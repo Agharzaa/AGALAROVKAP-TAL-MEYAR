@@ -1,0 +1,56 @@
+name: Windows build and validation
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install the pinned Electron runtime
+        run: npm run runtime:install
+      - run: npm run typecheck
+      - name: Domain and SQLite integration tests
+        run: npm test
+      - name: DOM integration tests
+        run: npm run test:ui
+      - name: Build
+        run: npm run build:node && npm run build:web
+      - name: Real Electron smoke (shipped renderer, preload and IPC)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "./node_modules/electron/dist/electron.exe" -ArgumentList "./scripts/electron-smoke.cjs" -Wait -PassThru -RedirectStandardOutput "smoke-out.log" -RedirectStandardError "smoke-err.log"
+          Get-Content smoke-out.log, smoke-err.log
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          if (!(Test-Path "screenshots/smoke-results.json")) { throw "Electron smoke did not record its results." }
+          $r = Get-Content "screenshots/smoke-results.json" -Raw | ConvertFrom-Json
+          if (!$r.flows.invoiceThroughUi -or !$r.flows.oneWindow) { throw "Electron smoke evidence is missing." }
+      - name: Build the Windows installer (unsigned test build)
+        run: npx electron-builder --win nsis --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Meyar-screens
+          path: screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Meyar-Windows-unsigned
+          path: |
+            release/*.exe
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 14

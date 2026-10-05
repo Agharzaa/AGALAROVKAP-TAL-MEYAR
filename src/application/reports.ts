@@ -468,12 +468,16 @@ export function runQuery(db: Db, q: Query): unknown {
       const asOf = parseDate(q.asOf);
       return db
         .all(
-          `SELECT p.id, p.name, p.tax_id,
-             COALESCE(SUM(CASE WHEN (l.account='211' OR l.account LIKE '211.%') THEN l.debit-l.credit ELSE 0 END),0) AS receivable,
-             COALESCE(SUM(CASE WHEN (l.account='531' OR l.account LIKE '531.%') THEN l.credit-l.debit ELSE 0 END),0) AS payable
-           FROM partners p
-           LEFT JOIN journal_lines l ON l.partner_id=p.id AND l.entry_id IN (SELECT id FROM journal_entries WHERE company_id=? AND date<=?)
-           WHERE p.company_id=? GROUP BY p.id ORDER BY p.name`,
+          `WITH s AS (
+             SELECT l.partner_id,
+               SUM(CASE WHEN (l.account='211' OR l.account LIKE '211.%') THEN l.debit-l.credit ELSE 0 END) AS receivable,
+               SUM(CASE WHEN (l.account='531' OR l.account LIKE '531.%') THEN l.credit-l.debit ELSE 0 END) AS payable
+             FROM journal_lines l JOIN journal_entries e ON e.id=l.entry_id
+             WHERE l.company_id=? AND l.partner_id IS NOT NULL AND e.date<=?
+             GROUP BY l.partner_id)
+           SELECT p.id, p.name, p.tax_id, COALESCE(s.receivable,0) AS receivable, COALESCE(s.payable,0) AS payable
+           FROM partners p LEFT JOIN s ON s.partner_id=p.id
+           WHERE p.company_id=? ORDER BY p.name`,
           q.companyId,
           asOf,
           q.companyId,
