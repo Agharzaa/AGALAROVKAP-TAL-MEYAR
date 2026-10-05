@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+screenshots/
+coverage/
+*.sqlite
+*.sqlite-*
+.env
+.env.*

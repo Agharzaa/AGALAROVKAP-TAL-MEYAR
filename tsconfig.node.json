@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "dist/node"
+  },
+  "include": [
+    "src/domain",
+    "src/contracts",
+    "src/application",
+    "src/infrastructure",
+    "src/main",
+    "src/preload",
+    "tests/domain",
+    "tests/integration"
+  ]
+}
