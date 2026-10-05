@@ -701,8 +701,10 @@ test('drafts carry no financial effect until posted; posted documents never retu
 
 test('acceptance 16: a backup reopens with identical documents, ledger, stock and balances', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'meyar-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const f = fixture(t, join(dir, 'live.sqlite'));
+  // After-hooks run in registration order: the fixture closes the database first.
+  // Windows refuses to delete a file that is still open.
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const supplier = f.partner('Təchizatçı', '1700000002');
   const customer = f.partner();
   const goods = f.product();
