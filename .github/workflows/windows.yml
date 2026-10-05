@@ -57,14 +57,21 @@ jobs:
           if (!(Test-Path $db)) { throw "The installed app did not create its database." }
           if (!$alive) { throw "The installed app exited right after start." }
           Write-Host "Installed app started and created $db"
-      - name: Publish the unsigned test release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      # One prerelease per package version: published from the first validated main build
+      # (or a v* tag) whose version has no release yet. Later builds of the same version skip.
+      - name: Publish the unsigned test release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $tag = 'v' + (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; skipping."; exit 0 }
           $notes = "İmzalanmamış sınaq versiyası. Windows 'Windows protected your PC' yazsa: More info -> Run anyway. Məlumat %APPDATA%\Meyar qovluğunda saxlanılır; proqramı silmək məlumatı silmir. Real uçotdan əvvəl mühasib qəbulu lazımdır."
-          gh release create $env:GITHUB_REF_NAME (Get-ChildItem release -Filter 'Meyar-Setup-*.exe').FullName --prerelease --title "Meyar $env:GITHUB_REF_NAME (imzalanmamış sınaq versiyası)" --notes $notes
+          $setup = (Get-ChildItem release -Filter 'Meyar-Setup-*.exe' | Select-Object -First 1).FullName
+          gh release create $tag $setup --target $env:GITHUB_SHA --prerelease --title "Meyar $tag (imzalanmamış sınaq versiyası)" --notes $notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -10,7 +10,7 @@ Yenilənib: 06.10.2026. Növbəti sessiya buradan davam etməlidir.
   - soyuq kağız fonu, yeganə aksent mürəkkəb-mavidir;
   - sol modul paneli, yuxarıda açıq pəncərə tabları;
   - cəmlər mühasib qayda xətti (ikiqat xətt) ilə bağlanır.
-- **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR, `main` branch-i. Tag `v*` push olunanda Windows CI quraşdırıcını yığır, Windows-da səssiz quraşdırıb işə salır və GitHub Release (prerelease) kimi dərc edir. Bu sessiyadan Release API-si birbaşa bağlıdır, ona görə release yalnız CI vasitəsilə yaranır.
+- **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR, `main` branch-i. `main`-ə push olunanda Windows CI quraşdırıcını yığır, Windows-da səssiz quraşdırıb işə salır və hər paket versiyası üçün bir dəfə GitHub Release (prerelease) kimi dərc edir. Bu sessiyadan Release API-si birbaşa bağlıdır, ona görə release yalnız CI vasitəsilə yaranır.
 - **MEYAR2-də görülən iş:** ödəniş bölgüsü `feature/bank-settlement` branch-indədir, lokal klonda (`/home/claude/MEYAR2`). Push edilməyib, yeni layihədə istifadə olunmur.
 
 ## Hazır (testlə sübut olunub)
