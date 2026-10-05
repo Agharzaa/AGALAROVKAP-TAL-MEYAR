@@ -2,10 +2,11 @@ name: Windows build and validation
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   windows:
     runs-on: windows-latest
@@ -39,6 +40,31 @@ jobs:
         run: npx electron-builder --win nsis --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Install silently and start the installed app
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release -Filter 'Meyar-Setup-*.exe' | Select-Object -First 1
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited with $($p.ExitCode)." }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Meyar\Meyar.exe'
+          if (!(Test-Path $exe)) { throw "Installed Meyar.exe not found at $exe." }
+          $app = Start-Process -FilePath $exe -PassThru
+          $db = Join-Path $env:APPDATA 'Meyar\data\meyar.sqlite'
+          for ($i = 0; $i -lt 30 -and !(Test-Path $db); $i++) { Start-Sleep -Seconds 1 }
+          Start-Sleep -Seconds 3
+          $alive = !$app.HasExited
+          Get-Process -Name Meyar -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (!(Test-Path $db)) { throw "The installed app did not create its database." }
+          if (!$alive) { throw "The installed app exited right after start." }
+          Write-Host "Installed app started and created $db"
+      - name: Publish the unsigned test release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = "İmzalanmamış sınaq versiyası. Windows 'Windows protected your PC' yazsa: More info -> Run anyway. Məlumat %APPDATA%\Meyar qovluğunda saxlanılır; proqramı silmək məlumatı silmir. Real uçotdan əvvəl mühasib qəbulu lazımdır."
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem release -Filter 'Meyar-Setup-*.exe').FullName --prerelease --title "Meyar $env:GITHUB_REF_NAME (imzalanmamış sınaq versiyası)" --notes $notes
       - uses: actions/upload-artifact@v4
         if: always()
         with:

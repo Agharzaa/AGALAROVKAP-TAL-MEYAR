@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 05.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 06.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -10,7 +10,7 @@ Yenilənib: 05.10.2026. Növbəti sessiya buradan davam etməlidir.
   - soyuq kağız fonu, yeganə aksent mürəkkəb-mavidir;
   - sol modul paneli, yuxarıda açıq pəncərə tabları;
   - cəmlər mühasib qayda xətti (ikiqat xətt) ilə bağlanır.
-- **Repo:** lokal git, `main` branch-i. GitHub-a push **edilməyib**, çünki istifadəçinin GitHub hesabı Claude-a bağlı deyil (`add_repo`: permission_denied). Yeni repo adı və bağlantı istifadəçidən gözlənilir.
+- **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR, `main` branch-i. Tag `v*` push olunanda Windows CI quraşdırıcını yığır, Windows-da səssiz quraşdırıb işə salır və GitHub Release (prerelease) kimi dərc edir. Bu sessiyadan Release API-si birbaşa bağlıdır, ona görə release yalnız CI vasitəsilə yaranır.
 - **MEYAR2-də görülən iş:** ödəniş bölgüsü `feature/bank-settlement` branch-indədir, lokal klonda (`/home/claude/MEYAR2`). Push edilməyib, yeni layihədə istifadə olunmur.
 
 ## Hazır (testlə sübut olunub)
@@ -27,7 +27,8 @@ Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11,
 
 ## Hələ yoxdur / qismən
 
-- **Windows-da yoxlama:** CI workflow yazılıb, lakin Windows-da hələ işə düşməyib (push yoxdur). `.exe` quraşdırıcısı yığılmayıb, birbaşa yükləmə linki yoxdur.
+- **Windows-da yoxlama:** CI işi (`windows-latest`) GitHub-da növbədədir, hələ işləməyib. Nəticə gələnə qədər Windows-da test edilmiş sayılmır.
+- **Quraşdırıcı:** `Meyar-Setup-0.1.0.exe` (99,5 MB, NSIS, x64) Linux-da electron-builder + wine ilə yığıldı. Daxilində `Meyar.exe` və `app.asar` yoxlanıb. Eyni paket konfiqurasiyası ilə Linux paketi işə salındı: baza yarandı, proses açıq qaldı. Windows-da quraşdırma və açılış hələ təsdiqlənməyib. İmzalanmamış sınaq versiyasıdır.
 - **Qəbul 5 (atomik idxal) və 13 (qaytarma):** sənəd növü hələ yoxdur.
 - **Anbar sənədləri:** transfer, material sərfi (721/201), istismara vermə (111/113), inventarizasiya.
 - **Mərhələ B:** rollar və istifadəçilər, başlanğıc qalıqlar, bank çıxarışı idxalı və uyğunlaşdırma, hesab çıxarışı və üzləşmə aktı, proqram daxilində bərpa, Excel/PDF çıxışı və çap.
@@ -35,13 +36,12 @@ Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11,
 
 ## Açıq qərarlar (istifadəçi və mühasib üçün)
 
-1. **GitHub:** yeni repo adı (məsələn `Agharzaa/meyar`) və GitHub bağlantısı.
-2. **Avanslar:** 211/531-də qalsın, yoxsa dövr sonunda ayrıca hesablara yenidən təsnif olunsun? Hesab kodları mühasiblə təsdiqlənməlidir.
-3. **Hesab adları və subhesab icazələri:** hansı hesablar ekspert qəbulundan keçib?
+1. **Avanslar:** 211/531-də qalsın, yoxsa dövr sonunda ayrıca hesablara yenidən təsnif olunsun? Hesab kodları mühasiblə təsdiqlənməlidir.
+2. **Hesab adları və subhesab icazələri:** hansı hesablar ekspert qəbulundan keçib?
 
 ## Növbəti dəqiq addım
 
-1. GitHub bağlanan kimi: repo yaratmaq, `main`-i push etmək, Windows CI nəticəsini və imzalanmamış `.exe` artifact-ı yoxlamaq.
+1. Windows CI nəticəsini yoxlamaq. Keçərsə, `v0.1.0` release linki həqiqətən yaranıbsa istifadəçiyə vermək. Keçməzsə, Windows xətasını düzəltmək.
 2. Anbar sənədləri: qaytarma (ilkin sənədə bağlı, maya və ƏDV bərpası), transfer, material sərfi, istismara vermə. Testlər: qəbul 13 və xronologiya.
 3. Excel qaimə idxalı: sütun xəritəsi, ilkin baxış, atomik tətbiq (qəbul 5) və bank çıxarışı idxalı (CSV/XLSX), avtomatik uyğunlaşdırma təklifləri.
 

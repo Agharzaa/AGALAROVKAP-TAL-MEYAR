@@ -52,7 +52,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ]
   },
   "dependencies": {
     "lucide-react": "1.52.0",
