@@ -30,9 +30,15 @@ export function parseText(value: unknown, field: string, max = 240, required = t
 }
 
 /**
- * Document numbers are compared in a normalized form: trimmed, inner spaces removed, upper case
- * (Azerbaijani rules: i→İ). "mt 0001" and "MT0001" are the same document number.
+ * Document numbers are compared in a normalized form: whitespace removed and upper case, with
+ * every form of the letter i (i, ı, İ, I) folded to "I" so Azerbaijani and Latin keyboards agree.
+ * "mt 0001", "MT0001" and "mt0001" are the same document number; so are "inv-1" and "İNV-1".
  */
 export function numberKey(number: string): string {
-  return number.replace(/\s+/g, '').toLocaleUpperCase('az');
+  return number.replace(/\s+/g, '').replace(/[iıİ]/g, 'I').toUpperCase();
+}
+
+/** Case-insensitive search key that treats i/ı/İ/I alike. */
+export function searchKey(text: string): string {
+  return text.replace(/[İI]/g, 'i').replace(/ı/g, 'i').toLowerCase();
 }

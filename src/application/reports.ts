@@ -57,7 +57,9 @@ const POSTINGS = `
 SELECT e.id AS entry_id, e.date, e.source_type, e.source_id, e.source_number, e.source_version, e.reversal,
   l.line_no, l.account, l.debit, l.credit, l.quantity, l.memo,
   COALESCE(p.name,'') AS partner_name, COALESCE(pr.name,'') AS product_name,
-  COALESCE(w.name,'') AS warehouse_name, COALESCE(x.name,'') AS expense_name
+  COALESCE(w.name,'') AS warehouse_name, COALESCE(x.name,'') AS expense_name,
+  CASE e.source_type WHEN 'invoice' THEN (SELECT direction FROM invoices WHERE id=e.source_id)
+    ELSE (SELECT direction FROM payments WHERE id=e.source_id) END AS source_direction
 FROM journal_lines l
 JOIN journal_entries e ON e.id=l.entry_id
 LEFT JOIN partners p ON p.id=l.partner_id
@@ -73,6 +75,7 @@ function posting(r: Row): PostingView {
     entryId: str(r.entry_id),
     date: str(r.date),
     sourceType: r.source_type as PostingView['sourceType'],
+    sourceDirection: r.source_direction as PostingView['sourceDirection'],
     sourceId: str(r.source_id),
     sourceNumber: str(r.source_number),
     version: Number(r.source_version),
@@ -537,9 +540,27 @@ export function runQuery(db: Db, q: Query): unknown {
           `SELECT COALESCE(SUM(${sign === 1 ? 'l.debit-l.credit' : 'l.credit-l.debit'}),0) AS v FROM journal_lines l JOIN journal_entries e ON e.id=l.entry_id WHERE l.company_id=? AND e.date<=? AND (${pattern})`,
         );
       const all = payments(db, q.companyId, "AND pay.status='posted'");
+      const perPartner = db.all(
+        `SELECT
+           COALESCE(SUM(CASE WHEN (l.account='211' OR l.account LIKE '211.%') THEN l.debit-l.credit ELSE 0 END),0) AS r,
+           COALESCE(SUM(CASE WHEN (l.account='531' OR l.account LIKE '531.%') THEN l.credit-l.debit ELSE 0 END),0) AS p
+         FROM journal_lines l JOIN journal_entries e ON e.id=l.entry_id
+         WHERE l.company_id=? AND e.date<=? AND l.partner_id IS NOT NULL GROUP BY l.partner_id`,
+        q.companyId,
+        asOf,
+      );
+      const side = (key: 'r' | 'p', positive: boolean) =>
+        formatMinor(
+          perPartner.reduce((s, row) => {
+            const v = row[key] as bigint;
+            return positive ? (v > 0n ? s + v : s) : v < 0n ? s - v : s;
+          }, 0n),
+        );
       const view: DashboardView = {
-        receivable: formatMinor(balance("l.account='211' OR l.account LIKE '211.%'", 1)),
-        payable: formatMinor(balance("l.account='531' OR l.account LIKE '531.%'", -1)),
+        receivable: side('r', true),
+        customerAdvances: side('r', false),
+        payable: side('p', true),
+        supplierAdvances: side('p', false),
         bank: formatMinor(
           balance("l.account='223' OR l.account LIKE '223.%' OR l.account='224.04'", 1),
         ),

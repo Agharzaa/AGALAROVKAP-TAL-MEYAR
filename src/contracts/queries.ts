@@ -195,6 +195,7 @@ export interface PostingView {
   entryId: string;
   date: string;
   sourceType: 'invoice' | 'payment';
+  sourceDirection: 'purchase' | 'sale' | 'in' | 'out';
   sourceId: string;
   sourceNumber: string;
   version: number;
@@ -259,8 +260,12 @@ export interface AuditView {
   detail: string;
 }
 export interface DashboardView {
+  /** Sum of customers that owe us (debit balances on 211); advances are shown apart. */
   receivable: string;
+  customerAdvances: string;
+  /** Sum of suppliers we owe (credit balances on 531); our prepayments are shown apart. */
   payable: string;
+  supplierAdvances: string;
   bank: string;
   purchases: number;
   sales: number;

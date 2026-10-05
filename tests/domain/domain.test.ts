@@ -68,7 +68,9 @@ test('values: dates, VÖEN and normalized document numbers', () => {
   assert.equal(parseTaxId('0123456789'), '0123456789');
   assert.throws(() => parseTaxId('123'), /10 rəqəm/);
   assert.equal(numberKey(' mt 0001 '), 'MT0001');
-  assert.equal(numberKey('inv-1'), 'İNV-1');
+  assert.equal(numberKey('inv-1'), 'INV-1');
+  assert.equal(numberKey('İNV-1'), 'INV-1');
+  assert.equal(numberKey('ınv-1'), 'INV-1');
 });
 
 const purchase = (lines: InvoiceDoc['lines']): InvoiceDoc => ({
