@@ -28,7 +28,7 @@ Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11,
 ## Hələ yoxdur / qismən
 
 - **Windows-da yoxlama:** CI işi (`windows-latest`) GitHub-da növbədədir, hələ işləməyib. Nəticə gələnə qədər Windows-da test edilmiş sayılmır.
-- **Quraşdırıcı:** `Meyar-Setup-0.1.0.exe` (99,5 MB, NSIS, x64) Linux-da electron-builder + wine ilə yığıldı. Daxilində `Meyar.exe` və `app.asar` yoxlanıb. Eyni paket konfiqurasiyası ilə Linux paketi işə salındı: baza yarandı, proses açıq qaldı. Windows-da quraşdırma və açılış hələ təsdiqlənməyib. İmzalanmamış sınaq versiyasıdır.
+- **Quraşdırıcı:** `Meyar-Setup-0.1.0.exe` (99,5 MB, NSIS, x64) Linux-da electron-builder + wine ilə yığıldı. Daxilində `Meyar.exe` və `app.asar` yoxlanıb. Eyni paket konfiqurasiyası ilə Linux paketi işə salındı: baza yarandı, proses açıq qaldı. Windows-da quraşdırma və açılış hələ təsdiqlənməyib. İmzalanmamış sınaq versiyasıdır. Birbaşa yükləmə (ayrı `download` branch-i, SHA-256 `846a02aa…3d2d`, yoxlanıb): https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR/raw/download/Meyar-Setup-0.1.0.exe
 - **Qəbul 5 (atomik idxal) və 13 (qaytarma):** sənəd növü hələ yoxdur.
 - **Anbar sənədləri:** transfer, material sərfi (721/201), istismara vermə (111/113), inventarizasiya.
 - **Mərhələ B:** rollar və istifadəçilər, başlanğıc qalıqlar, bank çıxarışı idxalı və uyğunlaşdırma, hesab çıxarışı və üzləşmə aktı, proqram daxilində bərpa, Excel/PDF çıxışı və çap.
