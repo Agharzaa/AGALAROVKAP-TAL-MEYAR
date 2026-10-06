@@ -31,6 +31,45 @@ export const invoiceLineInput = z.object({
 });
 export type InvoiceLineInput = z.infer<typeof invoiceLineInput>;
 
+export const paymentKind = z.enum([
+  'settlement',
+  'refund',
+  'capital',
+  'loan',
+  'tax',
+  'social',
+  'salary',
+  'transfer',
+  'fee',
+  'other',
+]);
+
+/** One row of a bank statement as the import screen read it from the bank's file. */
+export const statementLineInput = z.object({
+  date: z.string().max(10),
+  direction: z.enum(['in', 'out']),
+  amount: decimal,
+  reference: text(80).default(''),
+  counterparty: text(240).default(''),
+  counterpartyTaxId: text(20).default(''),
+  purpose: text(500).default(''),
+});
+export type StatementLineInput = z.infer<typeof statementLineInput>;
+
+/** How one statement line becomes a bank document. */
+export const statementPostInput = z.object({
+  lineId: id,
+  kind: paymentKind,
+  partnerId: id.optional(),
+  /** Creates the partner from the statement's name and VÖEN when no partner is chosen. */
+  createPartner: z.boolean().default(false),
+  counterAccount: z.string().max(20).optional(),
+  expenseItemId: id.optional(),
+  /** Link the payment to the partner's open invoices, oldest first. */
+  autoAllocate: z.boolean().default(true),
+});
+export type StatementPostInput = z.infer<typeof statementPostInput>;
+
 export const allocationInput = z.object({ invoiceId: id, amount: decimal });
 export type AllocationInput = z.infer<typeof allocationInput>;
 
@@ -114,10 +153,13 @@ export const commandSchema = z.discriminatedUnion('type', [
     id: id.optional(),
     version: version.optional(),
     direction: z.enum(['in', 'out']),
+    kind: paymentKind.optional(),
     bankAccount: z.string().max(20),
     reference: text(80),
     date: z.string().max(10),
-    partnerId: id,
+    partnerId: id.optional(),
+    counterAccount: z.string().max(20).optional(),
+    expenseItemId: id.optional(),
     amount: decimal,
     note: text(500).default(''),
     allocations: z.array(allocationInput).max(200).default([]),
@@ -143,6 +185,31 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({
+    type: z.literal('bankStatement.import'),
+    ...base,
+    bankAccount: z.string().max(20),
+    fileName: text(240).default(''),
+    lines: z.array(statementLineInput).min(1).max(5000),
+  }),
+  z.object({
+    type: z.literal('bankStatement.post'),
+    ...base,
+    lines: z.array(statementPostInput).min(1).max(1000),
+  }),
+  z.object({
+    type: z.literal('bankStatement.ignore'),
+    ...base,
+    lineIds: z.array(id).min(1).max(1000),
+    reason: text(240),
+  }),
+  z.object({
+    type: z.literal('allocation.auto'),
+    ...base,
+    /** One payment, or every settlement payment of `partnerId`. */
+    paymentId: id.optional(),
+    partnerId: id.optional(),
+  }),
+  z.object({
     type: z.literal('period.close'),
     ...base,
     through: z.string().max(10),
@@ -155,6 +222,9 @@ export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>;
 export interface CommandResult {
   id: string;
   version?: number;
+  /** Batch commands: how many items were applied / skipped. */
+  count?: number;
+  skipped?: number;
   /** True when the same request was already applied; nothing changed. */
   replayed?: boolean;
 }

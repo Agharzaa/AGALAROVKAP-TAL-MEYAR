@@ -29,7 +29,7 @@ test('company creation seeds chart, units, a warehouse and expense items; VÖEN 
   assert.equal(c.warehouses[0]!.name, 'Əsas anbar');
   assert.deepEqual(
     c.expenseItems.map((e) => e.name),
-    ['Nəqliyyat', 'Ofis xərcləri', 'Rabitə', 'Yemək'],
+    ['Bank xidmətləri', 'Nəqliyyat', 'Ofis xərcləri', 'Rabitə', 'Yemək'],
   );
   assert.throws(
     () => f.exec({ type: 'company.create', name: 'Başqa', taxId: '1234567890' }),

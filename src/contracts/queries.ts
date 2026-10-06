@@ -1,6 +1,8 @@
 /** Read models. Amounts are canonical decimal strings ("1234.50"); dates are ISO strings. */
 import { z } from 'zod';
 import type { AccountNature, AnalyticKind } from '../domain/accounts.js';
+import type { PaymentKind } from '../domain/posting.js';
+import type { StatementSuggestion } from '../domain/statement.js';
 
 const id = z.string().min(1).max(80);
 const date = z.string().max(10);
@@ -60,6 +62,12 @@ export const querySchema = z.discriminatedUnion('type', [
     limit: z.number().int().min(1).max(1000).default(300),
   }),
   z.object({ type: z.literal('dashboard'), companyId: id, asOf: date }),
+  z.object({
+    type: z.literal('bankStatement'),
+    companyId: id,
+    bankAccount: z.string().max(20).optional(),
+    status: z.enum(['new', 'posted', 'ignored', 'all']).default('new'),
+  }),
 ]);
 export type Query = z.infer<typeof querySchema>;
 
@@ -169,11 +177,18 @@ export interface PaymentView {
   id: string;
   version: number;
   direction: 'in' | 'out';
+  /** Operation kind (settlement, tax, fee…); see domain/posting paymentKinds. */
+  kind: PaymentKind;
+  kindLabel: string;
   bankAccount: string;
   reference: string;
   date: string;
+  /** Empty when the operation has no counterparty (tax, fee, transfer…). */
   partnerId: string;
   partnerName: string;
+  counterAccount: string;
+  expenseItemId: string;
+  expenseItemName: string;
   amount: string;
   allocated: string;
   unallocated: string;
@@ -272,4 +287,23 @@ export interface DashboardView {
   unallocatedPayments: number;
   recentPayments: PaymentView[];
   closedThrough: string;
+}
+
+export interface StatementLineView {
+  id: string;
+  bankAccount: string;
+  date: string;
+  direction: 'in' | 'out';
+  amount: string;
+  reference: string;
+  counterparty: string;
+  counterpartyTaxId: string;
+  purpose: string;
+  sourceFile: string;
+  status: 'new' | 'posted' | 'ignored';
+  reason: string;
+  paymentId: string | null;
+  paymentReference: string | null;
+  /** Booking proposal for rows not yet posted. */
+  suggestion: StatementSuggestion | null;
 }

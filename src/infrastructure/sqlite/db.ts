@@ -80,10 +80,22 @@ export class Db {
         'conflict',
       );
     for (const m of migrations.filter((m) => m.version > current)) {
-      this.write(() => {
-        this.raw.exec(m.sql);
-        this.raw.exec(`PRAGMA user_version=${m.version}`);
-      });
+      // Table rebuilds follow SQLite's procedure: foreign keys off outside the transaction,
+      // integrity checked inside it before commit, foreign keys back on afterwards.
+      if (m.foreignKeysOff) this.raw.exec('PRAGMA foreign_keys=OFF');
+      try {
+        this.write(() => {
+          this.raw.exec(m.sql);
+          if (m.foreignKeysOff) {
+            const broken = this.raw.prepare('PRAGMA foreign_key_check').all();
+            if (broken.length)
+              throw new Error(`Miqrasiya ${m.version}: ${broken.length} əlaqə pozulub.`);
+          }
+          this.raw.exec(`PRAGMA user_version=${m.version}`);
+        });
+      } finally {
+        if (m.foreignKeysOff) this.raw.exec('PRAGMA foreign_keys=ON');
+      }
     }
   }
   /** Consistent online copy through SQLite's backup API (never a raw file copy). */

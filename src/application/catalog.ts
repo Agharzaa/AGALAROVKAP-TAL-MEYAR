@@ -17,7 +17,7 @@ const defaultUnits = [
   ['set', 'Dəst'],
   ['box', 'Qutu'],
 ] as const;
-const defaultExpenseItems = ['Rabitə', 'Nəqliyyat', 'Yemək', 'Ofis xərcləri'];
+const defaultExpenseItems = ['Rabitə', 'Nəqliyyat', 'Yemək', 'Ofis xərcləri', 'Bank xidmətləri'];
 
 export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): CommandResult {
   const name = parseText(cmd.name, 'Şirkətin adı', 200);

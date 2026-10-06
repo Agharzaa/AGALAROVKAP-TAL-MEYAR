@@ -210,44 +210,153 @@ export function postInvoice(
 }
 
 export type PaymentDirection = 'in' | 'out';
+/**
+ * What a bank document settles (1C: "əməliyyat növü"). `settlement` is the stage-A behaviour:
+ * customers pay 211, we pay suppliers on 531, and only these payments are linked to invoices.
+ * The other kinds post the bank movement against one account family chosen per kind.
+ */
+export type PaymentKind =
+  | 'settlement'
+  | 'refund'
+  | 'capital'
+  | 'loan'
+  | 'tax'
+  | 'social'
+  | 'salary'
+  | 'transfer'
+  | 'fee'
+  | 'other';
+interface KindRule {
+  label: Record<PaymentDirection, string | null>;
+  /** Allowed counter-account families per direction (first one is the default). */
+  families: Record<PaymentDirection, readonly string[]>;
+  partner: 'required' | 'optional';
+}
+export const paymentKinds: Record<PaymentKind, KindRule> = {
+  settlement: {
+    label: { in: 'Alıcıdan ödəniş', out: 'Malsatana ödəniş' },
+    families: { in: [roles.receivables], out: [roles.payables] },
+    partner: 'required',
+  },
+  refund: {
+    label: { in: 'Malsatandan qaytarılan vəsait', out: 'Alıcıya qaytarılan vəsait' },
+    families: { in: [roles.payables], out: [roles.receivables] },
+    partner: 'required',
+  },
+  capital: {
+    label: { in: 'Nizamnamə kapitalına qoyuluş', out: null },
+    families: { in: [roles.capital], out: [] },
+    partner: 'required',
+  },
+  loan: {
+    label: { in: 'Kreditin alınması', out: 'Kreditin qaytarılması' },
+    families: { in: [roles.loans], out: [roles.loans] },
+    partner: 'required',
+  },
+  tax: {
+    label: { in: 'Vergi qaytarılması', out: 'Vergi ödənişi' },
+    families: { in: [roles.taxPayable], out: [roles.taxPayable] },
+    partner: 'optional',
+  },
+  social: {
+    label: { in: null, out: 'Sosial sığorta ödənişi' },
+    families: { in: [], out: [roles.social] },
+    partner: 'optional',
+  },
+  salary: {
+    label: { in: null, out: 'Əmək haqqının ödənilməsi' },
+    families: { in: [], out: [roles.payroll] },
+    partner: 'optional',
+  },
+  transfer: {
+    label: { in: 'Öz hesabından / kassadan daxilolma', out: 'Öz hesabına / kassaya köçürmə' },
+    families: { in: [roles.transit, roles.cash], out: [roles.transit, roles.cash] },
+    partner: 'optional',
+  },
+  fee: {
+    label: { in: null, out: 'Bank xidmət haqqı' },
+    families: { in: [], out: [roles.adminExpenses] },
+    partner: 'optional',
+  },
+  other: {
+    label: { in: 'Digər daxilolma', out: 'Digər ödəniş' },
+    families: { in: [roles.otherIncome], out: [roles.otherExpenses, roles.adminExpenses] },
+    partner: 'optional',
+  },
+};
+/** Kinds whose payments are linked to invoices of the same partner. */
+export const settlesInvoices = (kind: PaymentKind) => kind === 'settlement';
+
 export interface PaymentDoc {
   direction: PaymentDirection;
+  kind?: PaymentKind;
   bankAccount: string;
   reference: string;
-  partnerId: string;
+  partnerId?: string;
   partnerName: string;
+  /** Counter account for non-settlement kinds; defaults to the first family of the kind. */
+  counterAccount?: string;
+  expenseItemId?: string;
   amount: Minor;
   memo: string;
 }
 export const bankFamilies = [roles.bank, roles.vatDeposit] as const;
+
+/** Resolves and checks the counter account of a bank document. */
+export function paymentCounterAccount(chart: Chart, doc: PaymentDoc): Account {
+  const kind = doc.kind ?? 'settlement';
+  const rule = paymentKinds[kind];
+  if (!rule) throw new DomainError('Bank əməliyyatının növü düzgün deyil.', 'kind');
+  const families = rule.families[doc.direction];
+  if (!families.length || !rule.label[doc.direction])
+    throw new DomainError(
+      `Bu əməliyyat növü ${doc.direction === 'in' ? 'daxilolma' : 'ödəniş'} üçün deyil.`,
+      'kind',
+    );
+  const code = doc.counterAccount || families[0]!;
+  const family = familyOf(code, families);
+  if (!family)
+    throw new DomainError(
+      `${rule.label[doc.direction]} üçün hesab ${families.join(', ')} qrupundan olmalıdır.`,
+      'counterAccount',
+    );
+  const account = chart.requirePostable(code, family, 'counterAccount');
+  if (account.analytics.includes('partner') && !doc.partnerId)
+    throw new DomainError(`${account.code} hesabı üçün kontragent seçin.`, 'partnerId');
+  if (account.analytics.includes('expenseItem') && !doc.expenseItemId)
+    throw new DomainError(`${account.code} hesabı üçün xərc maddəsi seçin.`, 'expenseItemId');
+  return account;
+}
 
 export function postPayment(chart: Chart, doc: PaymentDoc): JournalLine[] {
   const family = familyOf(doc.bankAccount, bankFamilies);
   if (!family) throw new DomainError('Bank hesabı 223 və ya 224.04 olmalıdır.', 'bankAccount');
   chart.requirePostable(doc.bankAccount, family, 'bankAccount');
   if (doc.amount <= 0n) throw new DomainError('Məbləğ sıfırdan böyük olmalıdır.', 'amount');
-  const memo =
-    doc.memo || `${doc.direction === 'in' ? 'Daxilolma' : 'Ödəniş'} · ${doc.partnerName}`;
+  const kind = doc.kind ?? 'settlement';
+  if (paymentKinds[kind]?.partner === 'required' && !doc.partnerId)
+    throw new DomainError('Kontragent seçin.', 'partnerId');
+  const counter = paymentCounterAccount(chart, doc);
+  if (inFamily(counter.code, doc.bankAccount) || inFamily(doc.bankAccount, counter.code))
+    throw new DomainError('Pul öz hesabına köçürülə bilməz.', 'counterAccount');
+  const label = paymentKinds[kind].label[doc.direction]!;
+  const memo = doc.memo || `${label}${doc.partnerName ? ` · ${doc.partnerName}` : ''}`;
+  const counterLine: Omit<JournalLine, 'debit' | 'credit'> = {
+    account: counter.code,
+    ...(counter.analytics.includes('partner') && doc.partnerId ? { partnerId: doc.partnerId } : {}),
+    ...(counter.analytics.includes('expenseItem') && doc.expenseItemId
+      ? { expenseItemId: doc.expenseItemId }
+      : {}),
+    memo,
+  };
   const lines: JournalLine[] =
     doc.direction === 'in'
       ? [
           { account: doc.bankAccount, debit: doc.amount, credit: 0n, memo },
-          {
-            account: chart.role('receivables').code,
-            debit: 0n,
-            credit: doc.amount,
-            partnerId: doc.partnerId,
-            memo,
-          },
+          { ...counterLine, debit: 0n, credit: doc.amount },
         ]
       : [
-          {
-            account: chart.role('payables').code,
-            debit: doc.amount,
-            credit: 0n,
-            partnerId: doc.partnerId,
-            memo,
-          },
+          { ...counterLine, debit: doc.amount, credit: 0n },
           { account: doc.bankAccount, debit: 0n, credit: doc.amount, memo },
         ];
   return checkEntry(chart, lines);

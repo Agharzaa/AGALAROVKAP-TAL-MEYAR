@@ -7,6 +7,8 @@ import { DomainError } from '../domain/errors.js';
 import { formatMinor } from '../domain/money.js';
 import { formatQty } from '../domain/quantity.js';
 import { parseDate } from '../domain/values.js';
+import { paymentKinds, type PaymentKind } from '../domain/posting.js';
+import { statementLines } from './statements.js';
 import type {
   AccountCard,
   AuditView,
@@ -133,7 +135,7 @@ function payments(
   ...params: (string | bigint)[]
 ): PaymentView[] {
   const rows = db.all(
-    `SELECT pay.*, p.name AS partner_name FROM payments pay JOIN partners p ON p.id=pay.partner_id WHERE pay.company_id=? ${where} ORDER BY pay.date DESC, pay.rowid DESC`,
+    `SELECT pay.*, p.name AS partner_name, x.name AS expense_item_name FROM payments pay LEFT JOIN partners p ON p.id=pay.partner_id LEFT JOIN expense_items x ON x.id=pay.expense_item_id WHERE pay.company_id=? ${where} ORDER BY pay.date DESC, pay.rowid DESC`,
     companyId,
     ...params,
   );
@@ -151,14 +153,22 @@ function payments(
       id: str(r.id),
       version: Number(r.version),
       direction: r.direction as PaymentView['direction'],
+      kind: r.kind as PaymentKind,
+      kindLabel:
+        paymentKinds[r.kind as PaymentKind]?.label[r.direction as 'in' | 'out'] ?? str(r.kind),
       bankAccount: str(r.bank_account),
       reference: str(r.reference),
       date: str(r.date),
       partnerId: str(r.partner_id),
       partnerName: str(r.partner_name),
+      counterAccount: str(r.counter_account),
+      expenseItemId: str(r.expense_item_id),
+      expenseItemName: str(r.expense_item_name),
       amount: money(r.amount),
       allocated: formatMinor(r.status === 'posted' ? allocated : 0n),
-      unallocated: formatMinor(r.status === 'posted' ? (r.amount as bigint) - allocated : 0n),
+      unallocated: formatMinor(
+        r.status === 'posted' && r.kind === 'settlement' ? (r.amount as bigint) - allocated : 0n,
+      ),
       status: r.status as PaymentView['status'],
       note: str(r.note),
       allocations: own.map((a) => ({
@@ -535,6 +545,9 @@ export function runQuery(db: Db, q: Query): unknown {
           entity: str(r.entity),
           detail: str(r.detail),
         }));
+    case 'bankStatement':
+      company(db, q.companyId);
+      return statementLines(db, q.companyId, { bankAccount: q.bankAccount, status: q.status });
     case 'dashboard': {
       const co = company(db, q.companyId);
       const asOf = parseDate(q.asOf);

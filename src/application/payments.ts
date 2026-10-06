@@ -8,7 +8,15 @@
  */
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, sumMinor, type Minor } from '../domain/money.js';
-import { postPayment, reverse } from '../domain/posting.js';
+import {
+  paymentCounterAccount,
+  paymentKinds,
+  postPayment,
+  reverse,
+  settlesInvoices,
+  type PaymentDoc,
+  type PaymentKind,
+} from '../domain/posting.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { AllocationInput, CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
@@ -127,13 +135,31 @@ function activeLinks(tx: Tx, paymentId: string): { invoiceId: string; amount: st
 
 export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResult {
   tx.company(cmd.companyId);
-  const partner = tx.partner(cmd.companyId, cmd.partnerId);
+  const kind: PaymentKind = cmd.kind ?? 'settlement';
+  const rule = paymentKinds[kind];
+  const partner = cmd.partnerId ? tx.partner(cmd.companyId, cmd.partnerId) : undefined;
+  if (!partner && rule.partner === 'required')
+    throw new DomainError('Kontragent seçin.', 'partnerId');
+  if (
+    cmd.expenseItemId &&
+    !tx.db.get(
+      'SELECT 1 AS x FROM expense_items WHERE company_id=? AND id=?',
+      cmd.companyId,
+      cmd.expenseItemId,
+    )
+  )
+    throw new DomainError('Xərc maddəsi tapılmadı.', 'expenseItemId', 'not-found');
   const date = parseDate(cmd.date);
   const reference = parseText(cmd.reference, 'Bank sənədinin nömrəsi', 80);
   const amount = parseMoney(cmd.amount);
   if (amount <= 0n) throw new DomainError('Məbləğ sıfırdan böyük olmalıdır.', 'amount');
   const note = parseText(cmd.note, 'Təyinat', 500, false);
   const links = parseLinks(cmd.allocations, 'allocations');
+  if (links.length && !settlesInvoices(kind))
+    throw new DomainError(
+      'Qaimələrə yalnız alıcı/malsatan hesablaşması bağlanır.',
+      'allocations',
+    );
   const key = numberKey(reference);
   const existing = cmd.id
     ? tx.db.get('SELECT * FROM payments WHERE company_id=? AND id=?', cmd.companyId, cmd.id)
@@ -159,12 +185,33 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
       'reference',
       'conflict',
     );
+  const chart = tx.chart(cmd.companyId);
+  const doc: PaymentDoc = {
+    direction: cmd.direction,
+    kind,
+    bankAccount: cmd.bankAccount,
+    reference,
+    ...(partner ? { partnerId: String(partner.id) } : {}),
+    partnerName: partner ? String(partner.name) : '',
+    ...(cmd.counterAccount ? { counterAccount: cmd.counterAccount } : {}),
+    ...(cmd.expenseItemId ? { expenseItemId: cmd.expenseItemId } : {}),
+    amount,
+    memo: note,
+  };
+  const journal = postPayment(chart, doc);
+  const counter = paymentCounterAccount(chart, doc);
+  const expenseItemId = counter.analytics.includes('expenseItem')
+    ? (cmd.expenseItemId ?? null)
+    : null;
   const payload = {
     direction: cmd.direction,
+    kind,
     bankAccount: cmd.bankAccount,
     reference,
     date,
-    partnerId: String(partner.id),
+    partnerId: partner ? String(partner.id) : null,
+    counterAccount: counter.code,
+    expenseItemId,
     amount: formatMinor(amount),
     note,
     allocations: links.map((l) => ({ invoiceId: l.invoiceId, amount: formatMinor(l.amount) })),
@@ -173,10 +220,13 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
     existing &&
     JSON.stringify({
       direction: existing.direction,
+      kind: existing.kind,
       bankAccount: existing.bank_account,
       reference: existing.reference,
       date: existing.date,
-      partnerId: existing.partner_id,
+      partnerId: existing.partner_id ?? null,
+      counterAccount: existing.counter_account,
+      expenseItemId: existing.expense_item_id ?? null,
       amount: formatMinor(existing.amount as bigint),
       note: existing.note,
       allocations: activeLinks(tx, String(existing.id)),
@@ -187,7 +237,6 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
   tx.open(cmd.companyId, date);
   const id = existing ? String(existing.id) : tx.id();
   const version = existing ? Number(existing.version) + 1 : 1;
-  const chart = tx.chart(cmd.companyId);
   if (existing) {
     tx.open(cmd.companyId, String(existing.date));
     releaseAll(tx, id, 'Ödəniş düzəlişi');
@@ -205,24 +254,18 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
       reverse(original.lines),
     );
   }
-  const journal = postPayment(chart, {
-    direction: cmd.direction,
-    bankAccount: cmd.bankAccount,
-    reference,
-    partnerId: String(partner.id),
-    partnerName: String(partner.name),
-    amount,
-    memo: note,
-  });
   const now = tx.clock.now();
   if (existing)
     tx.db.run(
-      'UPDATE payments SET bank_account=?,reference=?,reference_key=?,date=?,partner_id=?,amount=?,version=?,note=?,updated_at=? WHERE id=?',
+      'UPDATE payments SET kind=?,bank_account=?,reference=?,reference_key=?,date=?,partner_id=?,counter_account=?,expense_item_id=?,amount=?,version=?,note=?,updated_at=? WHERE id=?',
+      kind,
       cmd.bankAccount,
       reference,
       key,
       date,
-      String(partner.id),
+      payload.partnerId,
+      counter.code,
+      expenseItemId,
       amount,
       version,
       note,
@@ -231,15 +274,19 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
     );
   else
     tx.db.run(
-      "INSERT INTO payments VALUES(?,?,?,?,?,?,?,?,?,'posted',?,?,?,?)",
+      `INSERT INTO payments(id,company_id,direction,kind,bank_account,reference,reference_key,date,partner_id,counter_account,expense_item_id,amount,status,version,note,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'posted',?,?,?,?)`,
       id,
       cmd.companyId,
       cmd.direction,
+      kind,
       cmd.bankAccount,
       reference,
       key,
       date,
-      String(partner.id),
+      payload.partnerId,
+      counter.code,
+      expenseItemId,
       amount,
       version,
       note,
@@ -253,11 +300,62 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
   tx.audit(
     cmd.companyId,
     existing ? 'Düzəliş edildi' : 'Uçota alındı',
-    cmd.direction === 'in' ? 'Daxil olan ödəniş' : 'Çıxan ödəniş',
+    rule.label[cmd.direction] ?? (cmd.direction === 'in' ? 'Daxil olan ödəniş' : 'Çıxan ödəniş'),
     id,
-    `${reference} · ${formatMinor(amount)} AZN · ${partner.name}`,
+    `${reference} · ${formatMinor(amount)} AZN · ${partner ? String(partner.name) : counter.code}`,
   );
   return { id, version };
+}
+
+/**
+ * Links free payment money to the partner's open invoices, oldest first (1C: avansların
+ * əvəzləşdirilməsi). Each link is dated at the later of the two documents, so an advance paid
+ * before the invoice is offset on the invoice date. Links that would fall into a closed period
+ * are skipped. Returns the number of links created.
+ */
+export function autoAllocate(tx: Tx, companyId: string, paymentId: string): number {
+  const payment = tx.db.get('SELECT * FROM payments WHERE company_id=? AND id=?', companyId, paymentId);
+  if (!payment || payment.status !== 'posted' || payment.kind !== 'settlement') return 0;
+  const closed = String(tx.company(companyId).closed_through);
+  let free = (payment.amount as bigint) - allocated(tx, 'payment_id', paymentId);
+  if (free <= 0n) return 0;
+  const open = tx.db.all(
+    `SELECT i.id,i.date,i.net+i.vat-COALESCE((SELECT SUM(a.amount) FROM allocations a WHERE a.invoice_id=i.id AND a.status='active'),0) AS remaining
+     FROM invoices i WHERE i.company_id=? AND i.partner_id=? AND i.direction=? AND i.status='posted'
+     ORDER BY i.date, i.rowid`,
+    companyId,
+    String(payment.partner_id),
+    payment.direction === 'in' ? 'sale' : 'purchase',
+  );
+  let count = 0;
+  for (const inv of open) {
+    if (free <= 0n) break;
+    const remaining = inv.remaining as bigint;
+    if (remaining <= 0n) continue;
+    const date = String(inv.date) > String(payment.date) ? String(inv.date) : String(payment.date);
+    if (date <= closed) continue;
+    const amount = remaining < free ? remaining : free;
+    link(tx, companyId, tx.db.get('SELECT * FROM payments WHERE id=?', paymentId)!, [{ invoiceId: String(inv.id), amount }], date);
+    free -= amount;
+    count++;
+  }
+  return count;
+}
+
+export function autoAllocateCommand(tx: Tx, cmd: CommandOf<'allocation.auto'>): CommandResult {
+  tx.company(cmd.companyId);
+  const ids = cmd.paymentId
+    ? [cmd.paymentId]
+    : tx.db
+        .all(
+          "SELECT id FROM payments WHERE company_id=? AND partner_id=? AND kind='settlement' AND status='posted' ORDER BY date, rowid",
+          cmd.companyId,
+          cmd.partnerId ?? '',
+        )
+        .map((r) => String(r.id));
+  if (!ids.length) throw new DomainError('Əvəzləşdiriləcək ödəniş tapılmadı.', 'paymentId', 'not-found');
+  const count = ids.reduce((n, id) => n + autoAllocate(tx, cmd.companyId, id), 0);
+  return { id: cmd.paymentId ?? cmd.partnerId ?? cmd.companyId, count };
 }
 
 export function cancelPayment(tx: Tx, cmd: CommandOf<'payment.cancel'>): CommandResult {

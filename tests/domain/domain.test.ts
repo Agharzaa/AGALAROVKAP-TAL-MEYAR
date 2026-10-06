@@ -329,3 +329,45 @@ test('acceptance 11: 10×10 + 10×20, issue 4 → average cost 60; full issue cl
   assert.equal(issueCost({ quantity: parseQty('3'), value: 1000n }, parseQty('3'), 'Mal'), 1000n);
   assert.throws(() => issueCost(balance, parseQty('21'), 'Mal'), /kifayət qədər/);
 });
+
+test('bank statement amounts and dates are read the way banks print them', async () => {
+  const { readStatementAmount, readStatementDate, classifyStatementLine } = await import(
+    '../../src/domain/statement.js'
+  );
+  const a = (v: string) => {
+    const r = readStatementAmount(v);
+    return r ? `${r.negative ? '-' : ''}${formatMinor(r.amount)}` : undefined;
+  };
+  assert.equal(a('1 234,56'), '1234.56');
+  assert.equal(a('1.234,56'), '1234.56');
+  assert.equal(a('1,234.56'), '1234.56');
+  assert.equal(a('17 000,0000'), '17000.00');
+  assert.equal(a('-50.00'), '-50.00');
+  assert.equal(a('(50,00)'), '-50.00');
+  assert.equal(a('12,345'), '12345.00');
+  assert.equal(a('0,005'), '0.01');
+  assert.equal(a('1 500 AZN'), '1500.00');
+  assert.equal(a('abc'), undefined);
+  assert.equal(readStatementDate('31.01.2026'), '2026-01-31');
+  assert.equal(readStatementDate('31/01/26'), '2026-01-31');
+  assert.equal(readStatementDate('2026-01-31 10:15'), '2026-01-31');
+  assert.equal(readStatementDate('46053'), '2026-01-31');
+  assert.equal(readStatementDate('31.02.2026'), undefined);
+
+  const ctx = {
+    companyTaxId: '1234567890',
+    partnersByTaxId: new Map([['1700000001', { id: 'p1', name: 'Alıcı' }]]),
+    partnersByName: new Map(),
+  };
+  const kind = (direction: 'in' | 'out', purpose: string, taxId = '', counterparty = '') =>
+    classifyStatementLine({ direction, purpose, counterpartyTaxId: taxId, counterparty }, ctx).kind;
+  // A supplier's "vergi hesab-fakturası" or "ƏDV daxil" is still a settlement.
+  assert.equal(kind('out', 'Elektron vergi hesab-fakturası üzrə, ƏDV daxil', '1700000001'), 'settlement');
+  assert.equal(kind('out', 'Mənfəət vergisi'), 'tax');
+  assert.equal(kind('out', 'Ödəniş', '', 'Azərbaycan Respublikası Dövlət Xəzinədarlığı'), 'tax');
+  assert.equal(kind('out', 'Yanvar ayı üzrə əmək haqqı'), 'salary');
+  assert.equal(kind('in', 'Nizamnamə kapitalına ödəniş', '1700000001'), 'capital');
+  assert.equal(kind('out', 'Artıq ödənilmiş məbləğin qaytarılması', '1700000001'), 'refund');
+  assert.equal(kind('out', 'ƏDV depozit hesabına köçürmə'), 'transfer');
+  assert.equal(kind('in', 'x', '1234567890'), 'transfer');
+});

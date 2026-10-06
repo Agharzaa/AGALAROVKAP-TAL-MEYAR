@@ -12,7 +12,9 @@ import {
   saveUnit,
 } from './catalog.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
+import { ignoreStatement, importStatement, postStatement } from './statements.js';
 import {
+  autoAllocateCommand,
   cancelAllocation,
   cancelPayment,
   closePeriod,
@@ -104,6 +106,14 @@ export class Ledger {
         return createAllocations(tx, c);
       case 'allocation.cancel':
         return cancelAllocation(tx, c);
+      case 'allocation.auto':
+        return autoAllocateCommand(tx, c);
+      case 'bankStatement.import':
+        return importStatement(tx, c);
+      case 'bankStatement.post':
+        return postStatement(tx, c);
+      case 'bankStatement.ignore':
+        return ignoreStatement(tx, c);
       case 'period.close':
         return closePeriod(tx, c);
     }
