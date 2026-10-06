@@ -1,7 +1,9 @@
-# Meyar yükləmə
+# Meyar — quraşdırıcı
 
-`Meyar-Setup-0.1.0.exe` — Windows 64-bit quraşdırıcısı. **İmzalanmamış sınaq versiyası.**
+Meyar-Setup-0.2.0.exe — Windows x64, imzalanmamış sınaq versiyası.
 
-Windows "Windows protected your PC" yazsa: More info → Run anyway.
+SHA-256: af5d9386785d505399981fd787bdf75cad6fefe9eaf2ca9928184908d5cadfc5
 
-SHA-256: `846a02aa44fc59fc1f0d730147b9b2447f4178344f74a3c7ab4f547213ac3d2d`
+0.2.0-da yeni: bank çıxarışının yüklənməsi və avtomatik tanınması, bank əməliyyat növləri
+(vergi, DSMF, əmək haqqı, komissiya, kredit, nizamnamə kapitalı, hesablar arası köçürmə),
+avansların qaimələrlə avtomatik əvəzləşdirilməsi. Köhnə baza açılanda avtomatik yenilənir.
