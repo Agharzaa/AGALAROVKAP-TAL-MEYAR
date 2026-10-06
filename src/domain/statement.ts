@@ -47,14 +47,69 @@ type Column =
 const headerWords: Record<Column, string[]> = {
   date: ['tarix', 'date', 'дата', 'əməliyyat tarixi', 'sənəd tarixi'],
   // From the account holder's side: money in / money out.
-  credit: ['mədaxil', 'medaxil', 'daxilolma', 'daxil olan', 'kredit', 'credit', 'кредит', 'приход', 'mədaxil məbləği'],
-  debit: ['məxaric', 'mexaric', 'çıxış', 'çıxan', 'debet', 'debit', 'дебет', 'расход', 'məxaric məbləği'],
+  credit: [
+    'mədaxil',
+    'medaxil',
+    'daxilolma',
+    'daxil olan',
+    'kredit',
+    'credit',
+    'кредит',
+    'приход',
+    'mədaxil məbləği',
+  ],
+  debit: [
+    'məxaric',
+    'mexaric',
+    'çıxış',
+    'çıxan',
+    'debet',
+    'debit',
+    'дебет',
+    'расход',
+    'məxaric məbləği',
+  ],
   amount: ['məbləğ', 'mebleg', 'amount', 'сумма', 'cəm'],
   direction: ['növ', 'istiqamət', 'd/k', 'dt/kt', 'type'],
-  reference: ['sənəd', '№', 'nömrə', 'nomre', 'ödəniş tapşırığı', 'reference', 'номер', 'sənəd nömrəsi', 'ref'],
-  counterparty: ['kontragent', 'qarşı tərəf', 'benefisiar', 'alan', 'göndərən', 'ödəyici', 'ad', 'adı', 'name', 'контрагент', 'получатель', 'плательщик', 'müştəri'],
+  reference: [
+    'sənəd',
+    '№',
+    'nömrə',
+    'nomre',
+    'ödəniş tapşırığı',
+    'reference',
+    'номер',
+    'sənəd nömrəsi',
+    'ref',
+  ],
+  counterparty: [
+    'kontragent',
+    'qarşı tərəf',
+    'benefisiar',
+    'alan',
+    'göndərən',
+    'ödəyici',
+    'ad',
+    'adı',
+    'name',
+    'контрагент',
+    'получатель',
+    'плательщик',
+    'müştəri',
+  ],
   taxId: ['vöen', 'voen', 'inn', 'инн', 'tax id', 'vergi ödəyicisinin'],
-  purpose: ['təyinat', 'teyinat', 'ödənişin təyinatı', 'məqsəd', 'purpose', 'назначение', 'açıqlama', 'qeyd', 'izah', 'description'],
+  purpose: [
+    'təyinat',
+    'teyinat',
+    'ödənişin təyinatı',
+    'məqsəd',
+    'purpose',
+    'назначение',
+    'açıqlama',
+    'qeyd',
+    'izah',
+    'description',
+  ],
 };
 
 function matchColumn(cell: string): Column | undefined {
@@ -80,7 +135,9 @@ function matchColumn(cell: string): Column | undefined {
 }
 
 /** Finds the header row within the first rows of the sheet (banks put a title block above it). */
-function findHeader(rows: readonly string[][]): { index: number; map: Map<Column, number> } | undefined {
+function findHeader(
+  rows: readonly string[][],
+): { index: number; map: Map<Column, number> } | undefined {
   for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const map = new Map<Column, number>();
     rows[i]!.forEach((cell, c) => {
@@ -120,7 +177,9 @@ export function readStatementDate(value: string): string | undefined {
  * Reads amounts the way banks print them: "1 234,56", "1.234,56", "1,234.56", "-50.00",
  * "(50,00)". Returns the absolute value in minor units and whether it was negative.
  */
-export function readStatementAmount(value: string): { amount: Minor; negative: boolean } | undefined {
+export function readStatementAmount(
+  value: string,
+): { amount: Minor; negative: boolean } | undefined {
   let text = value.replace(/[\s ']/g, '').replace(/(AZN|₼|manat)$/i, '');
   if (!text) return undefined;
   let negative = false;
@@ -136,10 +195,7 @@ export function readStatementAmount(value: string): { amount: Minor; negative: b
   const lastDot = text.lastIndexOf('.');
   if (lastComma >= 0 && lastDot >= 0) {
     // The later separator is the decimal one.
-    text =
-      lastComma > lastDot
-        ? text.replace(/\./g, '').replace(',', '.')
-        : text.replace(/,/g, '');
+    text = lastComma > lastDot ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '');
   } else if (lastComma >= 0) {
     const decimals = text.length - lastComma - 1;
     // "12,345" is a thousands separator; "1,5", "0,005" and "1,5000" are decimals.
@@ -227,7 +283,8 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
       reference: cell(row, map.get('reference')).slice(0, 80),
       counterparty: cell(row, map.get('counterparty')).slice(0, 240),
       counterpartyTaxId:
-        taxId || (/\b(?:VÖEN|VOEN)[:\s]*(\d{10})\b/i.exec(cell(row, map.get('purpose')))?.[1] ?? ''),
+        taxId ||
+        (/\b(?:VÖEN|VOEN)[:\s]*(\d{10})\b/i.exec(cell(row, map.get('purpose')))?.[1] ?? ''),
       purpose: cell(row, map.get('purpose')).slice(0, 500),
     });
   }
@@ -304,7 +361,9 @@ export function classifyStatementLine(
 ): StatementSuggestion {
   const purpose = searchKey(`${line.purpose} ${line.counterparty}`);
   const out = line.direction === 'out';
-  const byTax = line.counterpartyTaxId ? ctx.partnersByTaxId.get(line.counterpartyTaxId) : undefined;
+  const byTax = line.counterpartyTaxId
+    ? ctx.partnersByTaxId.get(line.counterpartyTaxId)
+    : undefined;
   const byName = !byTax ? ctx.partnersByName.get(searchKey(line.counterparty.trim())) : undefined;
   const partner = byTax ?? byName;
   const withPartner = partner ? { partnerId: partner.id } : {};
@@ -323,7 +382,19 @@ export function classifyStatementLine(
       confidence: 'high',
       reason: 'ƏDV depozit hesabı ilə köçürmə (222 vasitəsilə).',
     };
-  if (out && has(purpose, 'komissiya', 'xidmət haqqı', 'xidmet haqqi', 'bank xidm', 'commission', 'hesabın aparılması', 'sms'))
+  if (
+    out &&
+    has(
+      purpose,
+      'komissiya',
+      'xidmət haqqı',
+      'xidmet haqqi',
+      'bank xidm',
+      'commission',
+      'hesabın aparılması',
+      'sms',
+    )
+  )
     return {
       kind: 'fee',
       counterAccount: roles.adminExpenses,
@@ -333,7 +404,19 @@ export function classifyStatementLine(
         ? 'Təyinatda bank komissiyası (721, Bank xidmətləri).'
         : 'Bank komissiyası — xərc maddəsini seçin (721).',
     };
-  if (out && has(purpose, 'dsmf', 'sosial sığorta', 'sosial sigorta', 'işsizlik', 'issizlik', 'icbari tibbi', 'itsh'))
+  if (
+    out &&
+    has(
+      purpose,
+      'dsmf',
+      'sosial sığorta',
+      'sosial sigorta',
+      'işsizlik',
+      'issizlik',
+      'icbari tibbi',
+      'itsh',
+    )
+  )
     return {
       kind: 'social',
       counterAccount: roles.social,
@@ -342,8 +425,41 @@ export function classifyStatementLine(
     };
   // "ƏDV daxil" or "vergi hesab-fakturası" in a supplier payment is not a tax payment, so purpose
   // words count only when the counterparty is not a known partner; the Treasury always counts.
-  const budget = has(searchKey(line.counterparty), 'xəzinə', 'xezine', 'dövlət vergi', 'dovlet vergi', 'dvx', 'büdcə', 'budce', 'казначейство');
-  const taxWords = has(purpose, 'vergi ödən', 'vergi oden', 'vergisi', 'mənfəət vergi', 'gəlir vergi', 'əmlak vergi', 'torpaq vergi', 'sadələşdirilmiş vergi', 'sadelesdirilmis vergi', 'mənbədə', 'ödəmə mənbəyində', 'dövlət rüsumu', 'dovlet rusumu', 'ədv ödən', 'ədv-nin ödən', 'edv oden', 'büdcəyə', 'budceye', 'büdcə təsnifat', 'maliyyə sanksiya', 'faiz (vergi)');
+  const budget = has(
+    searchKey(line.counterparty),
+    'xəzinə',
+    'xezine',
+    'dövlət vergi',
+    'dovlet vergi',
+    'dvx',
+    'büdcə',
+    'budce',
+    'казначейство',
+  );
+  const taxWords = has(
+    purpose,
+    'vergi ödən',
+    'vergi oden',
+    'vergisi',
+    'mənfəət vergi',
+    'gəlir vergi',
+    'əmlak vergi',
+    'torpaq vergi',
+    'sadələşdirilmiş vergi',
+    'sadelesdirilmis vergi',
+    'mənbədə',
+    'ödəmə mənbəyində',
+    'dövlət rüsumu',
+    'dovlet rusumu',
+    'ədv ödən',
+    'ədv-nin ödən',
+    'edv oden',
+    'büdcəyə',
+    'budceye',
+    'büdcə təsnifat',
+    'maliyyə sanksiya',
+    'faiz (vergi)',
+  );
   if (budget || (!byTax && taxWords))
     return {
       kind: 'tax',
@@ -351,7 +467,10 @@ export function classifyStatementLine(
       confidence: 'high',
       reason: out ? 'Vergi ödənişi (521).' : 'Vergi qaytarılması (521).',
     };
-  if (out && has(purpose, 'əmək haqq', 'emek haqq', 'əməkhaqq', 'maaş', 'maas', 'zarplata', 'salary'))
+  if (
+    out &&
+    has(purpose, 'əmək haqq', 'emek haqq', 'əməkhaqq', 'maaş', 'maas', 'zarplata', 'salary')
+  )
     return {
       kind: 'salary',
       counterAccount: roles.payroll,
@@ -376,7 +495,20 @@ export function classifyStatementLine(
       confidence: 'medium',
       reason: out ? 'Kreditin qaytarılması (511) — faiz varsa ayırın.' : 'Kreditin alınması (511).',
     };
-  if (has(purpose, 'öz hesab', 'oz hesab', 'hesablar arası', 'hesablar arasi', 'kassaya', 'kassadan', 'nağdlaşdır', 'nagdlasdir', 'inkassasiya'))
+  if (
+    has(
+      purpose,
+      'öz hesab',
+      'oz hesab',
+      'hesablar arası',
+      'hesablar arasi',
+      'kassaya',
+      'kassadan',
+      'nağdlaşdır',
+      'nagdlasdir',
+      'inkassasiya',
+    )
+  )
     return {
       kind: 'transfer',
       counterAccount: roles.transit,

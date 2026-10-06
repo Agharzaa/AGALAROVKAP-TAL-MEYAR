@@ -39,8 +39,11 @@ test('v1 databases migrate: payments keep their data and become settlements; new
   assert.equal(pay.counter_account, '211');
   assert.equal(pay.amount, 15000n);
   assert.equal(pay.partner_id, 'p1');
-  const codes = db.all("SELECT code FROM accounts WHERE company_id='c1' ORDER BY code").map((r) => r.code);
-  for (const code of ['222', '301', '511', '522', '533', '611', '731']) assert.ok(codes.includes(code), code);
+  const codes = db
+    .all("SELECT code FROM accounts WHERE company_id='c1' ORDER BY code")
+    .map((r) => r.code);
+  for (const code of ['222', '301', '511', '522', '533', '611', '731'])
+    assert.ok(codes.includes(code), code);
   assert.equal(db.get("SELECT nature FROM accounts WHERE code='521'")!.nature, 'active-passive');
   assert.ok(db.get("SELECT 1 AS x FROM expense_items WHERE name='Bank xidmətləri'"));
   assert.equal(db.raw.prepare('PRAGMA foreign_keys').get()!.foreign_keys, 1);
@@ -67,8 +70,14 @@ test('bank operation kinds post to their own accounts without a partner where 1C
     expenseItemId: f.expenseItem('Bank xidmətləri'),
   });
   const capital = f.payment('in', bank, '10000', { kind: 'capital' });
-  assert.throws(() => f.payment('in', '', '1', { kind: 'capital', partnerId: undefined }), /Kontragent/);
-  assert.throws(() => f.payment('in', '', '1', { kind: 'salary', partnerId: undefined }), /üçün deyil/);
+  assert.throws(
+    () => f.payment('in', '', '1', { kind: 'capital', partnerId: undefined }),
+    /Kontragent/,
+  );
+  assert.throws(
+    () => f.payment('in', '', '1', { kind: 'salary', partnerId: undefined }),
+    /üçün deyil/,
+  );
   const loan = f.payment('in', bank, '2000', { kind: 'loan' });
   const transfer = f.payment('out', '', '700', { kind: 'transfer', partnerId: undefined });
   assert.deepEqual(sides(f.paymentDetail(transfer.id).postings), [
@@ -179,7 +188,13 @@ test('bank statement: read, import once, classify, post high-confidence lines, a
   assert.equal(read.lines[2]!.amount, '1.50');
 
   const imp = (fileName = 'yanvar.csv') =>
-    f.exec({ type: 'bankStatement.import', companyId: f.companyId, bankAccount: '223', fileName, lines: read.lines });
+    f.exec({
+      type: 'bankStatement.import',
+      companyId: f.companyId,
+      bankAccount: '223',
+      fileName,
+      lines: read.lines,
+    });
   assert.deepEqual([imp().count, imp().count], [8, 0]);
   assert.equal(imp('təkrar.csv').skipped, 8);
 
@@ -217,27 +232,48 @@ test('bank statement: read, import once, classify, post high-confidence lines, a
   f.exec({
     type: 'bankStatement.post',
     companyId: f.companyId,
-    lines: [{ lineId: supplierLine.id, kind: 'settlement', createPartner: true, autoAllocate: true }],
+    lines: [
+      { lineId: supplierLine.id, kind: 'settlement', createPartner: true, autoAllocate: true },
+    ],
   });
-  assert.ok(f.catalog().partners.some((p) => p.taxId === '1700000099' && p.name === 'Yeni Təchizatçı MMC'));
+  assert.ok(
+    f.catalog().partners.some((p) => p.taxId === '1700000099' && p.name === 'Yeni Təchizatçı MMC'),
+  );
   assert.throws(
     () =>
       f.exec({
         type: 'bankStatement.post',
         companyId: f.companyId,
-        lines: [{ lineId: supplierLine.id, kind: 'settlement', createPartner: true, autoAllocate: true }],
+        lines: [
+          { lineId: supplierLine.id, kind: 'settlement', createPartner: true, autoAllocate: true },
+        ],
       }),
     /artıq keçirilib/,
   );
   const unknown = rows[7]!;
-  f.exec({ type: 'bankStatement.ignore', companyId: f.companyId, lineIds: [unknown.id], reason: 'Bankla dəqiqləşdirilir' });
-  assert.equal(f.query<StatementLineView[]>({ type: 'bankStatement', companyId: f.companyId }).length, 0);
-  const all = f.query<StatementLineView[]>({ type: 'bankStatement', companyId: f.companyId, status: 'all' });
+  f.exec({
+    type: 'bankStatement.ignore',
+    companyId: f.companyId,
+    lineIds: [unknown.id],
+    reason: 'Bankla dəqiqləşdirilir',
+  });
+  assert.equal(
+    f.query<StatementLineView[]>({ type: 'bankStatement', companyId: f.companyId }).length,
+    0,
+  );
+  const all = f.query<StatementLineView[]>({
+    type: 'bankStatement',
+    companyId: f.companyId,
+    status: 'all',
+  });
   assert.deepEqual(
     all.map((r) => r.status),
     ['posted', 'posted', 'posted', 'posted', 'posted', 'posted', 'posted', 'ignored'],
   );
-  assert.equal(new Set(all.filter((r) => r.paymentReference).map((r) => r.paymentReference)).size, 7);
+  assert.equal(
+    new Set(all.filter((r) => r.paymentReference).map((r) => r.paymentReference)).size,
+    7,
+  );
 
   const tb = f.balanced();
   // 1500 in − 2360 − 1.50×2 − 340 − 220 − 700 out

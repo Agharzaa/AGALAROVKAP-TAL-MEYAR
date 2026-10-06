@@ -2040,3 +2040,66 @@ button.figure:hover {
   color: var(--amber);
   font-size: 12px;
 }
+
+/* Bank statement import */
+.stmt-booking {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 340px;
+}
+.stmt-booking select {
+  flex: 1 1 150px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+.stmt-amount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+.stmt-amount + .stmt-amount {
+  margin-left: 12px;
+}
+.stmt-amount.in svg {
+  color: var(--green);
+}
+.stmt-amount.out svg {
+  color: var(--red);
+}
+.tax-id {
+  color: var(--faint);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.badge.bad {
+  background: var(--red-tint);
+  color: var(--red);
+}
+.row-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+.muted-text {
+  color: var(--faint);
+  font-size: 12px;
+}
+.empty-hint {
+  max-width: 460px;
+  margin: 4px auto 10px;
+  color: var(--graphite);
+  font-size: 12.5px;
+  text-align: center;
+}
+.stmt-suggest {
+  max-width: 280px;
+}
+.stmt-suggest .badge {
+  align-self: flex-start;
+}

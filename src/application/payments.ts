@@ -156,10 +156,7 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
   const note = parseText(cmd.note, 'Təyinat', 500, false);
   const links = parseLinks(cmd.allocations, 'allocations');
   if (links.length && !settlesInvoices(kind))
-    throw new DomainError(
-      'Qaimələrə yalnız alıcı/malsatan hesablaşması bağlanır.',
-      'allocations',
-    );
+    throw new DomainError('Qaimələrə yalnız alıcı/malsatan hesablaşması bağlanır.', 'allocations');
   const key = numberKey(reference);
   const existing = cmd.id
     ? tx.db.get('SELECT * FROM payments WHERE company_id=? AND id=?', cmd.companyId, cmd.id)
@@ -314,7 +311,11 @@ export function savePayment(tx: Tx, cmd: CommandOf<'payment.save'>): CommandResu
  * are skipped. Returns the number of links created.
  */
 export function autoAllocate(tx: Tx, companyId: string, paymentId: string): number {
-  const payment = tx.db.get('SELECT * FROM payments WHERE company_id=? AND id=?', companyId, paymentId);
+  const payment = tx.db.get(
+    'SELECT * FROM payments WHERE company_id=? AND id=?',
+    companyId,
+    paymentId,
+  );
   if (!payment || payment.status !== 'posted' || payment.kind !== 'settlement') return 0;
   const closed = String(tx.company(companyId).closed_through);
   let free = (payment.amount as bigint) - allocated(tx, 'payment_id', paymentId);
@@ -335,7 +336,13 @@ export function autoAllocate(tx: Tx, companyId: string, paymentId: string): numb
     const date = String(inv.date) > String(payment.date) ? String(inv.date) : String(payment.date);
     if (date <= closed) continue;
     const amount = remaining < free ? remaining : free;
-    link(tx, companyId, tx.db.get('SELECT * FROM payments WHERE id=?', paymentId)!, [{ invoiceId: String(inv.id), amount }], date);
+    link(
+      tx,
+      companyId,
+      tx.db.get('SELECT * FROM payments WHERE id=?', paymentId)!,
+      [{ invoiceId: String(inv.id), amount }],
+      date,
+    );
     free -= amount;
     count++;
   }
@@ -353,7 +360,8 @@ export function autoAllocateCommand(tx: Tx, cmd: CommandOf<'allocation.auto'>): 
           cmd.partnerId ?? '',
         )
         .map((r) => String(r.id));
-  if (!ids.length) throw new DomainError('Əvəzləşdiriləcək ödəniş tapılmadı.', 'paymentId', 'not-found');
+  if (!ids.length)
+    throw new DomainError('Əvəzləşdiriləcək ödəniş tapılmadı.', 'paymentId', 'not-found');
   const count = ids.reduce((n, id) => n + autoAllocate(tx, cmd.companyId, id), 0);
   return { id: cmd.paymentId ?? cmd.partnerId ?? cmd.companyId, count };
 }

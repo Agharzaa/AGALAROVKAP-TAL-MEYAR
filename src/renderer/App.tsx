@@ -17,6 +17,7 @@ import {
 import { InvoiceList } from './pages/invoices';
 import { InvoiceEditor } from './pages/invoice-editor';
 import { PaymentList } from './pages/payments';
+import { BankStatement } from './pages/bank-statement';
 import { PaymentEditor } from './pages/payment-editor';
 import {
   AccountCardPage,
@@ -371,6 +372,8 @@ function WindowBody({ win }: { win: Win }) {
           return <InvoiceList direction="purchase" />;
         case 'sales':
           return <InvoiceList direction="sale" />;
+        case 'bankStatement':
+          return <BankStatement />;
         case 'bankIn':
           return <PaymentList direction="in" />;
         case 'bankOut':

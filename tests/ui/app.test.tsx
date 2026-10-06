@@ -368,3 +368,80 @@ test('Ctrl+K finds an invoice by number and opens it; windows keep their filters
     h.close();
   }
 });
+
+test('bank statement: a CSV is loaded once, recognised rows post automatically, the rest wait', async () => {
+  const h = harness();
+  const companyId = h.run({ type: 'company.create', name: 'Meyar MMC', taxId: '1234567890' }).id;
+  h.run({ type: 'partner.save', companyId, name: 'Alıcı MMC', taxId: '1700000001' });
+  const csv = [
+    'Tarix;Sənəd №;Kontragent;VÖEN;Mədaxil;Məxaric;Ödənişin təyinatı',
+    '05.01.2026;101;Alıcı MMC;1700000001;"1 500,00";;Müqavilə üzrə ödəniş',
+    '06.01.2026;;Kapital Bank;9900003611;;1,50;Komissiya',
+    '07.01.2026;102;Yeni MMC;1700000099;;"200,00";Hesab-faktura 5',
+  ].join('\n');
+  const file = () => new File([csv], 'yanvar.csv', { type: 'text/csv' });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Bank çıxarışı' }));
+    const page = within(pane());
+    const input = pane().querySelector('input[type=file]') as HTMLInputElement;
+    await user.upload(input, file());
+    await page.findByText(/yanvar\.csv: 3 yeni sətir yükləndi/);
+    await user.upload(input, file());
+    await page.findByText(/0 yeni sətir yükləndi, 3 sətir əvvəl yüklənib/);
+    const auto = await page.findByRole('button', { name: /Avtomatik keçir \(2\)/ });
+    await user.click(auto);
+    await page.findByText(/Avtomatik keçirmə: 2 sənəd uçota alındı/);
+    // The new supplier waits: choose "+ Yeni" and post it by hand.
+    const partner = await page.findByRole('combobox', { name: 'Kontragent' });
+    await user.selectOptions(partner, '__new');
+    await user.click(page.getByRole('button', { name: /^Uçota al 2026-01-07/ }));
+    await page.findByText(/Sətir keçirildi: 1 sənəd/);
+    const out = h.ledger.query({ type: 'payments', companyId, direction: 'out', ...all }) as {
+      kind: string;
+      counterAccount: string;
+      partnerName: string;
+    }[];
+    assert.deepEqual(out.map((p) => [p.kind, p.counterAccount, p.partnerName]).sort(), [
+      ['fee', '721', ''],
+      ['settlement', '531', 'Yeni MMC'],
+    ]);
+  } finally {
+    h.close();
+  }
+});
+
+test('payment editor: a tax payment needs no partner and posts Dt 521', async () => {
+  const h = harness();
+  const companyId = h.run({ type: 'company.create', name: 'Meyar MMC', taxId: '1234567890' }).id;
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Ödənişlər' }));
+    await user.click(await within(pane()).findByRole('button', { name: 'Yeni ödəniş' }));
+    const editor = within(pane());
+    await user.selectOptions(
+      await editor.findByRole('combobox', { name: 'Əməliyyat növü' }),
+      'tax',
+    );
+    await user.type(editor.getByRole('textbox', { name: 'Bank sənədinin nömrəsi' }), 'V-1');
+    await user.type(editor.getByRole('textbox', { name: 'Məbləğ · AZN' }), '340');
+    assert.match(pane().textContent ?? '', /Dt 521 \/ Kt 223/);
+    await user.click(editor.getByRole('button', { name: 'Uçota al' }));
+    await editor.findByText('Ödəniş uçota alındı.');
+    const [p] = h.ledger.query({ type: 'payments', companyId, direction: 'out', ...all }) as {
+      id: string;
+    }[];
+    const detail = h.ledger.query({ type: 'payment', companyId, id: p!.id }) as PaymentDetail;
+    assert.deepEqual(
+      detail.postings.map((l) => [l.account, l.debit, l.credit]),
+      [
+        ['521', '340.00', '0.00'],
+        ['223', '0.00', '340.00'],
+      ],
+    );
+  } finally {
+    h.close();
+  }
+});

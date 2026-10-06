@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Ban, Check, Link2, ListOrdered, Unlink, X } from 'lucide-react';
 import { inFamily } from '../../domain/accounts';
 import { formatMinor, parseMoney } from '../../domain/money';
+import { paymentKinds, type PaymentKind } from '../../domain/posting';
 import type { InvoiceSummary, PaymentDetail } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
@@ -13,6 +14,9 @@ import { useWindow, useWorkspace } from '../workspace';
 import { PostingsPanel } from './postings';
 
 interface Form {
+  kind: PaymentKind;
+  counterAccount: string;
+  expenseItemId: string;
   reference: string;
   date: string;
   bankAccount: string;
@@ -234,6 +238,9 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
     if (id && !payment) return;
     const initial: Form = payment
       ? {
+          kind: payment.kind,
+          counterAccount: payment.counterAccount,
+          expenseItemId: payment.expenseItemId,
           reference: payment.reference,
           date: payment.date,
           bankAccount: payment.bankAccount,
@@ -243,6 +250,9 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
           split: Object.fromEntries(atDate.map((a) => [a.invoiceId, toField(a.amount)])),
         }
       : {
+          kind: 'settlement',
+          counterAccount: '',
+          expenseItemId: '',
           reference: '',
           date: today(),
           bankAccount: '223',
@@ -258,6 +268,9 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
     if (!payment || !form || !resync.current) return;
     resync.current = false;
     const next: Form = {
+      kind: payment.kind,
+      counterAccount: payment.counterAccount,
+      expenseItemId: payment.expenseItemId,
       reference: payment.reference,
       date: payment.date,
       bankAccount: payment.bankAccount,
@@ -298,6 +311,21 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
     }))
     .filter((c) => !isZero(c.available));
   const amount = toMinor(form.amount);
+  const rule = paymentKinds[form.kind];
+  const settles = form.kind === 'settlement';
+  const kindOptions = (Object.keys(paymentKinds) as PaymentKind[]).filter(
+    (k) => paymentKinds[k].label[direction],
+  );
+  const families = rule.families[direction];
+  const counterOptions = catalog.accounts.filter(
+    (a) => a.postable && families.some((f) => inFamily(a.code, f)),
+  );
+  const counter =
+    counterOptions.find((a) => a.code === form.counterAccount) ??
+    counterOptions.find((a) => inFamily(a.code, families[0] ?? '')) ??
+    counterOptions[0];
+  const counterCode = counter?.code ?? families[0] ?? '';
+  const needsItem = !!counter?.analytics.includes('expenseItem');
   const banks = catalog.accounts.filter(
     (a) => a.postable && (inFamily(a.code, '223') || a.code === '224.04'),
   );
@@ -332,13 +360,16 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
       type: 'payment.save',
       companyId: win.companyId,
       direction,
+      kind: form.kind,
       bankAccount: form.bankAccount,
       reference: form.reference,
       date: form.date,
-      partnerId: form.partnerId,
+      ...(form.partnerId ? { partnerId: form.partnerId } : {}),
+      ...(settles ? {} : { counterAccount: counterCode }),
+      ...(needsItem && form.expenseItemId ? { expenseItemId: form.expenseItemId } : {}),
       amount: form.amount,
       note: form.note,
-      allocations: splitLines(form.split, candidates, form.date),
+      allocations: settles ? splitLines(form.split, candidates, form.date) : [],
       ...(id && payment ? { id, version: payment.version } : {}),
     });
     if (!r) return;
@@ -391,6 +422,62 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
       >
         <fieldset className="document-body" disabled={m.busy || locked}>
           <div className="document-header">
+            <Field label="Əməliyyat növü" wide>
+              <select
+                aria-label="Əməliyyat növü"
+                value={form.kind}
+                disabled={!!payment?.allocations.some((a) => a.status === 'active')}
+                onChange={(e) =>
+                  set({
+                    kind: e.target.value as PaymentKind,
+                    counterAccount: '',
+                    expenseItemId:
+                      e.target.value === 'fee'
+                        ? (catalog.expenseItems.find((x) => x.name === 'Bank xidmətləri')?.id ?? '')
+                        : '',
+                    split: {},
+                  })
+                }
+              >
+                {kindOptions.map((k) => (
+                  <option key={k} value={k}>
+                    {paymentKinds[k].label[direction]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {!settles && (
+              <Field label="Müxabirləşən hesab">
+                <select
+                  aria-label="Müxabirləşən hesab"
+                  value={counterCode}
+                  onChange={(e) => set({ counterAccount: e.target.value, expenseItemId: '' })}
+                >
+                  {counterOptions.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.code} · {a.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {!settles && needsItem && (
+              <Field label="Xərc maddəsi">
+                <select
+                  aria-label="Xərc maddəsi"
+                  required
+                  value={form.expenseItemId}
+                  onChange={(e) => set({ expenseItemId: e.target.value })}
+                >
+                  <option value="">Seçin</option>
+                  {catalog.expenseItems.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="Bank sənədinin nömrəsi">
               <input
                 required
@@ -424,13 +511,17 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
                 onChange={(e) => set({ amount: e.target.value })}
               />
             </Field>
-            <Field label={direction === 'in' ? 'Ödəyici' : 'Alan'} wide>
+            <Field
+              label={`${direction === 'in' ? 'Ödəyici' : 'Alan'}${rule.partner === 'required' ? '' : ' (məcburi deyil)'}`}
+              wide
+            >
               <select
-                required
+                aria-label={direction === 'in' ? 'Ödəyici' : 'Alan'}
+                required={rule.partner === 'required'}
                 value={form.partnerId}
                 onChange={(e) => set({ partnerId: e.target.value, split: {} })}
               >
-                <option value="">Kontragent seçin</option>
+                <option value="">{rule.partner === 'required' ? 'Kontragent seçin' : '—'}</option>
                 {catalog.partners.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} · {p.taxId}
@@ -446,7 +537,7 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
               />
             </Field>
           </div>
-          {form.partnerId && (
+          {settles && form.partnerId && (
             <SplitTable
               caption="Qaimələr üzrə bölgü"
               candidates={candidates}
@@ -459,10 +550,12 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
           <p className="document-hint">
             Bütün məbləğ{' '}
             {direction === 'in'
-              ? `Dt ${form.bankAccount} / Kt 211`
-              : `Dt 531 / Kt ${form.bankAccount}`}{' '}
-            kimi uçota alınır. Qaimələrə bağlanmayan hissə kontragentin avansıdır; bağlama yalnız
-            borcların hesablaşmasını göstərir, yazılışı dəyişmir.
+              ? `Dt ${form.bankAccount} / Kt ${settles ? '211' : counterCode}`
+              : `Dt ${settles ? '531' : counterCode} / Kt ${form.bankAccount}`}{' '}
+            kimi uçota alınır.
+            {settles
+              ? ' Qaimələrə bağlanmayan hissə kontragentin avansıdır; bağlama yalnız borcların hesablaşmasını göstərir, yazılışı dəyişmir.'
+              : ''}
             {laterLinks.length > 0 &&
               ` Düzəliş saxlanarsa, sonradan edilmiş ${laterLinks.length} bağlantı açılacaq.`}
           </p>
@@ -522,7 +615,7 @@ export function PaymentEditor({ direction, id }: { direction: 'in' | 'out'; id?:
                 </tbody>
               </table>
             )}
-            {unallocated > 0n && !dirty && (
+            {settles && unallocated > 0n && !dirty && (
               <div className="later" key={laterKey}>
                 <SplitTable
                   caption={`Avansı bağla · ${money(payment.unallocated)} AZN`}

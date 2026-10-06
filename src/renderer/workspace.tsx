@@ -14,6 +14,7 @@ export type Page =
   | 'home'
   | 'purchases'
   | 'sales'
+  | 'bankStatement'
   | 'bankIn'
   | 'bankOut'
   | 'trial'

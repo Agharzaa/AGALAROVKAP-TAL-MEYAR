@@ -281,7 +281,6 @@ WHEN EXISTS(SELECT 1 FROM allocations WHERE payment_id=OLD.id AND status='active
 BEGIN SELECT RAISE(ABORT,'guard: Əvvəl ödənişin qaimə bağlantıları ləğv edilməlidir.'); END;
 `;
 
-
 /**
  * v2 — bank operation kinds and bank statement import.
  * - Accounts the bank kinds post to are added to every existing company (222, 301, 511, 522,

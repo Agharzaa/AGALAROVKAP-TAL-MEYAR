@@ -23,15 +23,24 @@ Bu sənəd proqramın **hazırda** necə uçot apardığını təsvir edir. Büt
 | 205    | Mallar                                        | anbar, məhsul, miqdar |
 | 211    | Alıcılarla hesablaşmalar                      | kontragent            |
 | 221    | Kassa                                         | —                     |
+| 222    | Yolda olan pul köçürmələri                    | —                     |
 | 223    | Bank hesabları                                | —                     |
 | 224.04 | ƏDV depozit hesabı                            | —                     |
 | 241    | Alış üzrə ƏDV                                 | —                     |
-| 521    | Vergi öhdəlikləri                             | —                     |
+| 301    | Nominal (nizamnamə) kapital                   | kontragent (təsisçi)  |
+| 511    | Qısamüddətli bank kreditləri                  | kontragent (bank)     |
+| 521    | Vergi öhdəlikləri (aktiv-passiv)              | —                     |
+| 522    | Sosial sığorta öhdəlikləri                    | —                     |
 | 531    | Malsatanlarla hesablaşmalar                   | kontragent            |
+| 533    | Əməyin ödənişi üzrə borclar                   | —                     |
 | 545    | Satış üzrə ƏDV                                | —                     |
 | 601    | Satış gəliri                                  | —                     |
+| 611    | Sair əməliyyat gəlirləri                      | —                     |
 | 701    | Satışın maya dəyəri                           | —                     |
 | 721    | İnzibati xərclər                              | xərc maddəsi          |
+| 731    | Sair əməliyyat xərcləri                       | xərc maddəsi          |
+
+222, 301, 511, 522, 533, 611, 731 baza versiyası 2-də əlavə olunub; köhnə bazalarda proqram açılanda avtomatik yaranır.
 
 Subhesab qaydaları:
 
@@ -53,6 +62,31 @@ Subhesab qaydaları:
 | Satılan malın maya dəyəri          | 701                               | 205 / 201 (orta çəkili)      |
 | Daxil olan bank ödənişi            | 223 və ya 224.04                  | 211 + kontragent             |
 | Çıxan bank ödənişi                 | 531 + kontragent                  | 223 və ya 224.04             |
+
+Bank sənədinin **əməliyyat növü** (1C-dəki kimi) müxabirləşən hesabı müəyyən edir:
+
+| Növ                           | Daxilolma (Dt bank / Kt …) | Ödəniş (Dt … / Kt bank)  | Kontragent |
+| ----------------------------- | -------------------------- | ------------------------ | ---------- |
+| Alıcı / malsatan hesablaşması | 211                        | 531                      | məcburi    |
+| Vəsaitin qaytarılması         | 531 (malsatan qaytarır)    | 211 (alıcıya qaytarırıq) | məcburi    |
+| Nizamnamə kapitalı            | 301                        | —                        | məcburi    |
+| Kredit                        | 511                        | 511                      | məcburi    |
+| Vergi                         | 521                        | 521                      | yox        |
+| Sosial sığorta                | —                          | 522                      | yox        |
+| Əmək haqqı                    | —                          | 533                      | yox        |
+| Öz hesabları / kassa          | 222 və ya 221              | 222 və ya 221            | yox        |
+| Bank xidmət haqqı             | —                          | 721 + xərc maddəsi       | yox        |
+| Digər                         | 611                        | 731 / 721 + xərc maddəsi | yox        |
+
+Hesablar arası köçürmə 222 (yolda olan pul) vasitəsilə aparılır: göndərən hesabda Dt 222 / Kt 223, alan hesabda Dt 223 (və ya 224.04) / Kt 222. Hər iki tərəf keçiriləndə 222 sıfırlanır; qalıq qalırsa, pul yoldadır.
+
+### Bank çıxarışının idxalı
+
+- **Fayl:** internet-bankdan endirilən Excel (.xlsx) və ya CSV. Sütunlar başlıq sözlərinə görə tapılır (Tarix, Mədaxil/Məxaric və ya Debet/Kredit, Məbləğ, VÖEN, Kontragent, Təyinat). Köhnə .xls oxunmur — .xlsx kimi saxlanmalıdır.
+- **Təkrar yükləmə:** hər sətrin barmaq izi (tarix, istiqamət, məbləğ, nömrə, VÖEN, təyinat) saxlanır; eyni çıxarış ikinci dəfə dublikat yaratmır.
+- **Tanıma ardıcıllığı:** şirkətin öz VÖEN-i → köçürmə (222); "ƏDV depozit" → köçürmə; komissiya → 721 "Bank xidmətləri"; DSMF/sosial sığorta → 522; Xəzinədarlıq/büdcə və ya (tanınmış kontragent deyilsə) vergi sözləri → 521; əmək haqqı → 533; nizamnamə → 301; kredit → 511; VÖEN üzrə tanınmış kontragent → hesablaşma (və ya "qaytar" sözü ilə qaytarma); naməlum VÖEN → yeni kontragent yaradılması təklifi.
+- **Avtomatik keçirmə:** yalnız "Dəqiq" (yüksək etibarlı) təkliflər keçirilir; qalanları mühasib yoxlayıb tək-tək keçirir və ya səbəb yazaraq kənarlaşdırır.
+- **Nəticə:** hər sətir adi bank sənədi olur (eyni yoxlamalar, jurnal və audit). Hesablaşma sətirləri kontragentin açıq qaimələrinə köhnədən başlayaraq avtomatik bağlanır; artığı avans qalır.
 
 Əlavə qaydalar:
 
@@ -81,6 +115,8 @@ Subhesab qaydaları:
 - **Bank yazılışı:** ödəniş həmişə **tam məbləğlə** kontragentin hesablaşma hesabına yazılır (211 və ya 531).
 - **Qaiməyə bağlama:** yalnız hesablaşma analitikasıdır. **Jurnalı dəyişmir.**
 - **Bağlanmamış qalıq:** eyni hesabda kontragentin avansıdır. Sonradan istənilən tarixdə qaimələrə bağlana bilər. Bağlama tarixi ödənişdən və qaimədən əvvəl ola bilməz.
+- **Avansların avtomatik əvəzləşdirilməsi:** `allocation.auto` ödənişin (və ya kontragentin bütün ödənişlərinin) boş qalığını açıq qaimələrə köhnədən başlayaraq bağlayır; bağlama tarixi iki sənəddən sonrakının tarixidir. Bağlı dövrə düşən bağlantı yaradılmır.
+- **Yalnız hesablaşma:** vergi, komissiya, kredit və s. ödənişləri qaimələrə bağlanmır (bazada da qadağandır).
 - **Hədlər:** bağlanan məbləğ nə qaimənin qalıq borcunu, nə ödənişin bağlanmamış qalığını aşa bilər. Bu, bazada da yoxlanılır.
 - **Bağlı qaimə:** dəyişdirilmir və ləğv edilmir. Əvvəl bağlantı səbəb göstərilərək açılır.
 - **Ödənişin düzəlişi və ləğvi:** bağlantıları açır. Düzəlişdə bölgü ödəniş tarixi ilə yenidən qurulur.
@@ -97,4 +133,4 @@ Subhesab qaydaları:
 
 ## Hələ olmayanlar (hazır kimi təqdim edilmir)
 
-Qaytarma, anbarlararası transfer, material sərfi (Dt 721 / Kt 201), istismara vermə (Dt 111 / Kt 113) və amortizasiya. Həmçinin kassa, xarici valyuta, əməkhaqqı, vergi bəyannamələri, Excel və bank çıxarışı idxalı, DVX/bank API-ləri. İstifadəçi rolları, başlanğıc qalıqların köçürülməsi və proqram daxilində bərpa da hələ yoxdur.
+Qaytarma, anbarlararası transfer, material sərfi (Dt 721 / Kt 201), istismara vermə (Dt 111 / Kt 113) və amortizasiya. Həmçinin kassa, xarici valyuta, əməkhaqqı, vergi bəyannamələri, Excel qaimə idxalı, DVX/bank API-ləri. İstifadəçi rolları, başlanğıc qalıqların köçürülməsi və proqram daxilində bərpa da hələ yoxdur.

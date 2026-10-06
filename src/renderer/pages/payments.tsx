@@ -9,6 +9,14 @@ import { pages } from '../pages';
 import { Amount, DataTable, Empty, Notice, Status, type Column } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
+function subtitle(p: PaymentView): string {
+  if (p.kind !== 'settlement')
+    return [p.kindLabel, p.counterAccount, p.expenseItemName, p.note].filter(Boolean).join(' · ');
+  if (p.note) return p.note;
+  const links = p.allocations.filter((a) => a.status === 'active');
+  return links.length ? links.map((a) => a.invoiceNumber).join(', ') : 'Qaiməyə bağlanmayıb';
+}
+
 export function PaymentList({ direction }: { direction: 'in' | 'out' }) {
   const win = useWindow();
   const ws = useWorkspace();
@@ -21,7 +29,7 @@ export function PaymentList({ direction }: { direction: 'in' | 'out' }) {
     ...range.applied,
   });
   const rows = (result.data ?? []).filter((p) =>
-    matches(search, p.reference, p.partnerName, p.note),
+    matches(search, p.reference, p.partnerName, p.note, p.kindLabel, p.counterAccount),
   );
   const posted = rows.filter((p) => p.status === 'posted');
   const page = pages[direction === 'in' ? 'bankIn' : 'bankOut'];
@@ -44,16 +52,8 @@ export function PaymentList({ direction }: { direction: 'in' | 'out' }) {
       className: 'wide',
       render: (p) => (
         <div className="two-line">
-          <strong title={p.partnerName}>{p.partnerName}</strong>
-          <small>
-            {p.note ||
-              (p.allocations.some((a) => a.status === 'active')
-                ? p.allocations
-                    .filter((a) => a.status === 'active')
-                    .map((a) => a.invoiceNumber)
-                    .join(', ')
-                : 'Qaiməyə bağlanmayıb')}
-          </small>
+          <strong title={p.partnerName || p.kindLabel}>{p.partnerName || p.kindLabel}</strong>
+          <small>{subtitle(p)}</small>
         </div>
       ),
     },

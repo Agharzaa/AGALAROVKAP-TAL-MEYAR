@@ -120,7 +120,8 @@ function partnerFor(
     taxId,
   );
   if (found) return String(found.id);
-  const name = parseText(String(line.counterparty || ''), 'Kontragentin adı', 240, false) || `VÖEN ${taxId}`;
+  const name =
+    parseText(String(line.counterparty || ''), 'Kontragentin adı', 240, false) || `VÖEN ${taxId}`;
   const id = tx.id();
   tx.db.run(
     'INSERT INTO partners(id,company_id,name,tax_id) VALUES(?,?,?,?)',
@@ -143,7 +144,8 @@ export function postStatement(tx: Tx, cmd: CommandOf<'bankStatement.post'>): Com
       cmd.companyId,
       input.lineId,
     );
-    if (!line) throw new DomainError(`Sətir ${i + 1}: çıxarış sətri tapılmadı.`, `lines.${i}`, 'not-found');
+    if (!line)
+      throw new DomainError(`Sətir ${i + 1}: çıxarış sətri tapılmadı.`, `lines.${i}`, 'not-found');
     if (line.status !== 'new')
       throw new DomainError(
         `Sətir ${i + 1}: bu çıxarış sətri artıq ${line.status === 'posted' ? 'keçirilib' : 'kənarlaşdırılıb'}.`,
@@ -205,7 +207,14 @@ export function ignoreStatement(tx: Tx, cmd: CommandOf<'bankStatement.ignore'>):
     );
     count += Number(r.changes);
   }
-  if (count) tx.audit(cmd.companyId, 'Kənarlaşdırıldı', 'Bank çıxarışı', cmd.companyId, `${count} sətir · ${reason}`);
+  if (count)
+    tx.audit(
+      cmd.companyId,
+      'Kənarlaşdırıldı',
+      'Bank çıxarışı',
+      cmd.companyId,
+      `${count} sətir · ${reason}`,
+    );
   return { id: cmd.companyId, count };
 }
 
@@ -222,7 +231,10 @@ export function classifyContext(db: Db, companyId: string): ClassifyContext {
       partners.map((p) => [String(p.tax_id), { id: String(p.id), name: String(p.name) }]),
     ),
     partnersByName: new Map(
-      partners.map((p) => [searchKey(String(p.name).trim()), { id: String(p.id), name: String(p.name) }]),
+      partners.map((p) => [
+        searchKey(String(p.name).trim()),
+        { id: String(p.id), name: String(p.name) },
+      ]),
     ),
     ...(fee ? { bankFeeItemId: String(fee.id) } : {}),
   };
@@ -231,7 +243,10 @@ export function classifyContext(db: Db, companyId: string): ClassifyContext {
 export function statementLines(
   db: Db,
   companyId: string,
-  filter: { bankAccount?: string | undefined; status?: 'new' | 'posted' | 'ignored' | 'all' | undefined },
+  filter: {
+    bankAccount?: string | undefined;
+    status?: 'new' | 'posted' | 'ignored' | 'all' | undefined;
+  },
 ): StatementLineView[] {
   const ctx = classifyContext(db, companyId);
   const where: string[] = ['s.company_id=?'];

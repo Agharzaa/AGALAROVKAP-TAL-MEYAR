@@ -15,13 +15,14 @@ Yenilənib: 06.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Hazır (testlə sübut olunub)
 
-| Sahə                                                                                                                                                                          | Sübut                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Domain: pul/miqdar, hesab planı, müxabirləşmə, orta maya                                                                                                                      | `tests/domain` — 10 test                                                                                            |
-| SQLite ledger: idempotentlik, versiya, əks yazılış, bağlı dövr, tenant FK, bölgü, anbar xronologiyası, hesabatlar, backup                                                     | `tests/integration` — 21 test                                                                                       |
-| UI (jsdom + real Ledger): ilk şirkət, qaimə, 18%, ilkin baxış, düzəliş, bağlama qoruması, server xətası, bank bölgüsü, ikiqat klik, avansın bağlanması, şirkət keçidi, Ctrl+K | `tests/ui` — 6 test                                                                                                 |
-| Real Electron (Linux, Xvfb): tək pəncərə; 1050/1440/1920 layout; filtr 7%; kəsilmiş yazı yoxdur; qaimə IPC ilə saxlanır                                                       | `scripts/electron-smoke.cjs` — keçdi                                                                                |
-| Performans (Linux konteyner, 100 000 qaimə)                                                                                                                                   | il üzrə satış siyahısı (50 000 sətir) ~0,9 s; ay ~0,07 s; DBC ~1,0 s; kontragent qalıqları ~0,5 s; iş masası ~0,8 s |
+| Sahə                                                                                                                                                                                                                                                                              | Sübut                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Domain: pul/miqdar, hesab planı, müxabirləşmə, orta maya                                                                                                                                                                                                                          | `tests/domain` — 11 test                                                                                            |
+| SQLite ledger: idempotentlik, versiya, əks yazılış, bağlı dövr, tenant FK, bölgü, anbar xronologiyası, hesabatlar, backup                                                                                                                                                         | `tests/integration` — 25 test                                                                                       |
+| UI (jsdom + real Ledger): ilk şirkət, qaimə, 18%, ilkin baxış, düzəliş, bağlama qoruması, server xətası, bank bölgüsü, ikiqat klik, avansın bağlanması, şirkət keçidi, Ctrl+K                                                                                                     | `tests/ui` — 8 test                                                                                                 |
+| Bank (v0.2.0): əməliyyat növləri (hesablaşma, qaytarma, kapital, kredit, vergi, DSMF, əmək haqqı, köçürmə 222, komissiya, digər), baza miqrasiyası v1→v2, çıxarış idxalı (CSV/XLSX, dublikatsız), VÖEN/təyinat üzrə avtomatik tanıma və keçirmə, avansların FIFO əvəzləşdirilməsi | `tests/integration/bank.test.ts`, `tests/ui`                                                                        |
+| Real Electron (Linux, Xvfb): tək pəncərə; 1050/1440/1920 layout; filtr 7%; kəsilmiş yazı yoxdur; qaimə IPC ilə saxlanır                                                                                                                                                           | `scripts/electron-smoke.cjs` — keçdi                                                                                |
+| Performans (Linux konteyner, 100 000 qaimə)                                                                                                                                                                                                                                       | il üzrə satış siyahısı (50 000 sətir) ~0,9 s; ay ~0,07 s; DBC ~1,0 s; kontragent qalıqları ~0,5 s; iş masası ~0,8 s |
 
 Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19 testlə örtülüb.
 
@@ -31,7 +32,7 @@ Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11,
 - **Quraşdırıcı:** `Meyar-Setup-0.1.0.exe` (99,5 MB, NSIS, x64) Linux-da electron-builder + wine ilə yığıldı. Daxilində `Meyar.exe` və `app.asar` yoxlanıb. Eyni paket konfiqurasiyası ilə Linux paketi işə salındı: baza yarandı, proses açıq qaldı. Windows-da quraşdırma və açılış hələ təsdiqlənməyib. İmzalanmamış sınaq versiyasıdır. Birbaşa yükləmə (ayrı `download` branch-i, SHA-256 `846a02aa…3d2d`, yoxlanıb): https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR/raw/download/Meyar-Setup-0.1.0.exe
 - **Qəbul 5 (atomik idxal) və 13 (qaytarma):** sənəd növü hələ yoxdur.
 - **Anbar sənədləri:** transfer, material sərfi (721/201), istismara vermə (111/113), inventarizasiya.
-- **Mərhələ B:** rollar və istifadəçilər, başlanğıc qalıqlar, bank çıxarışı idxalı və uyğunlaşdırma, hesab çıxarışı və üzləşmə aktı, proqram daxilində bərpa, Excel/PDF çıxışı və çap.
+- **Mərhələ B:** rollar və istifadəçilər, başlanğıc qalıqlar, bank qalığının çıxarışla üzləşdirilməsi, hesab çıxarışı və üzləşmə aktı, proqram daxilində bərpa, Excel/PDF çıxışı və çap.
 - **Mərhələ C–F:** imza, yeniləmə, server və PostgreSQL, valyuta, amortizasiya, əməkhaqqı, vergi, DVX.
 
 ## Açıq qərarlar (istifadəçi və mühasib üçün)
@@ -43,7 +44,9 @@ Spesifikasiyanın qəbul ssenariləri: 1, 2, 3, 4 (saxlama), 6, 7, 8, 9, 10, 11,
 
 1. Windows CI nəticəsini yoxlamaq. Keçərsə, `v0.1.0` release linki həqiqətən yaranıbsa istifadəçiyə vermək. Keçməzsə, Windows xətasını düzəltmək.
 2. Anbar sənədləri: qaytarma (ilkin sənədə bağlı, maya və ƏDV bərpası), transfer, material sərfi, istismara vermə. Testlər: qəbul 13 və xronologiya.
-3. Excel qaimə idxalı: sütun xəritəsi, ilkin baxış, atomik tətbiq (qəbul 5) və bank çıxarışı idxalı (CSV/XLSX), avtomatik uyğunlaşdırma təklifləri.
+3. Excel qaimə idxalı: sütun xəritəsi, ilkin baxış, atomik tətbiq (qəbul 5).
+4. Kassa (221: MKO/MMO, 222 vasitəsilə bankla köçürmə) və ay bağlanışı (6/7/9 → 801 → 341) — köhnə v1.16 məntiqi bu arxitekturaya köçürülməlidir.
+5. Analitik DBC: hesab → kontragent → sənəd üzrə açılış (hesab kartı artıq var).
 
 ## Əmrlər
 

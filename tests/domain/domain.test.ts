@@ -331,9 +331,8 @@ test('acceptance 11: 10×10 + 10×20, issue 4 → average cost 60; full issue cl
 });
 
 test('bank statement amounts and dates are read the way banks print them', async () => {
-  const { readStatementAmount, readStatementDate, classifyStatementLine } = await import(
-    '../../src/domain/statement.js'
-  );
+  const { readStatementAmount, readStatementDate, classifyStatementLine } =
+    await import('../../src/domain/statement.js');
   const a = (v: string) => {
     const r = readStatementAmount(v);
     return r ? `${r.negative ? '-' : ''}${formatMinor(r.amount)}` : undefined;
@@ -362,7 +361,10 @@ test('bank statement amounts and dates are read the way banks print them', async
   const kind = (direction: 'in' | 'out', purpose: string, taxId = '', counterparty = '') =>
     classifyStatementLine({ direction, purpose, counterpartyTaxId: taxId, counterparty }, ctx).kind;
   // A supplier's "vergi hesab-fakturası" or "ƏDV daxil" is still a settlement.
-  assert.equal(kind('out', 'Elektron vergi hesab-fakturası üzrə, ƏDV daxil', '1700000001'), 'settlement');
+  assert.equal(
+    kind('out', 'Elektron vergi hesab-fakturası üzrə, ƏDV daxil', '1700000001'),
+    'settlement',
+  );
   assert.equal(kind('out', 'Mənfəət vergisi'), 'tax');
   assert.equal(kind('out', 'Ödəniş', '', 'Azərbaycan Respublikası Dövlət Xəzinədarlığı'), 'tax');
   assert.equal(kind('out', 'Yanvar ayı üzrə əmək haqqı'), 'salary');
