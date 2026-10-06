@@ -15,7 +15,6 @@ const sides = (postings: PostingView[]) =>
 
 test('v1 databases migrate: payments keep their data and become settlements; new accounts appear', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'meyar-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, 'v1.sqlite');
   const raw = new DatabaseSync(path);
   raw.exec('PRAGMA foreign_keys=ON');
@@ -32,7 +31,11 @@ test('v1 databases migrate: payments keep their data and become settlements; new
   raw.close();
 
   const db = new Db(path);
-  t.after(() => db.close());
+  // Windows refuses to delete an open SQLite file: close first, then remove the folder.
+  t.after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
   assert.equal(db.version(), SCHEMA_VERSION);
   const pay = db.get('SELECT * FROM payments WHERE id=?', 'pay1')!;
   assert.equal(pay.kind, 'settlement');
