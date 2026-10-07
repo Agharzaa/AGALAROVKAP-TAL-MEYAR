@@ -18,6 +18,15 @@ import { issueCost } from '../../src/domain/stock.js';
 import { numberKey, parseDate, parseTaxId } from '../../src/domain/values.js';
 import { DomainError } from '../../src/domain/errors.js';
 import { Chart, baseChart, checkSubkonto, newAccount } from '../../src/domain/chart.js';
+import {
+  allocateAdvances,
+  AZN_RATE,
+  aznAmounts,
+  fifoCost,
+  lineAmounts,
+  sliceValue,
+  toAzn,
+} from '../../src/domain/invoice.js';
 import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
@@ -206,4 +215,68 @@ test('postings: subkonto count, quantity and currency rules; storno negates ever
   assert.equal(s!.amount, -1000n);
   assert.equal(s!.quantity, -5n);
   checkPostings(chart, [s!]);
+});
+
+test('invoice lines: VAT on top or inside, per-line rounding, AZN conversion', () => {
+  const q = (v: string) => parseQty(v);
+  const p = (v: string) => parsePrice(v);
+  assert.deepEqual(lineAmounts(q('1'), p('100'), '18', false), {
+    net: 10000n,
+    vat: 1800n,
+    gross: 11800n,
+  });
+  assert.deepEqual(lineAmounts(q('1'), p('118'), '18', true), {
+    net: 10000n,
+    vat: 1800n,
+    gross: 11800n,
+  });
+  assert.deepEqual(lineAmounts(q('1'), p('15000'), '18', true), {
+    net: 1271186n,
+    vat: 228814n,
+    gross: 1500000n,
+  });
+  assert.deepEqual(lineAmounts(q('3'), p('10'), 'exempt', false), {
+    net: 3000n,
+    vat: 0n,
+    gross: 3000n,
+  });
+  assert.equal(toAzn(10000n, AZN_RATE), 10000n);
+  assert.equal(toAzn(10000n, p('1.7')), 17000n);
+  assert.equal(toAzn(3333n, p('1.7031')), 5676n, '33.33 × 1.7031 = 56.764323 → 56.76');
+  const a = aznAmounts({ net: 3333n, vat: 600n, gross: 3933n }, p('1.7031'));
+  assert.equal(a.net + a.vat, a.gross, 'AZN net is gross − VAT, so AZN lines always add up');
+});
+
+test('FIFO: slices of a layer add up exactly; oldest layer first; shortage is refused', () => {
+  const layer = { source: 'a', quantity: 3_000_000n, value: 1000n };
+  const one = 1_000_000n;
+  const slices = [0n, 1n, 2n].map((i) => sliceValue(layer, i * one, (i + 1n) * one));
+  assert.deepEqual(slices, [333n, 334n, 333n]);
+  const layers = [
+    { source: 'a', quantity: 10n * one, value: 1000n },
+    { source: 'b', quantity: 10n * one, value: 2000n },
+  ];
+  assert.equal(fifoCost(layers, 0n, 4n * one, 'x'), 400n);
+  assert.equal(fifoCost(layers, 4n * one, 11n * one, 'x'), 1600n);
+  assert.equal(fifoCost(layers, 0n, 20n * one, 'x'), 3000n);
+  assert.throws(() => fifoCost(layers, 15n * one, 6n * one, 'Qələm'), /qalıq 5, tələb 6/);
+});
+
+test('advances: oldest first, up to the invoice; currency at the advance rate', () => {
+  const adv = [
+    { document: 'a', amount: 100n, currency: 0n },
+    { document: 'b', amount: 500n, currency: 0n },
+  ];
+  assert.deepEqual(allocateAdvances(adv, 300n, null), [
+    { document: 'a', amount: 100n, currency: 0n },
+    { document: 'b', amount: 200n, currency: 0n },
+  ]);
+  assert.deepEqual(allocateAdvances(adv, 50n, null), [
+    { document: 'a', amount: 50n, currency: 0n },
+  ]);
+  // 50 USD advance carried at 80 AZN; a 30 USD invoice takes 30 USD = 48 AZN.
+  assert.deepEqual(
+    allocateAdvances([{ document: 'u', amount: 8000n, currency: 5000n }], 5100n, 3000n),
+    [{ document: 'u', amount: 4800n, currency: 3000n }],
+  );
 });

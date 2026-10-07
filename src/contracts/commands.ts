@@ -53,6 +53,28 @@ export const operationLineInput = z.object({
 });
 export type OperationLineInput = z.infer<typeof operationLineInput>;
 
+const vatRate = z.enum(['18', '0', 'exempt', 'nontaxable']);
+const vatTreatment = z.enum(['offset', 'cost']);
+export const invoiceLineInput = z.object({
+  productId: id,
+  quantity: decimal,
+  price: decimal,
+  vatRate,
+  /** Sale: income type (601); defaults to the goods / services income type of the product. */
+  incomeTypeId: id.optional(),
+  /**
+   * Sale: stock account the goods leave (default by product kind). Purchase: the debit account
+   * (default: service 721, material 201, goods 205, fixed asset 113).
+   */
+  account: code.optional(),
+  /** Expense item when the account keeps one (721, 711, 731…). */
+  expenseItemId: id.optional(),
+  /** Purchase: overrides the invoice's VAT treatment for this line. */
+  vatTreatment: vatTreatment.optional(),
+  memo: text(300).default(''),
+});
+export type InvoiceLineInput = z.infer<typeof invoiceLineInput>;
+
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('company.create'),
@@ -128,6 +150,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     name: text(240),
     unit: text(20),
     kind: z.enum(['goods', 'material', 'asset', 'service']),
+    /** Product group (701); empty means the default group. */
+    groupId: z.string().max(80).default(''),
   }),
   z.object({
     type: z.literal('employee.save'),
@@ -165,6 +189,34 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('operation.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
+  }),
+  z.object({
+    type: z.literal('invoice.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    direction: z.enum(['sale', 'purchase']),
+    /** Internal number; generated when empty (SQ-000001 / AQ-000001). */
+    number: text(40).default(''),
+    date,
+    partnerId: id,
+    contractId: id,
+    /** AMB rate for a currency contract (4 decimals), empty for AZN. */
+    rate: decimal.default(''),
+    pricesIncludeVat: z.boolean().default(false),
+    /** Purchase: "offset" puts VAT on 241, "cost" adds it to the cost; default from the company. */
+    vatTreatment: vatTreatment.optional(),
+    eqSeries: text(20).default(''),
+    eqNumber: text(40).default(''),
+    memo: text(500).default(''),
+    lines: z.array(invoiceLineInput).min(1).max(500),
+  }),
+  z.object({
+    type: z.literal('invoice.cancel'),
     ...base,
     id,
     version,

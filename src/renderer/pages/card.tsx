@@ -21,6 +21,11 @@ export function CardPage({
 }) {
   const win = useWindow();
   const ws = useWorkspace();
+  const openSource = (l: AccountCard['lines'][number]) => {
+    if (l.sourceType === 'operation') ws.open({ type: 'operation', id: l.sourceId }, win.companyId);
+    if (l.sourceType === 'invoice' && l.direction)
+      ws.open({ type: 'invoice', direction: l.direction, id: l.sourceId }, win.companyId);
+  };
   const { catalog } = useCatalog(win.companyId);
   const range = useRange({
     from: initial?.from ?? ws.period.from,
@@ -212,21 +217,12 @@ export function CardPage({
                 <tr
                   key={i}
                   className={l.storno ? 'storno' : ''}
-                  onDoubleClick={() =>
-                    l.sourceType === 'operation' &&
-                    ws.open({ type: 'operation', id: l.sourceId }, win.companyId)
-                  }
+                  onDoubleClick={() => openSource(l)}
                 >
                   <td>{day(l.date)}</td>
                   <td>
-                    {l.sourceType === 'operation' ? (
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() =>
-                          ws.open({ type: 'operation', id: l.sourceId }, win.companyId)
-                        }
-                      >
+                    {l.sourceType === 'operation' || l.sourceType === 'invoice' ? (
+                      <button type="button" className="link" onClick={() => openSource(l)}>
                         {l.number}
                       </button>
                     ) : (

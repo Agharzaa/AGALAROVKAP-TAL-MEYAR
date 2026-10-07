@@ -19,6 +19,8 @@ import {
 import { HomePage } from './pages/home';
 import { OperationsPage } from './pages/operations';
 import { OperationEditor } from './pages/operation-editor';
+import { InvoiceEditor } from './pages/invoice-editor';
+import { InvoicesPage } from './pages/invoices';
 import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
 import { AccountsPage } from './pages/accounts';
@@ -543,12 +545,18 @@ function Routed({ win }: { win: Win }) {
   switch (v.type) {
     case 'operation':
       return <OperationEditor {...(v.id ? { id: v.id } : {})} />;
+    case 'invoice':
+      return <InvoiceEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
       switch (v.page) {
         case 'operations':
           return <OperationsPage />;
+        case 'sales':
+          return <InvoicesPage direction="sale" />;
+        case 'purchases':
+          return <InvoicesPage direction="purchase" />;
         case 'trial':
           return <TrialPage />;
         case 'card':

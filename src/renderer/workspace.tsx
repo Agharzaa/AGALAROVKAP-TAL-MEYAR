@@ -13,6 +13,8 @@ import { api } from './api';
 export type Page =
   | 'home'
   | 'operations'
+  | 'sales'
+  | 'purchases'
   | 'trial'
   | 'card'
   | 'accounts'
@@ -26,6 +28,7 @@ export type Page =
 export type View =
   | { type: 'page'; page: Page }
   | { type: 'operation'; id?: string }
+  | { type: 'invoice'; direction: 'sale' | 'purchase'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
@@ -77,7 +80,7 @@ export function useWindow(): Win {
 
 const sameView = (a: View, b: View) => JSON.stringify(a) === JSON.stringify(b);
 /** New documents may be opened several times; everything else is focused if already open. */
-const reusable = (v: View) => !(v.type === 'operation' && !v.id);
+const reusable = (v: View) => !((v.type === 'operation' || v.type === 'invoice') && !v.id);
 
 let sequence = 0;
 const todayIso = () => {

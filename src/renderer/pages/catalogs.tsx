@@ -293,15 +293,26 @@ export function ProductsPage() {
     name: '',
     unit: 'ədəd',
     kind: 'goods' as ProductView['kind'],
+    groupId: '',
     archived: false,
   });
   const rows = (catalog?.products ?? []).filter((p) => matches(search, p.name, p.code));
+  const groups = (catalog?.items ?? []).filter((i) => i.kind === 'productGroup');
+  const groupName = (id: string) =>
+    id ? (groups.find((g) => g.id === id)?.name ?? '') : (groups[0]?.name ?? '');
   const open = (p: ProductView | 'new') => {
     setEdit(p);
     setF(
       p === 'new'
-        ? { code: '', name: '', unit: 'ədəd', kind: 'goods', archived: false }
-        : { code: p.code, name: p.name, unit: p.unit, kind: p.kind, archived: p.archived },
+        ? { code: '', name: '', unit: 'ədəd', kind: 'goods', groupId: '', archived: false }
+        : {
+            code: p.code,
+            name: p.name,
+            unit: p.unit,
+            kind: p.kind,
+            groupId: p.groupId,
+            archived: p.archived,
+          },
     );
   };
   const current = edit && edit !== 'new' ? edit : null;
@@ -312,8 +323,8 @@ export function ProductsPage() {
       search={search}
       setSearch={setSearch}
       placeholder="Ad və ya kod"
-      head={['Kod', 'Ad', 'Vahid', 'Növ']}
-      row={(p) => [p.code, p.name, p.unit, productKind[p.kind]]}
+      head={['Kod', 'Ad', 'Vahid', 'Növ', 'Qrup']}
+      row={(p) => [p.code, p.name, p.unit, productKind[p.kind], groupName(p.groupId)]}
       onNew={() => open('new')}
       onEdit={open}
     >
@@ -360,6 +371,18 @@ export function ProductsPage() {
                   {v}
                 </option>
               ))}
+            </select>
+          </Field>
+          <Field label="Nomenklatura qrupu" hint="Satışın maya dəyəri (701) bu qrup üzrə yazılır">
+            <select value={f.groupId} onChange={(e) => setF({ ...f, groupId: e.target.value })}>
+              <option value="">Standart qrup</option>
+              {groups
+                .filter((g) => !g.archived || g.id === f.groupId)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
             </select>
           </Field>
           {archiveBox(f.archived, (archived) => setF({ ...f, archived }), !!current)}

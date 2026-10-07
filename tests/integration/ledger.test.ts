@@ -50,13 +50,7 @@ function september(f: ReturnType<typeof fixture>) {
   const tax = f.item('paymentKind', 'Vergi (haqq)');
   const capitalIn = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
   const mainGroup = f.item('productGroup', 'Əsas nomenklatura qrupu');
-  const cogs = f.exec({
-    type: 'item.save',
-    companyId: f.companyId,
-    kind: 'expenseItem',
-    name: 'Satılmış malların maya dəyəri',
-    archived: false,
-  }).id;
+  const cogs = f.item('expenseItem', 'Satılmış malların maya dəyəri');
   const L = f.line;
   f.operation(
     '2026-08-31',

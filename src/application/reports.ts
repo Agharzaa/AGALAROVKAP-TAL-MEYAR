@@ -12,7 +12,7 @@ import {
 } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import { formatMinor } from '../domain/money.js';
-import { formatQty } from '../domain/quantity.js';
+import { formatPrice, formatQty } from '../domain/quantity.js';
 import { parseDate } from '../domain/values.js';
 import type {
   AccountCard,
@@ -26,6 +26,9 @@ import type {
   EmployeeView,
   HomeView,
   IntegrityView,
+  InvoiceDetail,
+  InvoiceLineView,
+  InvoiceSummary,
   ItemView,
   OperationDetail,
   OperationSummary,
@@ -124,6 +127,13 @@ export class Names {
             id: `operation:${r.id}`,
           })),
           (r) => `${r.number} · ${dmy(str(r.date))}`,
+        );
+        put(
+          this.db
+            .all('SELECT id,number,date,eq_series,eq_number FROM invoices WHERE company_id=?', c)
+            .map((r) => ({ ...r, id: `invoice:${r.id}` })),
+          (r) =>
+            `${r.number}${r.eq_number ? ` (${str(r.eq_series)}${str(r.eq_number)})` : ''} · ${dmy(str(r.date))}`,
         );
         break;
       default:
@@ -559,9 +569,11 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
   for (const side of ['dt', 'kt'] as const) {
     const conds = sk.map((_, i) => ` AND p.${side}_s${i + 1}=?`).join('');
     db.all(
-      `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq, o.memo AS doc_memo
+      `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq,
+         COALESCE(o.memo, i.memo) AS doc_memo, i.direction AS doc_direction
        FROM postings p JOIN entries e ON e.id=p.entry_id
        LEFT JOIN operations o ON e.source_type='operation' AND o.id=e.source_id
+       LEFT JOIN invoices i ON e.source_type='invoice' AND i.id=e.source_id
        WHERE p.company_id=? AND p.${side}_account IN (${codes.map(() => '?').join(',')}) AND p.date>=? AND p.date<=?${conds}
        ORDER BY p.date, e.rowid, p.line_no LIMIT ${LIMIT + 1}`,
       q.companyId,
@@ -599,6 +611,7 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
       date: str(r.date),
       sourceType: str(r.source_type),
       sourceId: str(r.source_id),
+      direction: str(r.doc_direction) as CardLine['direction'],
       number: str(r.source_number),
       storno: flag(r.storno),
       memo: str(r.memo) || str(r.doc_memo),
@@ -672,19 +685,43 @@ function sideView(chart: Chart, names: Names, r: Row, s: 'dt' | 'kt'): SideView 
   };
 }
 
-function operationDetail(db: Db, companyId: string, id: string): OperationDetail {
-  const r = db.get('SELECT * FROM operations WHERE company_id=? AND id=?', companyId, id);
-  if (!r) throw new DomainError('Sənəd tapılmadı.', 'id', 'not-found');
+function invoiceSummary(names: Names, r: Row): InvoiceSummary {
+  return {
+    id: str(r.id),
+    version: Number(r.version),
+    direction: r.direction as InvoiceSummary['direction'],
+    number: str(r.number),
+    date: str(r.date),
+    partnerId: str(r.partner_id),
+    partner: names.name('partner', str(r.partner_id)),
+    contractId: str(r.contract_id),
+    contract: names.name('contract', str(r.contract_id)),
+    currency: str(r.currency),
+    eqSeries: str(r.eq_series),
+    eqNumber: str(r.eq_number),
+    memo: str(r.memo),
+    status: r.status as InvoiceSummary['status'],
+    net: money(r.net as bigint),
+    vat: money(r.vat as bigint),
+    total: money(r.total as bigint),
+    totalAzn: money(r.total_azn as bigint),
+  };
+}
+
+/** Postings and history of a document's last posted version (shared by all document kinds). */
+function documentEntry(db: Db, companyId: string, type: string, id: string) {
   const chart = loadChart(db, companyId);
   const names = new Names(db, companyId);
   const lastPosted = db.get(
-    "SELECT MAX(version) AS v FROM document_history WHERE company_id=? AND doc_type='operation' AND doc_id=? AND status='posted'",
+    "SELECT MAX(version) AS v FROM document_history WHERE company_id=? AND doc_type=? AND doc_id=? AND status='posted'",
     companyId,
+    type,
     id,
   )!.v as bigint;
   const entry = db.get(
-    "SELECT id FROM entries WHERE company_id=? AND source_type='operation' AND source_id=? AND source_version=? AND storno=0",
+    'SELECT id FROM entries WHERE company_id=? AND source_type=? AND source_id=? AND source_version=? AND storno=0',
     companyId,
+    type,
     id,
     lastPosted,
   );
@@ -703,22 +740,60 @@ function operationDetail(db: Db, companyId: string, id: string): OperationDetail
           memo: str(p.memo),
         }))
     : [];
+  const history = db
+    .all(
+      'SELECT version,status,at,actor FROM document_history WHERE company_id=? AND doc_type=? AND doc_id=? ORDER BY version,at',
+      companyId,
+      type,
+      id,
+    )
+    .map((h) => ({
+      version: Number(h.version),
+      status: str(h.status),
+      at: str(h.at),
+      actor: str(h.actor),
+    }));
+  return { postings, history, names };
+}
+
+function invoiceDetail(db: Db, companyId: string, id: string): InvoiceDetail {
+  const r = db.get('SELECT * FROM invoices WHERE company_id=? AND id=?', companyId, id);
+  if (!r) throw new DomainError('Qaimə tapılmadı.', 'id', 'not-found');
+  const { postings, history, names } = documentEntry(db, companyId, 'invoice', id);
+  const last = db.get(
+    "SELECT payload FROM document_history WHERE company_id=? AND doc_type='invoice' AND doc_id=? AND status='posted' ORDER BY version DESC LIMIT 1",
+    companyId,
+    id,
+  );
+  const payload = JSON.parse(str(last?.payload) || '{}') as { vatTreatment?: 'offset' | 'cost' };
+  const products = new Map(
+    db
+      .all('SELECT id,name,unit FROM products WHERE company_id=?', companyId)
+      .map((p) => [str(p.id), { name: str(p.name), unit: str(p.unit) }]),
+  );
+  const lines = (JSON.parse(str(r.lines)) as Omit<InvoiceLineView, 'product' | 'unit'>[]).map(
+    (l): InvoiceLineView => ({
+      ...l,
+      product: products.get(l.productId)?.name ?? '(nomenklatura tapılmadı)',
+      unit: products.get(l.productId)?.unit ?? '',
+    }),
+  );
   return {
-    ...operationSummary(db, r),
+    ...invoiceSummary(names, r),
+    rate: formatPrice(r.rate as bigint),
+    pricesIncludeVat: r.prices_include_vat === 1n,
+    vatTreatment: payload.vatTreatment ?? 'offset',
+    lines,
     postings,
-    history: db
-      .all(
-        "SELECT version,status,at,actor FROM document_history WHERE company_id=? AND doc_type='operation' AND doc_id=? ORDER BY version,at",
-        companyId,
-        id,
-      )
-      .map((h) => ({
-        version: Number(h.version),
-        status: str(h.status),
-        at: str(h.at),
-        actor: str(h.actor),
-      })),
+    history,
   };
+}
+
+function operationDetail(db: Db, companyId: string, id: string): OperationDetail {
+  const r = db.get('SELECT * FROM operations WHERE company_id=? AND id=?', companyId, id);
+  if (!r) throw new DomainError('Sənəd tapılmadı.', 'id', 'not-found');
+  const { postings, history } = documentEntry(db, companyId, 'operation', id);
+  return { ...operationSummary(db, r), postings, history };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -935,6 +1010,7 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             name: str(r.name),
             unit: str(r.unit),
             kind: r.kind as ProductView['kind'],
+            groupId: str(r.group_id),
             archived: flag(r.archived),
           })),
         employees: db
@@ -972,6 +1048,21 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'operation':
       return operationDetail(db, q.companyId, q.id);
+    case 'invoices': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return db
+        .all(
+          'SELECT * FROM invoices WHERE company_id=? AND direction=? AND date>=? AND date<=? ORDER BY date DESC, rowid DESC',
+          q.companyId,
+          q.direction,
+          parseDate(q.from),
+          parseDate(q.to),
+        )
+        .map((r) => invoiceSummary(names, r));
+    }
+    case 'invoice':
+      return invoiceDetail(db, q.companyId, q.id);
     case 'trialBalance':
       company(db, q.companyId);
       return trialBalance(db, q);
@@ -985,14 +1076,23 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       const like = `%${q.search.trim()}%`;
       return db
         .all(
-          'SELECT id,number,date,memo FROM operations WHERE company_id=? AND (number LIKE ? OR memo LIKE ?) ORDER BY date DESC LIMIT 50',
+          `SELECT 'operation' AS t, id, number, date, memo, '' AS eq FROM operations
+             WHERE company_id=? AND (number LIKE ? OR memo LIKE ?)
+           UNION ALL
+           SELECT 'invoice', id, number, date, memo, eq_series||eq_number FROM invoices
+             WHERE company_id=? AND (number LIKE ? OR memo LIKE ? OR eq_series||eq_number LIKE ?)
+           ORDER BY date DESC LIMIT 50`,
           q.companyId,
+          like,
+          like,
+          q.companyId,
+          like,
           like,
           like,
         )
         .map((r): DocumentRef => ({
-          value: `operation:${r.id}`,
-          label: `${r.number} · ${dmy(str(r.date))}${r.memo ? ` · ${r.memo}` : ''}`,
+          value: `${str(r.t)}:${r.id}`,
+          label: `${r.number}${r.eq ? ` (${str(r.eq)})` : ''} · ${dmy(str(r.date))}${r.memo ? ` · ${r.memo}` : ''}`,
         }));
     }
     case 'audit':

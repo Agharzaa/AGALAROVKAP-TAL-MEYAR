@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const v1 = `
 CREATE TABLE companies(
@@ -531,8 +531,80 @@ const v3 = [
   FROM companies;`,
 ].join('\n');
 
+// ---------------------------------------------------------------------------------------------
+// v4 — invoices (stage 2). Items get a "role" so posting rules find their catalog elements
+// (VAT payment kind, cost-of-sales item, default product group, default income types) even
+// after the accountant renames them; products get a product group (701); two indexes serve
+// FIFO, which reads one product's movements on one stock account.
+
+const v4 = `
+CREATE TABLE invoices(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('sale','purchase')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  partner_id TEXT NOT NULL,
+  contract_id TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate INTEGER NOT NULL CHECK(rate>0),
+  prices_include_vat INTEGER NOT NULL CHECK(prices_include_vat IN(0,1)),
+  eq_series TEXT NOT NULL DEFAULT '',
+  eq_number TEXT NOT NULL DEFAULT '',
+  eq_key TEXT NOT NULL DEFAULT '',
+  memo TEXT NOT NULL DEFAULT '',
+  lines TEXT NOT NULL,
+  net INTEGER NOT NULL,
+  vat INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  total_azn INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,direction,number_key),
+  FOREIGN KEY(company_id,partner_id) REFERENCES partners(company_id,id),
+  FOREIGN KEY(company_id,contract_id) REFERENCES contracts(company_id,id)
+);
+CREATE INDEX invoices_date ON invoices(company_id,direction,date);
+CREATE UNIQUE INDEX invoices_eq_sale ON invoices(company_id,eq_key)
+  WHERE direction='sale' AND eq_key<>'' AND status='posted';
+CREATE UNIQUE INDEX invoices_eq_purchase ON invoices(company_id,partner_id,eq_key)
+  WHERE direction='purchase' AND eq_key<>'' AND status='posted';
+CREATE TRIGGER invoices_no_delete BEFORE DELETE ON invoices BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER invoices_period BEFORE UPDATE ON invoices
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+  OR NEW.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+CREATE INDEX postings_dt_s1 ON postings(company_id,dt_account,dt_s1,date);
+CREATE INDEX postings_kt_s1 ON postings(company_id,kt_account,kt_s1,date);
+
+ALTER TABLE products ADD COLUMN group_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE items ADD COLUMN role TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX items_role ON items(company_id,role) WHERE role<>'';
+UPDATE items SET role='vatTax' WHERE kind='paymentKind' AND name='Vergi (haqq)';
+UPDATE items SET role='defaultProductGroup' WHERE kind='productGroup' AND name='Əsas nomenklatura qrupu';
+UPDATE items SET role='goodsIncome' WHERE kind='incomeType' AND name='Məhsul satışı';
+UPDATE items SET role='serviceIncome' WHERE kind='incomeType' AND name='Xidmət satışı';
+UPDATE items SET role='cogs' WHERE kind='expenseItem' AND name='Satılmış malların maya dəyəri';
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT ${uuid},id,'expenseItem','Satılmış malların maya dəyəri','cogs'
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c
+    WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.role='cogs'));
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-4','Yeniləndi','Baza',id,
+  'Qaimələr üçün baza hazırlandı: qaimə cədvəli, kitabça rolları, nomenklatura qrupu, FIFO indeksləri.'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
   { version: 3, sql: v3, foreignKeysOff: true },
+  { version: 4, sql: v4 },
 ];

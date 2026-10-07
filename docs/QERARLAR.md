@@ -164,3 +164,28 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 ### Hələ açıq
 
 - Hesabların qalan adları 1C-dəki adlarla tutuşdurulmalıdır (indi yalnız dəyişən hesabların adları 1C-yə uyğunlaşdırılıb).
+
+## 2026-10-07 (gecə) — mərhələ 2: qaimələr
+
+### TƏSDİQLƏNDİ
+
+1. **Maya dəyəri — FIFO.** Mal satılanda əvvəl gələn partiya əvvəl silinir (Dt 701 / Kt 205). Partiya — malın hər alış sənədi (eyni sənəddə eyni mal cəmlənir).
+2. **Qiymət qaimədə seçilir:** "ƏDV daxildir" bayrağı. Bayraq yoxdursa, qiymət ƏDV-sizdir (e-qaimə kimi) və ƏDV 18% üstə gəlir; varsa, ƏDV 18/118 ilə ayrılır. ƏDV sətir üzrə yuvarlaqlaşdırılır.
+3. **Valyuta qaimələri bu mərhələdədir.** Valyuta müqavilədən gəlir, məzənnə (AMB, 4 onluq) qaimədə əl ilə yazılır. Manat məbləği = valyuta məbləği × məzənnə, sətir üzrə.
+
+### İcra qaydaları (koddadır, testlərlə yoxlanılır)
+
+- Satış: Dt 211.01 / Kt 601 (ƏDV daxil); 18%-də Dt 604.1 / Kt 521.01 (ödəniş növü "Vergi (haqq)"); mal üçün Dt 701 (nomenklatura qrupu, "Satılmış malların maya dəyəri") / Kt 205 (FIFO). Valyuta müqaviləsində 211.02.
+- Alış: Dt 721/201/205/113 (ƏDV-siz) / Kt 531.01; ƏDV əvəzləşdirilirsə Dt 241 (kontragent, bu qaimə, dərəcə) / Kt 531.01; maya dəyərinə daxil edilirsə ƏDV hesabın məbləğinə qoşulur. Seçim qaimə üzrə, sətirdə dəyişdirilə bilər. ƏDV ödəyicisi olmayan şirkətdə 18% satış qadağandır, alış ƏDV-si maya dəyərinə gedir.
+- Sətrin standart hesabı nomenklaturanın növündən: xidmət → 721, material → 201, mal → 205, əsas vəsait → 113 (satışda əsas vəsait qaimə ilə satılmır). Xərc maddəsi olan hesabda xərc maddəsi məcburidir.
+- Avansın avtomatik əvəzləşdirilməsi: qaimə uçota alınanda eyni kontragent + müqavilədə açıq avanslar (543 / 243) ən köhnədən başlayaraq qaimə məbləği qədər əvəzləşir: satışda Dt 543 (avans sənədi) / Kt 211 (bu qaimə), alışda Dt 531 (bu qaimə) / Kt 243 (avans sənədi). Avans qaimə tarixində və bu gün də açıq olmalıdır (bir avans iki dəfə işlənmir).
+- Valyuta avansı öz məzənnəsi ilə əvəzləşir (valyuta məbləği ilə ölçülür); qaimə ilə avansın məzənnə fərqi 211.02 / 531.02-də qalır və ay sonu yenidən qiymətləndirmədə (mərhələ 5) bağlanır.
+- Nömrə: SQ-000001 (satış), AQ-000001 (alış), boş qalsa avtomatik. E-qaimə seriya + nömrəsi uçotda bir dəfə: satışda şirkət üzrə, alışda malsatan üzrə.
+- Düzəliş və ləğv: əl ilə əməliyyat kimi qırmızı storno. Düzəlişdə əvvəlki yazılış əvvəlcə storno edilir, sonra FIFO və avanslar qaiməsiz ledgerə görə yenidən hesablanır.
+- Kitabça elementləri rol ilə tapılır (ad dəyişsə də): "Vergi (haqq)", "Satılmış malların maya dəyəri", "Əsas nomenklatura qrupu", "Məhsul satışı", "Xidmət satışı".
+
+### Məhdudiyyətlər (sonrakı mərhələlər)
+
+- Geriyə tarixlə daxil edilən mal hərəkəti sonrakı satışların FIFO maya dəyərini avtomatik dəyişmir; ay bağlanışında (mərhələ 5) yenidən hesablanacaq.
+- Malın qaytarılması, əsas vəsaitin satışı, qeyri-rezidentdən ödəmə mənbəyində vergi (521.07) və ƏDV vergi agenti (521.13) avtomatik deyil — hələlik əl ilə əməliyyatla.
+- DVX e-qaimələrinin idxalı — mərhələ 4.

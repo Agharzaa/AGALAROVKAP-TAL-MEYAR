@@ -6,8 +6,15 @@ import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { expectVersion, type Tx } from './tx.js';
 
-const seedItems: [kind: string, names: string[]][] = [
-  ['incomeType', ['Məhsul satışı', 'Xidmət satışı']],
+/** Seeded catalog elements; a role lets posting rules find an element after it is renamed. */
+const seedItems: [kind: string, names: (string | [name: string, role: string])[]][] = [
+  [
+    'incomeType',
+    [
+      ['Məhsul satışı', 'goodsIncome'],
+      ['Xidmət satışı', 'serviceIncome'],
+    ],
+  ],
   [
     'taxType',
     [
@@ -20,7 +27,7 @@ const seedItems: [kind: string, names: string[]][] = [
       'Dövlət rüsumu',
     ],
   ],
-  ['paymentKind', ['Vergi (haqq)', 'Faiz', 'Maliyyə sanksiyası']],
+  ['paymentKind', [['Vergi (haqq)', 'vatTax'], 'Faiz', 'Maliyyə sanksiyası']],
   ['fund', ['DSMF — məcburi dövlət sosial sığorta', 'İşsizlik sığortası', 'İcbari tibbi sığorta']],
   ['capitalChange', ['Nizamnamə kapitalına qoyuluş', 'Nizamnamə kapitalının azaldılması']],
   [
@@ -33,10 +40,11 @@ const seedItems: [kind: string, names: string[]][] = [
       'Kommunal xidmətlər',
       'Ofis xərcləri',
       'Əmək haqqı',
+      ['Satılmış malların maya dəyəri', 'cogs'],
     ],
   ],
   ['cashbox', ['Əsas kassa']],
-  ['productGroup', ['Əsas nomenklatura qrupu']],
+  ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],
 ];
 
 export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): CommandResult {
@@ -67,8 +75,17 @@ export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): Command
       a.currency ? 1 : 0,
     );
   for (const [kind, names] of seedItems)
-    for (const n of names)
-      tx.db.run('INSERT INTO items(id,company_id,kind,name) VALUES(?,?,?,?)', tx.id(), id, kind, n);
+    for (const n of names) {
+      const [name, role] = typeof n === 'string' ? [n, ''] : n;
+      tx.db.run(
+        'INSERT INTO items(id,company_id,kind,name,role) VALUES(?,?,?,?,?)',
+        tx.id(),
+        id,
+        kind,
+        name,
+        role,
+      );
+    }
   tx.audit(id, 'Yaradıldı', 'Şirkət', id, `${name} · VÖEN ${taxId}`);
   return { id };
 }
@@ -390,6 +407,16 @@ export function saveProduct(tx: Tx, cmd: CommandOf<'product.save'>): CommandResu
     if (byCode && byCode.id !== cmd.id)
       throw new DomainError('Bu kodla nomenklatura artıq var.', 'code', 'conflict');
   }
+  const groupId = cmd.groupId.trim();
+  if (
+    groupId &&
+    !tx.db.get(
+      "SELECT 1 AS x FROM items WHERE company_id=? AND id=? AND kind='productGroup'",
+      cmd.companyId,
+      groupId,
+    )
+  )
+    throw new DomainError('Nomenklatura qrupu tapılmadı.', 'groupId', 'not-found');
   return saveRow(
     tx,
     'products',
@@ -401,6 +428,7 @@ export function saveProduct(tx: Tx, cmd: CommandOf<'product.save'>): CommandResu
       name,
       unit: parseText(cmd.unit, 'Ölçü vahidi', 20),
       kind: cmd.kind,
+      group_id: groupId,
       archived: cmd.archived ? 1 : 0,
     },
     name,

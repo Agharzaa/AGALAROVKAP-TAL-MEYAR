@@ -214,3 +214,61 @@ test('unsaved operation: closing its tab asks first', async () => {
     h.close();
   }
 });
+
+test('sales invoice: partner, contract, product and price by keyboard; entry shown after posting', async () => {
+  const h = harness();
+  const s = seed(h);
+  h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: 'X-1',
+    name: 'Konsaltinq xidməti',
+    unit: 'saat',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    await pick('Kontragent', 'Alıcı');
+    // The partner has one contract: it is chosen by itself.
+    assert.match(
+      (editor.getByRole('combobox', { name: 'Müqavilə' }) as HTMLInputElement).value ||
+        pane().textContent ||
+        '',
+      /№7/,
+    );
+    await pick('Sətir 1 nomenklatura', 'Konsalt');
+    const qtyField = editor.getByRole('textbox', { name: 'Sətir 1 miqdar' });
+    await user.clear(qtyField);
+    await user.type(qtyField, '10');
+    await user.type(editor.getByRole('textbox', { name: 'Sətir 1 qiymət' }), '50');
+    // 10 × 50 = 500 + 18% = 590, computed while typing.
+    assert.match(pane().textContent ?? '', /590,00/);
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Qaimə SQ-000001 uçota alındı/);
+    const entry = await editor.findByRole('region', { name: 'Yazılışlar' });
+    assert.match(entry.textContent ?? '', /211\.01.*601.*500,00|211\.01/);
+    assert.match(entry.textContent ?? '', /521\.01/);
+    const tb = h.ledger.query({
+      type: 'trialBalance',
+      companyId: s.companyId,
+      from: '2000-01-01',
+      to: '2099-12-31',
+      expand: [],
+    }) as TrialBalance;
+    assert.equal(tb.rows.find((r) => r.account === '211')!.turnDt, '590.00');
+    assert.equal(tb.rows.find((r) => r.account === '521')!.turnKt, '90.00');
+  } finally {
+    h.close();
+  }
+});

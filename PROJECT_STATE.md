@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -38,6 +38,16 @@ Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
 - 221.01–221.05, 244.01 / 244.02; 301: Kontragent → Kapitalda dəyişiklik növü. 90 hesab.
 - Sxem v3: v2 kimi təhlükəsiz yeniləmə. Real Electron-da 0.3.1 bazası v3-ə keçdi, bütövlük ok. Testlər: `npm test`, `npm run test:ui`.
 
+## Mərhələ 2 — qaimələr (0.4.0, 07.10.2026 gecə)
+
+| Sahə                                                                                                                             | Sübut                                         |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Satış və alış qaiməsi: sətir ƏDV-si, "ƏDV daxildir" seçimi, valyuta + məzənnə, e-qaimə nömrəsi bir dəfə, storno ilə düzəliş/ləğv | `tests/integration/invoices.test.ts`          |
+| Sentyabr misalı qaimələrlə: 43 000 / 65 891,14 / 63 288,14 — əl ilə versiya ilə eyni                                             | `invoices.test.ts`                            |
+| FIFO maya dəyəri, avansların avtomatik əvəzləşdirilməsi (manat və valyuta)                                                       | `invoices.test.ts`, `tests/domain`            |
+| Sxem v4: qaimələr, kitabça rolları, nomenklatura qrupu, FIFO indeksləri                                                          | `schema v1 → current` testi                   |
+| UI: satış/alış qaimələri siyahısı və redaktoru, yazılışlar sənədin altında, hesab kartından keçid                                | `tests/ui` (6 test), Electron ekran şəkilləri |
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -47,7 +57,7 @@ Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
-2. Qaimələr: sətir üzrə ƏDV statusu, 601/604.1/521.01 (ƏDV e-qaimə kəsiləndə); alışda "əvəzləşdirilir" və ya "maya dəyərinə"; 543/243 avanslarının avtomatik əvəzləşdirilməsi.
+2. ~~Qaimələr~~ — hazır (0.4.0).
 3. Bank sənədi: sərbəst müxabir hesab, çoxsətirli; 223.01/224.04 cütü; çıxarış idxalı və öyrənən qaydalar.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).

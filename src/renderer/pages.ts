@@ -28,6 +28,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Dt/Kt yazılışları və başlanğıc qalıqlar',
     icon: ScrollText,
   },
+  sales: {
+    title: 'Satış qaimələri',
+    hint: 'Satış, ƏDV, maya dəyəri (FIFO), avansların əvəzləşdirilməsi',
+    icon: ReceiptText,
+  },
+  purchases: {
+    title: 'Alış qaimələri',
+    hint: 'Mal, material, xidmət və əsas vəsait alışı, ƏDV',
+    icon: ReceiptText,
+  },
   trial: { title: 'Dövriyyə balansı', hint: 'Hesablar və subkontolar üzrə', icon: Scale },
   card: { title: 'Hesab kartı', hint: 'Hesab və subkonto üzrə hərəkət', icon: FileSpreadsheet },
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
@@ -80,9 +90,14 @@ export const ribbon: { tab: string; groups: RibbonGroup[] }[] = [
             label: 'Satış qaiməsi',
             icon: ReceiptText,
             size: 'small',
-            action: soon('2-ci mərhələ'),
+            action: { kind: 'view', view: { type: 'invoice', direction: 'sale' } },
           },
-          { label: 'Alış qaiməsi', icon: ReceiptText, size: 'small', action: soon('2-ci mərhələ') },
+          {
+            label: 'Alış qaiməsi',
+            icon: ReceiptText,
+            size: 'small',
+            action: { kind: 'view', view: { type: 'invoice', direction: 'purchase' } },
+          },
           { label: 'Bank sənədi', icon: Landmark, size: 'small', action: soon('3-cü mərhələ') },
         ],
       },
@@ -133,18 +148,8 @@ export const ribbon: { tab: string; groups: RibbonGroup[] }[] = [
       {
         name: 'Qaimələr',
         buttons: [
-          {
-            label: 'Satış qaimələri',
-            icon: ReceiptText,
-            size: 'small',
-            action: soon('2-ci mərhələ'),
-          },
-          {
-            label: 'Alış qaimələri',
-            icon: ReceiptText,
-            size: 'small',
-            action: soon('2-ci mərhələ'),
-          },
+          { label: 'Satış qaimələri', icon: ReceiptText, size: 'large', action: page('sales') },
+          { label: 'Alış qaimələri', icon: ReceiptText, size: 'large', action: page('purchases') },
         ],
       },
       {
@@ -241,6 +246,10 @@ export function viewTitle(view: View, label?: string): string {
       return pages[view.page].title;
     case 'operation':
       return view.id ? `Əməliyyat${label ? ` ${label}` : ''}` : 'Yeni əməliyyat';
+    case 'invoice': {
+      const kind = view.direction === 'sale' ? 'Satış qaiməsi' : 'Alış qaiməsi';
+      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
+    }
     case 'accountCard':
       return `Hesab kartı ${view.account}`;
   }

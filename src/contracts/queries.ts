@@ -1,6 +1,6 @@
 /** Read models. Amounts are canonical decimal strings ("1234.50"); dates are ISO strings. */
 import { z } from 'zod';
-import type { AccountNature, SubkontoKind } from '../domain/chart.js';
+import type { AccountNature, SubkontoKind, VatRate } from '../domain/chart.js';
 
 const id = z.string().min(1).max(80);
 const date = z.string().max(10);
@@ -10,6 +10,14 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('catalog'), companyId: id }),
   z.object({ type: z.literal('operations'), companyId: id, from: date, to: date }),
   z.object({ type: z.literal('operation'), companyId: id, id }),
+  z.object({
+    type: z.literal('invoices'),
+    companyId: id,
+    direction: z.enum(['sale', 'purchase']),
+    from: date,
+    to: date,
+  }),
+  z.object({ type: z.literal('invoice'), companyId: id, id }),
   z.object({
     type: z.literal('trialBalance'),
     companyId: id,
@@ -103,6 +111,7 @@ export interface ProductView {
   name: string;
   unit: string;
   kind: 'goods' | 'material' | 'asset' | 'service';
+  groupId: string;
   archived: boolean;
 }
 export interface EmployeeView {
@@ -171,6 +180,56 @@ export interface OperationDetail extends OperationSummary {
   history: { version: number; status: string; at: string; actor: string }[];
 }
 
+export interface InvoiceLineView {
+  productId: string;
+  product: string;
+  unit: string;
+  quantity: string;
+  price: string;
+  vatRate: VatRate;
+  incomeTypeId: string;
+  account: string;
+  expenseItemId: string;
+  vatTreatment: 'offset' | 'cost' | '';
+  memo: string;
+  /** Document currency. */
+  net: string;
+  vat: string;
+  gross: string;
+  /** AZN. */
+  netAzn: string;
+  vatAzn: string;
+  grossAzn: string;
+}
+export interface InvoiceSummary {
+  id: string;
+  version: number;
+  direction: 'sale' | 'purchase';
+  number: string;
+  date: string;
+  partnerId: string;
+  partner: string;
+  contractId: string;
+  contract: string;
+  currency: string;
+  eqSeries: string;
+  eqNumber: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+  net: string;
+  vat: string;
+  total: string;
+  totalAzn: string;
+}
+export interface InvoiceDetail extends InvoiceSummary {
+  rate: string;
+  pricesIncludeVat: boolean;
+  vatTreatment: 'offset' | 'cost';
+  lines: InvoiceLineView[];
+  postings: PostingView[];
+  history: { version: number; status: string; at: string; actor: string }[];
+}
+
 export interface TrialRow {
   key: string;
   level: number;
@@ -218,6 +277,8 @@ export interface CardLine {
   date: string;
   sourceType: string;
   sourceId: string;
+  /** Invoices: sale or purchase; empty for other documents. */
+  direction: 'sale' | 'purchase' | '';
   number: string;
   storno: boolean;
   memo: string;

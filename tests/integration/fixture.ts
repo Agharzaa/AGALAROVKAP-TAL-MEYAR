@@ -77,9 +77,21 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
       name,
       archived: false,
     }).id;
-  const product = (name: string, unit = 'ədəd') =>
-    exec({ type: 'product.save', companyId, code: '', name, unit, kind: 'goods', archived: false })
-      .id;
+  const product = (
+    name: string,
+    unit = 'ədəd',
+    kind: 'goods' | 'material' | 'asset' | 'service' = 'goods',
+  ) =>
+    exec({
+      type: 'product.save',
+      companyId,
+      code: '',
+      name,
+      unit,
+      kind,
+      groupId: '',
+      archived: false,
+    }).id;
   const line = (
     dtAccount: string,
     dtSk: string[],

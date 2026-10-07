@@ -1022,6 +1022,49 @@ td.trial-name {
   color: var(--faint);
   padding-left: 8px;
 }
+/* Invoice editor */
+.invoice-header {
+  grid-template-columns: 150px 140px minmax(200px, 1.4fr) minmax(140px, 1fr) 120px 150px 180px;
+}
+.invoice-header .field.wide {
+  grid-column: auto / span 3;
+}
+.invoice-grid td.side {
+  min-width: 220px;
+  width: 22%;
+}
+.invoice-grid td.side > * + * {
+  margin-top: 4px;
+}
+.invoice-grid td select {
+  width: 100%;
+}
+.invoice-grid td select + select {
+  margin-top: 4px;
+}
+.invoice-grid .line-memo {
+  width: 100%;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.invoice-grid .unit {
+  display: block;
+  color: var(--faint);
+  text-align: right;
+  margin-top: 2px;
+}
+.invoice-grid td.num {
+  vertical-align: top;
+  padding-top: 10px;
+  white-space: nowrap;
+}
+.invoice-postings h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.invoice-postings small {
+  color: var(--muted);
+}
 .history h2 {
   margin: 0 0 4px;
   font-size: 13px;
@@ -1347,6 +1390,9 @@ td.trial-name {
 }
 .data-table .wide {
   width: 50%;
+}
+.data-table .nowrap {
+  white-space: nowrap;
 }
 .data-table tbody tr:hover {
   background: #f6f9fd;
