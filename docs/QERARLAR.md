@@ -193,3 +193,12 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 - Geriyə tarixlə daxil edilən mal hərəkəti artıq uçotda olan satışların maya dəyərini avtomatik dəyişmir (sonrakılar orta dəyərlə tutuşdurulur); dəqiq FIFO ay bağlanışında (mərhələ 5) yenidən hesablanacaq.
 - Malın qaytarılması, əsas vəsaitin satışı, qeyri-rezidentdən ödəmə mənbəyində vergi (521.07) və ƏDV vergi agenti (521.13) avtomatik deyil — hələlik əl ilə əməliyyatla.
 - DVX e-qaimələrinin idxalı — mərhələ 4.
+
+## 2026-10-07 (gecə, sonra) — qaimə və pəncərələr üzrə istəklər (0.4.1)
+
+### TƏSDİQLƏNDİ
+
+1. **E-qaimə nömrəsi bir sahədir.** "MT" ayrılmır: `MT2610007` bütöv yazılır (boşluqlar götürülür, böyük hərflə saxlanılır). Bir dəfəlik yoxlama bu tam nömrə üzrədir. Sxem v5 köhnə seriya + nömrəni bir sahəyə birləşdirir (eyni tam nömrə artıq varsa, köhnə qeyd toxunulmaz qalır).
+2. **Cədvəllərdə kontragentə az yer.** Siyahıda kontragent sütunu dar və bir sətirlik (uzun ad "…" ilə kəsilir, tam adı üzərinə gələndə görünür); redaktorda kontragent sahəsi digər sahələr qədərdir.
+3. **Yazılışları əl ilə düzəltmək olar (1C "Əl ilə düzəliş").** Saxlanmış qaimənin "Yazılışlar" bölməsində bayraq qoyulanda yazılışlar əl ilə əməliyyatdakı kimi cədvəldə dəyişdirilir (hesab, subkonto, miqdar, valyuta, məbləğ, məzmun). Bayraq sənəddə saxlanılır; belə qaimədə sətirlərin dəyişməsi yazılışları yenidən hesablamır. Bayraq götürüləndə yazılışlar yenə qaydalarla qurulur. Düzəliş adi qaydada qırmızı storno ilə gedir; yazılışlar əl ilə əməliyyatın bütün yoxlamalarından keçir (subkonto məcburidir, qrup hesabına yazılmır və s.). Boş "hesablaşma sənədi" bu qaimənin özü deməkdir.
+4. **1C kimi pəncərələr.** Hər bölmə (qaimələr, əl ilə əməliyyatlar, hesabatlar, kitabçalar…) və hər sənəd iş sahəsində ayrıca pəncərədə açılır: sürüşdürülür, ölçüsü dəyişdirilir, üst-üstə düşür, kiçildilir, böyüdülür (başlığa iki klik), bağlanır. Aşağıda 1C-dəki kimi pəncərələr paneli var: açıq pəncərələr, "Başlanğıc" (hamısını kiçildir), kaskad, yan-yana, hamısını bağla. Ctrl+Tab növbəti pəncərə, Ctrl+F4 bağla. Pəncərənin ölçüsü və böyüdülmüş olması növünə görə yadda saxlanılır (məs. bütün satış qaimələri).

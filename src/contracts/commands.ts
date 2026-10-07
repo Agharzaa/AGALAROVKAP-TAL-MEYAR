@@ -217,10 +217,17 @@ export const commandSchema = z.discriminatedUnion('type', [
     pricesIncludeVat: z.boolean().default(false),
     /** Purchase: "offset" puts VAT on 241, "cost" adds it to the cost; default from the company. */
     vatTreatment: vatTreatment.optional(),
+    /** Kept for older callers: joined in front of the number. */
     eqSeries: text(20).default(''),
-    eqNumber: text(40).default(''),
+    /** E-qaimə number as printed, e.g. "MT2610007". */
+    eqNumber: text(60).default(''),
     memo: text(500).default(''),
     lines: z.array(invoiceLineInput).min(1).max(500),
+    /**
+     * Manual postings (1C "Əl ilə düzəliş"): when given, they replace the generated entry; the
+     * invoice lines stay as the document's content. Omitted = postings by the rules.
+     */
+    postings: z.array(operationLineInput).min(1).max(2000).optional(),
   }),
   z.object({
     type: z.literal('invoice.cancel'),

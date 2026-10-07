@@ -5,7 +5,7 @@ import { useCatalog } from './catalog';
 
 /**
  * One module window: title line with actions, an optional filter strip, notices and the work
- * area. Windows switch through the tab strip, so there are no inner window controls.
+ * area. It sits inside a child window (App.tsx, Desktop), which carries the window controls.
  */
 export function ModuleFrame({
   title,

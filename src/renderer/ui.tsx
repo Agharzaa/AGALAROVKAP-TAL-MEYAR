@@ -17,15 +17,17 @@ export function Field({
   hint,
   error,
   wide = false,
+  className = '',
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
   error?: string;
   wide?: boolean;
+  className?: string;
 }) {
   return (
-    <label className={`field${wide ? ' wide' : ''}${error ? ' invalid' : ''}`}>
+    <label className={`field${wide ? ' wide' : ''}${error ? ' invalid' : ''} ${className}`}>
       <span className="field-label">{label}</span>
       {children}
       {error ? (

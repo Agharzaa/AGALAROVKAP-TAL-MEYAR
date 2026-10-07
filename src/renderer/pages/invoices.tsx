@@ -22,7 +22,7 @@ export function InvoicesPage({ direction }: { direction: 'sale' | 'purchase' }) 
     ...range.applied,
   });
   const rows = (result.data ?? []).filter((r) =>
-    matches(search, r.number, r.partner, r.eqSeries + r.eqNumber, r.memo),
+    matches(search, r.number, r.partner, r.eqNumber, r.memo),
   );
   const open = (id?: string) =>
     ws.open({ type: 'invoice', direction, ...(id ? { id } : {}) }, win.companyId);
@@ -42,9 +42,15 @@ export function InvoicesPage({ direction }: { direction: 'sale' | 'purchase' }) 
     {
       key: 'eq',
       label: 'E-qaimə',
-      render: (r) => (r.eqNumber ? `${r.eqSeries}${r.eqNumber}` : '—'),
+      className: 'nowrap',
+      render: (r) => r.eqNumber || '—',
     },
-    { key: 'partner', label: 'Kontragent', className: 'wide', render: (r) => r.partner },
+    {
+      key: 'partner',
+      label: 'Kontragent',
+      className: 'clip',
+      render: (r) => <span title={r.partner}>{r.partner}</span>,
+    },
     {
       key: 'contract',
       label: 'Müqavilə',

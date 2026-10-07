@@ -1,99 +1,37 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, Copy, Plus, Trash2 } from 'lucide-react';
-import { parseMoney } from '../../domain/money';
-import type { OperationLineInput } from '../../contracts/commands';
+import { Ban, Check } from 'lucide-react';
 import type { Catalog, OperationDetail } from '../../contracts/queries';
+import {
+  blankEntryLine,
+  EntryGrid,
+  entryLinesFrom,
+  toEntryInput,
+  type EntryLine,
+} from '../entry-grid';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { addAmounts, day, money, toField } from '../format';
+import { day } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
-import { AccountPicker, SubkontoFields } from '../picker';
 import { Confirm, DateInput, Field, Notice } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
-interface LineForm {
-  key: number;
-  dtAccount: string;
-  dtSk: string[];
-  ktAccount: string;
-  ktSk: string[];
-  amount: string;
-  quantity: string;
-  dtCur: string;
-  ktCur: string;
-  memo: string;
-}
 interface Form {
   number: string;
   date: string;
   memo: string;
-  lines: LineForm[];
+  lines: EntryLine[];
 }
-let keys = 0;
-const blank = (): LineForm => ({
-  key: ++keys,
-  dtAccount: '',
-  dtSk: [],
-  ktAccount: '',
-  ktSk: [],
-  amount: '',
-  quantity: '',
-  dtCur: '',
-  ktCur: '',
-  memo: '',
-});
 
 function fromDetail(d: OperationDetail): Form {
-  const self = `operation:${d.id}`;
-  const unself = (v: string[]) => v.map((x) => (x === self ? '' : x));
   return {
     number: d.number,
     date: d.date,
     memo: d.memo,
-    lines: d.postings.map((p) => ({
-      key: ++keys,
-      dtAccount: p.dt.account,
-      dtSk: unself(p.dt.sk),
-      ktAccount: p.kt.account,
-      ktSk: unself(p.kt.sk),
-      amount: toField(p.amount),
-      quantity: p.quantity.replace('.', ','),
-      dtCur: toField(p.dt.curAmount),
-      ktCur: toField(p.kt.curAmount),
-      memo: p.memo,
-    })),
+    lines: entryLinesFrom(d.postings, `operation:${d.id}`),
   };
 }
-
-function toInput(l: LineForm): OperationLineInput {
-  return {
-    dtAccount: l.dtAccount,
-    dtSk: l.dtSk,
-    ktAccount: l.ktAccount,
-    ktSk: l.ktSk,
-    amount: l.amount.trim(),
-    ...(l.quantity.trim() ? { quantity: l.quantity.trim() } : {}),
-    ...(l.dtCur.trim() ? { dtCurAmount: l.dtCur.trim() } : {}),
-    ...(l.ktCur.trim() ? { ktCurAmount: l.ktCur.trim() } : {}),
-    memo: l.memo,
-  };
-}
-
-/** Which line/side/slot the server error points at ("lines.2.kt.sk.1"). */
-function errorAt(field: string | undefined) {
-  const m =
-    /^lines\.(\d+)(?:\.(dt|kt))?(?:\.(account|sk|amount|quantity|curAmount))?(?:\.(\d+))?/.exec(
-      field ?? '',
-    );
-  if (!m) return null;
-  return {
-    line: Number(m[1]),
-    side: m[2] as 'dt' | 'kt' | undefined,
-    part: m[3],
-    slot: m[4] !== undefined ? Number(m[4]) : undefined,
-  };
-}
+const toInput = toEntryInput;
 
 export function OperationEditor({ id }: { id?: string }) {
   const win = useWindow();
@@ -120,7 +58,7 @@ export function OperationEditor({ id }: { id?: string }) {
           number: '',
           date: ws.period.to < todayIso() ? ws.period.to : todayIso(),
           memo: '',
-          lines: [blank()],
+          lines: [blankEntryLine()],
         };
     baseline.current = JSON.stringify({ ...initial, lines: initial.lines.map(toInput) });
     setForm(initial);
@@ -188,27 +126,6 @@ export function OperationEditor({ id }: { id?: string }) {
       </ModuleFrame>
     );
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
-  const setLine = (i: number, patch: Partial<LineForm>) =>
-    set({ lines: form.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
-  const err = errorAt(m.error?.field);
-  const acc = (code: string) => catalog.accounts.find((a) => a.code === code);
-  const total = addAmounts(
-    form.lines.map((l) => {
-      try {
-        const v = parseMoney(l.amount.trim());
-        return `${v / 100n}.${String(v % 100n).padStart(2, '0')}`;
-      } catch {
-        return '0.00';
-      }
-    }),
-  );
-  const anyCurrency = form.lines.some(
-    (l) => acc(l.dtAccount)?.currency || acc(l.ktAccount)?.currency,
-  );
-  const anyQty = form.lines.some(
-    (l) => acc(l.dtAccount)?.quantitative || acc(l.ktAccount)?.quantitative,
-  );
-
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
@@ -282,185 +199,13 @@ export function OperationEditor({ id }: { id?: string }) {
           </Field>
         </fieldset>
         <fieldset className="lines" disabled={m.busy || locked}>
-          <table className="grid entry-grid">
-            <thead>
-              <tr>
-                <th scope="col" className="n">
-                  №
-                </th>
-                <th scope="col">Debet hesabı və subkonto</th>
-                <th scope="col">Kredit hesabı və subkonto</th>
-                {anyQty && (
-                  <th scope="col" className="num narrow">
-                    Miqdar
-                  </th>
-                )}
-                {anyCurrency && (
-                  <th scope="col" className="num narrow">
-                    Valyuta
-                  </th>
-                )}
-                <th scope="col" className="num narrow">
-                  Məbləğ, AZN
-                </th>
-                <th scope="col">Məzmun</th>
-                <th scope="col" className="n">
-                  <span className="sr-only">Əməliyyat</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.lines.map((l, i) => {
-                const e = err && err.line === i ? err : null;
-                const dt = acc(l.dtAccount);
-                const kt = acc(l.ktAccount);
-                return (
-                  <tr key={l.key} className={e ? 'has-error' : ''}>
-                    <td className="n">{i + 1}</td>
-                    <td className="side">
-                      <AccountPicker
-                        catalog={catalog}
-                        ariaLabel={`Sətir ${i + 1} debet hesabı`}
-                        value={l.dtAccount}
-                        invalid={e?.side === 'dt' && e.part === 'account'}
-                        onChange={(dtAccount) => setLine(i, { dtAccount, dtSk: [], dtCur: '' })}
-                      />
-                      <SubkontoFields
-                        catalog={catalog as Catalog}
-                        companyId={win.companyId}
-                        account={l.dtAccount}
-                        values={l.dtSk}
-                        side={`Sətir ${i + 1} debet`}
-                        onChange={(dtSk) => setLine(i, { dtSk })}
-                        {...(e?.side === 'dt' && e.part === 'sk' && e.slot !== undefined
-                          ? { errorIndex: e.slot }
-                          : {})}
-                      />
-                    </td>
-                    <td className="side">
-                      <AccountPicker
-                        catalog={catalog}
-                        ariaLabel={`Sətir ${i + 1} kredit hesabı`}
-                        value={l.ktAccount}
-                        invalid={e?.side === 'kt' && e.part === 'account'}
-                        onChange={(ktAccount) => setLine(i, { ktAccount, ktSk: [], ktCur: '' })}
-                      />
-                      <SubkontoFields
-                        catalog={catalog as Catalog}
-                        companyId={win.companyId}
-                        account={l.ktAccount}
-                        values={l.ktSk}
-                        side={`Sətir ${i + 1} kredit`}
-                        onChange={(ktSk) => setLine(i, { ktSk })}
-                        {...(e?.side === 'kt' && e.part === 'sk' && e.slot !== undefined
-                          ? { errorIndex: e.slot }
-                          : {})}
-                      />
-                    </td>
-                    {anyQty && (
-                      <td className="num narrow">
-                        {(dt?.quantitative || kt?.quantitative) && (
-                          <input
-                            aria-label={`Sətir ${i + 1} miqdar`}
-                            inputMode="decimal"
-                            className={e?.part === 'quantity' ? 'invalid' : ''}
-                            value={l.quantity}
-                            onChange={(ev) => setLine(i, { quantity: ev.target.value })}
-                          />
-                        )}
-                      </td>
-                    )}
-                    {anyCurrency && (
-                      <td className="num narrow">
-                        {dt?.currency && (
-                          <input
-                            aria-label={`Sətir ${i + 1} debet valyuta məbləği`}
-                            placeholder="Dt val."
-                            inputMode="decimal"
-                            value={l.dtCur}
-                            onChange={(ev) => setLine(i, { dtCur: ev.target.value })}
-                          />
-                        )}
-                        {kt?.currency && (
-                          <input
-                            aria-label={`Sətir ${i + 1} kredit valyuta məbləği`}
-                            placeholder="Kt val."
-                            inputMode="decimal"
-                            value={l.ktCur}
-                            onChange={(ev) => setLine(i, { ktCur: ev.target.value })}
-                          />
-                        )}
-                      </td>
-                    )}
-                    <td className="num narrow">
-                      <input
-                        aria-label={`Sətir ${i + 1} məbləğ`}
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        className={e?.part === 'amount' ? 'invalid' : ''}
-                        value={l.amount}
-                        onChange={(ev) => setLine(i, { amount: ev.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`Sətir ${i + 1} məzmun`}
-                        maxLength={300}
-                        value={l.memo}
-                        onChange={(ev) => setLine(i, { memo: ev.target.value })}
-                      />
-                    </td>
-                    <td className="n row-tools">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="Sətri köçür"
-                        aria-label={`Sətir ${i + 1} köçür`}
-                        onClick={() =>
-                          set({
-                            lines: [
-                              ...form.lines.slice(0, i + 1),
-                              { ...l, key: ++keys },
-                              ...form.lines.slice(i + 1),
-                            ],
-                          })
-                        }
-                      >
-                        <Copy size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button danger"
-                        title="Sətri sil"
-                        aria-label={`Sətir ${i + 1} sil`}
-                        disabled={form.lines.length === 1}
-                        onClick={() => set({ lines: form.lines.filter((_, j) => j !== i) })}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={3 + (anyQty ? 1 : 0) + (anyCurrency ? 1 : 0)}>
-                  <button
-                    type="button"
-                    className="button secondary small"
-                    onClick={() => set({ lines: [...form.lines, blank()] })}
-                  >
-                    <Plus size={14} /> Sətir əlavə et
-                  </button>
-                </td>
-                <td className="num">
-                  <b>{money(total)}</b>
-                </td>
-                <td colSpan={2}>{form.lines.length} yazılış</td>
-              </tr>
-            </tfoot>
-          </table>
+          <EntryGrid
+            catalog={catalog as Catalog}
+            companyId={win.companyId}
+            lines={form.lines}
+            onChange={(lines) => set({ lines })}
+            errorField={m.error?.field}
+          />
         </fieldset>
         <p className="doc-hint">
           Hər sətir bir yazılışdır: Dt hesab (subkontoları ilə) / Kt hesab. “Hesablaşma sənədi” boş

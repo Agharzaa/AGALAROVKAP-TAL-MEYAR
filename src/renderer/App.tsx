@@ -1,5 +1,26 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Home,
+  Layers,
+  LayoutGrid,
+  Minus,
+  Search,
+  Square,
+  SquareX,
+  X,
+} from 'lucide-react';
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
 import { api } from './api';
@@ -11,10 +32,13 @@ import {
   WindowContext,
   WorkspaceProvider,
   monthOf,
+  useLayout,
   useWorkspace,
+  type Geom,
   type Page,
   type View,
   type Win,
+  type WinLayout,
 } from './workspace';
 import { HomePage } from './pages/home';
 import { OperationsPage } from './pages/operations';
@@ -343,6 +367,16 @@ function Shell({
       if (e.ctrlKey && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault();
         ws.open({ type: 'operation' });
+      } else if (e.ctrlKey && e.key === 'F4') {
+        // 1C: Ctrl+F4 closes the active window, Ctrl+Tab goes to the next one.
+        e.preventDefault();
+        if (ws.activeId !== 'home') ws.close(ws.activeId);
+      } else if (e.ctrlKey && e.key === 'Tab' && ws.windows.length) {
+        e.preventDefault();
+        const i = ws.windows.findIndex((w) => w.id === ws.activeId);
+        const step = e.shiftKey ? -1 : 1;
+        const n = ws.windows.length;
+        ws.focus(ws.windows[((((i < 0 ? (step > 0 ? -1 : 0) : i) + step) % n) + n) % n]!.id);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -435,39 +469,6 @@ function Shell({
           </div>
         ))}
       </section>
-      <div className="window-tabs" role="tablist" aria-label="Açıq pəncərələr">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={ws.activeId === 'home'}
-          className={ws.activeId === 'home' ? 'active' : ''}
-          onClick={() => ws.focus('home')}
-        >
-          Başlanğıc
-        </button>
-        {ws.windows.map((w) => (
-          <span key={w.id} className={`window-tab${ws.activeId === w.id ? ' active' : ''}`}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={ws.activeId === w.id}
-              onClick={() => ws.focus(w.id)}
-              title={viewTitle(w.view, w.label)}
-            >
-              {w.dirty && <i className="dirty-dot" aria-label="Saxlanmayıb" />}
-              {viewTitle(w.view, w.label)}
-            </button>
-            <button
-              type="button"
-              className="tab-close"
-              aria-label={`Bağla: ${viewTitle(w.view, w.label)}`}
-              onClick={() => ws.close(w.id)}
-            >
-              <X size={12} />
-            </button>
-          </span>
-        ))}
-      </div>
       {message && (
         <div className="shell-message">
           <Notice kind={message.kind} onClose={() => setMessage(null)}>
@@ -475,22 +476,14 @@ function Shell({
           </Notice>
         </div>
       )}
-      <main className="workspace">
-        <div className="pane" hidden={ws.activeId !== 'home'}>
-          <HomePage
-            integrity={integrity.data}
-            integrityLoading={integrity.loading}
-            onRecheck={integrity.reload}
-          />
-        </div>
-        {ws.windows.map((w) => (
-          <div key={w.id} className="pane" hidden={ws.activeId !== w.id}>
-            <WindowContext.Provider value={w}>
-              <Routed win={w} />
-            </WindowContext.Provider>
-          </div>
-        ))}
-      </main>
+      <Desktop>
+        <HomePage
+          integrity={integrity.data}
+          integrityLoading={integrity.loading}
+          onRecheck={integrity.reload}
+        />
+      </Desktop>
+      <WindowBar />
       <footer className="statusbar">
         <span>
           {company.closedThrough
@@ -508,7 +501,7 @@ function Shell({
         </span>
         <span className="statusbar-keys">
           {active ? viewTitle(active.view, active.label) : 'Başlanğıc'} · Ctrl+N yeni əməliyyat ·
-          Ctrl+K axtarış · Ctrl+S saxla
+          Ctrl+K axtarış · Ctrl+S saxla · Ctrl+Tab növbəti pəncərə · Ctrl+F4 bağla
         </span>
       </footer>
       {ws.pendingClose && (
@@ -537,6 +530,280 @@ function Shell({
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Smallest size a window can be dragged to. */
+const MIN_W = 360;
+const MIN_H = 200;
+/** Keeps at least the start of the title bar on the work area so a window can always be reached. */
+function clamp(g: Geom, d: { w: number; h: number }): Geom {
+  const w = Math.max(MIN_W, Math.min(g.w, d.w));
+  const h = Math.max(MIN_H, Math.min(g.h, d.h));
+  return {
+    w,
+    h,
+    x: Math.max(Math.min(0, d.w - w), Math.min(g.x, d.w - 120), 120 - w),
+    y: Math.max(0, Math.min(g.y, d.h - 32)),
+  };
+}
+
+/**
+ * The work area: the start page is its background and every section or document opens on it as a
+ * child window (1C's window mode), which can be moved, resized, minimized and maximized.
+ */
+function Desktop({ children }: { children: ReactNode }) {
+  const ws = useWorkspace();
+  const layout = useLayout();
+  const ref = useRef<HTMLElement>(null);
+  const [size, setSize] = useState({ w: 1200, h: 680 });
+  const setDesktop = useRef(layout.setDesktop);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const s = { w: el.clientWidth, h: el.clientHeight };
+      if (s.w > 0 && s.h > 0) {
+        setDesktop.current(s);
+        setSize(s);
+      }
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <main className="workspace mdi" ref={ref}>
+      <div className="desktop" aria-hidden={ws.activeId !== 'home' || undefined}>
+        {children}
+      </div>
+      {ws.windows.map((w) => {
+        const l = layout.layout[w.id];
+        if (!l) return null;
+        return (
+          <MdiWindow
+            key={w.id}
+            win={w}
+            l={l}
+            z={layout.order.indexOf(w.id) + 1}
+            active={ws.activeId === w.id}
+            bounds={size}
+          />
+        );
+      })}
+    </main>
+  );
+}
+
+const WindowBody = memo(function WindowBody({ win }: { win: Win }) {
+  return (
+    <WindowContext.Provider value={win}>
+      <Routed win={win} />
+    </WindowContext.Provider>
+  );
+});
+
+type DragMode = 'move' | 'e' | 's' | 'se' | 'w' | 'sw';
+function MdiWindow({
+  win,
+  l,
+  z,
+  active,
+  bounds,
+}: {
+  win: Win;
+  l: WinLayout;
+  z: number;
+  active: boolean;
+  bounds: { w: number; h: number };
+}) {
+  const ws = useWorkspace();
+  const layout = useLayout();
+  const [live, setLive] = useState<Geom | null>(null);
+  const g = live ?? clamp(l.geom, bounds);
+  const max = l.state === 'maximized';
+  const title = viewTitle(win.view, win.label);
+  const drag = (mode: DragMode) => (e: ReactPointerEvent) => {
+    if (e.button !== 0 || max) return;
+    e.preventDefault();
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const base = g;
+    let current = base;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - sx;
+      const dy = ev.clientY - sy;
+      const next = { ...base };
+      if (mode === 'move') {
+        next.x = base.x + dx;
+        next.y = Math.max(0, base.y + dy);
+      }
+      if (mode === 'e' || mode === 'se') next.w = Math.max(MIN_W, base.w + dx);
+      if (mode === 's' || mode === 'se' || mode === 'sw') next.h = Math.max(MIN_H, base.h + dy);
+      if (mode === 'w' || mode === 'sw') {
+        next.w = Math.max(MIN_W, base.w - dx);
+        next.x = base.x + base.w - next.w;
+      }
+      current = next;
+      setLive(next);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.classList.remove('dragging');
+      setLive(null);
+      if (current !== base) layout.place(win.id, clamp(current, bounds));
+    };
+    document.body.classList.add('dragging');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const keep = (e: ReactPointerEvent) => e.stopPropagation();
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      className={`mdi-window${active ? ' active' : ''}${max ? ' maximized' : ''}`}
+      hidden={l.state === 'minimized'}
+      style={max ? { zIndex: z } : { left: g.x, top: g.y, width: g.w, height: g.h, zIndex: z }}
+      onPointerDownCapture={() => {
+        if (!active) ws.focus(win.id);
+      }}
+    >
+      <div
+        className="mdi-title"
+        onPointerDown={drag('move')}
+        onDoubleClick={() => layout.toggleMaximize(win.id)}
+      >
+        <span className="mdi-caption" title={title}>
+          {win.dirty && <i className="dirty-dot" aria-label="Saxlanmayıb" />}
+          {title}
+        </span>
+        <span className="mdi-controls" onPointerDown={keep}>
+          <button
+            type="button"
+            aria-label="Kiçilt"
+            title="Kiçilt"
+            onClick={() => layout.minimize(win.id)}
+          >
+            <Minus size={13} />
+          </button>
+          <button
+            type="button"
+            aria-label={max ? 'Əvvəlki ölçü' : 'Böyüt'}
+            title={max ? 'Əvvəlki ölçü' : 'Böyüt'}
+            onClick={() => layout.toggleMaximize(win.id)}
+          >
+            {max ? <Copy size={12} /> : <Square size={11} />}
+          </button>
+          <button
+            type="button"
+            className="close"
+            aria-label="Bağla"
+            title="Bağla (Ctrl+F4)"
+            onClick={() => ws.close(win.id)}
+          >
+            <X size={14} />
+          </button>
+        </span>
+      </div>
+      <div className="mdi-body">
+        <WindowBody win={win} />
+      </div>
+      {!max && (
+        <>
+          <span className="mdi-grip e" onPointerDown={drag('e')} aria-hidden="true" />
+          <span className="mdi-grip w" onPointerDown={drag('w')} aria-hidden="true" />
+          <span className="mdi-grip s" onPointerDown={drag('s')} aria-hidden="true" />
+          <span className="mdi-grip se" onPointerDown={drag('se')} aria-hidden="true" />
+          <span className="mdi-grip sw" onPointerDown={drag('sw')} aria-hidden="true" />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 1C's window panel: every open window, in the order opened, plus arranging them. */
+function WindowBar() {
+  const ws = useWorkspace();
+  const layout = useLayout();
+  return (
+    <nav className="window-bar" aria-label="Pəncərələr paneli">
+      <div className="window-tabs" role="tablist" aria-label="Açıq pəncərələr">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={ws.activeId === 'home'}
+          className={ws.activeId === 'home' ? 'active' : ''}
+          title="Bütün pəncərələri kiçilt və başlanğıc səhifəsini göstər"
+          onClick={() => layout.showDesktop()}
+        >
+          <Home size={13} aria-hidden="true" />
+          Başlanğıc
+        </button>
+        {ws.windows.map((w) => {
+          const minimized = layout.layout[w.id]?.state === 'minimized';
+          return (
+            <span
+              key={w.id}
+              className={`window-tab${ws.activeId === w.id ? ' active' : ''}${minimized ? ' minimized' : ''}`}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={ws.activeId === w.id}
+                onClick={() => ws.focus(w.id)}
+                title={viewTitle(w.view, w.label)}
+              >
+                {w.dirty && <i className="dirty-dot" aria-label="Saxlanmayıb" />}
+                {viewTitle(w.view, w.label)}
+              </button>
+              <button
+                type="button"
+                className="tab-close"
+                aria-label={`Bağla: ${viewTitle(w.view, w.label)}`}
+                onClick={() => ws.close(w.id)}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          );
+        })}
+      </div>
+      {ws.windows.length > 0 && (
+        <div className="window-tools">
+          <button
+            type="button"
+            className="icon-button"
+            title="Kaskad düz"
+            aria-label="Kaskad düz"
+            onClick={layout.cascade}
+          >
+            <Layers size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Yan-yana düz"
+            aria-label="Yan-yana düz"
+            onClick={layout.tile}
+          >
+            <LayoutGrid size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Bütün pəncərələri bağla"
+            aria-label="Bütün pəncərələri bağla"
+            onClick={layout.closeAll}
+          >
+            <SquareX size={15} />
+          </button>
+        </div>
+      )}
+    </nav>
   );
 }
 

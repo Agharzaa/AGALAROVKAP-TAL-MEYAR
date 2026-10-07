@@ -226,6 +226,8 @@ export interface InvoiceSummary {
 export interface InvoiceDetail extends InvoiceSummary {
   rate: string;
   pricesIncludeVat: boolean;
+  /** Postings were entered by hand (1C "Əl ilə düzəliş"). */
+  manual: boolean;
   vatTreatment: 'offset' | 'cost';
   lines: InvoiceLineView[];
   postings: PostingView[];

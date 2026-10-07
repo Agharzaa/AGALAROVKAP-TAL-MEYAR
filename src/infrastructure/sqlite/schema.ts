@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const v1 = `
 CREATE TABLE companies(
@@ -616,9 +616,25 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v5 — the e-qaimə number is one value ("MT2610007"), as it is printed; manual postings of an
+// invoice (1C "Əl ilə düzəliş"). Numbers typed in two fields under 0.4.0 are joined, unless the
+// joined number already belongs to another invoice (then they stay as they were).
+
+const v5 = `
+ALTER TABLE invoices ADD COLUMN manual INTEGER NOT NULL DEFAULT 0 CHECK(manual IN(0,1));
+UPDATE invoices SET eq_number=upper(replace(eq_series||eq_number,' ','')), eq_series='', eq_key=upper(replace(replace(replace(replace(eq_series||eq_number,' ',''),'i','I'),'ı','I'),'İ','I'))
+WHERE eq_series<>'' AND NOT EXISTS(
+  SELECT 1 FROM invoices o WHERE o.company_id=invoices.company_id AND o.id<>invoices.id
+    AND o.direction=invoices.direction AND o.status='posted'
+    AND (o.direction='sale' OR o.partner_id=invoices.partner_id)
+    AND o.eq_key=upper(replace(replace(replace(replace(invoices.eq_series||invoices.eq_number,' ',''),'i','I'),'ı','I'),'İ','I')));
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
   { version: 3, sql: v3, foreignKeysOff: true },
   { version: 4, sql: v4 },
+  { version: 5, sql: v5 },
 ];

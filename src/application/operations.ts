@@ -35,16 +35,20 @@ function nextNumber(tx: Tx, companyId: string): string {
   }
 }
 
-function buildPostings(
+/**
+ * Dt/Kt lines typed by the accountant, checked like every posting. `self` is the document the
+ * lines belong to ("operation:<id>", "invoice:<id>"): an empty settlement-document slot means it.
+ */
+export function buildPostings(
   tx: Tx,
   companyId: string,
   chart: Chart,
-  opId: string,
+  self: string,
   lines: readonly OperationLineInput[],
+  field = 'lines',
 ): Posting[] {
-  const self = `${SOURCE}:${opId}`;
   const postings = lines.map((l, i): Posting => {
-    const f = `lines.${i}`;
+    const f = `${field}.${i}`;
     const amount = parseMoney(l.amount, `Sətir ${i + 1}: məbləğ`);
     if (amount === 0n)
       throw new DomainError(`Sətir ${i + 1}: məbləğ sıfır ola bilməz.`, `${f}.amount`);
@@ -97,11 +101,11 @@ function buildPostings(
       memo: parseText(l.memo, 'Məzmun', 300, false),
     };
   });
-  checkPostings(chart, postings);
+  checkPostings(chart, postings, field);
   return postings;
 }
 
-const describe = (p: readonly Posting[]) =>
+export const describe = (p: readonly Posting[]) =>
   p.map((x) => ({
     dt: x.dt.account,
     dtSk: x.dt.sk,
@@ -144,7 +148,7 @@ export function saveOperation(tx: Tx, cmd: CommandOf<'operation.save'>): Command
     throw new DomainError('Bu nömrə ilə sənəd artıq var.', 'number', 'conflict');
   const id = existing ? String(existing.id) : tx.id();
   const chart = tx.chart(cmd.companyId);
-  const postings = buildPostings(tx, cmd.companyId, chart, id, cmd.lines);
+  const postings = buildPostings(tx, cmd.companyId, chart, `${SOURCE}:${id}`, cmd.lines);
   const payload = { number, date, memo, lines: describe(postings) };
 
   if (existing) {

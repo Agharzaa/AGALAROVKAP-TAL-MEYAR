@@ -24,7 +24,7 @@ Azərbaycan şirkətləri üçün Windows mühasibat proqramı: qaimələr, ƏDV
   - Əvəzləşdirilməmiş avans, mənfi anbar və mənfi pul qalığı üzrə xəbərdarlıq verilir.
   - Avtomatik ehtiyat nüsxə alınır.
 - **Sürət:** uçot ayrıca axında işləyir; 500 000 yazılışda dövriyyə balansı 1 saniyədən tez açılır.
-- **İnterfeys:** "Klassik ofis" — lent menyu, iş dövrü, sürətli axtarış (Ctrl+K), pəncərə tabları.
+- **İnterfeys:** "Klassik ofis" — lent menyu, iş dövrü, sürətli axtarış (Ctrl+K), 1C kimi pəncərələr (sürüşdürülür, kiçildilir/böyüdülür, aşağıda pəncərələr paneli; Ctrl+Tab, Ctrl+F4).
 
 Uçot qaydaları: [docs/ACCOUNTING.md](docs/ACCOUNTING.md). Razılaşdırılmış qərarlar: [docs/QERARLAR.md](docs/QERARLAR.md). Cari vəziyyət: [PROJECT_STATE.md](PROJECT_STATE.md).
 

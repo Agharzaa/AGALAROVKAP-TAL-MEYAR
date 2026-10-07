@@ -130,10 +130,9 @@ export class Names {
         );
         put(
           this.db
-            .all('SELECT id,number,date,eq_series,eq_number FROM invoices WHERE company_id=?', c)
+            .all('SELECT id,number,date,eq_number FROM invoices WHERE company_id=?', c)
             .map((r) => ({ ...r, id: `invoice:${r.id}` })),
-          (r) =>
-            `${r.number}${r.eq_number ? ` (${str(r.eq_series)}${str(r.eq_number)})` : ''} · ${dmy(str(r.date))}`,
+          (r) => `${r.number}${r.eq_number ? ` (${str(r.eq_number)})` : ''} · ${dmy(str(r.date))}`,
         );
         break;
       default:
@@ -782,6 +781,7 @@ function invoiceDetail(db: Db, companyId: string, id: string): InvoiceDetail {
     ...invoiceSummary(names, r),
     rate: formatPrice(r.rate as bigint),
     pricesIncludeVat: r.prices_include_vat === 1n,
+    manual: r.manual === 1n,
     vatTreatment: payload.vatTreatment ?? 'offset',
     lines,
     postings,

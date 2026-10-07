@@ -151,7 +151,7 @@ test('September through invoices: postings, FIFO cost and the trial balance to t
   });
   assert.deepEqual(
     list.map((i) => [i.number, i.partner, i.eqNumber, i.total]),
-    [['AQ-000001', 'Təchizat ASC', '001', '11800.00']],
+    [['AQ-000001', 'Təchizat ASC', 'AA001', '11800.00']],
   );
 });
 
@@ -286,12 +286,11 @@ test('purchase: services to 721, VAT to cost when chosen, prices with VAT, e-qai
     ['241', '531.01', '18.00'],
     ['201', '531.01', '118.00', '2'],
   ]);
-  assert.equal(detail(f, a.id).eqSeries, 'MT');
+  assert.equal(detail(f, a.id).eqNumber, 'MT2609001', 'one value, as printed');
   assert.throws(
     () =>
       invoice(f, 'purchase', '2026-09-11', supplier, c, [{ productId: chairs, price: '1' }], {
-        eqSeries: 'MT',
-        eqNumber: '2609001',
+        eqNumber: 'mt 2609001',
       }),
     /artıq AQ-000001 nömrəli qaimədə/,
   );
@@ -617,22 +616,53 @@ test('audit 7: invoice roles survive renaming and can be moved to another elemen
   );
 });
 
-test('audit 8: e-qaimə series and number do not run together; a series needs a number', (t) => {
+test('e-qaimə number is one value: series and number are not split', (t) => {
   const f = fixture(t);
   const g = goods(f);
   const work = f.product('Məsləhət', 'saat', 'service');
-  invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
-    eqSeries: 'M',
-    eqNumber: 'T1',
+  const a = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
+    eqNumber: 'MT2610007',
   });
-  invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
-    eqSeries: 'MT',
-    eqNumber: '1',
-  });
+  assert.equal(detail(f, a.id).eqNumber, 'MT2610007');
   assert.throws(
-    () => invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], { eqSeries: 'MT' }),
-    /nömrəsini yazın/,
+    () =>
+      invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
+        eqNumber: 'mt2610007',
+      }),
+    /artıq SQ-000001/,
   );
+  // An older caller that still sends the series apart gets the same single number.
+  const b = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
+    eqSeries: 'MT',
+    eqNumber: '2610008',
+  });
+  assert.equal(detail(f, b.id).eqNumber, 'MT2610008');
+});
+
+test('manual postings (Əl ilə düzəliş): the accountant’s entry replaces the rules, and back', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  const work = f.product('Məsləhət', 'saat', 'service');
+  const s = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '100')]);
+  const income = f.item('incomeType', 'Xidmət satışı');
+  // Book the revenue to 611 by hand instead of 601.
+  const manual = resave(f, s.id, {
+    postings: [f.line('211.01', [g.cus, g.cs, ''], '611', [income], '100')],
+  });
+  assert.equal(manual.version, 2);
+  const d = detail(f, s.id);
+  assert.equal(d.manual, true);
+  assert.deepEqual(postings(f, s.id), [['211.01', '611', '100.00']]);
+  assert.equal(d.postings[0]!.dt.sk[2], `invoice:${s.id}`, 'empty document = this invoice');
+  // Manual postings are checked like any posting.
+  assert.throws(
+    () => resave(f, s.id, { postings: [f.line('211', [g.cus, g.cs, ''], '611', [income], '100')] }),
+    /subhesab seçin/,
+  );
+  // Without postings the rules take over again.
+  resave(f, s.id, { lines: [line(work, '1', '100')] });
+  assert.equal(detail(f, s.id).manual, false);
+  assert.deepEqual(postings(f, s.id), [['211.01', '601', '100.00']]);
 });
 
 test('audit: a payment cannot settle a cancelled invoice or another partner’s invoice', (t) => {

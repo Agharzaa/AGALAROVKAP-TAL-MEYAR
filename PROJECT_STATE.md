@@ -7,7 +7,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** "Klassik ofis" — lent menyu, iş dövrü, pəncərə tabları, status sətri. İstifadəçi üç fərqli konsepsiyadan bunu seçib.
+- **Dizayn:** "Klassik ofis" — lent menyu, iş dövrü, 1C kimi pəncərələr (iş sahəsində sürüşdürülən, kiçildilən/böyüdülən pəncərələr və aşağıda pəncərələr paneli), status sətri. İstifadəçi üç fərqli konsepsiyadan bunu seçib.
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
 
@@ -51,6 +51,15 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 | Yük testi: 500 000 yazılışlı bazada satış qaiməsi (FIFO + avans) ~0,1 s                                                          | `npm run test:perf`                           |
 | Real Electron: 0.3.0 bazası 0.4.0-a yenilənir (50 → 90 hesab, rollar, bütövlük ok)                                               | `MEYAR_SMOKE`                                 |
 
+## 0.4.1 — qaimə və pəncərələr üzrə istəklər (07.10.2026 gecə)
+
+| Sahə                                                                                                                              | Sübut                                         |
+| --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| E-qaimə nömrəsi bir sahədir (`MT2610007`); sxem v5 köhnə seriya + nömrəni birləşdirir                                             | `invoices.test.ts`, `tests/ui`                |
+| Siyahıda və redaktorda kontragentə dar yer                                                                                        | Electron ekran şəkilləri                      |
+| Qaimənin yazılışlarını əl ilə düzəltmək (1C "Əl ilə düzəliş"); bayraq sənəddə saxlanılır, storno ilə                              | `invoices.test.ts`, `tests/ui`                |
+| 1C kimi pəncərələr: sürüşdürmə, ölçü, kiçilt/böyüt/bağla, pəncərələr paneli, kaskad, yan-yana, hamısını bağla, Ctrl+Tab / Ctrl+F4 | `tests/ui` (7 test), Electron ekran şəkilləri |
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -60,7 +69,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
-2. ~~Qaimələr~~ — hazır (0.4.0).
+2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Növbəti:** Bank sənədi: sərbəst müxabir hesab, çoxsətirli; 223.01/224.04 cütü; çıxarış idxalı və öyrənən qaydalar.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).

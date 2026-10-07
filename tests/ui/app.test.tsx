@@ -5,11 +5,13 @@ import { afterEach, test } from 'node:test';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../src/renderer/App';
-import type { Catalog, TrialBalance } from '../../src/contracts/queries';
+import type { Catalog, InvoiceSummary, TrialBalance } from '../../src/contracts/queries';
 import { harness } from './harness';
 
 afterEach(() => cleanup());
-const pane = () => document.querySelector('.pane:not([hidden])') as HTMLElement;
+const pane = () =>
+  (document.querySelector('.mdi-window.active:not([hidden])') ??
+    document.querySelector('.desktop')) as HTMLElement;
 
 function seed(h: ReturnType<typeof harness>) {
   const companyId = h.run({
@@ -268,6 +270,86 @@ test('sales invoice: partner, contract, product and price by keyboard; entry sho
     }) as TrialBalance;
     assert.equal(tb.rows.find((r) => r.account === '211')!.turnDt, '590.00');
     assert.equal(tb.rows.find((r) => r.account === '521')!.turnKt, '90.00');
+
+    // The e-qaimə number is one field ("MT" is part of it) and the postings can be corrected
+    // by hand (1C "Əl ilə düzəliş").
+    await user.type(editor.getByRole('textbox', { name: 'E-qaimə nömrəsi' }), 'mt 2610007');
+    await user.click(editor.getByRole('checkbox', { name: 'Əl ilə düzəliş' }));
+    const grid = within(editor.getByRole('region', { name: 'Yazılışlar' }));
+    const amounts = ['Sətir 1 məbləğ', 'Sətir 2 məbləğ'].map(
+      (name) => grid.getByRole('textbox', { name }) as HTMLInputElement,
+    );
+    const vatLine = amounts.findIndex((a) => a.value.replace(/\s/g, '') === '90,00');
+    assert.ok(vatLine >= 0);
+    await user.clear(amounts[vatLine]!);
+    await user.type(amounts[vatLine]!, '72');
+    await user.keyboard('{Control>}s{/Control}');
+    await waitFor(() => {
+      const after = h.ledger.query({
+        type: 'trialBalance',
+        companyId: s.companyId,
+        from: '2000-01-01',
+        to: '2099-12-31',
+        expand: [],
+      }) as TrialBalance;
+      assert.equal(after.rows.find((r) => r.account === '521')!.turnKt, '72.00');
+      assert.equal(after.rows.find((r) => r.account === '211')!.turnDt, '590.00');
+    });
+    const list = h.ledger.query({
+      type: 'invoices',
+      companyId: s.companyId,
+      direction: 'sale',
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as InvoiceSummary[];
+    assert.equal(list[0]!.eqNumber, 'MT2610007');
+    // The checkbox stays on after saving: the document remembers it was corrected by hand.
+    await waitFor(() =>
+      assert.equal(
+        (editor.getByRole('checkbox', { name: 'Əl ilə düzəliş' }) as HTMLInputElement).checked,
+        true,
+      ),
+    );
+  } finally {
+    h.close();
+  }
+});
+
+test('windows: sections open as 1C-like child windows that minimize, maximize and close', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
+    await user.keyboard('{Control>}n{/Control}');
+    const windows = () => [...document.querySelectorAll<HTMLElement>('.mdi-window')];
+    assert.equal(windows().length, 2);
+    // Both stay open on the work area; the newest is in front.
+    const [invoice, operation] = windows() as [HTMLElement, HTMLElement];
+    assert.ok(operation.classList.contains('active'));
+    assert.ok(Number(operation.style.zIndex) > Number(invoice.style.zIndex));
+    // Clicking the other window brings it to the front.
+    await user.click(invoice.querySelector('.mdi-caption')!);
+    assert.ok(invoice.classList.contains('active'));
+    assert.ok(Number(invoice.style.zIndex) > Number(operation.style.zIndex));
+    // Maximize and restore.
+    await user.click(within(invoice).getByRole('button', { name: 'Böyüt' }));
+    assert.ok(invoice.classList.contains('maximized'));
+    await user.click(within(invoice).getByRole('button', { name: 'Əvvəlki ölçü' }));
+    assert.ok(!invoice.classList.contains('maximized'));
+    // Minimize: the window hides, the other one becomes active; the window panel brings it back.
+    await user.click(within(invoice).getByRole('button', { name: 'Kiçilt' }));
+    assert.ok(invoice.hidden);
+    assert.ok(operation.classList.contains('active'));
+    await user.click(screen.getByRole('tab', { name: /satış qaiməsi/i }));
+    assert.ok(!invoice.hidden && invoice.classList.contains('active'));
+    // Başlanğıc minimizes everything; close all empties the work area.
+    await user.click(screen.getByRole('tab', { name: /Başlanğıc/ }));
+    assert.ok(windows().every((w) => w.hidden));
+    await user.click(screen.getByRole('button', { name: 'Bütün pəncərələri bağla' }));
+    await waitFor(() => assert.equal(windows().length, 0));
   } finally {
     h.close();
   }

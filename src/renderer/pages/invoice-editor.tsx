@@ -19,6 +19,7 @@ import { viewTitle } from '../pages';
 import { accountOptions, Picker, subkontoOptions, type Option } from '../picker';
 import { Confirm, DateInput, Field, Notice } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
+import { EntryGrid, entryLinesFrom, toEntryInput, type EntryLine } from '../entry-grid';
 
 type Direction = 'sale' | 'purchase';
 type Treatment = 'offset' | 'cost';
@@ -42,10 +43,12 @@ interface Form {
   rate: string;
   pricesIncludeVat: boolean;
   vatTreatment: Treatment;
-  eqSeries: string;
   eqNumber: string;
   memo: string;
   lines: LineForm[];
+  /** 1C "Əl ilə düzəliş": the postings below are typed by hand instead of the rules. */
+  manual: boolean;
+  postings: EntryLine[];
 }
 let keys = 0;
 const blank = (vatRate: VatRate): LineForm => ({
@@ -74,8 +77,7 @@ function fromDetail(d: InvoiceDetail): Form {
     rate: d.currency === 'AZN' ? '' : toField(d.rate),
     pricesIncludeVat: d.pricesIncludeVat,
     vatTreatment: d.vatTreatment,
-    eqSeries: d.eqSeries,
-    eqNumber: d.eqNumber,
+    eqNumber: `${d.eqSeries}${d.eqNumber}`,
     memo: d.memo,
     lines: d.lines.map((l) => ({
       key: ++keys,
@@ -90,6 +92,8 @@ function fromDetail(d: InvoiceDetail): Form {
         d.direction === 'purchase' && l.vatTreatment !== d.vatTreatment ? l.vatTreatment : '',
       memo: l.memo,
     })),
+    manual: d.manual,
+    postings: d.manual ? entryLinesFrom(d.postings, `invoice:${d.id}`) : [],
   };
 }
 
@@ -155,7 +159,11 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
   const doc = detail.data;
   const sale = direction === 'sale';
   const snapshot = (f: Form) =>
-    JSON.stringify({ ...f, lines: f.lines.map((l) => toInput(l, direction)) });
+    JSON.stringify({
+      ...f,
+      lines: f.lines.map((l) => toInput(l, direction)),
+      postings: f.manual ? f.postings.map(toEntryInput) : [],
+    });
 
   useEffect(() => {
     if (form || !catalog) return;
@@ -171,10 +179,11 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
           rate: '',
           pricesIncludeVat: false,
           vatTreatment: vatPayer ? catalog.company.purchaseVat : 'cost',
-          eqSeries: '',
           eqNumber: '',
           memo: '',
           lines: [blank(vatPayer ? '18' : 'nontaxable')],
+          manual: false,
+          postings: [],
         };
     baseline.current = snapshot(initial);
     setForm(initial);
@@ -228,10 +237,11 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       rate: form.rate.trim(),
       pricesIncludeVat: form.pricesIncludeVat,
       ...(sale ? {} : { vatTreatment: form.vatTreatment }),
-      eqSeries: form.eqSeries,
+      eqSeries: '',
       eqNumber: form.eqNumber,
       memo: form.memo,
       lines: form.lines.map((l) => toInput(l, direction)),
+      ...(form.manual ? { postings: form.postings.map(toEntryInput) } : {}),
       ...(id && doc ? { id, version: doc.version } : {}),
     });
     if (!r) return;
@@ -361,7 +371,11 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
               aria-label="Tarix"
             />
           </Field>
-          <Field label={sale ? 'Alıcı' : 'Malsatan'} error={headerError('partnerId')}>
+          <Field
+            label={sale ? 'Alıcı' : 'Malsatan'}
+            className="partner"
+            error={headerError('partnerId')}
+          >
             <Picker
               ariaLabel="Kontragent"
               value={form.partnerId}
@@ -400,18 +414,12 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
               />
             </Field>
           )}
-          <Field label="E-qaimə seriyası" error={headerError('eqSeries')}>
+          <Field label="E-qaimə nömrəsi" className="eq" error={headerError('eqNumber')}>
             <input
-              maxLength={20}
-              value={form.eqSeries}
-              placeholder="MT"
-              onChange={(e) => set({ eqSeries: e.target.value })}
-            />
-          </Field>
-          <Field label="E-qaimə nömrəsi" error={headerError('eqNumber')}>
-            <input
-              maxLength={40}
+              aria-label="E-qaimə nömrəsi"
+              maxLength={60}
               value={form.eqNumber}
+              placeholder="MT2610007"
               onChange={(e) => set({ eqNumber: e.target.value })}
             />
           </Field>
@@ -678,7 +686,54 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
             : 'Yazılış: Dt 721/201/205/113 / Kt 531 (ƏDV-siz), Dt 241 / Kt 531 (ƏDV). Müqavilədə verilmiş avans varsa, avtomatik əvəzləşir (Dt 531 / Kt 243).'}{' '}
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
         </p>
-        {doc && doc.postings.length > 0 && <Postings postings={doc.postings} />}
+        {doc && (
+          <section className="invoice-postings" aria-label="Yazılışlar">
+            <div className="section-head">
+              <h2>Yazılışlar</h2>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={form.manual}
+                  disabled={locked || m.busy}
+                  onChange={(e) =>
+                    set(
+                      e.target.checked
+                        ? {
+                            manual: true,
+                            postings: form.postings.length
+                              ? form.postings
+                              : entryLinesFrom(doc.postings, `invoice:${doc.id}`),
+                          }
+                        : { manual: false },
+                    )
+                  }
+                />
+                Əl ilə düzəliş
+              </label>
+            </div>
+            {form.manual ? (
+              <>
+                <p className="doc-hint">
+                  Yazılışlar əl ilə dəyişdirilir və qaimə qaydaları ilə yenidən hesablanmır (1C-dəki
+                  kimi). “Hesablaşma sənədi” boş qalarsa, bu qaimə yazılır. Bayrağı götürsəniz,
+                  yazılışlar yenə qaydalarla qurulur.
+                </p>
+                <fieldset className="lines" disabled={m.busy || locked}>
+                  <EntryGrid
+                    catalog={catalog as Catalog}
+                    companyId={win.companyId}
+                    lines={form.postings}
+                    onChange={(postings) => set({ postings })}
+                    errorField={m.error?.field}
+                    errorPrefix="postings"
+                  />
+                </fieldset>
+              </>
+            ) : (
+              <Postings postings={doc.postings} />
+            )}
+          </section>
+        )}
         {doc && doc.history.length > 0 && (
           <section className="history" aria-label="Sənədin tarixçəsi">
             <h2>Tarixçə</h2>
@@ -747,37 +802,34 @@ function Postings({ postings }: { postings: PostingView[] }) {
     </>
   );
   return (
-    <section className="invoice-postings" aria-label="Yazılışlar">
-      <h2>Yazılışlar</h2>
-      <table className="grid">
-        <thead>
-          <tr>
-            <th scope="col">Debet</th>
-            <th scope="col">Kredit</th>
-            <th scope="col" className="num">
-              Miqdar
-            </th>
-            <th scope="col" className="num">
-              Məbləğ, AZN
-            </th>
-            <th scope="col">Məzmun</th>
+    <table className="grid">
+      <thead>
+        <tr>
+          <th scope="col">Debet</th>
+          <th scope="col">Kredit</th>
+          <th scope="col" className="num">
+            Miqdar
+          </th>
+          <th scope="col" className="num">
+            Məbləğ, AZN
+          </th>
+          <th scope="col">Məzmun</th>
+        </tr>
+      </thead>
+      <tbody>
+        {postings.map((p) => (
+          <tr key={p.lineNo}>
+            <td>{side(p.dt)}</td>
+            <td>{side(p.kt)}</td>
+            <td className="num">{qty(p.quantity)}</td>
+            <td className="num strong">{money(p.amount)}</td>
+            <td className="ellipsis" title={p.memo}>
+              {p.memo}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {postings.map((p) => (
-            <tr key={p.lineNo}>
-              <td>{side(p.dt)}</td>
-              <td>{side(p.kt)}</td>
-              <td className="num">{qty(p.quantity)}</td>
-              <td className="num strong">{money(p.amount)}</td>
-              <td className="ellipsis" title={p.memo}>
-                {p.memo}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

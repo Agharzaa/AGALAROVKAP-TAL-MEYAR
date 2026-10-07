@@ -80,11 +80,12 @@ Hesab planının qaydaları:
 
 ## Qaimələr (mərhələ 2)
 
-- **Sənəd:** satış və alış qaiməsi — kontragent, müqavilə (valyutanı müəyyən edir), tarix, məzənnə (valyuta müqaviləsində), e-qaimə seriya/nömrəsi, "ƏDV daxildir" bayrağı, alışda ƏDV-nin taleyi.
+- **Sənəd:** satış və alış qaiməsi — kontragent, müqavilə (valyutanı müəyyən edir), tarix, məzənnə (valyuta müqaviləsində), e-qaimə nömrəsi (bir sahə, məs. `MT2610007`), "ƏDV daxildir" bayrağı, alışda ƏDV-nin taleyi.
 - **Sətir:** nomenklatura, miqdar, qiymət, ƏDV dərəcəsi; satışda gəlir növü və anbar hesabı, alışda hesab və xərc maddəsi (standartlar nomenklaturanın növündən).
 - **Məbləğlər:** sətir = miqdar × qiymət, qəpiyə bir dəfə yuvarlaqlaşdırılır; ƏDV yalnız 18%-də, sətir üzrə. Valyutada manat məbləği sətrin cəmi və ƏDV-si üzrə çevrilir, ƏDV-siz manat məbləği onların fərqidir.
 - **Yazılışlar, FIFO, avanslar:** `docs/QERARLAR.md` (2026-10-07 gecə, mərhələ 2). FIFO jurnalın özündən oxunur (hesab + nomenklatura indeksi): partiya hər alış sənədidir, maya dəyəri jurnaldakı real qalıqla tutuşdurulur, mal sıfırlananda dəyər də sıfırlanır. Kifayət qədər qalıq yoxdursa, satış uçota alınmır; satılmış malın alışı ləğv edilmir.
 - **Yazılışlar ekranda:** qaimə saxlanandan sonra onun yaratdığı bütün yazılışlar sənədin altında göstərilir; hesab kartından qaiməyə keçid var.
+- **Əl ilə düzəliş:** saxlanmış qaimənin yazılışları əl ilə dəyişdirilə bilər (1C kimi). Sənəd bunu yadda saxlayır (`invoices.manual`); belə qaimədə sətirlər yazılışları yenidən hesablamır. Əl ilə yazılışlar əl ilə əməliyyatın yoxlamalarından keçir və storno ilə düzəliş qaydası dəyişmir.
 
 ## Qalıqlar, registrlər və hesabatlar
 

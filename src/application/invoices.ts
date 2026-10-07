@@ -34,6 +34,7 @@ import type { Account, Chart, CurrencyCode, SubkontoKind, VatRate } from '../dom
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { dailyStock, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
+import { buildPostings as buildManualPostings } from './operations.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 
@@ -282,8 +283,10 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
       rate: formatPrice(rate),
       pricesIncludeVat: cmd.pricesIncludeVat,
       vatTreatment: cmd.direction === 'purchase' ? treatment : ('offset' as const),
-      eqSeries: parseText(cmd.eqSeries, 'E-qaimə seriyası', 20, false).toUpperCase(),
-      eqNumber: parseText(cmd.eqNumber, 'E-qaimə nömrəsi', 40, false),
+      // One value as printed on the e-qaimə ("MT2610007"); a series sent apart is joined in front.
+      eqNumber: parseText(`${cmd.eqSeries}${cmd.eqNumber}`, 'E-qaimə nömrəsi', 60, false)
+        .replace(/\s+/g, '')
+        .toUpperCase(),
       memo: parseText(cmd.memo, 'Məzmun', 500, false),
     },
   };
@@ -605,11 +608,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
   );
   if (same && same.id !== cmd.id)
     throw new DomainError('Bu nömrə ilə qaimə artıq var.', 'number', 'conflict');
-  if (n.header.eqSeries && !n.header.eqNumber)
-    throw new DomainError('E-qaimənin nömrəsini yazın (seriya yazılıb).', 'eqNumber');
-  const eqKey = n.header.eqNumber
-    ? `${numberKey(n.header.eqSeries)}|${numberKey(n.header.eqNumber)}`
-    : '';
+  const eqKey = n.header.eqNumber ? numberKey(n.header.eqNumber) : '';
   if (eqKey) {
     const dup = tx.db.get(
       cmd.direction === 'sale'
@@ -628,7 +627,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
       );
   }
   const id = existing ? String(existing.id) : tx.id();
-  const data = payload(number, n);
+  const data = { ...payload(number, n), postings: cmd.postings ?? null };
   if (existing) {
     const last = tx.db.get(
       "SELECT payload FROM document_history WHERE company_id=? AND doc_type=? AND doc_id=? AND version=? AND status='posted'",
@@ -660,7 +659,11 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
       storno(prev.postings),
     );
   }
-  const postings = buildPostings(tx, cmd.companyId, chart, id, n);
+  // Manual postings (1C "Əl ilə düzəliş") replace the rules; the lines stay the document content.
+  const manual = cmd.postings
+    ? buildManualPostings(tx, cmd.companyId, chart, `${INVOICE}:${id}`, cmd.postings, 'postings')
+    : null;
+  const postings = manual ?? buildPostings(tx, cmd.companyId, chart, id, n);
   const stored = JSON.stringify(data.lines);
   const values = [
     number,
@@ -671,7 +674,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     n.currency,
     n.rate,
     n.header.pricesIncludeVat ? 1 : 0,
-    n.header.eqSeries,
+    '',
     n.header.eqNumber,
     eqKey,
     n.header.memo,
@@ -680,6 +683,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     n.totals.vat,
     n.totals.total,
     n.totals.totalAzn,
+    cmd.postings ? 1 : 0,
     version,
     now,
   ] as const;
@@ -687,15 +691,15 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     tx.db.run(
       `UPDATE invoices SET number=?,number_key=?,date=?,partner_id=?,contract_id=?,currency=?,rate=?,
          prices_include_vat=?,eq_series=?,eq_number=?,eq_key=?,memo=?,lines=?,net=?,vat=?,total=?,total_azn=?,
-         version=?,updated_at=? WHERE id=?`,
+         manual=?,version=?,updated_at=? WHERE id=?`,
       ...values,
       id,
     );
   else
     tx.db.run(
       `INSERT INTO invoices(number,number_key,date,partner_id,contract_id,currency,rate,prices_include_vat,
-         eq_series,eq_number,eq_key,memo,lines,net,vat,total,total_azn,version,updated_at,id,company_id,direction,status,created_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'posted',?)`,
+         eq_series,eq_number,eq_key,memo,lines,net,vat,total,total_azn,manual,version,updated_at,id,company_id,direction,status,created_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'posted',?)`,
       ...values,
       id,
       cmd.companyId,
