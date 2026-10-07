@@ -580,3 +580,57 @@ test('a file database survives reopen and refuses a newer schema', (t) => {
   assert.throws(() => new Db(path), /daha yeni versiyası/);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('a used contract keeps its currency; archived accounts keep their history in the card', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const buyer = f.partner('Foreign LLC', '', 'foreign');
+  const usd = f.bankAccount(bank, 'AZ10AIIB38060019840000000001', '223.02', 'USD');
+  const c = f.contract(buyer, 'EX-1', 'sale', 'USD');
+  f.operation('2026-09-10', [
+    f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+      dtCurAmount: '1000',
+      ktCurAmount: '1000',
+    }),
+  ]);
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'contract.save',
+        companyId: f.companyId,
+        id: c,
+        version: 1,
+        partnerId: buyer,
+        number: 'EX-1',
+        date: '2026-01-01',
+        kind: 'sale',
+        currency: 'AZN',
+        note: '',
+        archived: false,
+      }),
+    /valyutası dəyişdirilmir/,
+  );
+  // 711.01 used in September, emptied in October and archived: September's card still shows it.
+  f.exec({ type: 'account.create', companyId: f.companyId, code: '711.01', name: 'Reklam' });
+  const ads = f.item('expenseItem', 'Ofis xərcləri');
+  const op = f.operation('2026-09-20', [
+    f.line('711.01', [ads], '223.02', [usd], '100', { ktCurAmount: '58.82' }),
+  ]);
+  f.operation('2026-10-01', [
+    f.line('223.02', [usd], '711.01', [ads], '100', { dtCurAmount: '58.82' }),
+  ]);
+  f.exec({
+    type: 'account.update',
+    companyId: f.companyId,
+    code: '711.01',
+    name: 'Reklam',
+    nature: 'active',
+    subkonto: ['expenseItem'],
+    quantitative: false,
+    currency: false,
+    archived: true,
+  });
+  const card = f.card('711', '2026-09-21', '2026-09-30');
+  assert.equal(card.opening, '100.00');
+  assert.ok(op.id);
+});

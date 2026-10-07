@@ -2,18 +2,18 @@
 
 ## Qatlar
 
-| Qovluq                      | Məsuliyyət                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `src/domain`                | Təmiz uçot nüvəsi: pul, miqdar, hesab planı, müxabirləşmə qaydaları, orta maya. I/O yoxdur.            |
-| `src/contracts`             | UI ↔ tətbiq müqaviləsi və runtime yoxlama (zod). Pul və miqdar onluq mətndir.                          |
-| `src/application`           | Əmrlər və sorğular: tranzaksiya, idempotentlik, versiya, dövr, anbar xronologiyası, audit, hesabatlar. |
-| `src/infrastructure/sqlite` | SQLite adapteri, versiyalı miqrasiyalar, tenant və dəyişməzlik triggerləri, backup.                    |
-| `src/main`, `src/preload`   | Electron: tək pəncərə, IPC sərhədi, açılış backup-ı, bağlama qoruması.                                 |
-| `src/renderer`              | React UI: iş sahəsi, modul və sənəd pəncərələri, dizayn sistemi.                                       |
-| `tests/domain`              | Domain unit testləri.                                                                                  |
-| `tests/integration`         | Real SQLite üzərində əmr və hesabat testləri.                                                          |
-| `tests/ui`                  | jsdom-da React + real Ledger inteqrasiyası.                                                            |
-| `scripts`                   | Real Electron sınağı (`electron-smoke.cjs`) və performans ölçməsi (`benchmark.mjs`).                   |
+| Qovluq                      | Məsuliyyət                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `src/domain`                | Təmiz uçot nüvəsi: pul, miqdar, hesab planı və subkonto, Dt/Kt yazılış yoxlaması, storno. I/O yoxdur. |
+| `src/contracts`             | UI ↔ tətbiq müqaviləsi və runtime yoxlama (zod). Pul və miqdar onluq mətndir.                         |
+| `src/application`           | Əmrlər və sorğular: tranzaksiya, idempotentlik, versiya, dövr, subkonto yoxlaması, audit, hesabatlar. |
+| `src/infrastructure/sqlite` | SQLite adapteri, versiyalı miqrasiyalar, tenant və dəyişməzlik triggerləri, backup.                   |
+| `src/main`, `src/preload`   | Electron: tək pəncərə, IPC sərhədi, uçot worker-ləri (yazan + yalnız oxuyan), açılış backup-ı.        |
+| `src/renderer`              | React UI: iş sahəsi, modul və sənəd pəncərələri, dizayn sistemi.                                      |
+| `tests/domain`              | Domain unit testləri.                                                                                 |
+| `tests/integration`         | Real SQLite üzərində əmr və hesabat testləri.                                                         |
+| `tests/ui`                  | jsdom-da React + real Ledger inteqrasiyası.                                                           |
+| `tests/perf`                | Yük testi (standart 500 000 yazılış) və hesabat həddləri.                                             |
 
 ## Asılılıq qaydaları
 
@@ -22,8 +22,9 @@
   1. sxemlə yoxlanılır;
   2. idempotentlik açarı ilə təkrara qarşı yoxlanılır;
   3. bir `BEGIN IMMEDIATE` tranzaksiyasında icra olunur.
-- **Maliyyə yazılışları:** yalnız domain qaydalarının nəticəsidir (`postInvoice`, `postPayment`, `reverse`). Hər giriş `checkEntry` yoxlamasından keçir: balans, tərəflər, hesabın aktivliyi, tələb olunan analitika.
-- **Hesabatlar:** jurnal və bağlantı reyestrindən oxunur, bir oxu tranzaksiyasında. Hesabat öz rəqəmlərini ayrıca saxlamır.
+- **Maliyyə yazılışları:** yalnız `Tx.post` ilə yazılır. Hər yazılış `checkPostings` (hesab yazıla biləndir, subkonto sayı, miqdar və valyuta tələbi) və `checkSideValues` (subkonto dəyəri kitabçada, düzgün növdə, arxivdə deyil, müqavilə kontragentə, bank hesabı hesaba aiddir) yoxlamalarından keçir. Düzəliş və ləğv — qırmızı storno.
+- **Hesabatlar:** aylıq qalıq registrlərindən (triggerlə eyni tranzaksiyada yenilənir) və natamam ayların yazılışlarından SQL-də hesablanır, bir oxu tranzaksiyasında.
+- **Worker-lər:** yazan worker bütün əmr və sorğuları icra edir; bütövlük yoxlaması ayrıca yalnız oxuyan bağlantıda (query_only) işləyir. Pəncərə heç vaxt gözləmir.
 
 ## Bütövlük və təhlükəsizlik
 
@@ -39,14 +40,14 @@
 
 ## Məlumat və backup
 
-- **Yerləşmə:** `%APPDATA%/Meyar/data/meyar.sqlite`; nüsxələr `%APPDATA%/Meyar/backups`. Quraşdırma qovluğundan ayrıdır; uninstall məlumatı silmir.
-- **Açılış nüsxəsi:** hər açılışda, miqrasiyadan əvvəl SQLite backup API ilə ardıcıl nüsxə götürülür.
+- **Yerləşmə:** `%APPDATA%/Meyar/data/meyar-v3.sqlite` (köhnə `meyar.sqlite` toxunulmaz qalır); nüsxələr `%APPDATA%/Meyar/backups`. Quraşdırma qovluğundan ayrıdır; uninstall məlumatı silmir.
+- **Açılış nüsxəsi:** hər açılışda, miqrasiyadan əvvəl SQLite backup API ilə ardıcıl nüsxə götürülür; son 30 nüsxə saxlanılır.
 - **Versiya qoruması:** daha yeni sxemli bazanı köhnə proqram açmır.
 - **Əl ilə nüsxə:** Parametrlər bölməsindən istənilən qovluğa.
 - **Bərpa:** test edilib — nüsxə canlı baza ilə eyni hesabatları qaytarır. Proqram daxilində bərpa pəncərəsi isə **hələ yoxdur**. Əl ilə bərpa qaydası:
   1. Proqramı bağlayın.
   2. `data` qovluğunu kənara köçürün.
-  3. Nüsxəni boş `data` qovluğuna `meyar.sqlite` adı ilə qoyun.
+  3. Nüsxəni boş `data` qovluğuna `meyar-v3.sqlite` adı ilə qoyun.
 
 ## Server rejiminə yol
 

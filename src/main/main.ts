@@ -1,6 +1,6 @@
 import { app, dialog, session } from 'electron';
 import { DatabaseSync, backup } from 'node:sqlite';
-import { mkdir, stat } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LedgerClient } from './ledger-client.js';
@@ -10,7 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const rendererFile = path.resolve(here, '../../../web/index.html');
 const preloadFile = path.join(here, '../preload/preload.cjs');
 // User data lives outside the installation folder; uninstall and updates never touch it.
-app.setPath('userData', path.join(app.getPath('appData'), 'Meyar'));
+app.setPath('userData', process.env.MEYAR_DATA_DIR || path.join(app.getPath('appData'), 'Meyar'));
 const dataDir = path.join(app.getPath('userData'), 'data');
 const backupDir = path.join(app.getPath('userData'), 'backups');
 // Ledger v3 (subkonto model) starts in its own file; the stage-A test database stays untouched.
@@ -37,6 +37,10 @@ async function startupBackup() {
   } finally {
     source.close();
   }
+  // Keep the 30 most recent startup copies; manual backups are never removed.
+  const startups = (await readdir(backupDir)).filter((f) => /^startup-.*\.sqlite$/.test(f)).sort();
+  for (const old of startups.slice(0, Math.max(0, startups.length - 30)))
+    await rm(path.join(backupDir, old), { force: true });
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -73,6 +77,7 @@ else {
           return result.filePath;
         },
       });
+      if (process.env.MEYAR_SMOKE) void smoke(window, process.env.MEYAR_SMOKE);
       app.on('second-instance', () => {
         if (window.isMinimized()) window.restore();
         window.focus();
@@ -88,3 +93,38 @@ app.on('will-quit', () => {
   void ledger?.terminate();
   void reader?.terminate();
 });
+
+/**
+ * Installer smoke test (MEYAR_SMOKE=<result.json>): drives the real preload → IPC → worker →
+ * SQLite path inside the packaged app, saves a screenshot next to the result and quits.
+ */
+async function smoke(window: import('electron').BrowserWindow, out: string) {
+  const { writeFile } = await import('node:fs/promises');
+  const js = (code: string) => window.webContents.executeJavaScript(code);
+  const result: Record<string, unknown> = {};
+  try {
+    result.company = await js(
+      `window.meyar.command({ type: 'company.create', key: 'smoke-0000001', name: 'Smoke MMC', taxId: '1000000009', vatPayer: true })`,
+    );
+    const id = (result.company as { value?: { id: string } }).value?.id;
+    result.catalog = await js(
+      `window.meyar.query({ type: 'catalog', companyId: ${JSON.stringify(id)} }).then(r => ({ ok: r.ok, accounts: r.value?.accounts.length }))`,
+    );
+    result.trial = await js(
+      `window.meyar.query({ type: 'trialBalance', companyId: ${JSON.stringify(id)}, from: '2026-01-01', to: '2026-12-31' }).then(r => r.ok)`,
+    );
+    result.integrity = await js(
+      `window.meyar.query({ type: 'integrity', companyId: ${JSON.stringify(id)} }).then(r => r.value?.ok)`,
+    );
+    window.webContents.reload();
+    await new Promise((r) => setTimeout(r, 2500));
+    await writeFile(
+      out.replace(/\.json$/, '.png'),
+      (await window.webContents.capturePage()).toPNG(),
+    );
+  } catch (error) {
+    result.error = String(error);
+  }
+  await writeFile(out, JSON.stringify(result, null, 2));
+  app.quit();
+}

@@ -322,8 +322,8 @@ input[aria-invalid='true'] {
 /* Shell */
 .shell {
   height: 100%;
-  display: grid;
-  grid-template-rows: auto auto auto auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 .titlebar {
@@ -596,6 +596,7 @@ kbd {
   padding: 6px 10px 0;
 }
 .workspace {
+  flex: 1;
   min-height: 0;
   position: relative;
   padding: 0 10px 10px;

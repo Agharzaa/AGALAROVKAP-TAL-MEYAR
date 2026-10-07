@@ -271,14 +271,25 @@ export function saveContract(tx: Tx, cmd: CommandOf<'contract.save'>): CommandRe
   );
   if (same && same.id !== cmd.id)
     throw new DomainError('Bu kontragentlə bu nömrəli müqavilə artıq var.', 'number', 'conflict');
+  const currency = currencyCode(cmd.currency, 'currency');
   if (cmd.id) {
     const row = tx.db.get(
-      'SELECT partner_id FROM contracts WHERE company_id=? AND id=?',
+      'SELECT partner_id,currency FROM contracts WHERE company_id=? AND id=?',
       cmd.companyId,
       cmd.id,
     );
     if (row && row.partner_id !== cmd.partnerId)
       throw new DomainError('Müqavilənin kontragenti dəyişdirilmir.', 'partnerId');
+    // Postings on currency accounts carry the contract's currency; it cannot change under them.
+    const used = tx.db.get(
+      'SELECT 1 AS x FROM registers WHERE company_id=? AND (s1=? OR s2=? OR s3=?) LIMIT 1',
+      cmd.companyId,
+      cmd.id,
+      cmd.id,
+      cmd.id,
+    );
+    if (row && used && row.currency !== currency)
+      throw new DomainError('Hərəkəti olan müqavilənin valyutası dəyişdirilmir.', 'currency');
   }
   return saveRow(
     tx,
@@ -292,7 +303,7 @@ export function saveContract(tx: Tx, cmd: CommandOf<'contract.save'>): CommandRe
       number_key: key,
       date: parseDate(cmd.date, 'Müqavilənin tarixi'),
       kind: cmd.kind,
-      currency: currencyCode(cmd.currency, 'currency'),
+      currency,
       note: parseText(cmd.note, 'Qeyd', 500, false),
       archived: cmd.archived ? 1 : 0,
     },

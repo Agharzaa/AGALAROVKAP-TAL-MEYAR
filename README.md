@@ -2,34 +2,38 @@
 
 Azərbaycan şirkətləri üçün Windows mühasibat proqramı: qaimələr, ƏDV, bank ödənişləri və onların qaimələrə bölgüsü, anbar (orta maya dəyəri), jurnal və dövriyyə balansı. Bütün uçot yerli SQLite bazasında aparılır.
 
-**Vəziyyət:** 0.1.0, imzalanmamış sınaq versiyası. İstehsala hazır deyil; real şirkətdə istifadədən əvvəl mühasib qəbulu və pilot tələb olunur.
+**Vəziyyət:** 0.3.0 — uçot təməli (subkonto modeli), imzalanmamış sınaq versiyası. Real şirkətdə istifadədən əvvəl mühasib qəbulu və pilot tələb olunur.
 
-## Nə hazırdır
+## Nə hazırdır (0.3.0)
 
-- **Şirkət və kitabçalar:** şirkətlər, VÖEN üzrə kontragentlər, hesab planı və subhesablar, xərc maddələri, anbarlar, ölçü vahidləri, nomenklatura (qutu → ədəd çevirməsi).
-- **Qaimələr:** alış və satış; xidmət və mal sətirləri ilə.
-  - Sətirdə faktiki hesab seçilir (205/201/113, 721, 601).
-  - ƏDV üçün 18% köməkçi düyməsi var.
-  - Qaralama, uçota alma, əks yazılışla düzəliş və ləğv.
-  - Dt/Kt və T-hesab görünüşü, saxlanmamış dəyişikliklər üçün ilkin baxış.
-- **Bank:** 223 və 224.04 hesabları ilə daxil olan və çıxan ödənişlər.
-  - Bir ödəniş bir neçə qaiməyə bölünür.
-  - Bağlanmamış qalıq avans kimi qalır və sonradan bağlanır.
-- **Anbar:** orta çəkili maya dəyəri, satışda 701 yazılışı. Mənfi qalıq və geri tarixli hərəkət bloklanır.
-- **Hesabatlar:** dövriyyə balansı (subhesablar birləşir, 211/531 açıq saldo ilə), jurnal, hesab kartı, debitorlar və kreditorlar, anbar qalığı, dəyişiklik tarixçəsi.
+- **Hesab planı və subkonto:**
+  - Razılaşdırılmış hesab planı, hər hesabda 3-ə qədər subkonto (kontragent, müqavilə, hesablaşma sənədi, bank hesabı, nomenklatura, gəlir növü, ƏDV dərəcəsi, vergi növü, fond, işçi, xərc maddəsi, kassa).
+  - Miqdar və valyuta uçotu.
+  - Yeni hesab və subhesab açmaq olar.
+- **Kitabçalar:** kontragentlər və müqavilələr, bank hesabları (IBAN, valyuta, 223.01/223.02/224.04), nomenklatura, işçilər, siyahılar.
+- **Əl ilə əməliyyat:**
+  - Dt/Kt yazılışları subkontoları ilə; başlanğıc qalıqlar da bununla daxil edilir.
+  - Düzəliş və ləğv qırmızı storno ilə aparılır.
+  - Klaviatura ilə doldurulur: Ctrl+N yeni sənəd, Ctrl+S saxla.
+- **Hesabatlar:**
+  - Hesablar və subkontolar üzrə açılan dövriyyə balansı: açıq saldo, süzgəclər, Excel-ə çıxış.
+  - Hesab kartı, dəyişiklik tarixçəsi.
 - **Nəzarət:**
-  - Bağlı dövr.
-  - Təkrar sorğuya qarşı qoruma (idempotentlik).
-  - Versiya ilə düzəliş: köhnə versiya son məlumatı əvəz etmir.
-  - Şirkətlər arası qoruma, bazada da.
-  - Açılışda avtomatik və əl ilə ehtiyat nüsxə.
-- **Proqram:** tək Windows pəncərəsi, daxili modul və sənəd pəncərələri, Ctrl+K tez keçid.
+  - Jurnal və audit dəyişdirilmir; bağlı dövr bazada qorunur.
+  - Proqram açılanda bütövlük yoxlaması aparılır.
+  - Əvəzləşdirilməmiş avans, mənfi anbar və mənfi pul qalığı üzrə xəbərdarlıq verilir.
+  - Avtomatik ehtiyat nüsxə alınır.
+- **Sürət:** uçot ayrıca axında işləyir; 500 000 yazılışda dövriyyə balansı 1 saniyədən tez açılır.
+- **İnterfeys:** "Klassik ofis" — lent menyu, iş dövrü, sürətli axtarış (Ctrl+K), pəncərə tabları.
 
-Uçot qaydaları: [docs/ACCOUNTING.md](docs/ACCOUNTING.md). Quruluş: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Cari vəziyyət: [PROJECT_STATE.md](PROJECT_STATE.md).
+Uçot qaydaları: [docs/ACCOUNTING.md](docs/ACCOUNTING.md). Razılaşdırılmış qərarlar: [docs/QERARLAR.md](docs/QERARLAR.md). Cari vəziyyət: [PROJECT_STATE.md](PROJECT_STATE.md).
 
-## Hələ olmayanlar
+## Növbəti mərhələlər
 
-İstifadəçi rolları, başlanğıc qalıqlar, Excel və bank çıxarışı idxalı, qaytarma və transfer, material sərfi və istismara vermə sənədləri, kassa. Həmçinin valyuta, amortizasiya, əməkhaqqı, vergi bəyannamələri, DVX və bank API-ləri, imzalı avtomatik yeniləmə, çoxistifadəçili server rejimi.
+2. Satış və alış qaimələri (ƏDV statusu sətirdə, 601/604.1/521, alışda əvəzləşdirmə və ya maya dəyəri, avansların avtomatik əvəzləşdirilməsi).
+3. Bank sənədi (sərbəst müxabir hesab, çoxsətirli; 223.01/224.04 cütü; çıxarışın idxalı və öyrənən qaydalar).
+4. DVX e-qaimələri (Excel və kabinet).
+5. Kassa, ay bağlanışı, valyuta yenidən qiymətləndirilməsi.
 
 ## İşə salmaq
 
@@ -44,27 +48,10 @@ npm start            # Electron runtime-ı quraşdırır, yığır və proqramı
 
 ```sh
 npm run typecheck
-npm test             # domain + real SQLite inteqrasiya testləri
+npm test             # domain + real SQLite inteqrasiya testləri (sentyabr misalı qəpikbəqəpik)
 npm run test:ui      # React + real uçot nüvəsi (jsdom)
+npm run test:perf    # yük testi: MEYAR_PERF_POSTINGS=500000 (standart), hesabat həddləri
 npm run build
-npm run runtime:install
-electron scripts/electron-smoke.cjs     # real Electron; Linux-da: xvfb-run -a electron --no-sandbox …
-node scripts/benchmark.mjs 100000       # performans ölçməsi
+# Real Electron (worker, preload, IPC): nəticə JSON və ekran şəkli
+MEYAR_DATA_DIR=/tmp/m MEYAR_SMOKE=/tmp/m/smoke.json electron .
 ```
-
-`electron-smoke.cjs` bunları yoxlayır:
-
-- yığılmış ekran, preload və IPC tək OS pəncərəsində işləyir;
-- 1050, 1440 və 1920 piksel endə filtr sahəsi 7%, iş sahəsi qalan hissədir;
-- səhifədə üfüqi sürüşmə və kəsilmiş yazı yoxdur;
-- qaimə UI-dan saxlananda bazada düzgün Dt/Kt yaranır.
-
-Ekran şəkilləri `screenshots/` qovluğuna yazılır.
-
-## Windows quraşdırıcısı
-
-```sh
-npm run dist:win
-```
-
-GitHub Actions (`.github/workflows/windows.yml`) Windows-da bütün testləri və real Electron sınağını işlədir, sonra imzalanmamış NSIS quraşdırıcısını artifact kimi saxlayır. Rəqəmsal imza və yayımlanmış release kanalı hələ yoxdur.

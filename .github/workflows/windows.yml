@@ -25,17 +25,20 @@ jobs:
         run: npm test
       - name: DOM integration tests
         run: npm run test:ui
+      - name: Load test (100 000 postings, report budgets)
+        run: npm run test:perf
+        env:
+          MEYAR_PERF_POSTINGS: '100000'
       - name: Build
         run: npm run build:node && npm run build:web
-      - name: Real Electron smoke (shipped renderer, preload and IPC)
+      - name: Real Electron smoke (renderer, preload, IPC, ledger worker)
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath "./node_modules/electron/dist/electron.exe" -ArgumentList "./scripts/electron-smoke.cjs" -Wait -PassThru -RedirectStandardOutput "smoke-out.log" -RedirectStandardError "smoke-err.log"
-          Get-Content smoke-out.log, smoke-err.log
-          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
-          if (!(Test-Path "screenshots/smoke-results.json")) { throw "Electron smoke did not record its results." }
-          $r = Get-Content "screenshots/smoke-results.json" -Raw | ConvertFrom-Json
-          if (!$r.flows.invoiceThroughUi -or !$r.flows.oneWindow) { throw "Electron smoke evidence is missing." }
+          $env:MEYAR_DATA_DIR = Join-Path $env:RUNNER_TEMP 'meyar-smoke'
+          $env:MEYAR_SMOKE = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $p = Start-Process -FilePath "./node_modules/electron/dist/electron.exe" -ArgumentList "." -Wait -PassThru
+          $r = Get-Content $env:MEYAR_SMOKE -Raw | ConvertFrom-Json
+          if (!$r.company.ok -or !$r.trial -or !$r.integrity) { throw "Electron smoke failed: $(Get-Content $env:MEYAR_SMOKE -Raw)" }
       - name: Build the Windows installer (unsigned test build)
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -48,15 +51,14 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Installer exited with $($p.ExitCode)." }
           $exe = Join-Path $env:LOCALAPPDATA 'Programs\Meyar\Meyar.exe'
           if (!(Test-Path $exe)) { throw "Installed Meyar.exe not found at $exe." }
-          $app = Start-Process -FilePath $exe -PassThru
-          $db = Join-Path $env:APPDATA 'Meyar\data\meyar.sqlite'
-          for ($i = 0; $i -lt 30 -and !(Test-Path $db); $i++) { Start-Sleep -Seconds 1 }
-          Start-Sleep -Seconds 3
-          $alive = !$app.HasExited
-          Get-Process -Name Meyar -ErrorAction SilentlyContinue | Stop-Process -Force
+          $env:MEYAR_DATA_DIR = Join-Path $env:RUNNER_TEMP 'meyar-installed'
+          $env:MEYAR_SMOKE = Join-Path $env:RUNNER_TEMP 'installed.json'
+          $app = Start-Process -FilePath $exe -Wait -PassThru
+          $db = Join-Path $env:MEYAR_DATA_DIR 'data\meyar-v3.sqlite'
           if (!(Test-Path $db)) { throw "The installed app did not create its database." }
-          if (!$alive) { throw "The installed app exited right after start." }
-          Write-Host "Installed app started and created $db"
+          $r = Get-Content $env:MEYAR_SMOKE -Raw | ConvertFrom-Json
+          if (!$r.company.ok -or !$r.trial -or !$r.integrity) { throw "Installed app smoke failed: $(Get-Content $env:MEYAR_SMOKE -Raw)" }
+          Write-Host "Installed app ran the ledger worker and created $db"
       # One prerelease per package version: published from the first validated main build
       # (or a v* tag) whose version has no release yet. Later builds of the same version skip.
       - name: Publish the unsigned test release

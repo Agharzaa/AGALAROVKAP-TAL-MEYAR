@@ -6,6 +6,7 @@ import type { WorkerOp, WorkerResponse } from './ledger-worker.js';
 export class LedgerClient {
   private readonly worker: Worker;
   private next = 1;
+  private exited = false;
   private readonly pending = new Map<number, (o: Outcome<unknown>) => void>();
   readonly ready: Promise<void>;
   constructor(script: string, file: string, readOnly = false) {
@@ -27,6 +28,7 @@ export class LedgerClient {
       done?.(m.outcome);
     });
     this.worker.on('exit', () => {
+      this.exited = true;
       for (const done of this.pending.values())
         done({
           ok: false,
@@ -37,6 +39,11 @@ export class LedgerClient {
   }
   call<T = unknown>(body: WorkerOp): Promise<Outcome<T>> {
     const id = this.next++;
+    if (this.exited)
+      return Promise.resolve({
+        ok: false,
+        error: { message: 'Uçot modulu dayandı. Proqramı yenidən açın.', code: 'internal' },
+      });
     return new Promise((resolve) => {
       this.pending.set(id, resolve as (o: Outcome<unknown>) => void);
       this.worker.postMessage({ id, body });

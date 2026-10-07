@@ -546,7 +546,8 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
   const names = new Names(db, q.companyId);
   const codes = familyCodes(chart, account.code);
   const sk = q.sk.filter(Boolean);
-  const leafs = codes.filter((c) => chart.postable(c) || !chart.children(c, true).length);
+  // Archived accounts keep their history: they count for past balances.
+  const leafs = codes.filter((c) => !chart.children(c, true).length);
   const opening = netBefore(db, q.companyId, from, { accounts: leafs, sk });
   const LIMIT = 20000;
   const skNames = (code: string, values: string[]) => {
