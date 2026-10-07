@@ -36,26 +36,42 @@ export function stockState(
       date,
     )
     .map((r) => ({ source: String(r.s), quantity: r.q as bigint, value: r.a as bigint }));
+  // Units other documents issued before this one: earlier days, and on the same day the
+  // documents first entered before it (a new document comes after all of them).
+  const [selfType, selfId] = exclude.split(':') as [string, string];
+  const selfSeq =
+    (db.get(
+      'SELECT MIN(rowid) AS s FROM entries WHERE company_id=? AND source_type=? AND source_id=?',
+      companyId,
+      selfType,
+      selfId,
+    )?.s as bigint | null) ?? 9_000_000_000_000_000_000n;
   const issued = db.get(
     `SELECT COALESCE(SUM(p.kt_qty),0) AS q FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE p.company_id=? AND p.kt_account=? AND p.kt_s1=? AND p.date<=? AND ${src}<>?`,
+     WHERE p.company_id=? AND p.kt_account=? AND p.kt_s1=? AND ${src}<>?
+       AND (p.date<? OR (p.date=? AND (SELECT MIN(x.rowid) FROM entries x
+         WHERE x.company_id=e.company_id AND x.source_type=e.source_type AND x.source_id=e.source_id)<?))`,
     companyId,
     account,
     product,
-    date,
     exclude,
+    date,
+    date,
+    selfSeq,
   )!.q as bigint;
   const left = db.get(
-    `SELECT COALESCE(SUM(CASE WHEN p.dt_account=? THEN p.dt_qty ELSE -p.kt_qty END),0) AS q,
-            COALESCE(SUM(CASE WHEN p.dt_account=? THEN p.amount ELSE -p.amount END),0) AS v
-     FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE p.company_id=? AND ((p.dt_account=? AND p.dt_s1=?) OR (p.kt_account=? AND p.kt_s1=?))
-       AND ${src}<>?`,
-    account,
-    account,
+    `SELECT COALESCE(SUM(q),0) AS q, COALESCE(SUM(v),0) AS v FROM (
+       SELECT p.dt_qty AS q, p.amount AS v FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND p.dt_account=? AND p.dt_s1=? AND ${src}<>?
+       UNION ALL
+       SELECT -p.kt_qty, -p.amount FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND p.kt_account=? AND p.kt_s1=? AND ${src}<>?
+     )`,
     companyId,
     account,
     product,
+    exclude,
+    companyId,
     account,
     product,
     exclude,
@@ -73,14 +89,19 @@ export function quantityAt(
   exclude: string,
 ): bigint {
   return db.get(
-    `SELECT COALESCE(SUM(CASE WHEN p.dt_account=? THEN p.dt_qty ELSE -p.kt_qty END),0) AS q
-     FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE p.company_id=? AND ((p.dt_account=? AND p.dt_s1=?) OR (p.kt_account=? AND p.kt_s1=?))
-       AND p.date<=? AND ${src}<>?`,
-    account,
+    `SELECT COALESCE(SUM(q),0) AS q FROM (
+       SELECT p.dt_qty AS q FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND p.dt_account=? AND p.dt_s1=? AND p.date<=? AND ${src}<>?
+       UNION ALL
+       SELECT -p.kt_qty FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND p.kt_account=? AND p.kt_s1=? AND p.date<=? AND ${src}<>?
+     )`,
     companyId,
     account,
     product,
+    date,
+    exclude,
+    companyId,
     account,
     product,
     date,

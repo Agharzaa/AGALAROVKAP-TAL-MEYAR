@@ -84,6 +84,34 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   );
   assert.ok(card.lines.length > 0);
   time('İş masası', 1500, () => q({ type: 'home' }));
+  // A sales invoice on a product with a long history: FIFO and the advance lookup read the
+  // journal through the account + subkonto indexes, so posting stays fast.
+  const product = String(
+    db.get(
+      "SELECT dt_s1 AS p FROM postings WHERE company_id=? AND dt_account='205' GROUP BY dt_s1 ORDER BY COUNT(*) DESC LIMIT 1",
+      companyId,
+    )!.p,
+  );
+  const contract = db.get(
+    'SELECT id,partner_id FROM contracts WHERE company_id=? LIMIT 1',
+    companyId,
+  )!;
+  const sale = time('Satış qaiməsi (FIFO, avans)', 300, () =>
+    ledger.execute(
+      {
+        key: `perf-invoice-${Date.now()}`,
+        type: 'invoice.save',
+        companyId,
+        direction: 'sale',
+        date: '2026-10-01',
+        partnerId: String(contract.partner_id),
+        contractId: String(contract.id),
+        lines: [{ productId: product, quantity: '3', price: '100', vatRate: '18' }],
+      },
+      { actor: 'perf', correlationId: 'perf' },
+    ),
+  );
+  assert.ok((sale as { id: string }).id);
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

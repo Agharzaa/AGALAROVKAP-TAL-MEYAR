@@ -706,3 +706,17 @@ test('re-audit C: a purchase that reduces an existing shortage is accepted', (t)
     /qalıq mənfi olardı/,
   );
 });
+
+test('re-audit D: same-day sales keep their order when the first one is corrected', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '5', '1')]);
+  invoice(f, 'purchase', '2026-09-02', g.sup, g.cp, [line(g.pen, '5', '3')]);
+  invoice(f, 'purchase', '2026-09-03', g.sup, g.cp, [line(g.pen, '5', '5')]);
+  const s1 = invoice(f, 'sale', '2026-09-04', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  const s2 = invoice(f, 'sale', '2026-09-04', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  resave(f, s1.id, { lines: [line(g.pen, '5', '11')] });
+  resave(f, s2.id, { lines: [line(g.pen, '5', '12')] });
+  assert.deepEqual([postings(f, s1.id)[1]![2], postings(f, s2.id)[1]![2]], ['5.00', '15.00']);
+  assert.deepEqual(stockOf(f, g.pen), ['25.00', '5']);
+});
