@@ -1,11 +1,11 @@
-# Meyar — quraşdırıcı
+# Meyar yükləmə
 
-Meyar-Setup-0.2.0.exe — Windows x64, imzalanmamış sınaq versiyası.
+`Meyar-Setup-0.3.0.exe` — Windows 64-bit quraşdırıcısı. **İmzalanmamış sınaq versiyası.**
+
+Mərhələ 1: hesab planı və subkonto, kitabçalar, əl ilə əməliyyat (storno ilə), dövriyyə balansı (subkonto üzrə açılış, Excel), hesab kartı, bütövlük yoxlaması, dövrün bağlanması.
 
 Windows "Windows protected your PC" yazsa: More info → Run anyway.
 
-SHA-256: af5d9386785d505399981fd787bdf75cad6fefe9eaf2ca9928184908d5cadfc5
+Məlumat `%APPDATA%\Meyar\data\meyar-v3.sqlite` faylındadır. Köhnə versiyanın bazası toxunulmaz qalır.
 
-0.2.0-da yeni: bank çıxarışının yüklənməsi və avtomatik tanınması, bank əməliyyat növləri
-(vergi, DSMF, əmək haqqı, komissiya, kredit, nizamnamə kapitalı, hesablar arası köçürmə),
-avansların qaimələrlə avtomatik əvəzləşdirilməsi. Köhnə baza açılanda avtomatik yenilənir.
+SHA-256: `0cfe96fc9dd215bee8adae437b7af0a49868bda89dedb2514598ea0267f69447`
