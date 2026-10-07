@@ -404,3 +404,259 @@ test('a company that is not a VAT payer cannot charge 18%; purchases go to cost'
     'ƏDV-yə cəlb olunmayan',
   ]);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Findings of the independent audit of stage 2, each reproduced first and kept as a regression.
+
+function goods(f: F) {
+  const sup = f.partner('Təchizat ASC', '1700000002');
+  const cus = f.partner('Alıcı MMC', '1700000001');
+  return {
+    sup,
+    cus,
+    cp: f.contract(sup, '1', 'purchase'),
+    cs: f.contract(cus, '1', 'sale'),
+    pen: f.product('Qələm'),
+  };
+}
+const stockOf = (f: F, product: string) => {
+  const r = f.row(f.trial('2026-01-01', '2026-12-31', ['a:205']), `a:205|${product}`);
+  return r ? [r.closeDt || (r.closeKt ? `-${r.closeKt}` : ''), r.closeQty] : ['', ''];
+};
+const line = (productId: string, quantity: string, price: string) => ({
+  productId,
+  quantity,
+  price,
+  vatRate: '0' as const,
+  memo: '',
+});
+const resave = (f: F, id: string, patch: Partial<InvoiceCmd>) => {
+  const d = detail(f, id);
+  return f.exec({
+    type: 'invoice.save',
+    companyId: f.companyId,
+    id,
+    version: d.version,
+    direction: d.direction,
+    number: d.number,
+    date: d.date,
+    partnerId: d.partnerId,
+    contractId: d.contractId,
+    rate: d.currency === 'AZN' ? '' : d.rate,
+    pricesIncludeVat: d.pricesIncludeVat,
+    eqSeries: d.eqSeries,
+    eqNumber: d.eqNumber,
+    memo: d.memo,
+    lines: d.lines.map((l) => ({
+      productId: l.productId,
+      quantity: l.quantity,
+      price: l.price,
+      vatRate: l.vatRate,
+      memo: l.memo,
+    })),
+    ...patch,
+  });
+};
+
+test('audit 1: correcting an earlier same-day sale never takes a slice twice', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '5', '1')]);
+  invoice(f, 'purchase', '2026-09-02', g.sup, g.cp, [line(g.pen, '5', '3')]);
+  const s1 = invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  resave(f, s1.id, { lines: [line(g.pen, '5', '11')] });
+  assert.deepEqual(stockOf(f, g.pen), ['', ''], 'quantity 0 and value 0');
+});
+
+test('audit 2: cancelling or enlarging an earlier sale keeps value and quantity together', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '5', '1')]);
+  invoice(f, 'purchase', '2026-09-02', g.sup, g.cp, [line(g.pen, '5', '3')]);
+  const s1 = invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  invoice(f, 'sale', '2026-09-04', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  f.exec({ type: 'invoice.cancel', companyId: f.companyId, id: s1.id, version: 1, reason: 'x' });
+  invoice(f, 'sale', '2026-09-05', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  assert.deepEqual(stockOf(f, g.pen), ['', '']);
+
+  const h = fixture(t);
+  const k = goods(h);
+  invoice(h, 'purchase', '2026-09-01', k.sup, k.cp, [line(k.pen, '10', '1')]);
+  invoice(h, 'purchase', '2026-09-02', k.sup, k.cp, [line(k.pen, '10', '3')]);
+  const a = invoice(h, 'sale', '2026-09-03', k.cus, k.cs, [line(k.pen, '5', '10')]);
+  invoice(h, 'sale', '2026-09-04', k.cus, k.cs, [line(k.pen, '5', '10')]);
+  resave(h, a.id, { lines: [line(k.pen, '8', '10')] });
+  invoice(h, 'sale', '2026-09-05', k.cus, k.cs, [line(k.pen, '7', '10')]);
+  assert.deepEqual(stockOf(h, k.pen), ['', ''], 'no value is left behind at quantity 0');
+});
+
+test('audit 3: a company outside VAT records a supplier invoice with 18% VAT at cost', (t) => {
+  const f = fixture(t);
+  const co = f.catalog().company;
+  f.exec({
+    type: 'company.update',
+    companyId: f.companyId,
+    version: co.version,
+    name: co.name,
+    vatPayer: false,
+    purchaseVat: 'cost',
+  });
+  const g = goods(f);
+  const p = invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [
+    { productId: g.pen, quantity: '10', price: '10', vatRate: '18' },
+  ]);
+  assert.deepEqual(postings(f, p.id), [['205', '531.01', '118.00', '10']]);
+});
+
+test('audit 4: a paid invoice does not absorb a later advance when it is re-saved', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.01', 'AZN', 'Kapital');
+  const g = goods(f);
+  const work = f.product('Məsləhət', 'saat', 'service');
+  const x = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '100')]);
+  f.operation('2026-09-12', [
+    f.line('223.01', [acc], '211.01', [g.cus, g.cs, `invoice:${x.id}`], '100'),
+  ]);
+  f.operation('2026-09-05', [f.line('223.01', [acc], '543.01', [g.cus, g.cs, ''], '50')]);
+  resave(f, x.id, { memo: 'qeyd' });
+  assert.deepEqual(postings(f, x.id), [['211.01', '601', '100.00']]);
+  // Half paid: only the rest is offset.
+  const y = invoice(f, 'sale', '2026-09-20', g.cus, g.cs, [line(work, '1', '80')]);
+  f.operation('2026-09-21', [
+    f.line('223.01', [acc], '211.01', [g.cus, g.cs, `invoice:${y.id}`], '40'),
+  ]);
+  resave(f, y.id, { memo: 'qeyd' });
+  assert.deepEqual(postings(f, y.id), [
+    ['211.01', '601', '80.00'],
+    ['543.01', '211.01', '40.00'],
+  ]);
+});
+
+test('audit 5: goods already sold cannot be taken back by cancelling or reducing the purchase', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  const pu = invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '10', '2')]);
+  invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(g.pen, '10', '10')]);
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'invoice.cancel',
+        companyId: f.companyId,
+        id: pu.id,
+        version: 1,
+        reason: 'x',
+      }),
+    /03\.09\.2026 tarixində qalıq mənfi olardı/,
+  );
+  assert.throws(() => resave(f, pu.id, { lines: [line(g.pen, '4', '2')] }), /qalıq mənfi olardı/);
+  assert.throws(() => resave(f, pu.id, { date: '2026-09-04' }), /tarixinə anbarda|qalıq mənfi/);
+  assert.deepEqual(stockOf(f, g.pen), ['', '']);
+});
+
+test('audit 6: cheap goods sell one by one; the last unit settles the value', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  const screw = f.product('Vint');
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(screw, '1000', '0.001')]);
+  const one = invoice(f, 'sale', '2026-09-02', g.cus, g.cs, [line(screw, '1', '1')]);
+  assert.equal(postings(f, one.id)[1]![2], '0.01');
+  const rest = invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(screw, '999', '1')]);
+  assert.equal(postings(f, rest.id)[1]![2], '0.99');
+  assert.deepEqual(stockOf(f, screw), ['', '']);
+});
+
+test('audit 7: invoice roles survive renaming and can be moved to another element', (t) => {
+  const f = fixture(t);
+  const vat = f.catalog().items.find((i) => i.role === 'vatTax')!;
+  f.exec({
+    type: 'item.save',
+    companyId: f.companyId,
+    id: vat.id,
+    version: vat.version,
+    kind: 'paymentKind',
+    name: 'Vergi',
+    archived: false,
+  });
+  const g = goods(f);
+  const work = f.product('Məsləhət', 'saat', 'service');
+  const s = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [{ productId: work, price: '100' }]);
+  assert.deepEqual(detail(f, s.id).postings[1]!.kt.skNames, ['Vergi']);
+  const other = f.catalog().items.find((i) => i.name === 'Faiz')!;
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'item.save',
+        companyId: f.companyId,
+        id: other.id,
+        version: other.version,
+        kind: 'paymentKind',
+        name: 'Faiz',
+        archived: false,
+        role: 'cogs',
+      }),
+    /bu növ elementə verilmir/,
+  );
+  f.exec({
+    type: 'item.save',
+    companyId: f.companyId,
+    id: other.id,
+    version: other.version,
+    kind: 'paymentKind',
+    name: 'Faiz',
+    archived: false,
+    role: 'vatTax',
+  });
+  assert.deepEqual(
+    f
+      .catalog()
+      .items.filter((i) => i.role === 'vatTax')
+      .map((i) => i.name),
+    ['Faiz'],
+  );
+});
+
+test('audit 8: e-qaimə series and number do not run together; a series needs a number', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  const work = f.product('Məsləhət', 'saat', 'service');
+  invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
+    eqSeries: 'M',
+    eqNumber: 'T1',
+  });
+  invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], {
+    eqSeries: 'MT',
+    eqNumber: '1',
+  });
+  assert.throws(
+    () => invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '1')], { eqSeries: 'MT' }),
+    /nömrəsini yazın/,
+  );
+});
+
+test('audit: a payment cannot settle a cancelled invoice or another partner’s invoice', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.01', 'AZN', 'Kapital');
+  const g = goods(f);
+  const other = f.partner('Başqa MMC', '1700000003');
+  const oc = f.contract(other, '1', 'sale');
+  const work = f.product('Məsləhət', 'saat', 'service');
+  const x = invoice(f, 'sale', '2026-09-10', g.cus, g.cs, [line(work, '1', '100')]);
+  assert.throws(
+    () =>
+      f.operation('2026-09-12', [
+        f.line('223.01', [acc], '211.01', [other, oc, `invoice:${x.id}`], '100'),
+      ]),
+    /başqa kontragentə və ya müqaviləyə aiddir/,
+  );
+  f.exec({ type: 'invoice.cancel', companyId: f.companyId, id: x.id, version: 1, reason: 'x' });
+  assert.throws(
+    () =>
+      f.operation('2026-09-12', [
+        f.line('223.01', [acc], '211.01', [g.cus, g.cs, `invoice:${x.id}`], '100'),
+      ]),
+    /ləğv edilib/,
+  );
+});

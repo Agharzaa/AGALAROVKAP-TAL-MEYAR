@@ -591,6 +591,23 @@ UPDATE items SET role='defaultProductGroup' WHERE kind='productGroup' AND name='
 UPDATE items SET role='goodsIncome' WHERE kind='incomeType' AND name='Məhsul satışı';
 UPDATE items SET role='serviceIncome' WHERE kind='incomeType' AND name='Xidmət satışı';
 UPDATE items SET role='cogs' WHERE kind='expenseItem' AND name='Satılmış malların maya dəyəri';
+-- Renamed seed elements: the oldest element of the kind takes the role (seeding order).
+UPDATE items SET role='vatTax' WHERE rowid IN (SELECT MIN(i.rowid) FROM items i
+  WHERE i.kind='paymentKind' AND i.role='' AND i.archived=0
+    AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=i.company_id AND j.role='vatTax')
+  GROUP BY i.company_id);
+UPDATE items SET role='defaultProductGroup' WHERE rowid IN (SELECT MIN(i.rowid) FROM items i
+  WHERE i.kind='productGroup' AND i.role='' AND i.archived=0
+    AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=i.company_id AND j.role='defaultProductGroup')
+  GROUP BY i.company_id);
+UPDATE items SET role='goodsIncome' WHERE rowid IN (SELECT MIN(i.rowid) FROM items i
+  WHERE i.kind='incomeType' AND i.role='' AND i.archived=0
+    AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=i.company_id AND j.role='goodsIncome')
+  GROUP BY i.company_id);
+UPDATE items SET role='serviceIncome' WHERE rowid IN (SELECT MIN(i.rowid) FROM items i
+  WHERE i.kind='incomeType' AND i.role='' AND i.archived=0
+    AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=i.company_id AND j.role='serviceIncome')
+  GROUP BY i.company_id);
 INSERT INTO items(id,company_id,kind,name,role)
   SELECT ${uuid},id,'expenseItem','Satılmış malların maya dəyəri','cogs'
   FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c

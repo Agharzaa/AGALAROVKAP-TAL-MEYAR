@@ -1030,6 +1030,7 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             version: Number(r.version),
             kind: r.kind as ItemView['kind'],
             name: str(r.name),
+            role: str(r.role),
             archived: flag(r.archived),
           })),
       };

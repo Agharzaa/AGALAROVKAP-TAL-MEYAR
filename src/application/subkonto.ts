@@ -60,8 +60,27 @@ export function checkSideValues(
       return;
     }
     if (kind === 'document') {
-      if (value !== allowSelf && !documentExists(db, companyId, value))
+      if (value === allowSelf) return;
+      if (!documentExists(db, companyId, value))
         throw new DomainError(`${label}: sənəd tapılmadı.`, where, 'not-found');
+      // An invoice settles only with its own partner and contract, and only while it is posted.
+      const [type, id] = value.split(':');
+      if (type === 'invoice') {
+        const inv = db.get(
+          'SELECT number,status,partner_id,contract_id FROM invoices WHERE company_id=? AND id=?',
+          companyId,
+          id ?? '',
+        )!;
+        if (inv.status !== 'posted')
+          throw new DomainError(`${label}: ${String(inv.number)} qaiməsi ləğv edilib.`, where);
+        const p = account.subkonto.indexOf('partner');
+        const c = account.subkonto.indexOf('contract');
+        if ((p >= 0 && values[p] !== inv.partner_id) || (c >= 0 && values[c] !== inv.contract_id))
+          throw new DomainError(
+            `${label}: ${String(inv.number)} qaiməsi başqa kontragentə və ya müqaviləyə aiddir.`,
+            where,
+          );
+      }
       return;
     }
     const t = tables[kind]!;

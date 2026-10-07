@@ -33,7 +33,7 @@ import { subkontoLabel } from '../domain/chart.js';
 import type { Account, Chart, CurrencyCode, SubkontoKind, VatRate } from '../domain/chart.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
-import { issuedBefore, openAdvances, stockLayers } from './stock.js';
+import { firstNegative, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 
@@ -183,7 +183,8 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
     const kind = String(product.kind) as ProductKind;
     const quantity = parseQty(l.quantity, `${where}: miqdar`);
     const price = parsePrice(l.price, `${where}: qiymət`);
-    if (l.vatRate === '18' && !vatPayer)
+    // A company outside VAT cannot charge it; on a purchase the supplier's VAT goes to cost.
+    if (cmd.direction === 'sale' && l.vatRate === '18' && !vatPayer)
       throw new DomainError(
         `${where}: şirkət ƏDV ödəyicisi deyil; 18% seçilə bilməz.`,
         f('vatRate'),
@@ -280,7 +281,7 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
       currency,
       rate: formatPrice(rate),
       pricesIncludeVat: cmd.pricesIncludeVat,
-      vatTreatment: treatment,
+      vatTreatment: cmd.direction === 'purchase' ? treatment : ('offset' as const),
       eqSeries: parseText(cmd.eqSeries, 'E-qaimə seriyası', 20, false).toUpperCase(),
       eqNumber: parseText(cmd.eqNumber, 'E-qaimə nömrəsi', 40, false),
       memo: parseText(cmd.memo, 'Məzmun', 500, false),
@@ -322,6 +323,7 @@ function buildPostings(
     const vatTax = pick(chart, ['521.01', '521'], 'lines');
     const cogs = pick(chart, ['701'], 'lines');
     const pv = { partner, contract, document: self };
+    const consumed = new Map<string, { quantity: bigint; value: bigint }>();
     n.lines.forEach((l, i) => {
       const where = `Sətir ${i + 1}`;
       const memo = l.stored.memo || String(l.product.name);
@@ -350,25 +352,38 @@ function buildPostings(
         });
       if (l.account) {
         const stock = l.account;
-        const layers = stockLayers(tx.db, companyId, stock.code, l.stored.productId, header.date);
-        const before = issuedBefore(
-          tx.db,
-          companyId,
-          stock.code,
-          l.stored.productId,
-          header.date,
-          self,
-        );
+        const label = `${where} (${memo})`;
+        const key = `${stock.code}|${l.stored.productId}`;
         // Earlier lines of this invoice for the same product have already left the stock.
-        const sameEarlier = n.lines
-          .slice(0, i)
-          .filter(
-            (x) => x.account?.code === stock.code && x.stored.productId === l.stored.productId,
-          )
-          .reduce((s, x) => s + x.quantity, 0n);
-        const cost = fifoCost(layers, before + sameEarlier, l.quantity, `${where} (${memo})`);
+        const earlier = consumed.get(key) ?? { quantity: 0n, value: 0n };
+        const atDate =
+          quantityAt(tx.db, companyId, stock.code, l.stored.productId, header.date, self) -
+          earlier.quantity;
+        if (atDate < l.quantity)
+          throw new DomainError(
+            `${label}: ${header.date.split('-').reverse().join('.')} tarixinə anbarda kifayət qədər qalıq yoxdur (qalıq ${formatQty(atDate > 0n ? atDate : 0n)}, tələb ${formatQty(l.quantity)}).`,
+            `lines.${i}.quantity`,
+            'insufficient-stock',
+          );
+        const state = stockState(tx.db, companyId, stock.code, l.stored.productId, self);
+        const cost = fifoCost(
+          {
+            layers: state.layers,
+            quantity: state.quantity - earlier.quantity,
+            value: state.value - earlier.value,
+          },
+          l.quantity,
+          `${label} — sonrakı tarixli silinmələr nəzərə alınmaqla`,
+        );
         if (cost <= 0n)
-          throw new DomainError(`${where}: malın maya dəyəri sıfırdır; alış sənədini yoxlayın.`);
+          throw new DomainError(
+            `${label}: malın anbardakı dəyəri sıfırdır; alış sənədlərini yoxlayın.`,
+            `lines.${i}.productId`,
+          );
+        consumed.set(key, {
+          quantity: earlier.quantity + l.quantity,
+          value: earlier.value + cost,
+        });
         const group =
           String(l.product.group_id) ||
           role(tx, companyId, 'defaultProductGroup', 'Əsas nomenklatura qrupu');
@@ -390,8 +405,11 @@ function buildPostings(
       }
     });
     const advance = settle('543');
-    const total = n.lines.reduce((s, l) => s + l.azn.gross, 0n);
-    const totalCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) : null;
+    // Only what is still owed on this invoice is offset: payments already made against it
+    // (credits on its own receivable key from other documents) reduce the amount.
+    const paid = settlementBalance(tx.db, companyId, receivable.code, partner, contract, self);
+    const owed = n.lines.reduce((s, l) => s + l.azn.gross, 0n) + paid.amount;
+    const owedCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) + paid.currency : null;
     const open = openAdvances(
       tx.db,
       companyId,
@@ -400,8 +418,9 @@ function buildPostings(
       contract,
       'credit',
       header.date,
+      foreign,
     );
-    for (const o of allocateAdvances(open, total, totalCur))
+    for (const o of allocateAdvances(open, owed, owedCur))
       out.push({
         dt: {
           ...side(advance, { partner, contract, document: o.document }, 'Avans'),
@@ -449,8 +468,10 @@ function buildPostings(
         });
     });
     const advance = settle('243');
-    const total = n.lines.reduce((s, l) => s + l.azn.gross, 0n);
-    const totalCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) : null;
+    // Payments already made against this invoice (debits on its payable key) reduce the offset.
+    const paid = settlementBalance(tx.db, companyId, payable.code, partner, contract, self);
+    const owed = n.lines.reduce((s, l) => s + l.azn.gross, 0n) - paid.amount;
+    const owedCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) - paid.currency : null;
     const open = openAdvances(
       tx.db,
       companyId,
@@ -459,8 +480,9 @@ function buildPostings(
       contract,
       'debit',
       header.date,
+      foreign,
     );
-    for (const o of allocateAdvances(open, total, totalCur))
+    for (const o of allocateAdvances(open, owed, owedCur))
       out.push({
         dt: { ...side(payable, pv, 'Avans'), ...cur(o.currency) },
         kt: {
@@ -487,6 +509,32 @@ function buildPostings(
   });
   checkPostings(chart, out, 'postings');
   return out;
+}
+
+/**
+ * After a document changed stock (a purchase cancelled, reduced or moved, a sale corrected), no
+ * product may be below zero on any day: goods that were already sold cannot be taken back.
+ */
+function guardStock(tx: Tx, companyId: string, chart: Chart, postings: readonly Posting[]) {
+  const seen = new Set<string>();
+  for (const p of postings)
+    for (const side of [p.dt, p.kt]) {
+      const account = chart.get(side.account);
+      if (!account?.quantitative || account.subkonto[0] !== 'product') continue;
+      const product = side.sk[0] ?? '';
+      const key = `${account.code}|${product}`;
+      if (!product || seen.has(key)) continue;
+      seen.add(key);
+      const neg = firstNegative(tx.db, companyId, account.code, product);
+      if (neg) {
+        const name = tx.db.get('SELECT name FROM products WHERE id=?', product)?.name ?? product;
+        throw new DomainError(
+          `${String(name)} (${account.code}): ${neg.date.split('-').reverse().join('.')} tarixində qalıq mənfi olardı (${neg.quantity}). Bu mal artıq silinib və ya satılıb; əvvəlcə həmin sənədləri düzəldin.`,
+          undefined,
+          'insufficient-stock',
+        );
+      }
+    }
 }
 
 function payload(number: string, n: Normalized) {
@@ -519,7 +567,11 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
   );
   if (same && same.id !== cmd.id)
     throw new DomainError('Bu nömrə ilə qaimə artıq var.', 'number', 'conflict');
-  const eqKey = n.header.eqNumber ? numberKey(`${n.header.eqSeries}${n.header.eqNumber}`) : '';
+  if (n.header.eqSeries && !n.header.eqNumber)
+    throw new DomainError('E-qaimənin nömrəsini yazın (seriya yazılıb).', 'eqNumber');
+  const eqKey = n.header.eqNumber
+    ? `${numberKey(n.header.eqSeries)}|${numberKey(n.header.eqNumber)}`
+    : '';
   if (eqKey) {
     const dup = tx.db.get(
       cmd.direction === 'sale'
@@ -555,8 +607,10 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
   const version = existing ? Number(existing.version) + 1 : 1;
   const now = tx.clock.now();
   // Reverse the previous version first: FIFO and advances must not see this invoice twice.
+  let previous: Posting[] = [];
   if (existing) {
     const prev = tx.entryPostings(cmd.companyId, INVOICE, id, Number(existing.version));
+    previous = prev.postings;
     tx.post(
       cmd.companyId,
       chart,
@@ -616,6 +670,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     false,
     postings,
   );
+  guardStock(tx, cmd.companyId, chart, [...previous, ...postings]);
   tx.history(cmd.companyId, INVOICE, id, version, 'posted', data);
   tx.audit(
     cmd.companyId,
@@ -642,9 +697,10 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
     throw new DomainError('Qaimə artıq ləğv edilib.', undefined, 'conflict');
   const prev = tx.entryPostings(cmd.companyId, INVOICE, cmd.id, Number(row.version));
   tx.open(cmd.companyId, prev.date);
+  const chart = tx.chart(cmd.companyId);
   tx.post(
     cmd.companyId,
-    tx.chart(cmd.companyId),
+    chart,
     { type: INVOICE, id: cmd.id, number: String(row.number), version: Number(row.version) },
     prev.date,
     true,
@@ -657,6 +713,7 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
     tx.clock.now(),
     cmd.id,
   );
+  guardStock(tx, cmd.companyId, chart, prev.postings);
   tx.history(cmd.companyId, INVOICE, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

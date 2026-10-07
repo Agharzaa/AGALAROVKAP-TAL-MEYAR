@@ -256,10 +256,25 @@ test('FIFO: slices of a layer add up exactly; oldest layer first; shortage is re
     { source: 'a', quantity: 10n * one, value: 1000n },
     { source: 'b', quantity: 10n * one, value: 2000n },
   ];
-  assert.equal(fifoCost(layers, 0n, 4n * one, 'x'), 400n);
-  assert.equal(fifoCost(layers, 4n * one, 11n * one, 'x'), 1600n);
-  assert.equal(fifoCost(layers, 0n, 20n * one, 'x'), 3000n);
-  assert.throws(() => fifoCost(layers, 15n * one, 6n * one, 'Qələm'), /qalıq 5, tələb 6/);
+  const full = { layers, quantity: 20n * one, value: 3000n };
+  assert.equal(fifoCost(full, 4n * one, 'x'), 400n, 'the oldest units first');
+  // 4 units already gone: the next 11 are 6 × 1.00 + 5 × 2.00.
+  assert.equal(fifoCost({ layers, quantity: 16n * one, value: 2600n }, 11n * one, 'x'), 1600n);
+  // Emptying the stock takes exactly the value left, whatever the layers say.
+  assert.equal(fifoCost({ layers, quantity: 5n * one, value: 499n }, 5n * one, 'x'), 499n);
+  // A partial issue never takes more than the value left.
+  assert.equal(fifoCost({ layers, quantity: 10n * one, value: 700n }, 9n * one, 'x'), 700n);
+  assert.throws(
+    () => fifoCost({ layers, quantity: 5n * one, value: 1000n }, 6n * one, 'Qələm'),
+    /qalıq 5, tələb 6/,
+  );
+  // A cheap unit costs at least one qəpik; the last issue settles the rest.
+  const screws = {
+    layers: [{ source: 's', quantity: 1000n * one, value: 100n }],
+    quantity: 1000n * one,
+    value: 100n,
+  };
+  assert.equal(fifoCost(screws, one, 'x'), 1n);
 });
 
 test('advances: oldest first, up to the invoice; currency at the advance rate', () => {

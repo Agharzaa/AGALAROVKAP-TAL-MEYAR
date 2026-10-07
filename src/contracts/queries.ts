@@ -136,6 +136,8 @@ export interface ItemView {
   version: number;
   kind: ItemKind;
   name: string;
+  /** Role in posting rules ("vatTax", "cogs"…), empty for ordinary elements. */
+  role: string;
   archived: boolean;
 }
 export interface Catalog {

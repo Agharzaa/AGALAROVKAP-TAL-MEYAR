@@ -476,6 +476,22 @@ const itemLabels = {
   productGroup: 'Nomenklatura qrupu',
 } as const;
 
+/** Posting-rule roles of catalog elements and the kind each belongs to. */
+const roleKind = {
+  vatTax: 'paymentKind',
+  cogs: 'expenseItem',
+  defaultProductGroup: 'productGroup',
+  goodsIncome: 'incomeType',
+  serviceIncome: 'incomeType',
+} as const;
+const roleLabel = {
+  vatTax: 'satışın ƏDV-si (521.01)',
+  cogs: 'satılmış malların maya dəyəri (701)',
+  defaultProductGroup: 'nomenklatura qrupu',
+  goodsIncome: 'mal satışı',
+  serviceIncome: 'xidmət satışı',
+} as const;
+
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {
   tx.company(cmd.companyId);
   const name = parseText(cmd.name, 'Ad', 160);
@@ -496,7 +512,7 @@ export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {
     if (row && row.kind !== cmd.kind)
       throw new DomainError('Elementin növü dəyişdirilmir.', 'kind');
   }
-  return saveRow(
+  const result = saveRow(
     tx,
     'items',
     itemLabels[cmd.kind],
@@ -505,6 +521,31 @@ export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {
     { kind: cmd.kind, name, archived: cmd.archived ? 1 : 0 },
     name,
   );
+  if (cmd.role !== undefined) {
+    const current = tx.db.get('SELECT role FROM items WHERE id=?', result.id)!;
+    if (current.role !== cmd.role) {
+      if (cmd.role && roleKind[cmd.role] !== cmd.kind)
+        throw new DomainError('Bu rol bu növ elementə verilmir.', 'role');
+      if (cmd.role && cmd.archived)
+        throw new DomainError('Arxivdəki element standart ola bilməz.', 'role');
+      if (cmd.role)
+        tx.db.run(
+          "UPDATE items SET role='' WHERE company_id=? AND role=? AND id<>?",
+          cmd.companyId,
+          cmd.role,
+          result.id,
+        );
+      tx.db.run('UPDATE items SET role=? WHERE id=?', cmd.role, result.id);
+      tx.audit(
+        cmd.companyId,
+        'Dəyişdirildi',
+        itemLabels[cmd.kind],
+        result.id,
+        `${name} · ${cmd.role ? `standart: ${roleLabel[cmd.role]}` : 'standart deyil'}`,
+      );
+    }
+  }
+  return result;
 }
 
 export function closePeriod(tx: Tx, cmd: CommandOf<'period.close'>): CommandResult {

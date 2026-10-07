@@ -176,6 +176,13 @@ export const commandSchema = z.discriminatedUnion('type', [
       'productGroup',
     ]),
     name: text(160),
+    /**
+     * Element used by posting rules (VAT payment kind, cost of sales, default product group,
+     * default income types). Setting it moves the role from any other element; omitted keeps it.
+     */
+    role: z
+      .enum(['', 'vatTax', 'cogs', 'defaultProductGroup', 'goodsIncome', 'serviceIncome'])
+      .optional(),
   }),
   z.object({
     type: z.literal('operation.save'),

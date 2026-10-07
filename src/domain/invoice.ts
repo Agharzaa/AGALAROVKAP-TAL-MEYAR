@@ -72,39 +72,59 @@ export function sliceValue(layer: StockLayer, from: Qty, to: Qty): Minor {
 }
 
 /**
- * Cost of issuing `quantity` units when `issuedBefore` units have already left the stock: the
- * layers are consumed in their order (oldest receipt first).
+ * What is left of one product on one stock account, from the journal itself: every receipt as a
+ * layer (oldest first) and the quantity and value still on the account.
  */
-export function fifoCost(
-  layers: readonly StockLayer[],
-  issuedBefore: Qty,
-  quantity: Qty,
-  label: string,
-): Minor {
+export interface StockState {
+  layers: readonly StockLayer[];
+  quantity: Qty;
+  value: Minor;
+}
+
+/**
+ * FIFO cost of issuing `quantity` units. Under FIFO the units still in stock are the newest ones,
+ * so the issue takes the oldest of them: the slice of the layers that starts where the remaining
+ * stock starts. Two rules keep value and quantity together whatever happened before (corrections,
+ * cancellations, documents entered out of order):
+ * - the issue that empties the stock takes exactly the value left on the account;
+ * - a partial issue never takes more than the value left, and at least one qəpik while value is
+ *   left (a cheap unit would otherwise round to zero; the last issue settles the difference).
+ */
+export function fifoCost(stock: StockState, quantity: Qty, label: string): Minor {
   if (quantity <= 0n) throw new DomainError('Silinən miqdar müsbət olmalıdır.');
-  const start = issuedBefore;
-  const end = issuedBefore + quantity;
-  let position = 0n;
-  let cost = 0n;
-  for (const layer of layers) {
-    if (layer.quantity <= 0n) continue;
-    const from = position;
-    const to = position + layer.quantity;
-    const a = start > from ? start : from;
-    const b = end < to ? end : to;
-    if (b > a) cost += sliceValue(layer, a - from, b - from);
-    position = to;
-    if (position >= end) break;
-  }
-  if (position < end) {
-    const available = position > start ? position - start : 0n;
+  if (stock.quantity < quantity) {
+    const available = stock.quantity > 0n ? stock.quantity : 0n;
     throw new DomainError(
       `${label}: anbarda kifayət qədər qalıq yoxdur (qalıq ${formatQty(available)}, tələb ${formatQty(quantity)}).`,
       undefined,
       'insufficient-stock',
     );
   }
-  return cost;
+  if (quantity === stock.quantity) return stock.value;
+  const total = stock.layers.reduce((s, l) => s + (l.quantity > 0n ? l.quantity : 0n), 0n);
+  const start = total - stock.quantity;
+  let cost: Minor;
+  if (start < 0n) {
+    // The journal holds more than its receipts explain (e.g. stock entered without a receipt):
+    // value the issue at the average of what is left.
+    cost = roundHalfAwayFromZero(stock.value * quantity, stock.quantity);
+  } else {
+    const end = start + quantity;
+    let position = 0n;
+    cost = 0n;
+    for (const layer of stock.layers) {
+      if (layer.quantity <= 0n) continue;
+      const from = position;
+      const to = position + layer.quantity;
+      const a = start > from ? start : from;
+      const b = end < to ? end : to;
+      if (b > a) cost += sliceValue(layer, a - from, b - from);
+      position = to;
+      if (position >= end) break;
+    }
+  }
+  if (cost < 1n) cost = 1n;
+  return cost > stock.value ? stock.value : cost;
 }
 
 // ---------------------------------------------------------------------------------------------

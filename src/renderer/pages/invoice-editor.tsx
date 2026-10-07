@@ -291,7 +291,8 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
   const previews = form.lines.map((l) => preview(l, form.pricesIncludeVat, rate || AZN_RATE));
   const totals = sum(previews.map((p) => p?.doc));
   const totalsAzn = sum(previews.map((p) => p?.azn));
-  const vatRateOptions = vatRates.filter((v) => catalog.company.vatPayer || v.id !== '18');
+  // A company outside VAT does not charge it, but its suppliers' e-qaimə may carry 18%.
+  const vatRateOptions = vatRates.filter((v) => !sale || catalog.company.vatPayer || v.id !== '18');
 
   return (
     <ModuleFrame

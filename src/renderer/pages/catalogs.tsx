@@ -471,6 +471,23 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'productGroup', label: 'Nomenklatura qrupları' },
 ];
 
+type Role = '' | 'vatTax' | 'cogs' | 'defaultProductGroup' | 'goodsIncome' | 'serviceIncome';
+/** Roles an element of each kind can take in the posting rules of invoices. */
+const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
+  paymentKind: [{ role: 'vatTax', label: 'Satışın ƏDV-si (Kt 521.01)' }],
+  expenseItem: [{ role: 'cogs', label: 'Satılmış malların maya dəyəri (Dt 701)' }],
+  productGroup: [{ role: 'defaultProductGroup', label: 'Standart nomenklatura qrupu' }],
+  incomeType: [
+    { role: 'goodsIncome', label: 'Mal satışında standart' },
+    { role: 'serviceIncome', label: 'Xidmət satışında standart' },
+  ],
+};
+const roleTitle = Object.fromEntries(
+  Object.values(kindRoles)
+    .flat()
+    .map((r) => [r.role, r.label]),
+) as Record<string, string>;
+
 export function ListsPage() {
   const win = useWindow();
   const { catalog } = useCatalog(win.companyId);
@@ -479,12 +496,15 @@ export function ListsPage() {
   const [edit, setEdit] = useState<ItemView | 'new' | null>(null);
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
+  const [role, setRole] = useState<Role>('');
   const rows = (catalog?.items ?? []).filter((i) => i.kind === kind && matches(search, i.name));
   const open = (i: ItemView | 'new') => {
     setEdit(i);
     setName(i === 'new' ? '' : i.name);
     setArchived(i === 'new' ? false : i.archived);
+    setRole(i === 'new' ? '' : (i.role as Role));
   };
+  const roles = kindRoles[kind];
   const current = edit && edit !== 'new' ? edit : null;
   return (
     <ListFrame
@@ -493,8 +513,8 @@ export function ListsPage() {
       search={search}
       setSearch={setSearch}
       placeholder="Ad"
-      head={['Ad']}
-      row={(i) => [i.name]}
+      head={roles ? ['Ad', 'Qaimələrdə'] : ['Ad']}
+      row={(i) => (roles ? [i.name, i.role ? (roleTitle[i.role] ?? '') : ''] : [i.name])}
       onNew={() => open('new')}
       onEdit={open}
       extraFilters={
@@ -527,6 +547,7 @@ export function ListsPage() {
             kind,
             name,
             archived,
+            ...(roles ? { role } : {}),
           })}
         >
           <Field label="Ad" wide>
@@ -537,6 +558,21 @@ export function ListsPage() {
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
+          {roles && (
+            <Field
+              label="Qaimələrdə standart"
+              hint="Qaimə yazılışları bu elementi avtomatik götürür; başqa elementdən köçürülür"
+            >
+              <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+                <option value="">Yox</option>
+                {roles.map((r) => (
+                  <option key={r.role} value={r.role}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           {archiveBox(archived, setArchived, !!current)}
         </EditDialog>
       )}
