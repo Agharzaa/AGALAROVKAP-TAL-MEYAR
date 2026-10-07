@@ -33,7 +33,7 @@ import { subkontoLabel } from '../domain/chart.js';
 import type { Account, Chart, CurrencyCode, SubkontoKind, VatRate } from '../domain/chart.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
-import { firstNegative, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
+import { dailyStock, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 
@@ -114,7 +114,7 @@ function role(tx: Tx, companyId: string, name: string, what: string): string {
   );
   if (!r)
     throw new DomainError(
-      `Kitabçada "${what}" elementi tapılmadı (arxivdə ola bilər). Kitabçalar bölməsində bərpa edin.`,
+      `Qaimə üçün standart "${what}" elementi təyin edilməyib. Siyahılar bölməsində elementi açıb "Qaimələrdə standart" sahəsini seçin.`,
       undefined,
       'not-found',
     );
@@ -365,10 +365,18 @@ function buildPostings(
             `lines.${i}.quantity`,
             'insufficient-stock',
           );
-        const state = stockState(tx.db, companyId, stock.code, l.stored.productId, self);
+        const state = stockState(
+          tx.db,
+          companyId,
+          stock.code,
+          l.stored.productId,
+          header.date,
+          self,
+        );
         const cost = fifoCost(
           {
             layers: state.layers,
+            issuedBefore: state.issuedBefore + earlier.quantity,
             quantity: state.quantity - earlier.quantity,
             value: state.value - earlier.value,
           },
@@ -513,28 +521,58 @@ function buildPostings(
 
 /**
  * After a document changed stock (a purchase cancelled, reduced or moved, a sale corrected), no
- * product may be below zero on any day: goods that were already sold cannot be taken back.
+ * product may fall below zero on a day where it was not already below, or deeper than it was:
+ * goods that were already sold cannot be taken back, but a document that improves an existing
+ * shortage is always accepted.
  */
-function guardStock(tx: Tx, companyId: string, chart: Chart, postings: readonly Posting[]) {
-  const seen = new Set<string>();
-  for (const p of postings)
-    for (const side of [p.dt, p.kt]) {
-      const account = chart.get(side.account);
-      if (!account?.quantitative || account.subkonto[0] !== 'product') continue;
-      const product = side.sk[0] ?? '';
-      const key = `${account.code}|${product}`;
-      if (!product || seen.has(key)) continue;
-      seen.add(key);
-      const neg = firstNegative(tx.db, companyId, account.code, product);
-      if (neg) {
+function guardStock(
+  tx: Tx,
+  companyId: string,
+  chart: Chart,
+  previous: readonly Posting[],
+  previousDate: string,
+  current: readonly Posting[],
+  currentDate: string,
+) {
+  // Quantity this change adds per product and day: the current version minus the previous one.
+  const delta = new Map<string, Map<string, bigint>>();
+  const add = (postings: readonly Posting[], day: string, sign: bigint) => {
+    for (const p of postings)
+      for (const [direction, s] of [
+        [1n, p.dt],
+        [-1n, p.kt],
+      ] as const) {
+        const account = chart.get(s.account);
+        if (!account?.quantitative || account.subkonto[0] !== 'product' || !s.sk[0]) continue;
+        const key = `${account.code}|${s.sk[0]}`;
+        const days = delta.get(key) ?? new Map<string, bigint>();
+        days.set(day, (days.get(day) ?? 0n) + sign * direction * (p.quantity ?? 0n));
+        delta.set(key, days);
+      }
+  };
+  add(previous, previousDate, -1n);
+  add(current, currentDate, 1n);
+  for (const [key, days] of delta) {
+    if (![...days.values()].some((q) => q !== 0n)) continue;
+    const [account, product] = key.split('|') as [string, string];
+    const after = dailyStock(tx.db, companyId, account, product);
+    const byDate = new Map(after.map((d) => [d.date, d.quantity]));
+    const dates = [...new Set([...byDate.keys(), ...days.keys()])].sort();
+    let now = 0n;
+    let change = 0n;
+    for (const d of dates) {
+      now += byDate.get(d) ?? 0n;
+      change += days.get(d) ?? 0n;
+      if (now < 0n && now < now - change) {
         const name = tx.db.get('SELECT name FROM products WHERE id=?', product)?.name ?? product;
         throw new DomainError(
-          `${String(name)} (${account.code}): ${neg.date.split('-').reverse().join('.')} tarixində qalıq mənfi olardı (${neg.quantity}). Bu mal artıq silinib və ya satılıb; əvvəlcə həmin sənədləri düzəldin.`,
+          `${String(name)} (${account}): ${d.split('-').reverse().join('.')} tarixində qalıq mənfi olardı (${formatQty(now)}). Bu mal artıq silinib və ya satılıb; əvvəlcə həmin sənədləri düzəldin.`,
           undefined,
           'insufficient-stock',
         );
       }
     }
+  }
 }
 
 function payload(number: string, n: Normalized) {
@@ -608,9 +646,11 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
   const now = tx.clock.now();
   // Reverse the previous version first: FIFO and advances must not see this invoice twice.
   let previous: Posting[] = [];
+  let previousDate = '';
   if (existing) {
     const prev = tx.entryPostings(cmd.companyId, INVOICE, id, Number(existing.version));
     previous = prev.postings;
+    previousDate = prev.date;
     tx.post(
       cmd.companyId,
       chart,
@@ -670,7 +710,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     false,
     postings,
   );
-  guardStock(tx, cmd.companyId, chart, [...previous, ...postings]);
+  guardStock(tx, cmd.companyId, chart, previous, previousDate, postings, n.header.date);
   tx.history(cmd.companyId, INVOICE, id, version, 'posted', data);
   tx.audit(
     cmd.companyId,
@@ -713,7 +753,7 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
     tx.clock.now(),
     cmd.id,
   );
-  guardStock(tx, cmd.companyId, chart, prev.postings);
+  guardStock(tx, cmd.companyId, chart, prev.postings, prev.date, [], prev.date);
   tx.history(cmd.companyId, INVOICE, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

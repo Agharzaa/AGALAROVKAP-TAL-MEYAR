@@ -793,3 +793,29 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('schema v3 → v4: a renamed seed element keeps its role, an archived one is not replaced', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'meyar-v3-'));
+  const path = join(dir, 'm.sqlite');
+  const raw = new DatabaseSync(path);
+  raw.exec(migrations.find((m) => m.version === 1)!.sql);
+  raw.exec(
+    "INSERT INTO companies(id,name,tax_id,created_at) VALUES('c','c','1000000001','2026-10-01')",
+  );
+  raw.exec(`INSERT INTO items(id,company_id,kind,name) VALUES('i1','c','incomeType','Məhsul satışı');
+INSERT INTO items(id,company_id,kind,name) VALUES('i2','c','incomeType','Xidmət satışı');`);
+  for (const v of [2, 3]) raw.exec(migrations.find((m) => m.version === v)!.sql);
+  raw.exec(`PRAGMA user_version=3;
+UPDATE items SET archived=1 WHERE kind='paymentKind' AND name='Vergi (haqq)';
+UPDATE items SET name='Mal satışı' WHERE id='i1';`);
+  raw.close();
+  const db = new Db(path);
+  const role = (r: string) =>
+    db.all("SELECT name FROM items WHERE company_id='c' AND role=?", r).map((x) => x.name);
+  assert.deepEqual(role('vatTax'), [], 'archived: the accountant chooses, nothing is guessed');
+  assert.deepEqual(role('goodsIncome'), ['Mal satışı']);
+  assert.deepEqual(role('serviceIncome'), ['Xidmət satışı']);
+  assert.deepEqual(role('cogs'), ['Satılmış malların maya dəyəri']);
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});

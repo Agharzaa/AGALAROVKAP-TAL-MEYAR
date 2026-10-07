@@ -256,21 +256,30 @@ test('FIFO: slices of a layer add up exactly; oldest layer first; shortage is re
     { source: 'a', quantity: 10n * one, value: 1000n },
     { source: 'b', quantity: 10n * one, value: 2000n },
   ];
-  const full = { layers, quantity: 20n * one, value: 3000n };
-  assert.equal(fifoCost(full, 4n * one, 'x'), 400n, 'the oldest units first');
+  const at = (issuedBefore: bigint, quantity: bigint, value: bigint) => ({
+    layers,
+    issuedBefore,
+    quantity,
+    value,
+  });
+  assert.equal(fifoCost(at(0n, 20n * one, 3000n), 4n * one, 'x'), 400n, 'oldest units first');
   // 4 units already gone: the next 11 are 6 × 1.00 + 5 × 2.00.
-  assert.equal(fifoCost({ layers, quantity: 16n * one, value: 2600n }, 11n * one, 'x'), 1600n);
+  assert.equal(fifoCost(at(4n * one, 16n * one, 2600n), 11n * one, 'x'), 1600n);
   // Emptying the stock takes exactly the value left, whatever the layers say.
-  assert.equal(fifoCost({ layers, quantity: 5n * one, value: 499n }, 5n * one, 'x'), 499n);
-  // A partial issue never takes more than the value left.
-  assert.equal(fifoCost({ layers, quantity: 10n * one, value: 700n }, 9n * one, 'x'), 700n);
+  assert.equal(fifoCost(at(15n * one, 5n * one, 499n), 5n * one, 'x'), 499n);
+  // Records out of FIFO order (the slice is worth more than what is left): average of the rest,
+  // and value always stays behind the remaining units.
+  assert.equal(fifoCost(at(10n * one, 10n * one, 2000n), 4n * one, 'x'), 800n, 'consistent: FIFO');
+  assert.equal(fifoCost(at(10n * one, 10n * one, 700n), 4n * one, 'x'), 280n);
+  assert.equal(fifoCost(at(10n * one, 10n * one, 700n), 9n * one, 'x'), 630n);
   assert.throws(
-    () => fifoCost({ layers, quantity: 5n * one, value: 1000n }, 6n * one, 'Qələm'),
+    () => fifoCost(at(15n * one, 5n * one, 1000n), 6n * one, 'Qələm'),
     /qalıq 5, tələb 6/,
   );
   // A cheap unit costs at least one qəpik; the last issue settles the rest.
   const screws = {
     layers: [{ source: 's', quantity: 1000n * one, value: 100n }],
+    issuedBefore: 0n,
     quantity: 1000n * one,
     value: 100n,
   };

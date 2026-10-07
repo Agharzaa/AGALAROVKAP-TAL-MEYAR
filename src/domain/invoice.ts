@@ -72,23 +72,44 @@ export function sliceValue(layer: StockLayer, from: Qty, to: Qty): Minor {
 }
 
 /**
- * What is left of one product on one stock account, from the journal itself: every receipt as a
- * layer (oldest first) and the quantity and value still on the account.
+ * One product on one stock account, read from the journal: the receipts up to the issue date
+ * (oldest first), the units other documents issued up to that date, and the quantity and value
+ * left on the account today.
  */
 export interface StockState {
   layers: readonly StockLayer[];
+  issuedBefore: Qty;
   quantity: Qty;
   value: Minor;
 }
 
+/** Value of units [start, start + quantity) of the layers, or null when they do not reach. */
+function layerSlice(layers: readonly StockLayer[], start: Qty, quantity: Qty): Minor | null {
+  const end = start + quantity;
+  let position = 0n;
+  let cost = 0n;
+  for (const layer of layers) {
+    if (layer.quantity <= 0n) continue;
+    const from = position;
+    const to = position + layer.quantity;
+    const a = start > from ? start : from;
+    const b = end < to ? end : to;
+    if (b > a) cost += sliceValue(layer, a - from, b - from);
+    position = to;
+    if (position >= end) return cost;
+  }
+  return null;
+}
+
 /**
- * FIFO cost of issuing `quantity` units. Under FIFO the units still in stock are the newest ones,
- * so the issue takes the oldest of them: the slice of the layers that starts where the remaining
- * stock starts. Two rules keep value and quantity together whatever happened before (corrections,
- * cancellations, documents entered out of order):
+ * FIFO cost of issuing `quantity` units on the issue date: the oldest units not yet issued by
+ * then. The journal is the judge of what is really left, so the cost always reconciles with it:
  * - the issue that empties the stock takes exactly the value left on the account;
- * - a partial issue never takes more than the value left, and at least one qəpik while value is
- *   left (a cheap unit would otherwise round to zero; the last issue settles the difference).
+ * - a partial issue costs at least one qəpik (a cheap unit would round to zero) and leaves value
+ *   behind it;
+ * - when the records no longer follow FIFO order (a receipt entered with an earlier date after
+ *   later issues), the issue is valued at the average of what is left, so nothing is ever blocked
+ *   or stranded; month-end re-costing (stage 5) restores strict FIFO.
  */
 export function fifoCost(stock: StockState, quantity: Qty, label: string): Minor {
   if (quantity <= 0n) throw new DomainError('Silinən miqdar müsbət olmalıdır.');
@@ -101,30 +122,15 @@ export function fifoCost(stock: StockState, quantity: Qty, label: string): Minor
     );
   }
   if (quantity === stock.quantity) return stock.value;
-  const total = stock.layers.reduce((s, l) => s + (l.quantity > 0n ? l.quantity : 0n), 0n);
-  const start = total - stock.quantity;
-  let cost: Minor;
-  if (start < 0n) {
-    // The journal holds more than its receipts explain (e.g. stock entered without a receipt):
-    // value the issue at the average of what is left.
-    cost = roundHalfAwayFromZero(stock.value * quantity, stock.quantity);
-  } else {
-    const end = start + quantity;
-    let position = 0n;
-    cost = 0n;
-    for (const layer of stock.layers) {
-      if (layer.quantity <= 0n) continue;
-      const from = position;
-      const to = position + layer.quantity;
-      const a = start > from ? start : from;
-      const b = end < to ? end : to;
-      if (b > a) cost += sliceValue(layer, a - from, b - from);
-      position = to;
-      if (position >= end) break;
-    }
+  const slice = layerSlice(stock.layers, stock.issuedBefore, quantity);
+  if (slice !== null) {
+    const cost = slice < 1n ? 1n : slice;
+    if (cost < stock.value) return cost;
   }
+  let cost = roundHalfAwayFromZero(stock.value * quantity, stock.quantity);
   if (cost < 1n) cost = 1n;
-  return cost > stock.value ? stock.value : cost;
+  if (cost >= stock.value && stock.value > 1n) cost = stock.value - 1n;
+  return cost;
 }
 
 // ---------------------------------------------------------------------------------------------

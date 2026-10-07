@@ -3,37 +3,48 @@
  * is still owed on a document. All of them read the journal itself (indexed by account + first
  * subkonto), so they always agree with it.
  */
-import { formatQty } from '../domain/quantity.js';
 import type { OpenAdvance, StockLayer, StockState } from '../domain/invoice.js';
 import type { Db } from '../infrastructure/sqlite/db.js';
 
 const src = "e.source_type||':'||e.source_id";
 
 /**
- * Receipts of `product` on `account` (all dates), oldest first, and what is left of it on the
- * account apart from document `exclude`. A document's corrections and cancellation net out inside
- * its own group (storno is posted on the original date).
+ * FIFO state of `product` on `account` for an issue on `date` by document `exclude`: receipts up
+ * to that date (a document's corrections and cancellation net out inside its own group, storno
+ * being posted on the original date), the units other documents issued up to that date, and
+ * what is left on the account today.
  */
 export function stockState(
   db: Db,
   companyId: string,
   account: string,
   product: string,
+  date: string,
   exclude: string,
 ): StockState {
   const layers: StockLayer[] = db
     .all(
       `SELECT ${src} AS s, p.date AS d, MIN(e.rowid) AS seq, SUM(p.dt_qty) AS q, SUM(p.amount) AS a
        FROM postings p JOIN entries e ON e.id=p.entry_id
-       WHERE p.company_id=? AND p.dt_account=? AND p.dt_s1=? AND p.dt_qty<>0
+       WHERE p.company_id=? AND p.dt_account=? AND p.dt_s1=? AND p.dt_qty<>0 AND p.date<=?
        GROUP BY e.source_type, e.source_id, p.date
        HAVING SUM(p.dt_qty)>0
        ORDER BY p.date, seq`,
       companyId,
       account,
       product,
+      date,
     )
     .map((r) => ({ source: String(r.s), quantity: r.q as bigint, value: r.a as bigint }));
+  const issued = db.get(
+    `SELECT COALESCE(SUM(p.kt_qty),0) AS q FROM postings p JOIN entries e ON e.id=p.entry_id
+     WHERE p.company_id=? AND p.kt_account=? AND p.kt_s1=? AND p.date<=? AND ${src}<>?`,
+    companyId,
+    account,
+    product,
+    date,
+    exclude,
+  )!.q as bigint;
   const left = db.get(
     `SELECT COALESCE(SUM(CASE WHEN p.dt_account=? THEN p.dt_qty ELSE -p.kt_qty END),0) AS q,
             COALESCE(SUM(CASE WHEN p.dt_account=? THEN p.amount ELSE -p.amount END),0) AS v
@@ -49,7 +60,7 @@ export function stockState(
     product,
     exclude,
   )!;
-  return { layers, quantity: left.q as bigint, value: left.v as bigint };
+  return { layers, issuedBefore: issued, quantity: left.q as bigint, value: left.v as bigint };
 }
 
 /** Quantity of `product` on `account` at the end of `date`, apart from document `exclude`. */
@@ -77,36 +88,28 @@ export function quantityAt(
   )!.q as bigint;
 }
 
-/**
- * The first day on which the stock of `product` on `account` is below zero, with that quantity;
- * null when it never is. Run after a document changed receipts, so a purchase that has already
- * been sold cannot be cancelled, reduced or moved after the sale.
- */
-export function firstNegative(
+/** Quantity of `product` on `account` per day (net movement), oldest first. */
+export function dailyStock(
   db: Db,
   companyId: string,
   account: string,
   product: string,
-): { date: string; quantity: string } | null {
-  const days = db.all(
-    `SELECT date, SUM(q) AS q FROM (
-       SELECT date, dt_qty AS q FROM postings WHERE company_id=? AND dt_account=? AND dt_s1=?
-       UNION ALL
-       SELECT date, -kt_qty FROM postings WHERE company_id=? AND kt_account=? AND kt_s1=?
-     ) GROUP BY date ORDER BY date`,
-    companyId,
-    account,
-    product,
-    companyId,
-    account,
-    product,
-  );
-  let running = 0n;
-  for (const d of days) {
-    running += d.q as bigint;
-    if (running < 0n) return { date: String(d.date), quantity: formatQty(running) };
-  }
-  return null;
+): { date: string; quantity: bigint }[] {
+  return db
+    .all(
+      `SELECT date, SUM(q) AS q FROM (
+         SELECT date, dt_qty AS q FROM postings WHERE company_id=? AND dt_account=? AND dt_s1=?
+         UNION ALL
+         SELECT date, -kt_qty FROM postings WHERE company_id=? AND kt_account=? AND kt_s1=?
+       ) GROUP BY date ORDER BY date`,
+      companyId,
+      account,
+      product,
+      companyId,
+      account,
+      product,
+    )
+    .map((r) => ({ date: String(r.date), quantity: r.q as bigint }));
 }
 
 /** Net debit (AZN and currency) of one settlement key: account, partner, contract, document. */

@@ -660,3 +660,49 @@ test('audit: a payment cannot settle a cancelled invoice or another partner’s 
     /ləğv edilib/,
   );
 });
+
+test('re-audit A: a backdated purchase never leaves stock without value or blocks the product', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  invoice(f, 'purchase', '2026-09-05', g.sup, g.cp, [line(g.pen, '10', '3')]);
+  invoice(f, 'sale', '2026-09-06', g.cus, g.cs, [line(g.pen, '10', '10')]);
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '10', '1')]);
+  const a = invoice(f, 'sale', '2026-09-07', g.cus, g.cs, [line(g.pen, '4', '10')]);
+  assert.equal(postings(f, a.id)[1]![2], '4.00', 'average of the 10.00 left on 10 units');
+  assert.deepEqual(stockOf(f, g.pen), ['6.00', '6']);
+  invoice(f, 'sale', '2026-09-08', g.cus, g.cs, [line(g.pen, '3', '10')]);
+  invoice(f, 'sale', '2026-09-09', g.cus, g.cs, [line(g.pen, '3', '10')]);
+  assert.deepEqual(stockOf(f, g.pen), ['', '']);
+});
+
+test('re-audit B: correcting the price of an old sale keeps its FIFO cost', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  invoice(f, 'purchase', '2026-09-01', g.sup, g.cp, [line(g.pen, '10', '1')]);
+  const s1 = invoice(f, 'sale', '2026-09-03', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  invoice(f, 'purchase', '2026-09-10', g.sup, g.cp, [line(g.pen, '10', '3')]);
+  const s2 = invoice(f, 'sale', '2026-09-12', g.cus, g.cs, [line(g.pen, '10', '10')]);
+  assert.equal(postings(f, s2.id)[1]![2], '20.00', '5 × 1 + 5 × 3');
+  resave(f, s1.id, { lines: [line(g.pen, '5', '12')] });
+  assert.equal(postings(f, s1.id)[1]![2], '5.00');
+  const s3 = invoice(f, 'sale', '2026-09-13', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  assert.equal(postings(f, s3.id)[1]![2], '15.00');
+  assert.deepEqual(stockOf(f, g.pen), ['', '']);
+});
+
+test('re-audit C: a purchase that reduces an existing shortage is accepted', (t) => {
+  const f = fixture(t);
+  const g = goods(f);
+  f.operation('2026-09-01', [
+    f.line('721', [f.item('expenseItem', 'Ofis xərcləri')], '205', [g.pen], '5', { quantity: '5' }),
+  ]);
+  const p = invoice(f, 'purchase', '2026-09-05', g.sup, g.cp, [line(g.pen, '10', '1')]);
+  assert.ok(p.id);
+  invoice(f, 'sale', '2026-09-06', g.cus, g.cs, [line(g.pen, '5', '10')]);
+  // Making it worse than it is now is still refused.
+  assert.throws(
+    () =>
+      f.exec({ type: 'invoice.cancel', companyId: f.companyId, id: p.id, version: 1, reason: 'x' }),
+    /qalıq mənfi olardı/,
+  );
+});

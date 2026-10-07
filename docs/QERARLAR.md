@@ -169,7 +169,7 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 
 ### TƏSDİQLƏNDİ
 
-1. **Maya dəyəri — FIFO.** Mal satılanda əvvəl gələn partiya əvvəl silinir (Dt 701 / Kt 205). Partiya — malın hər alış sənədi (eyni sənəddə eyni mal cəmlənir).
+1. **Maya dəyəri — FIFO.** Mal satılanda əvvəl gələn partiya əvvəl silinir (Dt 701 / Kt 205). Partiya — malın hər alış sənədi (eyni sənəddə eyni mal cəmlənir). Satış tarixinə qədərki partiyalar və o tarixə qədər silinmiş miqdar götürülür.
 2. **Qiymət qaimədə seçilir:** "ƏDV daxildir" bayrağı. Bayraq yoxdursa, qiymət ƏDV-sizdir (e-qaimə kimi) və ƏDV 18% üstə gəlir; varsa, ƏDV 18/118 ilə ayrılır. ƏDV sətir üzrə yuvarlaqlaşdırılır.
 3. **Valyuta qaimələri bu mərhələdədir.** Valyuta müqavilədən gəlir, məzənnə (AMB, 4 onluq) qaimədə əl ilə yazılır. Manat məbləği = valyuta məbləği × məzənnə, sətir üzrə.
 
@@ -182,10 +182,14 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 - Valyuta avansı öz məzənnəsi ilə əvəzləşir (valyuta məbləği ilə ölçülür); qaimə ilə avansın məzənnə fərqi 211.02 / 531.02-də qalır və ay sonu yenidən qiymətləndirmədə (mərhələ 5) bağlanır.
 - Nömrə: SQ-000001 (satış), AQ-000001 (alış), boş qalsa avtomatik. E-qaimə seriya + nömrəsi uçotda bir dəfə: satışda şirkət üzrə, alışda malsatan üzrə.
 - Düzəliş və ləğv: əl ilə əməliyyat kimi qırmızı storno. Düzəlişdə əvvəlki yazılış əvvəlcə storno edilir, sonra FIFO və avanslar qaiməsiz ledgerə görə yenidən hesablanır.
-- Kitabça elementləri rol ilə tapılır (ad dəyişsə də): "Vergi (haqq)", "Satılmış malların maya dəyəri", "Əsas nomenklatura qrupu", "Məhsul satışı", "Xidmət satışı".
+- Kitabça elementləri rol ilə tapılır (ad dəyişsə də): "Vergi (haqq)", "Satılmış malların maya dəyəri", "Əsas nomenklatura qrupu", "Məhsul satışı", "Xidmət satışı". Rolu Siyahılar bölməsində "Qaimələrdə standart" sahəsi ilə başqa elementə keçirmək olar. Arxivdəki element rol almır; sistem rolu təxminlə başqa elementə vermir.
+- Maya dəyəri jurnaldakı real qalıqla tutuşdurulur: malı sıfırlayan silinmə qalan dəyərin hamısını götürür (qəpik qalığı qalmır); hissə-hissə silinmə ən azı 0,01 AZN-dir və həmişə qalan vahidlərə dəyər saxlayır. Sənədlər FIFO ardıcıllığını pozubsa (məs. geriyə tarixlə alış), silinmə qalanın orta dəyəri ilə qiymətləndirilir — mal heç vaxt bloklanmır.
+- Mal qalığı: satış tarixinə qalıq çatmalıdır və sonrakı silinmələr üçün də qalıq qalmalıdır. Qaimənin düzəlişi və ya ləğvi heç bir gündə qalığı indikindən aşağı mənfiyə sala bilməz (satılmış malın alışı geri götürülmür); mövcud çatışmazlığı azaldan sənəd həmişə qəbul olunur.
+- Avans yalnız qaimənin hələ ödənilməmiş hissəsinə əvəzləşir (qaiməyə bağlı ödənişlər çıxılır).
+- Ödəniş qaiməyə yalnız onun kontragenti və müqaviləsi ilə bağlana bilər; ləğv edilmiş qaiməyə yeni ödəniş bağlanmır.
 
 ### Məhdudiyyətlər (sonrakı mərhələlər)
 
-- Geriyə tarixlə daxil edilən mal hərəkəti sonrakı satışların FIFO maya dəyərini avtomatik dəyişmir; ay bağlanışında (mərhələ 5) yenidən hesablanacaq.
+- Geriyə tarixlə daxil edilən mal hərəkəti artıq uçotda olan satışların maya dəyərini avtomatik dəyişmir (sonrakılar orta dəyərlə tutuşdurulur); dəqiq FIFO ay bağlanışında (mərhələ 5) yenidən hesablanacaq.
 - Malın qaytarılması, əsas vəsaitin satışı, qeyri-rezidentdən ödəmə mənbəyində vergi (521.07) və ƏDV vergi agenti (521.13) avtomatik deyil — hələlik əl ilə əməliyyatla.
 - DVX e-qaimələrinin idxalı — mərhələ 4.
