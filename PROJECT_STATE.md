@@ -47,12 +47,15 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 | FIFO maya dəyəri, avansların avtomatik əvəzləşdirilməsi (manat və valyuta)                                                       | `invoices.test.ts`, `tests/domain`            |
 | Sxem v4: qaimələr, kitabça rolları, nomenklatura qrupu, FIFO indeksləri                                                          | `schema v1 → current` testi                   |
 | UI: satış/alış qaimələri siyahısı və redaktoru, yazılışlar sənədin altında, hesab kartından keçid                                | `tests/ui` (6 test), Electron ekran şəkilləri |
+| Müstəqil audit (işi yazmayan ayrıca yoxlayıcı, 3 tur): 8 + 4 qüsur tapıldı, hamısı düzəldi və reqressiya testi kimi qalır        | `invoices.test.ts` ("audit", "re-audit")      |
+| Yük testi: 500 000 yazılışlı bazada satış qaiməsi (FIFO + avans) ~0,1 s                                                          | `npm run test:perf`                           |
+| Real Electron: 0.3.0 bazası 0.4.0-a yenilənir (50 → 90 hesab, rollar, bütövlük ok)                                               | `MEYAR_SMOKE`                                 |
 
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.3.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.3.1.exe`). 0.3.0 üzərinə quraşdırılanda baza avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
-- **Audit:** mərhələ 1-in auditi öz yoxlamamdır, müstəqil yoxlayıcı deyil.
+- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib.
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
