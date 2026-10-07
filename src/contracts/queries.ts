@@ -113,7 +113,8 @@ export interface EmployeeView {
   fin: string;
   archived: boolean;
 }
-export type ItemKind = 'expenseItem' | 'incomeType' | 'taxType' | 'fund' | 'cashbox';
+export type ItemKind =
+  'expenseItem' | 'incomeType' | 'taxType' | 'fund' | 'cashbox' | 'productGroup';
 export interface ItemView {
   id: string;
   version: number;

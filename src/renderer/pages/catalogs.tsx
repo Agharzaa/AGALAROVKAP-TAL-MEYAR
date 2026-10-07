@@ -443,6 +443,7 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'taxType', label: 'Vergi növləri' },
   { kind: 'fund', label: 'Fondlar' },
   { kind: 'cashbox', label: 'Kassalar' },
+  { kind: 'productGroup', label: 'Nomenklatura qrupları' },
 ];
 
 export function ListsPage() {

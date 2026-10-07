@@ -14,32 +14,36 @@ Bu sənəd proqramın necə uçot apardığını təsvir edir. Qərarların öz�
 - **Hesabat:** hesabatlar subkontolar üzrə açılır.
 - **Müqavilə:** müqavilə subkontosu həmişə kontragentdən dərhal sonra gəlir.
 
-| Hesab                        | Subkonto                                      | Qeyd                              |
-| ---------------------------- | --------------------------------------------- | --------------------------------- |
-| 101, 111, 113, 201, 204, 205 | Nomenklatura                                  | miqdar uçotu                      |
-| 211, 531                     | Kontragent → Müqavilə → Hesablaşma sənədi     | aktiv-passiv                      |
-| 217, 538                     | Kontragent → Müqavilə                         |                                   |
-| 221                          | Kassa                                         |                                   |
-| 223.01 / 223.02              | Bank hesabı                                   | 223.02 valyuta uçotu              |
-| 224.04                       | Bank hesabı                                   | ƏDV depozit hesabı                |
-| 241                          | Kontragent → Hesablaşma sənədi → ƏDV dərəcəsi |                                   |
-| 243.01 / 243.02              | Kontragent → Müqavilə                         | verilmiş avanslar (AZN / valyuta) |
-| 244, 533                     | İşçi                                          |                                   |
-| 301                          | Kontragent (təsisçi)                          |                                   |
-| 401, 501                     | Kontragent (bank) → Müqavilə                  | kreditlər                         |
-| 521                          | Vergi növü                                    | aktiv-passiv                      |
-| 522                          | Fond                                          |                                   |
-| 543.01 / 543.02              | Kontragent → Müqavilə                         | alınmış avanslar (AZN / valyuta)  |
-| 601, 602, 603                | Gəlir növü → ƏDV dərəcəsi                     |                                   |
-| 604.1                        | ƏDV dərəcəsi                                  | satışın ƏDV-si                    |
-| 701                          | Nomenklatura                                  |                                   |
-| 202, 242, 711, 721, 731      | Xərc maddəsi                                  |                                   |
-| 631, 751                     | Kontragent → Müqavilə                         | maliyyə gəlir və xərcləri         |
-| 222, 341, 343, 801, 901      | —                                             |                                   |
+| Hesab                                    | Subkonto                                      | Qeyd                                                   |
+| ---------------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| 101, 111, 113, 201, 204, 205             | Nomenklatura                                  | miqdar uçotu                                           |
+| 211.01 / 211.02, 531.01 / 531.02         | Kontragent → Müqavilə → Hesablaşma sənədi     | aktiv-passiv; .02 valyuta uçotu                        |
+| 243.01 / 243.02, 543.01 / 543.02         | Kontragent → Müqavilə → Hesablaşma sənədi     | verilmiş / alınmış avanslar; .02 valyuta uçotu         |
+| 217, 538                                 | Kontragent → Müqavilə                         |                                                        |
+| 221                                      | Kassa                                         |                                                        |
+| 222.01 / 222.03                          | —                                             | yolda olan köçürmələr (manat / valyuta)                |
+| 222.02 / 222.04                          | Kontragent → Müqavilə → Hesablaşma sənədi     | valyutanın alınması / satılması (.04 valyuta uçotu)    |
+| 223.01 / 223.02                          | Bank hesabı                                   | 223.02 valyuta uçotu                                   |
+| 224.04                                   | Bank hesabı                                   | ƏDV depozit hesabı                                     |
+| 241                                      | Kontragent → Hesablaşma sənədi → ƏDV dərəcəsi |                                                        |
+| 244, 533                                 | İşçi                                          |                                                        |
+| 301                                      | Kontragent (təsisçi)                          |                                                        |
+| 401, 501, 422                            | Kontragent → Müqavilə                         | kreditlər; 422 digər təxirə salınmış vergi öhdəlikləri |
+| 521.01–521.12 (521.07, 521.09 istisna)   | —                                             | subhesab vergi növüdür                                 |
+| 521.07                                   | Kontragent                                    | ödəmə mənbəyindən vergi                                |
+| 521.09                                   | Vergi növü                                    | sair vergi və rüsumlar                                 |
+| 521.13                                   | Kontragent → Müqavilə → Hesablaşma sənədi     | ƏDV vergi agenti                                       |
+| 522.01, 522.02, 522.03.1/.2, 522.04.1/.2 | —                                             | DSMF, işsizlik, tibbi sığorta (işçi / işəgötürən)      |
+| 601, 602, 603                            | Gəlir növü → ƏDV dərəcəsi                     |                                                        |
+| 604.1                                    | ƏDV dərəcəsi                                  | satışın ƏDV-si (Kt 521.01)                             |
+| 701                                      | Nomenklatura qrupu → Xərc maddəsi             |                                                        |
+| 202, 242, 711, 721, 731                  | Xərc maddəsi                                  |                                                        |
+| 631, 751                                 | Kontragent → Müqavilə                         | maliyyə gəlir və xərcləri                              |
+| 341, 343, 344, 534.01, 801, 901          | —                                             |                                                        |
 
 Hesab planının qaydaları:
 
-- **Qruplar:** subhesabı olan hesab (223, 224, 243, 543, 604) qrupdur və ona birbaşa yazılış edilmir. Hesabatlarda qrupun subhesabları qrupun üzərinə toplanır.
+- **Qruplar:** subhesabı olan hesab (211, 222, 223, 224, 243, 521, 522, 531, 534, 543, 604) qrupdur və ona birbaşa yazılış edilmir. Hesabatlarda qrupun subhesabları qrupun üzərinə toplanır.
 - **Yeni hesab və subhesab:** mühasib istənilən vaxt aça bilər. Subhesab əsas hesabın növünü, subkontolarını, miqdar və valyuta uçotunu götürür, amma bunları dəyişmək olar.
 - **Yazılışı olan hesab:**
   - subkontosu, növü, miqdar və valyuta uçotu dəyişdirilmir;
@@ -48,7 +52,8 @@ Hesab planının qaydaları:
 
   Bu qaydalar bazada da qorunur.
 
-- **Hesab adları:** işçi adlardır. Şirkətin real hesab planı ilə tutuşdurulub dəqiqləşdiriləcək.
+- **Hesab adları:** 1C AzStandart ilə tutuşdurmadan sonra dəyişən hesablar 1C-dəki adları daşıyır; qalanları hələ işçi adlardır.
+- **Köhnə bazaların yenilənməsi (sxem v2):** 0.3.0 bazası açılanda hesab planı yenilənir — yalnız yazılışı olmayan hesab ailələrində; yazılışı olan hesab öz quruluşunu saxlayır, istifadəçinin dəyişdirdiyi ad toxunulmur. Yeniləmədən əvvəl ehtiyat nüsxə alınır, audit jurnalına qeyd düşür.
 
 ## Kitabçalar
 
@@ -59,7 +64,7 @@ Hesab planının qaydaları:
 - **Bank hesabı:** bank (kontragent), IBAN, valyuta və bağlı olduğu hesabla (223.01 / 223.02 / 224.04) qeyd olunur.
   - Manat hesabı valyuta uçotu olan hesaba, xarici valyuta hesabı isə manat hesabına bağlana bilməz.
   - Hərəkəti olan bank hesabının bağlı olduğu hesab və valyutası dəyişdirilmir.
-- **Digər kitabçalar:** nomenklatura, işçilər, xərc maddələri, gəlir növləri, vergi növləri, fondlar və kassalar.
+- **Digər kitabçalar:** nomenklatura, nomenklatura qrupları, işçilər, xərc maddələri, gəlir növləri, vergi növləri, fondlar və kassalar.
 - **ƏDV dərəcələri:** qanunla müəyyən olunduğu üçün sabit siyahıdır: 18%, 0%, ƏDV-dən azad, ƏDV-yə cəlb olunmayan.
 - **Silinmə:** kitabça elementləri silinmir, arxivləşdirilir. Arxivdəki elementə yeni yazılış edilmir.
 

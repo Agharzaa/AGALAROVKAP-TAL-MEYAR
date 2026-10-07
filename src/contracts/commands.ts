@@ -19,6 +19,7 @@ const subkontoKind = z.enum([
   'bankAccount',
   'cashbox',
   'product',
+  'productGroup',
   'expenseItem',
   'incomeType',
   'vatRate',
@@ -138,7 +139,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     type: z.literal('item.save'),
     ...base,
     ...editable,
-    kind: z.enum(['expenseItem', 'incomeType', 'taxType', 'fund', 'cashbox']),
+    kind: z.enum(['expenseItem', 'incomeType', 'taxType', 'fund', 'cashbox', 'productGroup']),
     name: text(160),
   }),
   z.object({

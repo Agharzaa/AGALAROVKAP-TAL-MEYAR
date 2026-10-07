@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const v1 = `
 CREATE TABLE companies(
@@ -281,6 +281,158 @@ CREATE TABLE idempotency(
 );
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v2 — chart of accounts aligned with a real 1C AzStandart chart (docs/QERARLAR.md, 2026-10-07
+// evening) and the "Nomenklatura qrupu" catalog for 701.
+//
+// The lists below are a frozen snapshot of that change; later chart edits get their own
+// migration. Existing companies are upgraded only where it is safe: an account whose family
+// already has postings keeps its shape (the accounts_shape / accounts_parent guards would refuse
+// it anyway), a user's renamed account keeps the user's name, and existing codes are never
+// overwritten. New companies get the full chart from baseChart.
+
+type ChartRow = [
+  code: string,
+  name: string,
+  parent: string | null,
+  nature: 'active' | 'passive' | 'active-passive',
+  subkonto: string[],
+  qty: 0 | 1,
+  cur: 0 | 1,
+];
+const PCD = ['partner', 'contract', 'document'];
+const AP = 'active-passive';
+/** Accounts added in v2, parents before children. */
+const v2New: ChartRow[] = [
+  ['211.01', 'Alıcılar və sifarişçilərlə hesablaşmalar (manatla)', '211', AP, PCD, 0, 0],
+  ['211.02', 'Alıcılar və sifarişçilərlə hesablaşmalar (valyuta ilə)', '211', AP, PCD, 0, 1],
+  ['222.01', 'Yolda olan pul köçürmələri (manatla)', '222', 'active', [], 0, 0],
+  ['222.02', 'Xarici valyutanın alınması', '222', 'active', PCD, 0, 0],
+  ['222.03', 'Yolda olan pul köçürmələri (valyuta ilə)', '222', 'active', [], 0, 1],
+  ['222.04', 'Xarici valyutanın satılması', '222', 'active', PCD, 0, 1],
+  ['344', 'Elan edilmiş dividendlər', null, AP, [], 0, 0],
+  ['422', 'Digər təxirə salınmış vergi öhdəlikləri', null, AP, ['partner', 'contract'], 0, 0],
+  ['521.01', 'Əlavə dəyər vergisi', '521', AP, [], 0, 0],
+  ['521.02', 'Əmlak vergisi', '521', AP, [], 0, 0],
+  ['521.03', 'Gəlir vergisi', '521', AP, [], 0, 0],
+  ['521.04', 'Mənfəət vergisi', '521', AP, [], 0, 0],
+  ['521.05', 'Torpaq vergisi', '521', AP, [], 0, 0],
+  ['521.06', 'Sanksiyalar', '521', AP, [], 0, 0],
+  ['521.07', 'Ödəmə mənbəyindən vergi', '521', AP, ['partner'], 0, 0],
+  ['521.08', 'Sadələşdirilmiş vergi', '521', AP, [], 0, 0],
+  ['521.09', 'Sair vergi və rüsumlar', '521', AP, ['taxType'], 0, 0],
+  ['521.10', 'Yol vergisi', '521', AP, [], 0, 0],
+  ['521.11', 'Aksizlər', '521', AP, [], 0, 0],
+  ['521.12', 'Mədən vergisi', '521', AP, [], 0, 0],
+  ['521.13', 'ƏDV vergi agenti', '521', AP, PCD, 0, 0],
+  ['522.01', 'Sosial sığorta və təminat üzrə öhdəliklər — əmək sazişi', '522', AP, [], 0, 0],
+  ['522.02', 'Sosial sığorta və təminat üzrə öhdəliklər — xidmət müqaviləsi', '522', AP, [], 0, 0],
+  ['522.03', 'İşsizlikdən sığorta haqları', '522', AP, [], 0, 0],
+  ['522.03.1', 'İşsizlikdən sığorta haqları — işçi', '522.03', AP, [], 0, 0],
+  ['522.03.2', 'İşsizlikdən sığorta haqları — işəgötürən', '522.03', AP, [], 0, 0],
+  ['522.04', 'İcbari tibbi sığorta haqları', '522', AP, [], 0, 0],
+  ['522.04.1', 'İcbari tibbi sığorta haqları — işçi', '522.04', AP, [], 0, 0],
+  ['522.04.2', 'İcbari tibbi sığorta haqları — işəgötürən', '522.04', AP, [], 0, 0],
+  [
+    '531.01',
+    'Malsatan və podratçılara qısamüddətli kreditor borcları (manatla)',
+    '531',
+    AP,
+    PCD,
+    0,
+    0,
+  ],
+  [
+    '531.02',
+    'Malsatan və podratçılara qısamüddətli kreditor borcları (valyuta ilə)',
+    '531',
+    AP,
+    PCD,
+    0,
+    1,
+  ],
+  ['534', 'Dividendlərin ödənilməsi üzrə təsisçilərə kreditor borcları', null, AP, [], 0, 0],
+  ['534.01', 'Dividendlərin ödənilməsi üzrə təsisçilərə kreditor borcları', '534', AP, [], 0, 0],
+];
+/**
+ * New subkonto of existing system accounts, applied only while the whole top-level family
+ * (243 for 243.01) is unused, so sibling sub-accounts never end up with different subkonto.
+ */
+const v2Shape: [code: string, subkonto: string[]][] = [
+  ['243', PCD],
+  ['243.01', PCD],
+  ['243.02', PCD],
+  ['521', []],
+  ['522', []],
+  ['543', PCD],
+  ['543.01', PCD],
+  ['543.02', PCD],
+  ['701', ['productGroup', 'expenseItem']],
+];
+/** Renames of system accounts, applied only where the name is still the old seeded one. */
+const v2Names: [code: string, from: string, to: string][] = [
+  [
+    '211',
+    'Alıcılar və sifarişçilərin qısamüddətli debitor borcları',
+    'Alıcıların və sifarişçilərin qısamüddətli debitor borcları',
+  ],
+  ['243.01', 'Verilmiş avanslar (AZN)', 'Verilmiş avanslar üzrə hesablaşmalar (manatla)'],
+  ['243.02', 'Verilmiş avanslar (valyuta)', 'Verilmiş avanslar üzrə hesablaşmalar (valyuta ilə)'],
+  ['543.01', 'Alınmış avanslar (AZN)', 'Alınmış avanslar üzrə hesablaşmalar (manatla)'],
+  ['543.02', 'Alınmış avanslar (valyuta)', 'Alınmış avanslar üzrə hesablaşmalar (valyuta ilə)'],
+];
+
+const q = (v: string | null) => (v === null ? 'NULL' : `'${v.replaceAll("'", "''")}'`);
+/** Neither the account nor any of its sub-accounts has postings in company c. */
+const unused = (code: string) =>
+  `NOT EXISTS(SELECT 1 FROM registers r WHERE r.company_id=c.id AND (r.account=${q(code)} OR r.account LIKE ${q(`${code}.%`)}))`;
+const uuid =
+  "lower(substr(h,1,8)||'-'||substr(h,9,4)||'-4'||substr(h,14,3)||'-a'||substr(h,18,3)||'-'||substr(h,21,12))";
+
+const v2 = [
+  // Items: allow the new "productGroup" kind (SQLite cannot alter a CHECK; the table is rebuilt).
+  `CREATE TABLE items_v2(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN('expenseItem','incomeType','taxType','fund','cashbox','productGroup')),
+  name TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,name)
+);`,
+  'INSERT INTO items_v2(id,company_id,kind,name,archived,version) SELECT id,company_id,kind,name,archived,version FROM items;',
+  'DROP TABLE items;',
+  'ALTER TABLE items_v2 RENAME TO items;',
+  "CREATE TRIGGER items_no_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT,'guard: Kitabça elementi silinmir; arxivləşdirilir.'); END;",
+  `INSERT INTO items(id,company_id,kind,name) SELECT ${uuid},id,'productGroup','Əsas nomenklatura qrupu'
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies);`,
+  ...v2Shape.map(
+    ([code, sk]) =>
+      `UPDATE accounts SET subkonto=${q(JSON.stringify(sk))} WHERE code=${q(code)} AND system=1 AND EXISTS(SELECT 1 FROM companies c WHERE c.id=accounts.company_id AND ${unused(code.split('.')[0]!)});`,
+  ),
+  ...v2New.map(
+    ([code, name, parent, nature, sk, qty, cur]) =>
+      `INSERT INTO accounts(company_id,code,name,parent_code,nature,subkonto,quantitative,currency,system,archived)
+  SELECT c.id,${q(code)},${q(name)},${q(parent)},${q(nature)},${q(JSON.stringify(sk))},${qty},${cur},1,0 FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM accounts a WHERE a.company_id=c.id AND a.code=${q(code)})${
+    parent
+      ? ` AND EXISTS(SELECT 1 FROM accounts a WHERE a.company_id=c.id AND a.code=${q(parent)} AND a.archived=0)
+    AND NOT EXISTS(SELECT 1 FROM registers r WHERE r.company_id=c.id AND r.account=${q(parent)})`
+      : ''
+  };`,
+  ),
+  ...v2Names.map(
+    ([code, from, to]) =>
+      `UPDATE accounts SET name=${q(to)} WHERE code=${q(code)} AND system=1 AND name=${q(from)};`,
+  ),
+  `INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-2','Yeniləndi','Hesab planı',id,
+  'Hesab planı 1C AzStandart ilə tutuşdurmaya görə yeniləndi (521/522 subhesabları, 211/531 .01/.02, 222.01–222.04, 344, 422, 534; 243/543 + hesablaşma sənədi; 701: nomenklatura qrupu → xərc maddəsi). Yazılışı olan hesablar dəyişdirilmədi.'
+  FROM companies;`,
+].join('\n');
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
+  { version: 2, sql: v2, foreignKeysOff: true },
 ];

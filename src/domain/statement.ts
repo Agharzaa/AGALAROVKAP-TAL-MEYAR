@@ -24,8 +24,9 @@ export type PaymentKind =
   | 'transfer'
   | 'fee'
   | 'other';
+/** 521 and 522 are groups: tax and social proposals name the group and ask for the sub-account. */
 const roles = {
-  transit: '222',
+  transit: '222.01',
   adminExpenses: '721',
   social: '522',
   taxPayable: '521',
@@ -394,14 +395,14 @@ export function classifyStatementLine(
       kind: 'transfer',
       counterAccount: roles.transit,
       confidence: 'high',
-      reason: 'Qarşı tərəf şirkətin özüdür (öz hesabları arasında köçürmə, 222).',
+      reason: 'Qarşı tərəf şirkətin özüdür (öz hesabları arasında köçürmə, 222.01).',
     };
   if (has(purpose, 'ədv depozit', 'edv depozit', 'depozit hesab'))
     return {
       kind: 'transfer',
       counterAccount: roles.transit,
       confidence: 'high',
-      reason: 'ƏDV depozit hesabı ilə köçürmə (222 vasitəsilə).',
+      reason: 'ƏDV depozit hesabı ilə köçürmə (222.01 vasitəsilə).',
     };
   if (
     out &&
@@ -441,8 +442,8 @@ export function classifyStatementLine(
     return {
       kind: 'social',
       counterAccount: roles.social,
-      confidence: 'high',
-      reason: 'Sosial sığorta / işsizlik / tibbi sığorta haqqı (522).',
+      confidence: 'medium',
+      reason: 'Sosial sığorta / işsizlik / tibbi sığorta haqqı — 522 subhesabını seçin.',
     };
   // "ƏDV daxil" or "vergi hesab-fakturası" in a supplier payment is not a tax payment, so purpose
   // words count only when the counterparty is not a known partner; the Treasury always counts.
@@ -485,8 +486,8 @@ export function classifyStatementLine(
     return {
       kind: 'tax',
       counterAccount: roles.taxPayable,
-      confidence: 'high',
-      reason: out ? 'Vergi ödənişi (521).' : 'Vergi qaytarılması (521).',
+      confidence: 'medium',
+      reason: `${out ? 'Vergi ödənişi' : 'Vergi qaytarılması'} — 521 subhesabını seçin (521.01 ƏDV, 521.04 mənfəət…).`,
     };
   if (
     out &&
@@ -514,7 +515,7 @@ export function classifyStatementLine(
       ...(partner ? {} : line.counterpartyTaxId ? { createPartner: true } : {}),
       counterAccount: roles.loans,
       confidence: 'medium',
-      reason: out ? 'Kreditin qaytarılması (511) — faiz varsa ayırın.' : 'Kreditin alınması (511).',
+      reason: out ? 'Kreditin qaytarılması (501) — faiz varsa ayırın.' : 'Kreditin alınması (501).',
     };
   if (
     has(
@@ -534,7 +535,7 @@ export function classifyStatementLine(
       kind: 'transfer',
       counterAccount: roles.transit,
       confidence: 'high',
-      reason: 'Öz hesabları / kassa arasında köçürmə (222).',
+      reason: 'Öz hesabları / kassa arasında köçürmə (222.01).',
     };
   const refund = has(purpose, 'qaytar', 'geri ödən', 'geri oden', 'возврат', 'refund');
   if (partner)

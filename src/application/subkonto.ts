@@ -21,6 +21,7 @@ const tables: Partial<Record<SubkontoKind, { table: string; kind?: string }>> = 
   taxType: { table: 'items', kind: 'taxType' },
   fund: { table: 'items', kind: 'fund' },
   cashbox: { table: 'items', kind: 'cashbox' },
+  productGroup: { table: 'items', kind: 'productGroup' },
 };
 
 export interface SideCheck {

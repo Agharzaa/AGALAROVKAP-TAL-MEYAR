@@ -4,8 +4,8 @@
  * line on the account carries one value per kind, and every report can be opened along them
  * (account → partner → contract → settlement document).
  *
- * The seeded accounts and their subkonto follow docs/QERARLAR.md. Names are working titles to be
- * checked against the company's real chart.
+ * The seeded accounts and their subkonto follow docs/QERARLAR.md. Accounts restructured after the
+ * comparison with a real 1C AzStandart chart carry 1C's names; the rest are still working titles.
  */
 import { DomainError } from './errors.js';
 
@@ -16,6 +16,7 @@ export type SubkontoKind =
   | 'bankAccount'
   | 'cashbox'
   | 'product'
+  | 'productGroup'
   | 'expenseItem'
   | 'incomeType'
   | 'vatRate'
@@ -30,6 +31,7 @@ export const subkontoKinds: readonly SubkontoKind[] = [
   'bankAccount',
   'cashbox',
   'product',
+  'productGroup',
   'expenseItem',
   'incomeType',
   'vatRate',
@@ -45,6 +47,7 @@ export const subkontoLabel: Record<SubkontoKind, string> = {
   bankAccount: 'Bank hesabı',
   cashbox: 'Kassa',
   product: 'Nomenklatura',
+  productGroup: 'Nomenklatura qrupu',
   expenseItem: 'Xərc maddəsi',
   incomeType: 'Gəlir növü',
   vatRate: 'ƏDV dərəcəsi',
@@ -91,6 +94,8 @@ type Seed = [
 const A = 'active' as const;
 const P = 'passive' as const;
 const AP = 'active-passive' as const;
+/** Settlements: partner → contract → settlement document. */
+const PCD: SubkontoKind[] = ['partner', 'contract', 'document'];
 const seed: Seed[] = [
   ['101', 'Qeyri-maddi aktivlərin dəyəri', A, ['product'], { qty: true }],
   ['111', 'Torpaq, tikili və avadanlıqların dəyəri', A, ['product'], { qty: true }],
@@ -100,15 +105,16 @@ const seed: Seed[] = [
   ['202', 'İstehsalat (iş və xidmət) məsrəfləri', A, ['expenseItem']],
   ['204', 'Hazır məhsul', A, ['product'], { qty: true }],
   ['205', 'Mallar', A, ['product'], { qty: true }],
-  [
-    '211',
-    'Alıcılar və sifarişçilərin qısamüddətli debitor borcları',
-    AP,
-    ['partner', 'contract', 'document'],
-  ],
+  ['211', 'Alıcıların və sifarişçilərin qısamüddətli debitor borcları', AP, PCD],
+  ['211.01', 'Alıcılar və sifarişçilərlə hesablaşmalar (manatla)', AP, PCD],
+  ['211.02', 'Alıcılar və sifarişçilərlə hesablaşmalar (valyuta ilə)', AP, PCD, { cur: true }],
   ['217', 'Digər qısamüddətli debitor borcları', AP, ['partner', 'contract']],
   ['221', 'Kassa', A, ['cashbox']],
   ['222', 'Yolda olan pul köçürmələri', A, []],
+  ['222.01', 'Yolda olan pul köçürmələri (manatla)', A, []],
+  ['222.02', 'Xarici valyutanın alınması', A, PCD],
+  ['222.03', 'Yolda olan pul köçürmələri (valyuta ilə)', A, [], { cur: true }],
+  ['222.04', 'Xarici valyutanın satılması', A, PCD, { cur: true }],
   ['223', 'Bank hesablaşma hesabları', A, ['bankAccount']],
   ['223.01', 'Bank hesabları (AZN)', A, ['bankAccount']],
   ['223.02', 'Bank hesabları (xarici valyuta)', A, ['bankAccount'], { cur: true }],
@@ -116,28 +122,56 @@ const seed: Seed[] = [
   ['224.04', 'ƏDV depozit hesabı', A, ['bankAccount']],
   ['241', 'Əvəzləşdirilən ƏDV', A, ['partner', 'document', 'vatRate']],
   ['242', 'Gələcək hesabat dövrlərinin xərcləri', A, ['expenseItem']],
-  ['243', 'Verilmiş qısamüddətli avanslar', A, ['partner', 'contract']],
-  ['243.01', 'Verilmiş avanslar (AZN)', A, ['partner', 'contract']],
-  ['243.02', 'Verilmiş avanslar (valyuta)', A, ['partner', 'contract'], { cur: true }],
+  ['243', 'Verilmiş qısamüddətli avanslar', A, PCD],
+  ['243.01', 'Verilmiş avanslar üzrə hesablaşmalar (manatla)', A, PCD],
+  ['243.02', 'Verilmiş avanslar üzrə hesablaşmalar (valyuta ilə)', A, PCD, { cur: true }],
   ['244', 'Təhtəlhesab məbləğlər', AP, ['employee']],
   ['301', 'Nizamnamə (nominal) kapitalı', P, ['partner']],
   ['341', 'Hesabat dövründə xalis mənfəət (zərər)', AP, []],
   ['343', 'Keçmiş illər üzrə bölüşdürülməmiş mənfəət (ödənilməmiş zərər)', AP, []],
+  ['344', 'Elan edilmiş dividendlər', AP, []],
   ['401', 'Uzunmüddətli bank kreditləri', P, ['partner', 'contract']],
+  ['422', 'Digər təxirə salınmış vergi öhdəlikləri', AP, ['partner', 'contract']],
   ['501', 'Qısamüddətli bank kreditləri', P, ['partner', 'contract']],
-  ['521', 'Vergi öhdəlikləri', AP, ['taxType']],
-  ['522', 'Sosial sığorta və təminat üzrə öhdəliklər', AP, ['fund']],
+  ['521', 'Vergi öhdəlikləri', AP, []],
+  ['521.01', 'Əlavə dəyər vergisi', AP, []],
+  ['521.02', 'Əmlak vergisi', AP, []],
+  ['521.03', 'Gəlir vergisi', AP, []],
+  ['521.04', 'Mənfəət vergisi', AP, []],
+  ['521.05', 'Torpaq vergisi', AP, []],
+  ['521.06', 'Sanksiyalar', AP, []],
+  ['521.07', 'Ödəmə mənbəyindən vergi', AP, ['partner']],
+  ['521.08', 'Sadələşdirilmiş vergi', AP, []],
+  ['521.09', 'Sair vergi və rüsumlar', AP, ['taxType']],
+  ['521.10', 'Yol vergisi', AP, []],
+  ['521.11', 'Aksizlər', AP, []],
+  ['521.12', 'Mədən vergisi', AP, []],
+  ['521.13', 'ƏDV vergi agenti', AP, PCD],
+  ['522', 'Sosial sığorta və təminat üzrə öhdəliklər', AP, []],
+  ['522.01', 'Sosial sığorta və təminat üzrə öhdəliklər — əmək sazişi', AP, []],
+  ['522.02', 'Sosial sığorta və təminat üzrə öhdəliklər — xidmət müqaviləsi', AP, []],
+  ['522.03', 'İşsizlikdən sığorta haqları', AP, []],
+  ['522.03.1', 'İşsizlikdən sığorta haqları — işçi', AP, []],
+  ['522.03.2', 'İşsizlikdən sığorta haqları — işəgötürən', AP, []],
+  ['522.04', 'İcbari tibbi sığorta haqları', AP, []],
+  ['522.04.1', 'İcbari tibbi sığorta haqları — işçi', AP, []],
+  ['522.04.2', 'İcbari tibbi sığorta haqları — işəgötürən', AP, []],
+  ['531', 'Malsatan və podratçılara qısamüddətli kreditor borcları', AP, PCD],
+  ['531.01', 'Malsatan və podratçılara qısamüddətli kreditor borcları (manatla)', AP, PCD],
   [
-    '531',
-    'Malsatan və podratçılara qısamüddətli kreditor borcları',
+    '531.02',
+    'Malsatan və podratçılara qısamüddətli kreditor borcları (valyuta ilə)',
     AP,
-    ['partner', 'contract', 'document'],
+    PCD,
+    { cur: true },
   ],
   ['533', 'Əməyin ödənişi üzrə işçi heyətinə borclar', AP, ['employee']],
+  ['534', 'Dividendlərin ödənilməsi üzrə təsisçilərə kreditor borcları', AP, []],
+  ['534.01', 'Dividendlərin ödənilməsi üzrə təsisçilərə kreditor borcları', AP, []],
   ['538', 'Digər qısamüddətli kreditor borcları', AP, ['partner', 'contract']],
-  ['543', 'Alınmış qısamüddətli avanslar', P, ['partner', 'contract']],
-  ['543.01', 'Alınmış avanslar (AZN)', P, ['partner', 'contract']],
-  ['543.02', 'Alınmış avanslar (valyuta)', P, ['partner', 'contract'], { cur: true }],
+  ['543', 'Alınmış qısamüddətli avanslar', P, PCD],
+  ['543.01', 'Alınmış avanslar üzrə hesablaşmalar (manatla)', P, PCD],
+  ['543.02', 'Alınmış avanslar üzrə hesablaşmalar (valyuta ilə)', P, PCD, { cur: true }],
   ['601', 'Satış', P, ['incomeType', 'vatRate']],
   ['602', 'Satılmış malların qaytarılması və ucuzlaşdırılması', A, ['incomeType', 'vatRate']],
   ['603', 'Verilmiş güzəştlər', A, ['incomeType', 'vatRate']],
@@ -145,7 +179,7 @@ const seed: Seed[] = [
   ['604.1', 'Satışın ƏDV-si', A, ['vatRate']],
   ['611', 'Sair əməliyyat gəlirləri', P, ['incomeType']],
   ['631', 'Maliyyə gəlirləri', P, ['partner', 'contract']],
-  ['701', 'Satışın maya dəyəri', A, ['product']],
+  ['701', 'Satışın maya dəyəri', A, ['productGroup', 'expenseItem']],
   ['711', 'Kommersiya xərcləri', A, ['expenseItem']],
   ['721', 'İnzibati xərclər', A, ['expenseItem']],
   ['731', 'Sair əməliyyat xərcləri', A, ['expenseItem']],
@@ -162,7 +196,7 @@ export const baseChart: readonly Account[] = seed.map(([code, name, nature, subk
   name,
   parentCode: parentOf(code),
   nature,
-  subkonto,
+  subkonto: [...subkonto],
   quantitative: !!f?.qty,
   currency: !!f?.cur,
   system: true,

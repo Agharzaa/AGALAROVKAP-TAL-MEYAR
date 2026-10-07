@@ -88,9 +88,9 @@ test('manual operation: accounts and subkonto by keyboard, posting, storno on ed
     await pick('Sətir 1 kredit 301 · Kontragent', 'Ağarza');
     await user.type(editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }), '30000');
     await user.click(editor.getByRole('button', { name: 'Sətir əlavə et' }));
-    await pick('Sətir 2 debet hesabı', '211');
-    await pick('Sətir 2 debet 211 · Kontragent', 'Alıcı');
-    await pick('Sətir 2 debet 211 · Müqavilə', '7');
+    await pick('Sətir 2 debet hesabı', '211.01');
+    await pick('Sətir 2 debet 211.01 · Kontragent', 'Alıcı');
+    await pick('Sətir 2 debet 211.01 · Müqavilə', '7');
     await pick('Sətir 2 kredit hesabı', '601');
     await pick('Sətir 2 kredit 601 · Gəlir növü', 'Məhsul');
     await pick('Sətir 2 kredit 601 · ƏDV dərəcəsi', '18');

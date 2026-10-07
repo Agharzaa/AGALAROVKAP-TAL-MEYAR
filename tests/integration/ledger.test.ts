@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Db } from '../../src/infrastructure/sqlite/db.js';
+import { migrations, SCHEMA_VERSION } from '../../src/infrastructure/sqlite/schema.js';
 import type { IntegrityView, OperationDetail } from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 
@@ -44,8 +46,15 @@ function september(f: ReturnType<typeof fixture>) {
   const c7 = f.contract(customer, '7', 'sale');
   const paper = f.product('Kağız A4', 'qutu');
   const goods = f.item('incomeType', 'Məhsul satışı');
-  const vat = f.item('taxType', 'ƏDV');
   const fees = f.item('expenseItem', 'Bank xidmətləri');
+  const mainGroup = f.item('productGroup', 'Əsas nomenklatura qrupu');
+  const cogs = f.exec({
+    type: 'item.save',
+    companyId: f.companyId,
+    kind: 'expenseItem',
+    name: 'Satılmış malların maya dəyəri',
+    archived: false,
+  }).id;
   const L = f.line;
   f.operation(
     '2026-08-31',
@@ -59,8 +68,8 @@ function september(f: ReturnType<typeof fixture>) {
   const purchase = f.operation(
     '2026-09-05',
     [
-      L('205', [paper], '531', [supplier, c12, ''], '10000', { quantity: '100' }),
-      L('241', [supplier, '', '18'], '531', [supplier, c12, ''], '1800'),
+      L('205', [paper], '531.01', [supplier, c12, ''], '10000', { quantity: '100' }),
+      L('241', [supplier, '', '18'], '531.01', [supplier, c12, ''], '1800'),
     ],
     'Alış AA-001',
   );
@@ -68,34 +77,35 @@ function september(f: ReturnType<typeof fixture>) {
   f.operation(
     '2026-09-18',
     [
-      L('531', [supplier, c12, purchaseDoc], '223.01', [bankK], '10000'),
-      L('531', [supplier, c12, purchaseDoc], '224.04', [deposit], '1800'),
+      L('531.01', [supplier, c12, purchaseDoc], '223.01', [bankK], '10000'),
+      L('531.01', [supplier, c12, purchaseDoc], '224.04', [deposit], '1800'),
     ],
     'Malsatana ödəniş',
   );
   const sale = f.operation(
     '2026-09-08',
     [
-      L('211', [customer, c7, ''], '601', [goods, '18'], '15000'),
-      L('604.1', ['18'], '521', [vat], '2288.14'),
+      L('211.01', [customer, c7, ''], '601', [goods, '18'], '15000'),
+      L('604.1', ['18'], '521.01', [], '2288.14'),
     ],
     'Satış SF-0001',
   );
   const saleDoc = `operation:${sale.id}`;
-  f.operation(
+  const receipt = f.operation(
     '2026-09-15',
     [
-      L('223.01', [bankK], '211', [customer, c7, saleDoc], '12711.86'),
-      L('223.01', [bankK], '543.01', [customer, c7], '2542.38'),
-      L('224.04', [deposit], '211', [customer, c7, saleDoc], '2288.14'),
-      L('224.04', [deposit], '543.01', [customer, c7], '457.62'),
+      L('223.01', [bankK], '211.01', [customer, c7, saleDoc], '12711.86'),
+      L('223.01', [bankK], '543.01', [customer, c7, ''], '2542.38'),
+      L('224.04', [deposit], '211.01', [customer, c7, saleDoc], '2288.14'),
+      L('224.04', [deposit], '543.01', [customer, c7, ''], '457.62'),
     ],
     'Alıcıdan 18 000',
   );
+  const receiptDoc = `operation:${receipt.id}`;
   f.operation('2026-09-30', [L('721', [fees], '223.01', [bankK], '3')], 'Bank xidmət haqqı');
   f.operation(
     '2026-09-30',
-    [L('701', [paper], '205', [paper], '7000', { quantity: '70' })],
+    [L('701', [mainGroup, cogs], '205', [paper], '7000', { quantity: '70' })],
     'Maya dəyəri',
   );
   return {
@@ -110,11 +120,11 @@ function september(f: ReturnType<typeof fixture>) {
     c7,
     paper,
     goods,
-    vat,
     fees,
     purchase,
     sale,
     saleDoc,
+    receiptDoc,
   };
 }
 
@@ -128,6 +138,24 @@ test('company creation seeds the agreed chart and catalog lists', (t) => {
     'document',
   ]);
   assert.equal(c.accounts.find((a) => a.code === '223')!.postable, false);
+  // Structure agreed after the comparison with the real 1C chart (QERARLAR, 2026-10-07 evening).
+  const acc = (code: string) => c.accounts.find((a) => a.code === code);
+  for (const group of ['211', '222', '521', '522', '522.03', '531', '534'])
+    assert.equal(acc(group)!.postable, false, group);
+  assert.equal(acc('211.02')!.currency, true);
+  assert.equal(acc('531.02')!.currency, true);
+  assert.deepEqual(acc('521.01')!.subkonto, []);
+  assert.deepEqual(acc('521.07')!.subkonto, ['partner']);
+  assert.deepEqual(acc('522.04.2')!.subkonto, []);
+  assert.deepEqual(acc('243.01')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(acc('543.02')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(acc('701')!.subkonto, ['productGroup', 'expenseItem']);
+  assert.deepEqual(acc('751')!.subkonto, ['partner', 'contract']);
+  for (const code of ['222.04', '344', '422', '534.01']) assert.ok(acc(code), code);
+  assert.deepEqual(
+    c.items.filter((i) => i.kind === 'productGroup').map((i) => i.name),
+    ['Əsas nomenklatura qrupu'],
+  );
   assert.deepEqual(
     c.items
       .filter((i) => i.kind === 'incomeType')
@@ -159,8 +187,9 @@ test('September example: trial balance by account and subkonto, to the qəpik', 
         'a:223',
         'a:223.01',
         'a:211',
-        `a:211|${s.customer}`,
-        `a:211|${s.customer}|${s.c7}`,
+        'a:211.01',
+        `a:211.01|${s.customer}`,
+        `a:211.01|${s.customer}|${s.c7}`,
         'a:205',
         'a:543',
         'a:543.01',
@@ -183,7 +212,7 @@ test('September example: trial balance by account and subkonto, to the qəpik', 
   assert.deepEqual(r(`a:223.01|${s.bankP}`), ['10000.00', '', '', '', '10000.00', '']);
   assert.deepEqual(r('a:224'), ['3000.00', '', '2745.76', '1800.00', '3945.76', '']);
   assert.deepEqual(r('a:211'), ['', '', '15000.00', '15000.00', '', '']);
-  assert.deepEqual(r(`a:211|${s.customer}|${s.c7}|${s.saleDoc}`), [
+  assert.deepEqual(r(`a:211.01|${s.customer}|${s.c7}|${s.saleDoc}`), [
     '',
     '',
     '15000.00',
@@ -225,8 +254,8 @@ test('October: the next invoice and the advance offset; home warns until offset'
   const s = september(f);
   const L = f.line;
   const inv = f.operation('2026-10-06', [
-    L('211', [s.customer, s.c7, ''], '601', [s.goods, '18'], '5000'),
-    L('604.1', ['18'], '521', [s.vat], '762.71'),
+    L('211.01', [s.customer, s.c7, ''], '601', [s.goods, '18'], '5000'),
+    L('604.1', ['18'], '521.01', [], '762.71'),
   ]);
   assert.match(
     f
@@ -237,16 +266,25 @@ test('October: the next invoice and the advance offset; home warns until offset'
   );
   f.operation(
     '2026-10-06',
-    [L('543.01', [s.customer, s.c7], '211', [s.customer, s.c7, `operation:${inv.id}`], '3000')],
+    [
+      L(
+        '543.01',
+        [s.customer, s.c7, s.receiptDoc],
+        '211.01',
+        [s.customer, s.c7, `operation:${inv.id}`],
+        '3000',
+      ),
+    ],
     'Avansın əvəzləşdirilməsi',
   );
   assert.equal(f.home().warnings.length, 0);
   const tb = f.trial('2026-10-01', '2026-10-31', [
     'a:211',
-    `a:211|${s.customer}`,
-    `a:211|${s.customer}|${s.c7}`,
+    'a:211.01',
+    `a:211.01|${s.customer}`,
+    `a:211.01|${s.customer}|${s.c7}`,
   ]);
-  assert.equal(f.row(tb, `a:211|${s.customer}|${s.c7}|operation:${inv.id}`)!.closeDt, '2000.00');
+  assert.equal(f.row(tb, `a:211.01|${s.customer}|${s.c7}|operation:${inv.id}`)!.closeDt, '2000.00');
   assert.equal(f.row(tb, 'a:543')!.closeKt, '');
   const home = f.home();
   assert.deepEqual(
@@ -268,9 +306,9 @@ test('account card: opening, running balance and closing on one bank account', (
   assert.deepEqual(
     card.lines.map((l) => [l.date, l.debit, l.credit, l.corrAccount, l.balance]),
     [
-      ['2026-09-15', '12711.86', '', '211', '42711.86'],
+      ['2026-09-15', '12711.86', '', '211.01', '42711.86'],
       ['2026-09-15', '2542.38', '', '543.01', '45254.24'],
-      ['2026-09-18', '', '10000.00', '531', '35254.24'],
+      ['2026-09-18', '', '10000.00', '531.01', '35254.24'],
       ['2026-09-30', '', '3.00', '721', '35251.24'],
     ],
   );
@@ -326,7 +364,7 @@ test('subkonto values are checked against the catalogs', (t) => {
   const L = f.line;
   const other = f.partner('Başqa MMC', '1700000003');
   assert.throws(
-    () => f.operation('2026-09-20', [L('211', [other, s.c7, ''], '601', [s.goods, '18'], '1')]),
+    () => f.operation('2026-09-20', [L('211.01', [other, s.c7, ''], '601', [s.goods, '18'], '1')]),
     /müqavilə seçilən kontragentə aid deyil/,
   );
   assert.throws(
@@ -335,7 +373,7 @@ test('subkonto values are checked against the catalogs', (t) => {
   );
   assert.throws(
     () =>
-      f.operation('2026-09-20', [L('211', [s.customer, s.c7, ''], '601', [s.goods, '20'], '1')]),
+      f.operation('2026-09-20', [L('211.01', [s.customer, s.c7, ''], '601', [s.goods, '20'], '1')]),
     /ƏDV dərəcəsi seçin/,
   );
   assert.throws(
@@ -345,7 +383,7 @@ test('subkonto values are checked against the catalogs', (t) => {
   assert.throws(
     () =>
       f.operation('2026-09-20', [
-        L('211', [s.customer, s.c7, 'operation:nope'], '601', [s.goods, '18'], '1'),
+        L('211.01', [s.customer, s.c7, 'operation:nope'], '601', [s.goods, '18'], '1'),
       ]),
     /sənəd tapılmadı/,
   );
@@ -362,7 +400,7 @@ test('subkonto values are checked against the catalogs', (t) => {
   });
   const c = f.contract(other, '1', 'sale');
   assert.throws(
-    () => f.operation('2026-09-20', [L('211', [other, c, ''], '601', [s.goods, '18'], '1')]),
+    () => f.operation('2026-09-20', [L('211.01', [other, c, ''], '601', [s.goods, '18'], '1')]),
     /arxivdədir/,
   );
   assert.throws(
@@ -386,7 +424,7 @@ test('catalog rules: VÖEN, IBAN, contract numbers, bank account binding', (t) =
     /223\.02/,
   );
   assert.throws(
-    () => f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '211', 'AZN'),
+    () => f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '211.01', 'AZN'),
     /Bank hesabı" subkontosu yoxdur/,
   );
   f.bankAccount(bank, 'AZ12 AIIB 3806 0019 4412 3456 7890');
@@ -403,7 +441,7 @@ test('currency bank account: USD amounts travel next to AZN', (t) => {
   const usd = f.bankAccount(bank, 'AZ10AIIB38060019840000000001', '223.02', 'USD', 'Kapital USD');
   const c = f.contract(buyer, 'EX-1', 'sale', 'USD');
   f.operation('2026-09-10', [
-    f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+    f.line('223.02', [usd], '543.02', [buyer, c, ''], '1700', {
       dtCurAmount: '1000',
       ktCurAmount: '1000',
     }),
@@ -411,13 +449,13 @@ test('currency bank account: USD amounts travel next to AZN', (t) => {
   const row = f.row(f.trial('2026-09-01', '2026-09-30', ['a:223', 'a:223.02']), `a:223.02|${usd}`)!;
   assert.deepEqual([row.closeDt, row.currency, row.closeCur], ['1700.00', 'USD', '1000.00']);
   assert.throws(
-    () => f.operation('2026-09-11', [f.line('223.02', [usd], '543.02', [buyer, c], '1700')]),
+    () => f.operation('2026-09-11', [f.line('223.02', [usd], '543.02', [buyer, c, ''], '1700')]),
     /valyuta məbləğini/,
   );
   assert.throws(
     () =>
       f.operation('2026-09-11', [
-        f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+        f.line('223.02', [usd], '543.02', [buyer, c, ''], '1700', {
           dtCurAmount: '1',
           ktCurAmount: '1',
           currency: 'EUR',
@@ -588,7 +626,7 @@ test('a used contract keeps its currency; archived accounts keep their history i
   const usd = f.bankAccount(bank, 'AZ10AIIB38060019840000000001', '223.02', 'USD');
   const c = f.contract(buyer, 'EX-1', 'sale', 'USD');
   f.operation('2026-09-10', [
-    f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+    f.line('223.02', [usd], '543.02', [buyer, c, ''], '1700', {
       dtCurAmount: '1000',
       ktCurAmount: '1000',
     }),
@@ -633,4 +671,106 @@ test('a used contract keeps its currency; archived accounts keep their history i
   const card = f.card('711', '2026-09-21', '2026-09-30');
   assert.equal(card.opening, '100.00');
   assert.ok(op.id);
+});
+
+/**
+ * A 0.3.0 (schema v1) database upgrades in place: companies whose accounts are still unused get
+ * the new structure; an account family with postings keeps its shape and its postings.
+ */
+test('schema v1 → v2: the chart is upgraded only where it is unused', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'meyar-v1-'));
+  const path = join(dir, 'm.sqlite');
+  const raw = new DatabaseSync(path);
+  raw.exec(migrations.find((m) => m.version === 1)!.sql);
+  raw.exec('PRAGMA user_version=1');
+  // The 0.3.0 seed of the accounts this upgrade touches (frozen copy, not today's baseChart).
+  const v1Accounts: [string, string, string | null, string, string[]][] = [
+    [
+      '211',
+      'Alıcılar və sifarişçilərin qısamüddətli debitor borcları',
+      null,
+      'active-passive',
+      ['partner', 'contract', 'document'],
+    ],
+    ['222', 'Yolda olan pul köçürmələri', null, 'active', []],
+    ['243', 'Verilmiş qısamüddətli avanslar', null, 'active', ['partner', 'contract']],
+    ['243.01', 'Verilmiş avanslar (AZN)', '243', 'active', ['partner', 'contract']],
+    ['243.02', 'Verilmiş avanslar (valyuta)', '243', 'active', ['partner', 'contract']],
+    ['521', 'Vergi öhdəlikləri', null, 'active-passive', ['taxType']],
+    ['522', 'Sosial sığorta və təminat üzrə öhdəliklər', null, 'active-passive', ['fund']],
+    [
+      '531',
+      'Malsatan və podratçılara qısamüddətli kreditor borcları',
+      null,
+      'active-passive',
+      ['partner', 'contract', 'document'],
+    ],
+    ['543', 'Alınmış qısamüddətli avanslar', null, 'passive', ['partner', 'contract']],
+    ['543.01', 'Alınmış avanslar (AZN)', '543', 'passive', ['partner', 'contract']],
+    ['543.02', 'Alınmış avanslar (valyuta)', '543', 'passive', ['partner', 'contract']],
+    ['701', 'Satışın maya dəyəri', null, 'active', ['product']],
+  ];
+  for (const id of ['used', 'fresh']) {
+    raw
+      .prepare("INSERT INTO companies(id,name,tax_id,created_at) VALUES(?,?,?,'2026-10-01')")
+      .run(id, id, id === 'used' ? '1000000001' : '1000000002');
+    for (const [code, name, parent, nature, sk] of v1Accounts)
+      raw
+        .prepare('INSERT INTO accounts VALUES(?,?,?,?,?,?,0,0,1,0)')
+        .run(id, code, name, parent, nature, JSON.stringify(sk));
+    raw
+      .prepare("INSERT INTO items(id,company_id,kind,name) VALUES(?,?,'cashbox','Əsas kassa')")
+      .run(`${id}-cash`, id);
+  }
+  // Company "used" posted on 211 and 543.01 under 0.3.0, and renamed 243.01 itself.
+  raw.exec(`INSERT INTO entries VALUES('e1','used','2026-09-01','operation','o1','1',1,0,'x','x');
+INSERT INTO postings(entry_id,line_no,company_id,date,dt_account,dt_s1,dt_s2,dt_s3,kt_account,kt_s1,kt_s2,amount)
+  VALUES('e1',1,'used','2026-09-01','211','p','c','d','543.01','p','c',500);
+UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='243.01';`);
+  raw.close();
+
+  const db = new Db(path);
+  assert.equal(db.version(), SCHEMA_VERSION);
+  const account = (company: string, code: string) =>
+    db.get('SELECT name,subkonto FROM accounts WHERE company_id=? AND code=?', company, code);
+  const sk = (company: string, code: string) =>
+    JSON.parse(String(account(company, code)!.subkonto)) as string[];
+
+  // Unused company: full new structure.
+  assert.ok(account('fresh', '211.01') && account('fresh', '531.02') && account('fresh', '521.13'));
+  assert.ok(
+    account('fresh', '522.04.2') && account('fresh', '222.04') && account('fresh', '534.01'),
+  );
+  assert.ok(account('fresh', '344') && account('fresh', '422'));
+  assert.deepEqual(sk('fresh', '521'), []);
+  assert.deepEqual(sk('fresh', '543.01'), ['partner', 'contract', 'document']);
+  assert.deepEqual(sk('fresh', '701'), ['productGroup', 'expenseItem']);
+  assert.equal(account('fresh', '543.01')!.name, 'Alınmış avanslar üzrə hesablaşmalar (manatla)');
+
+  // Used company: 211 and the 543 family keep their shape; everything else is upgraded.
+  assert.equal(account('used', '211.01'), undefined);
+  assert.deepEqual(sk('used', '543'), ['partner', 'contract']);
+  assert.deepEqual(sk('used', '543.02'), ['partner', 'contract']);
+  assert.deepEqual(sk('used', '243.01'), ['partner', 'contract', 'document']);
+  assert.equal(account('used', '243.01')!.name, 'Mənim avanslarım', 'user rename kept');
+  assert.ok(account('used', '521.01') && account('used', '531.01'));
+  assert.equal(
+    db.get("SELECT SUM(debit) AS d FROM registers WHERE company_id='used' AND account='211'")!.d,
+    500n,
+  );
+
+  // Both companies: the product-group catalog, an audit line, intact links.
+  for (const id of ['used', 'fresh']) {
+    assert.equal(
+      db.get("SELECT name FROM items WHERE company_id=? AND kind='productGroup'", id)!.name,
+      'Əsas nomenklatura qrupu',
+    );
+    assert.ok(
+      db.get("SELECT 1 AS x FROM audit WHERE company_id=? AND correlation_id='migration-2'", id),
+    );
+  }
+  assert.equal(db.all('PRAGMA foreign_key_check').length, 0);
+  assert.throws(() => db.run("DELETE FROM items WHERE kind='cashbox'"), /silinmir/);
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
 });

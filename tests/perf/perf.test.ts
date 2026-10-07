@@ -54,8 +54,13 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   time('DBC, ay ortası (qismən ay)', 1000, () =>
     q({ type: 'trialBalance', from: '2025-03-10', to: '2025-06-20' }),
   );
-  time('DBC, 211 kontragentlər üzrə açılmış', 1000, () =>
-    q({ type: 'trialBalance', from: '2025-01-01', to: '2025-12-31', expand: ['a:211'] }),
+  time('DBC, 211.01 kontragentlər üzrə açılmış', 1000, () =>
+    q({
+      type: 'trialBalance',
+      from: '2025-01-01',
+      to: '2025-12-31',
+      expand: ['a:211', 'a:211.01'],
+    }),
   );
   time('DBC, 223.01 bank hesabları', 1000, () =>
     q({
@@ -178,7 +183,7 @@ function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] 
               1,
               companyId,
               date,
-              '211',
+              '211.01',
               p,
               c,
               `operation:${e}`,
@@ -202,7 +207,7 @@ function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] 
               bank,
               '',
               '',
-              '211',
+              '211.01',
               sale.p,
               sale.c,
               `operation:${sale.e}`,
@@ -221,7 +226,7 @@ function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] 
               products[done % products.length]!,
               '',
               '',
-              '531',
+              '531.01',
               p,
               c,
               `operation:${e}`,

@@ -26,7 +26,7 @@ Kod bu sənədə tabe olur. Hər yeni qərar buraya yazılır.
 
 ### Satış və ƏDV (1C sxemi)
 
-- Satış: Dt 211 / Kt 601 — ƏDV daxil ümumi məbləğ; Dt 604.1 / Kt 521 (subkonto "ƏDV") — ƏDV.
+- Satış: Dt 211.01 / Kt 601 — ƏDV daxil ümumi məbləğ; Dt 604.1 / Kt 521.01 — ƏDV (e-qaimə kəsiləndə).
 - 601 subkontoları: (1) Gəlir növü — məhsul satışı, xidmət satışı, … (genişlənən kitabça); (2) ƏDV dərəcəsi — 18%, 0%, ƏDV-dən azad, ƏDV-yə cəlb olunmayan.
 - 604.1 subkontosu: yalnız ƏDV dərəcəsi (hələlik kifayətdir).
 - Gəlir növü və ƏDV dərəcəsi qaimənin hər sətrində seçilir; bir qaimədə qarışıq ola bilər, uçotda qarışmır.
@@ -39,18 +39,18 @@ Kod bu sənədə tabe olur. Hər yeni qərar buraya yazılır.
 - Qaiməsi olmayan daxilolma: Dt 223 / Kt 543. Qismən borc + artıq: Kt 211 (borc qədər) + Kt 543 (qalan).
 - Qaimə kəsiləndə avans avtomatik əvəzləşir: Dt 543 / Kt 211 (eyni kontragent + müqavilə).
 - Malsatana avans: Dt 243 / Kt 223; alış qaiməsi gələndə Dt 531 / Kt 243.
-- Valyuta avansları ödəniş günü məzənnəsi ilə qalır, yenidən qiymətləndirilmir (qeyri-monetar).
+- ~~Valyuta avansları ödəniş günü məzənnəsi ilə qalır, yenidən qiymətləndirilmir (qeyri-monetar).~~ Dəyişdi (2026-10-07 axşam): 1C kimi ay sonu yenidən qiymətləndirilir.
 - Nəzarət: eyni kontragent + müqavilədə həm 211 debet, həm 543 kredit qalığı varsa — əvəzləşdirilməmiş avans siqnalı.
 
 ### ƏDV-li ödəniş iki hesaba gəlir
 
 - ƏDV-li məbləğin əsas hissəsi 223.01-ə, ƏDV hissəsi (18/118) 224.04-ə gəlir — avans da daxil.
 - Misal: qaimə 15 000 (ƏDV daxil), ödəniş 18 000 →
-  223.01 = 15 254.24 → Kt 211 12 711.86 + Kt 543.01 2 542.38;
-  224.04 = 2 745.76 → Kt 211 2 288.14 + Kt 543.01 457.62.
+  223.01 = 15 254.24 → Kt 211.01 12 711.86 + Kt 543.01 2 542.38;
+  224.04 = 2 745.76 → Kt 211.01 2 288.14 + Kt 543.01 457.62.
 - Hər iki hissə eyni qaiməyə / müqaviləyə bağlanır; sistem 224.04 hissəsinin 18/118-ə uyğunluğunu yoxlayır, fərq varsa xəbərdar edir.
 
-- Avansdan ƏDV öhdəliyi ödəniş anında YARANMIR; yalnız e-qaimə kəsiləndə (Dt 604.1 / Kt 521). Avansın 224.04 hissəsi qaimə kəsilənə qədər 543.01-də qalır.
+- Avansdan ƏDV öhdəliyi ödəniş anında YARANMIR; yalnız e-qaimə kəsiləndə (Dt 604.1 / Kt 521.01). Avansın 224.04 hissəsi qaimə kəsilənə qədər 543.01-də qalır.
 
 ### Alış (satışın güzgüsü)
 
@@ -118,4 +118,37 @@ Kod bu sənədə tabe olur. Hər yeni qərar buraya yazılır.
 ### Açıq suallar
 
 - Alışda ƏDV-li / ƏDV-siz / azad ayrımı hansı hesabda subkonto kimi aparılır?
-- Qaralama subkonto cədvəlinin qalan hissəsi (201/204/205, 221, 241, 244, 301, 343, 521, 522, 533, 701, 721, 751) təsdiqlənməlidir.
+- ~~Qaralama subkonto cədvəlinin qalan hissəsi təsdiqlənməlidir~~ — 2026-10-07 (axşam) bölməsində həll olundu; 221, 241, 244, 301 hələ açıqdır (aşağıya bax).
+
+## 2026-10-07 (axşam) — real 1C bazası ilə tutuşdurma
+
+Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesab) yalnız oxumaq üçün baxıldı. Real məlumat (adlar, VÖEN, məbləğlər) layihəyə köçürülmədi; yalnız hesab planı, subkontolar və "sənəd növü → Dt/Kt" quruluşu öyrənildi.
+
+### 1C-də gördüklərimiz (istinad üçün)
+
+- 211, 531, 243, 543 qrupdur: .01 manatla, .02 valyuta ilə. Hər birində Kontragent → Müqavilə → Hesablaşma sənədi.
+- 521 qrupdur, hər vergi ayrıca subhesabdır; 522 fondlara görə subhesablara bölünür (işçi və işəgötürən payı ayrı).
+- 221, 223, 224 subhesablarında ikinci subkonto "Pul vəsaitlərinin hərəkəti maddəsi"dir (yalnız dövriyyə üzrə). Meyar-da hələ yoxdur.
+- 241.01: Kontragent → Alınmış hesab-faktura (ƏDV dərəcəsi yoxdur). Ay ərzində "Satınalma kitabı" sənədi ilə Dt 521.01 / Kt 241.01.
+- 601: Nomenklatura qrupu → Gəlir maddəsi; ƏDV dərəcəsi yalnız 604.1-dədir. Meyar-da 601 qərarı (Gəlir növü → ƏDV dərəcəsi) qüvvədə qalır.
+- Satışın ƏDV-si 1C-də Dt 604.1 / Kt 422, ödəniş gələndə Dt 422 / Kt 521.01 yazılır. Meyar-da belə OLMAYACAQ (aşağıya bax).
+- Valyuta alışı: Dt 222.02 / Kt 223.01 → Dt 223.02 / Kt 222.02, fərq Dt 731 / Kt 222.02.
+- Dividend: Dt 343 / Kt 344 → Dt 344 / Kt 534.01 → Dt 534.01 / Kt 521.07 (ödəmə mənbəyində vergi) və ödəniş.
+- Ay bağlanışı: 721/731 → 801, 601/611 → 801, 604.1 → 801, 801 → 341; valyuta qalıqlarının yenidən qiymətləndirilməsi (731 / 611).
+
+### TƏSDİQLƏNDİ
+
+1. **Satışın ƏDV-si:** e-qaimə kəsiləndə Dt 604.1 / Kt 521.01. 422 bu sxemdə işlənmir.
+2. **521 və 522 — 1C kimi subhesablar.** İcra qaydası (təklifdir, yoxlanılmalıdır): subhesab vergini/fondu özü göstərdiyi üçün 1C-dəki "Büdcəyə ödəniş növü" subkontosu təkrarlanmır; yalnız aşağıda göstərilən subhesablarda subkonto var:
+   - 521.01 ƏDV, .02 Əmlak vergisi, .03 Gəlir vergisi, .04 Mənfəət vergisi, .05 Torpaq vergisi, .06 Sanksiyalar, .07 Ödəmə mənbəyindən vergi (subkonto: Kontragent), .08 Sadələşdirilmiş vergi, .09 Sair vergi və rüsumlar (subkonto: Vergi növü), .10 Yol vergisi, .11 Aksizlər, .12 Mədən vergisi, .13 ƏDV vergi agenti (Kontragent → Müqavilə → Hesablaşma sənədi).
+   - 522.01 Əmək sazişi üzrə DSMF, 522.02 Xidmət müqaviləsi üzrə DSMF, 522.03 İşsizlikdən sığorta (.1 işçi, .2 işəgötürən), 522.04 İcbari tibbi sığorta (.1 işçi, .2 işəgötürən).
+3. **701:** Nomenklatura qrupu → Xərc maddəsi (1C kimi). "Nomenklatura qrupları" yeni kitabçadır. **751 və 631:** Kontragent → Müqavilə qalır.
+4. **Valyuta avansları (243.02, 543.02) ay sonu yenidən qiymətləndirilir** (1C kimi, fərq 731 / 611). Yuxarıdakı "valyuta avansları yenidən qiymətləndirilmir" qərarını əvəz edir. Ay bağlanışı mərhələsində həyata keçiriləcək.
+5. **211 və 531 qrupdur:** 211.01 / 531.01 manatla, 211.02 / 531.02 valyuta ilə. 243 və 543-də üçüncü subkonto Hesablaşma sənədidir (Kontragent → Müqavilə → Hesablaşma sənədi).
+6. **Yeni hesablar:** 222.01–222.04 (yolda olan köçürmələr, valyuta alışı və satışı), 344 Elan edilmiş dividendlər, 422 Digər təxirə salınmış vergi öhdəlikləri, 534 / 534.01 Dividendlər üzrə təsisçilərə borclar.
+
+### Hələ açıq
+
+- 221 (1C-də 221.01 manat / 221.04 valyuta subhesabları), 244 (244.01 / 244.02), 301 (ikinci subkonto "Kapitalda dəyişiklik növü") — 1C kimi edilsinmi?
+- "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (yalnız dövriyyə üzrə) lazımdırmı?
+- Hesabların qalan adları 1C-dəki adlarla tutuşdurulmalıdır (indi yalnız dəyişən hesabların adları 1C-yə uyğunlaşdırılıb).

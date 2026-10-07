@@ -23,19 +23,28 @@ Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
 | Real Electron (mənbədən və paketlənmiş Linux build): worker `app.asar.unpacked`-dan yüklənir; şirkət, kataloq (50 hesab), DBC, bütövlük — ok | `MEYAR_SMOKE`                                                                                                      |
 | Yük testi, 500 000 yazılış                                                                                                                   | DBC il ~0,6 s; natamam ay ~0,9 s; 211 açılışı ~0,7 s; hesab kartı ~0,04 s; başlanğıc ~1,0 s; bütövlük ~8 s (fonda) |
 
+## 0.3.1 — hesab planı real 1C ilə tutuşdurulub (07.10.2026 axşam)
+
+| Sahə                                                                                                                                                               | Sübut                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Real 1C bazasına yalnız oxumaq üçün baxıldı ("1C Mühasibat AzStandart 2.0"); real məlumat köçürülmədi. Nəticə və təsdiqlənmiş qərarlar: `docs/QERARLAR.md` (axşam) | —                                                                                |
+| 521/522 subhesablar; 211/531 .01/.02; 243/543 + hesablaşma sənədi; 701 nomenklatura qrupu → xərc maddəsi; 222.01–.04, 344, 422, 534 (83 hesab)                     | `tests/domain`, `tests/integration` (Sentyabr misalı eyni rəqəmlərlə keçir)      |
+| Sxem v2: 0.3.0 bazası açılanda yenilənir, yalnız yazılışı olmayan hesab ailələrində; ad dəyişikliyi istifadəçinin adını əzmir; audit qeydi                         | `schema v1 → v2` testi; real Electron-da 0.3.0 bazası 50 → 83 hesab, bütövlük ok |
+| Yük testi 500 000 yazılış: DBC il ~0,4 s; natamam ay ~0,6 s; 211.01 kontragentlər üzrə ~0,6 s; başlanğıc ~0,6 s; bütövlük ~5 s                                     | `npm run test:perf`                                                              |
+
 ## Açıq məsələlər
 
-- **Subkonto cədvəli:** 221, 244, 301, 343, 521, 522, 533, 701, 751 təklif olunduğu kimi qurulub — istifadəçi ilə təsdiqlənməlidir.
-- **Real 1C bazası:** istifadəçinin iş kompüterindədir. Yalnız oxumaq, heç nə dəyişməmək, real məlumatı layihəyə və testlərə köçürməmək şərti ilə baxılacaq; hesab adları və subkontolar dəqiqləşdiriləcək.
+- **1C ilə hələ açıq qalanlar:** 221 (221.01 / 221.04), 244 (244.01 / 244.02), 301 (kapital dəyişikliyi növü), "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu, qalan hesabların adları. 521/522-də "Vergi növü"/"Fond" subkontosunun götürülməsi icra təklifidir — istifadəçi ilə yoxlanılmalıdır (QERARLAR, axşam).
+- **Quraşdırıcı:** 0.3.1 hələ `download` branch-ində dərc olunmayıb.
 - **Audit:** mərhələ 1-in auditi öz yoxlamamdır, müstəqil yoxlayıcı deyil.
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
-2. Qaimələr: sətir üzrə ƏDV statusu, 601/604.1/521; alışda "əvəzləşdirilir" və ya "maya dəyərinə"; 543/243 avanslarının avtomatik əvəzləşdirilməsi.
+2. Qaimələr: sətir üzrə ƏDV statusu, 601/604.1/521.01 (ƏDV e-qaimə kəsiləndə); alışda "əvəzləşdirilir" və ya "maya dəyərinə"; 543/243 avanslarının avtomatik əvəzləşdirilməsi.
 3. Bank sənədi: sərbəst müxabir hesab, çoxsətirli; 223.01/224.04 cütü; çıxarış idxalı və öyrənən qaydalar.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
-5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi.
+5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 
 ## Əmrlər
 

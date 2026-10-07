@@ -137,12 +137,17 @@ test('chart: agreed accounts and subkonto, groups are not postable', () => {
   assert.deepEqual(chart.get('601')!.subkonto, ['incomeType', 'vatRate']);
   assert.deepEqual(chart.get('604.1')!.subkonto, ['vatRate']);
   assert.deepEqual(chart.get('501')!.subkonto, ['partner', 'contract']);
-  assert.deepEqual(chart.get('543.01')!.subkonto, ['partner', 'contract']);
+  assert.deepEqual(chart.get('543.01')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(chart.get('243.02')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(chart.get('701')!.subkonto, ['productGroup', 'expenseItem']);
+  assert.deepEqual(chart.get('521.13')!.subkonto, ['partner', 'contract', 'document']);
+  assert.equal(chart.get('211.02')!.currency, true);
+  assert.equal(chart.get('211.01')!.currency, false);
   assert.deepEqual(chart.get('205')!.subkonto, ['product']);
   assert.equal(chart.get('205')!.quantitative, true);
   assert.equal(chart.get('223.02')!.currency, true);
   assert.equal(chart.get('223.01')!.currency, false);
-  for (const group of ['223', '224', '243', '543', '604'])
+  for (const group of ['211', '222', '223', '224', '243', '521', '522', '531', '534', '543', '604'])
     assert.equal(chart.postable(group), false, group);
   assert.throws(() => chart.require('223', 'x'), /subhesab seçin/);
   assert.throws(() => chart.require('999', 'x'), /hesab planında yoxdur/);
@@ -160,39 +165,41 @@ test('chart: new accounts inherit from the parent; subkonto rules', () => {
 });
 
 test('postings: subkonto count, quantity and currency rules; storno negates everything', () => {
-  checkPostings(chart, [P('211', ['p', 'c', 'd'], '601', ['inc', '18'], 1000n)]);
+  checkPostings(chart, [P('211.01', ['p', 'c', 'd'], '601', ['inc', '18'], 1000n)]);
   assert.throws(
-    () => checkPostings(chart, [P('211', ['p', 'c'], '601', ['inc', '18'], 1000n)]),
+    () => checkPostings(chart, [P('211.01', ['p', 'c'], '601', ['inc', '18'], 1000n)]),
     /3 subkonto/,
   );
   assert.throws(
-    () => checkPostings(chart, [P('211', ['p', '', 'd'], '601', ['inc', '18'], 1000n)]),
+    () => checkPostings(chart, [P('211.01', ['p', '', 'd'], '601', ['inc', '18'], 1000n)]),
     /subkonto 2 seçilməyib/,
   );
   assert.throws(
-    () => checkPostings(chart, [P('205', ['x'], '531', ['p', 'c', 'd'], 1000n)]),
+    () => checkPostings(chart, [P('205', ['x'], '531.01', ['p', 'c', 'd'], 1000n)]),
     /miqdar yazılmalıdır/,
   );
-  checkPostings(chart, [P('205', ['x'], '531', ['p', 'c', 'd'], 1000n, { quantity: 5_000_000n })]);
+  checkPostings(chart, [
+    P('205', ['x'], '531.01', ['p', 'c', 'd'], 1000n, { quantity: 5_000_000n }),
+  ]);
   assert.throws(
-    () => checkPostings(chart, [P('721', ['e'], '531', ['p', 'c', 'd'], 10n, { quantity: 1n })]),
+    () => checkPostings(chart, [P('721', ['e'], '531.01', ['p', 'c', 'd'], 10n, { quantity: 1n })]),
     /miqdar uçotu aparılmır/,
   );
   assert.throws(
-    () => checkPostings(chart, [P('223.02', ['b'], '543.02', ['p', 'c'], 170n)]),
+    () => checkPostings(chart, [P('223.02', ['b'], '543.02', ['p', 'c', 'd'], 170n)]),
     /valyuta məbləğini/,
   );
   checkPostings(chart, [
     {
       dt: { account: '223.02', sk: ['b'], currency: 'USD', curAmount: 100n },
-      kt: { account: '543.02', sk: ['p', 'c'], currency: 'USD', curAmount: 100n },
+      kt: { account: '543.02', sk: ['p', 'c', 'd'], currency: 'USD', curAmount: 100n },
       amount: 170n,
       memo: '',
     },
   ]);
   assert.throws(() => checkPostings(chart, [P('221', ['k'], '221', ['k'], 5n)]), /eyni ola bilməz/);
   assert.throws(() => checkPostings(chart, [P('221', ['k'], '223.01', ['b'], 0n)]), /sıfır/);
-  const [s] = storno([P('205', ['x'], '531', ['p', 'c', 'd'], 1000n, { quantity: 5n })]);
+  const [s] = storno([P('205', ['x'], '531.01', ['p', 'c', 'd'], 1000n, { quantity: 5n })]);
   assert.equal(s!.amount, -1000n);
   assert.equal(s!.quantity, -5n);
   checkPostings(chart, [s!]);

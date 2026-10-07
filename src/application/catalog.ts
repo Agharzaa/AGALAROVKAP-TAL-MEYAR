@@ -34,6 +34,7 @@ const seedItems: [kind: string, names: string[]][] = [
     ],
   ],
   ['cashbox', ['Əsas kassa']],
+  ['productGroup', ['Əsas nomenklatura qrupu']],
 ];
 
 export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): CommandResult {
@@ -440,6 +441,7 @@ const itemLabels = {
   taxType: 'Vergi növü',
   fund: 'Fond',
   cashbox: 'Kassa',
+  productGroup: 'Nomenklatura qrupu',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {
