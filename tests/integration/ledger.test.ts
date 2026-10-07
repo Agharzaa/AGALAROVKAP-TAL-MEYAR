@@ -47,6 +47,8 @@ function september(f: ReturnType<typeof fixture>) {
   const paper = f.product('Kağız A4', 'qutu');
   const goods = f.item('incomeType', 'Məhsul satışı');
   const fees = f.item('expenseItem', 'Bank xidmətləri');
+  const tax = f.item('paymentKind', 'Vergi (haqq)');
+  const capitalIn = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
   const mainGroup = f.item('productGroup', 'Əsas nomenklatura qrupu');
   const cogs = f.exec({
     type: 'item.save',
@@ -59,9 +61,9 @@ function september(f: ReturnType<typeof fixture>) {
   f.operation(
     '2026-08-31',
     [
-      L('223.01', [bankK], '301', [founder], '30000'),
-      L('223.01', [bankP], '301', [founder], '10000'),
-      L('224.04', [deposit], '301', [founder], '3000'),
+      L('223.01', [bankK], '301', [founder, capitalIn], '30000'),
+      L('223.01', [bankP], '301', [founder, capitalIn], '10000'),
+      L('224.04', [deposit], '301', [founder, capitalIn], '3000'),
     ],
     'Başlanğıc qalıqlar',
   );
@@ -86,7 +88,7 @@ function september(f: ReturnType<typeof fixture>) {
     '2026-09-08',
     [
       L('211.01', [customer, c7, ''], '601', [goods, '18'], '15000'),
-      L('604.1', ['18'], '521.01', [], '2288.14'),
+      L('604.1', ['18'], '521.01', [tax], '2288.14'),
     ],
     'Satış SF-0001',
   );
@@ -121,6 +123,8 @@ function september(f: ReturnType<typeof fixture>) {
     paper,
     goods,
     fees,
+    tax,
+    capitalIn,
     purchase,
     sale,
     saleDoc,
@@ -140,13 +144,18 @@ test('company creation seeds the agreed chart and catalog lists', (t) => {
   assert.equal(c.accounts.find((a) => a.code === '223')!.postable, false);
   // Structure agreed after the comparison with the real 1C chart (QERARLAR, 2026-10-07 evening).
   const acc = (code: string) => c.accounts.find((a) => a.code === code);
-  for (const group of ['211', '222', '521', '522', '522.03', '531', '534'])
+  for (const group of ['211', '221', '222', '244', '521', '522', '522.03', '531', '534'])
     assert.equal(acc(group)!.postable, false, group);
   assert.equal(acc('211.02')!.currency, true);
   assert.equal(acc('531.02')!.currency, true);
-  assert.deepEqual(acc('521.01')!.subkonto, []);
-  assert.deepEqual(acc('521.07')!.subkonto, ['partner']);
-  assert.deepEqual(acc('522.04.2')!.subkonto, []);
+  assert.deepEqual(acc('521.01')!.subkonto, ['paymentKind']);
+  assert.deepEqual(acc('521.07')!.subkonto, ['paymentKind', 'partner']);
+  assert.deepEqual(acc('521.13')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(acc('522.04.2')!.subkonto, ['paymentKind']);
+  assert.deepEqual(acc('301')!.subkonto, ['partner', 'capitalChange']);
+  assert.deepEqual(acc('221.01')!.subkonto, ['cashbox']);
+  assert.equal(acc('221.04')!.currency, true);
+  assert.equal(acc('244.02')!.currency, true);
   assert.deepEqual(acc('243.01')!.subkonto, ['partner', 'contract', 'document']);
   assert.deepEqual(acc('543.02')!.subkonto, ['partner', 'contract', 'document']);
   assert.deepEqual(acc('701')!.subkonto, ['productGroup', 'expenseItem']);
@@ -255,7 +264,7 @@ test('October: the next invoice and the advance offset; home warns until offset'
   const L = f.line;
   const inv = f.operation('2026-10-06', [
     L('211.01', [s.customer, s.c7, ''], '601', [s.goods, '18'], '5000'),
-    L('604.1', ['18'], '521.01', [], '762.71'),
+    L('604.1', ['18'], '521.01', [s.tax], '762.71'),
   ]);
   assert.match(
     f
@@ -368,7 +377,7 @@ test('subkonto values are checked against the catalogs', (t) => {
     /müqavilə seçilən kontragentə aid deyil/,
   );
   assert.throws(
-    () => f.operation('2026-09-20', [L('224.04', [s.bankK], '301', [s.founder], '1')]),
+    () => f.operation('2026-09-20', [L('224.04', [s.bankK], '301', [s.founder, s.capitalIn], '1')]),
     /223\.01 hesabına bağlıdır/,
   );
   assert.throws(
@@ -404,7 +413,7 @@ test('subkonto values are checked against the catalogs', (t) => {
     /arxivdədir/,
   );
   assert.throws(
-    () => f.operation('2026-09-20', [L('223', [s.bankK], '301', [s.founder], '1')]),
+    () => f.operation('2026-09-20', [L('223', [s.bankK], '301', [s.founder, s.capitalIn], '1')]),
     /subhesab seçin/,
   );
 });
@@ -677,7 +686,7 @@ test('a used contract keeps its currency; archived accounts keep their history i
  * A 0.3.0 (schema v1) database upgrades in place: companies whose accounts are still unused get
  * the new structure; an account family with postings keeps its shape and its postings.
  */
-test('schema v1 → v2: the chart is upgraded only where it is unused', () => {
+test('schema v1 → current: the chart is upgraded only where it is unused', () => {
   const dir = mkdtempSync(join(tmpdir(), 'meyar-v1-'));
   const path = join(dir, 'm.sqlite');
   const raw = new DatabaseSync(path);
@@ -692,8 +701,11 @@ test('schema v1 → v2: the chart is upgraded only where it is unused', () => {
       'active-passive',
       ['partner', 'contract', 'document'],
     ],
+    ['221', 'Kassa', null, 'active', ['cashbox']],
     ['222', 'Yolda olan pul köçürmələri', null, 'active', []],
     ['243', 'Verilmiş qısamüddətli avanslar', null, 'active', ['partner', 'contract']],
+    ['244', 'Təhtəlhesab məbləğlər', null, 'active-passive', ['employee']],
+    ['301', 'Nizamnamə (nominal) kapitalı', null, 'passive', ['partner']],
     ['243.01', 'Verilmiş avanslar (AZN)', '243', 'active', ['partner', 'contract']],
     ['243.02', 'Verilmiş avanslar (valyuta)', '243', 'active', ['partner', 'contract']],
     ['521', 'Vergi öhdəlikləri', null, 'active-passive', ['taxType']],
@@ -722,10 +734,12 @@ test('schema v1 → v2: the chart is upgraded only where it is unused', () => {
       .prepare("INSERT INTO items(id,company_id,kind,name) VALUES(?,?,'cashbox','Əsas kassa')")
       .run(`${id}-cash`, id);
   }
-  // Company "used" posted on 211 and 543.01 under 0.3.0, and renamed 243.01 itself.
+  // Company "used" posted on 211 / 543.01 and 221 / 301 under 0.3.0, and renamed 243.01 itself.
   raw.exec(`INSERT INTO entries VALUES('e1','used','2026-09-01','operation','o1','1',1,0,'x','x');
 INSERT INTO postings(entry_id,line_no,company_id,date,dt_account,dt_s1,dt_s2,dt_s3,kt_account,kt_s1,kt_s2,amount)
   VALUES('e1',1,'used','2026-09-01','211','p','c','d','543.01','p','c',500);
+INSERT INTO postings(entry_id,line_no,company_id,date,dt_account,dt_s1,kt_account,kt_s1,amount)
+  VALUES('e1',2,'used','2026-09-01','221','k','301','f',700);
 UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='243.01';`);
   raw.close();
 
@@ -742,7 +756,12 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
     account('fresh', '522.04.2') && account('fresh', '222.04') && account('fresh', '534.01'),
   );
   assert.ok(account('fresh', '344') && account('fresh', '422'));
-  assert.deepEqual(sk('fresh', '521'), []);
+  assert.deepEqual(sk('fresh', '521'), ['paymentKind']);
+  assert.deepEqual(sk('fresh', '521.01'), ['paymentKind']);
+  assert.deepEqual(sk('fresh', '521.07'), ['paymentKind', 'partner']);
+  assert.deepEqual(sk('fresh', '522.03.2'), ['paymentKind']);
+  assert.deepEqual(sk('fresh', '301'), ['partner', 'capitalChange']);
+  assert.ok(account('fresh', '221.04') && account('fresh', '244.02'));
   assert.deepEqual(sk('fresh', '543.01'), ['partner', 'contract', 'document']);
   assert.deepEqual(sk('fresh', '701'), ['productGroup', 'expenseItem']);
   assert.equal(account('fresh', '543.01')!.name, 'Alınmış avanslar üzrə hesablaşmalar (manatla)');
@@ -753,7 +772,10 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
   assert.deepEqual(sk('used', '543.02'), ['partner', 'contract']);
   assert.deepEqual(sk('used', '243.01'), ['partner', 'contract', 'document']);
   assert.equal(account('used', '243.01')!.name, 'Mənim avanslarım', 'user rename kept');
-  assert.ok(account('used', '521.01') && account('used', '531.01'));
+  assert.ok(account('used', '521.01') && account('used', '531.01') && account('used', '244.01'));
+  assert.equal(account('used', '221.01'), undefined, '221 has postings: not split');
+  assert.deepEqual(sk('used', '301'), ['partner'], '301 has postings: shape kept');
+  assert.deepEqual(sk('used', '521.01'), ['paymentKind']);
   assert.equal(
     db.get("SELECT SUM(debit) AS d FROM registers WHERE company_id='used' AND account='211'")!.d,
     500n,
@@ -765,8 +787,11 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
       db.get("SELECT name FROM items WHERE company_id=? AND kind='productGroup'", id)!.name,
       'Əsas nomenklatura qrupu',
     );
-    assert.ok(
-      db.get("SELECT 1 AS x FROM audit WHERE company_id=? AND correlation_id='migration-2'", id),
+    for (const m of ['migration-2', 'migration-3'])
+      assert.ok(db.get('SELECT 1 AS x FROM audit WHERE company_id=? AND correlation_id=?', id, m));
+    assert.equal(
+      db.all("SELECT 1 FROM items WHERE company_id=? AND kind='paymentKind'", id).length,
+      3,
     );
   }
   assert.equal(db.all('PRAGMA foreign_key_check').length, 0);

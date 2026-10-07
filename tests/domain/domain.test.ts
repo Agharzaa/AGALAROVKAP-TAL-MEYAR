@@ -197,8 +197,11 @@ test('postings: subkonto count, quantity and currency rules; storno negates ever
       memo: '',
     },
   ]);
-  assert.throws(() => checkPostings(chart, [P('221', ['k'], '221', ['k'], 5n)]), /eyni ola bilməz/);
-  assert.throws(() => checkPostings(chart, [P('221', ['k'], '223.01', ['b'], 0n)]), /sıfır/);
+  assert.throws(
+    () => checkPostings(chart, [P('221.01', ['k'], '221.01', ['k'], 5n)]),
+    /eyni ola bilməz/,
+  );
+  assert.throws(() => checkPostings(chart, [P('221.01', ['k'], '223.01', ['b'], 0n)]), /sıfır/);
   const [s] = storno([P('205', ['x'], '531.01', ['p', 'c', 'd'], 1000n, { quantity: 5n })]);
   assert.equal(s!.amount, -1000n);
   assert.equal(s!.quantity, -5n);

@@ -139,16 +139,28 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 ### TƏSDİQLƏNDİ
 
 1. **Satışın ƏDV-si:** e-qaimə kəsiləndə Dt 604.1 / Kt 521.01. 422 bu sxemdə işlənmir.
-2. **521 və 522 — 1C kimi subhesablar.** İcra qaydası (təklifdir, yoxlanılmalıdır): subhesab vergini/fondu özü göstərdiyi üçün 1C-dəki "Büdcəyə ödəniş növü" subkontosu təkrarlanmır; yalnız aşağıda göstərilən subhesablarda subkonto var:
-   - 521.01 ƏDV, .02 Əmlak vergisi, .03 Gəlir vergisi, .04 Mənfəət vergisi, .05 Torpaq vergisi, .06 Sanksiyalar, .07 Ödəmə mənbəyindən vergi (subkonto: Kontragent), .08 Sadələşdirilmiş vergi, .09 Sair vergi və rüsumlar (subkonto: Vergi növü), .10 Yol vergisi, .11 Aksizlər, .12 Mədən vergisi, .13 ƏDV vergi agenti (Kontragent → Müqavilə → Hesablaşma sənədi).
+2. **521 və 522 — 1C kimi subhesablar** (subkontolar 2026-10-07 gecə bölməsində dəqiqləşdi):
+   - 521.01 ƏDV, .02 Əmlak vergisi, .03 Gəlir vergisi, .04 Mənfəət vergisi, .05 Torpaq vergisi, .06 Sanksiyalar, .07 Ödəmə mənbəyindən vergi, .08 Sadələşdirilmiş vergi, .09 Sair vergi və rüsumlar, .10 Yol vergisi, .11 Aksizlər, .12 Mədən vergisi, .13 ƏDV vergi agenti.
    - 522.01 Əmək sazişi üzrə DSMF, 522.02 Xidmət müqaviləsi üzrə DSMF, 522.03 İşsizlikdən sığorta (.1 işçi, .2 işəgötürən), 522.04 İcbari tibbi sığorta (.1 işçi, .2 işəgötürən).
 3. **701:** Nomenklatura qrupu → Xərc maddəsi (1C kimi). "Nomenklatura qrupları" yeni kitabçadır. **751 və 631:** Kontragent → Müqavilə qalır.
 4. **Valyuta avansları (243.02, 543.02) ay sonu yenidən qiymətləndirilir** (1C kimi, fərq 731 / 611). Yuxarıdakı "valyuta avansları yenidən qiymətləndirilmir" qərarını əvəz edir. Ay bağlanışı mərhələsində həyata keçiriləcək.
 5. **211 və 531 qrupdur:** 211.01 / 531.01 manatla, 211.02 / 531.02 valyuta ilə. 243 və 543-də üçüncü subkonto Hesablaşma sənədidir (Kontragent → Müqavilə → Hesablaşma sənədi).
 6. **Yeni hesablar:** 222.01–222.04 (yolda olan köçürmələr, valyuta alışı və satışı), 344 Elan edilmiş dividendlər, 422 Digər təxirə salınmış vergi öhdəlikləri, 534 / 534.01 Dividendlər üzrə təsisçilərə borclar.
 
+## 2026-10-07 (gecə) — 1C ilə tutuşdurmanın ikinci hissəsi
+
+### TƏSDİQLƏNDİ
+
+1. **521 və 522 subkontosu 1C kimi hər yerdə.** 1C-dəki "Büdcəyə ödəniş növü (fondlar)" kitabçası ödənişin növünü ayırır (vergi, faiz, maliyyə sanksiyası); vergini/fondu subhesab göstərir. Meyar-da: "Ödəniş növü" kitabçası (başlanğıc: Vergi (haqq), Faiz, Maliyyə sanksiyası — mühasib dəyişə bilər).
+   - 521.xx, 522.xx: Ödəniş növü.
+   - 521.07: Ödəniş növü → Kontragent. 1C-də üçüncü subkonto İşçi də var, amma Meyar-da subkonto boş qala bilmədiyi üçün götürülmədi (işçinin gəlir vergisi 521.03-dədir).
+   - 521.13: Kontragent → Müqavilə → Hesablaşma sənədi (1C kimi, ödəniş növü yoxdur).
+   - Qeyd: kitabçanın başlanğıc elementləri standart 1C-yə görədir, real bazada yoxlanılmayıb.
+2. **221 1C kimi:** 221.01 Kassa (manatla), 221.02 Əməliyyat kassası, 221.03 Pul sənədləri (manatla), 221.04 Kassa (valyuta ilə), 221.05 Pul sənədləri (valyuta ilə). Kassa subkontosu .01, .02, .04-də.
+3. **244 1C kimi:** 244.01 manatla, 244.02 valyuta ilə; subkonto İşçi.
+4. **301:** Kontragent → Kapitalda dəyişiklik növü (yeni kitabça; başlanğıc: Nizamnamə kapitalına qoyuluş, Nizamnamə kapitalının azaldılması).
+5. **Pul vəsaitlərinin hərəkəti maddəsi:** bank sənədi mərhələsində qərar veriləcək.
+
 ### Hələ açıq
 
-- 221 (1C-də 221.01 manat / 221.04 valyuta subhesabları), 244 (244.01 / 244.02), 301 (ikinci subkonto "Kapitalda dəyişiklik növü") — 1C kimi edilsinmi?
-- "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (yalnız dövriyyə üzrə) lazımdırmı?
 - Hesabların qalan adları 1C-dəki adlarla tutuşdurulmalıdır (indi yalnız dəyişən hesabların adları 1C-yə uyğunlaşdırılıb).

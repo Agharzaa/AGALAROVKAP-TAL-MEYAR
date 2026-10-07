@@ -32,9 +32,15 @@ Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
 | Sxem v2: 0.3.0 bazası açılanda yenilənir, yalnız yazılışı olmayan hesab ailələrində; ad dəyişikliyi istifadəçinin adını əzmir; audit qeydi                         | `schema v1 → v2` testi; real Electron-da 0.3.0 bazası 50 → 83 hesab, bütövlük ok |
 | Yük testi 500 000 yazılış: DBC il ~0,4 s; natamam ay ~0,6 s; 211.01 kontragentlər üzrə ~0,6 s; başlanğıc ~0,6 s; bütövlük ~5 s                                     | `npm run test:perf`                                                              |
 
+## 0.3.2 — 1C tutuşdurmasının ikinci hissəsi (07.10.2026 gecə)
+
+- 521/522: "Ödəniş növü" subkontosu (vergi / faiz / sanksiya); 521.07 Ödəniş növü → Kontragent.
+- 221.01–221.05, 244.01 / 244.02; 301: Kontragent → Kapitalda dəyişiklik növü. 90 hesab.
+- Sxem v3: v2 kimi təhlükəsiz yeniləmə. Real Electron-da 0.3.1 bazası v3-ə keçdi, bütövlük ok. Testlər: `npm test`, `npm run test:ui`.
+
 ## Açıq məsələlər
 
-- **1C ilə hələ açıq qalanlar:** 221 (221.01 / 221.04), 244 (244.01 / 244.02), 301 (kapital dəyişikliyi növü), "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu, qalan hesabların adları. 521/522-də "Vergi növü"/"Fond" subkontosunun götürülməsi icra təklifidir — istifadəçi ilə yoxlanılmalıdır (QERARLAR, axşam).
+- **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.3.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.3.1.exe`). 0.3.0 üzərinə quraşdırılanda baza avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
 - **Audit:** mərhələ 1-in auditi öz yoxlamamdır, müstəqil yoxlayıcı deyil.
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.

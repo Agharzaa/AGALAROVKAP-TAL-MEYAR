@@ -441,7 +441,9 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'expenseItem', label: 'Xərc maddələri' },
   { kind: 'incomeType', label: 'Gəlir növləri' },
   { kind: 'taxType', label: 'Vergi növləri' },
+  { kind: 'paymentKind', label: 'Ödəniş növləri' },
   { kind: 'fund', label: 'Fondlar' },
+  { kind: 'capitalChange', label: 'Kapital dəyişiklikləri' },
   { kind: 'cashbox', label: 'Kassalar' },
   { kind: 'productGroup', label: 'Nomenklatura qrupları' },
 ];

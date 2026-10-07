@@ -19,7 +19,9 @@ const tables: Partial<Record<SubkontoKind, { table: string; kind?: string }>> = 
   expenseItem: { table: 'items', kind: 'expenseItem' },
   incomeType: { table: 'items', kind: 'incomeType' },
   taxType: { table: 'items', kind: 'taxType' },
+  paymentKind: { table: 'items', kind: 'paymentKind' },
   fund: { table: 'items', kind: 'fund' },
+  capitalChange: { table: 'items', kind: 'capitalChange' },
   cashbox: { table: 'items', kind: 'cashbox' },
   productGroup: { table: 'items', kind: 'productGroup' },
 };

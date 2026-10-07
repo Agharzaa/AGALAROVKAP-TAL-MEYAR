@@ -20,7 +20,9 @@ const seedItems: [kind: string, names: string[]][] = [
       'Dövlət rüsumu',
     ],
   ],
+  ['paymentKind', ['Vergi (haqq)', 'Faiz', 'Maliyyə sanksiyası']],
   ['fund', ['DSMF — məcburi dövlət sosial sığorta', 'İşsizlik sığortası', 'İcbari tibbi sığorta']],
+  ['capitalChange', ['Nizamnamə kapitalına qoyuluş', 'Nizamnamə kapitalının azaldılması']],
   [
     'expenseItem',
     [
@@ -439,7 +441,9 @@ const itemLabels = {
   expenseItem: 'Xərc maddəsi',
   incomeType: 'Gəlir növü',
   taxType: 'Vergi növü',
+  paymentKind: 'Ödəniş növü',
   fund: 'Fond',
+  capitalChange: 'Kapitalda dəyişiklik növü',
   cashbox: 'Kassa',
   productGroup: 'Nomenklatura qrupu',
 } as const;

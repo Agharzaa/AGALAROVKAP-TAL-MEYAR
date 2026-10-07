@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const v1 = `
 CREATE TABLE companies(
@@ -432,7 +432,107 @@ const v2 = [
   FROM companies;`,
 ].join('\n');
 
+// ---------------------------------------------------------------------------------------------
+// v3 — second round of 1C alignment (docs/QERARLAR.md, 2026-10-07 night): 521/522 carry 1C's
+// "payment kind" subkonto (tax / interest / sanction), 221 and 244 get 1C's sub-accounts, 301 gets
+// "Kapitalda dəyişiklik növü". Same safety rules as v2; frozen snapshot.
+
+const PK = ['paymentKind'];
+const v3New: ChartRow[] = [
+  ['221.01', 'Kassa (manatla)', '221', 'active', ['cashbox'], 0, 0],
+  ['221.02', 'Əməliyyat kassası', '221', 'active', ['cashbox'], 0, 0],
+  ['221.03', 'Pul sənədləri (manatla)', '221', 'active', [], 0, 0],
+  ['221.04', 'Kassa (valyuta ilə)', '221', 'active', ['cashbox'], 0, 1],
+  ['221.05', 'Pul sənədləri (valyuta ilə)', '221', 'active', [], 0, 1],
+  ['244.01', 'Təhtəlhesab məbləğlər (manatla)', '244', AP, ['employee'], 0, 0],
+  ['244.02', 'Təhtəlhesab məbləğlər (valyuta ilə)', '244', AP, ['employee'], 0, 1],
+];
+const v3Shape: [code: string, subkonto: string[]][] = [
+  ...[
+    '521',
+    '521.01',
+    '521.02',
+    '521.03',
+    '521.04',
+    '521.05',
+    '521.06',
+    '521.08',
+    '521.09',
+    '521.10',
+    '521.11',
+    '521.12',
+    '522',
+    '522.01',
+    '522.02',
+    '522.03',
+    '522.03.1',
+    '522.03.2',
+    '522.04',
+    '522.04.1',
+    '522.04.2',
+  ].map((code): [string, string[]] => [code, PK]),
+  ['521.07', [...PK, 'partner']],
+  ['301', ['partner', 'capitalChange']],
+];
+const v3Kinds = [
+  'expenseItem',
+  'incomeType',
+  'taxType',
+  'paymentKind',
+  'fund',
+  'capitalChange',
+  'cashbox',
+  'productGroup',
+];
+const v3Items: [kind: string, name: string][] = [
+  ['paymentKind', 'Vergi (haqq)'],
+  ['paymentKind', 'Faiz'],
+  ['paymentKind', 'Maliyyə sanksiyası'],
+  ['capitalChange', 'Nizamnamə kapitalına qoyuluş'],
+  ['capitalChange', 'Nizamnamə kapitalının azaldılması'],
+];
+
+const v3 = [
+  `CREATE TABLE items_v3(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN(${v3Kinds.map(q).join(',')})),
+  name TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,name)
+);`,
+  'INSERT INTO items_v3(id,company_id,kind,name,archived,version) SELECT id,company_id,kind,name,archived,version FROM items;',
+  'DROP TABLE items;',
+  'ALTER TABLE items_v3 RENAME TO items;',
+  "CREATE TRIGGER items_no_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT,'guard: Kitabça elementi silinmir; arxivləşdirilir.'); END;",
+  ...v3Items.map(
+    ([kind, name]) =>
+      `INSERT INTO items(id,company_id,kind,name) SELECT ${uuid},id,${q(kind)},${q(name)}
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c
+    WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.kind=${q(kind)} AND i.name=${q(name)}));`,
+  ),
+  ...v3Shape.map(
+    ([code, sk]) =>
+      `UPDATE accounts SET subkonto=${q(JSON.stringify(sk))} WHERE code=${q(code)} AND system=1 AND EXISTS(SELECT 1 FROM companies c WHERE c.id=accounts.company_id AND ${unused(code.split('.')[0]!)});`,
+  ),
+  ...v3New.map(
+    ([code, name, parent, nature, sk, qty, cur]) =>
+      `INSERT INTO accounts(company_id,code,name,parent_code,nature,subkonto,quantitative,currency,system,archived)
+  SELECT c.id,${q(code)},${q(name)},${q(parent)},${q(nature)},${q(JSON.stringify(sk))},${qty},${cur},1,0 FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM accounts a WHERE a.company_id=c.id AND a.code=${q(code)})
+    AND EXISTS(SELECT 1 FROM accounts a WHERE a.company_id=c.id AND a.code=${q(parent)} AND a.archived=0)
+    AND NOT EXISTS(SELECT 1 FROM registers r WHERE r.company_id=c.id AND r.account=${q(parent)});`,
+  ),
+  `INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-3','Yeniləndi','Hesab planı',id,
+  'Hesab planı 1C AzStandart ilə ikinci tutuşdurmaya görə yeniləndi (521/522: ödəniş növü subkontosu; 221.01–221.05, 244.01/244.02; 301: kapitalda dəyişiklik növü). Yazılışı olan hesablar dəyişdirilmədi.'
+  FROM companies;`,
+].join('\n');
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
+  { version: 3, sql: v3, foreignKeysOff: true },
 ];

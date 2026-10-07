@@ -21,7 +21,9 @@ export type SubkontoKind =
   | 'incomeType'
   | 'vatRate'
   | 'taxType'
+  | 'paymentKind'
   | 'fund'
+  | 'capitalChange'
   | 'employee';
 
 export const subkontoKinds: readonly SubkontoKind[] = [
@@ -36,7 +38,9 @@ export const subkontoKinds: readonly SubkontoKind[] = [
   'incomeType',
   'vatRate',
   'taxType',
+  'paymentKind',
   'fund',
+  'capitalChange',
   'employee',
 ];
 
@@ -52,7 +56,9 @@ export const subkontoLabel: Record<SubkontoKind, string> = {
   incomeType: 'Gəlir növü',
   vatRate: 'ƏDV dərəcəsi',
   taxType: 'Vergi növü',
+  paymentKind: 'Ödəniş növü',
   fund: 'Fond',
+  capitalChange: 'Kapitalda dəyişiklik növü',
   employee: 'İşçi',
 };
 
@@ -96,6 +102,8 @@ const P = 'passive' as const;
 const AP = 'active-passive' as const;
 /** Settlements: partner → contract → settlement document. */
 const PCD: SubkontoKind[] = ['partner', 'contract', 'document'];
+/** Tax and social liabilities: the sub-account names the tax, the subkonto the kind of payment. */
+const PK: SubkontoKind[] = ['paymentKind'];
 const seed: Seed[] = [
   ['101', 'Qeyri-maddi aktivlərin dəyəri', A, ['product'], { qty: true }],
   ['111', 'Torpaq, tikili və avadanlıqların dəyəri', A, ['product'], { qty: true }],
@@ -110,6 +118,11 @@ const seed: Seed[] = [
   ['211.02', 'Alıcılar və sifarişçilərlə hesablaşmalar (valyuta ilə)', AP, PCD, { cur: true }],
   ['217', 'Digər qısamüddətli debitor borcları', AP, ['partner', 'contract']],
   ['221', 'Kassa', A, ['cashbox']],
+  ['221.01', 'Kassa (manatla)', A, ['cashbox']],
+  ['221.02', 'Əməliyyat kassası', A, ['cashbox']],
+  ['221.03', 'Pul sənədləri (manatla)', A, []],
+  ['221.04', 'Kassa (valyuta ilə)', A, ['cashbox'], { cur: true }],
+  ['221.05', 'Pul sənədləri (valyuta ilə)', A, [], { cur: true }],
   ['222', 'Yolda olan pul köçürmələri', A, []],
   ['222.01', 'Yolda olan pul köçürmələri (manatla)', A, []],
   ['222.02', 'Xarici valyutanın alınması', A, PCD],
@@ -126,36 +139,38 @@ const seed: Seed[] = [
   ['243.01', 'Verilmiş avanslar üzrə hesablaşmalar (manatla)', A, PCD],
   ['243.02', 'Verilmiş avanslar üzrə hesablaşmalar (valyuta ilə)', A, PCD, { cur: true }],
   ['244', 'Təhtəlhesab məbləğlər', AP, ['employee']],
-  ['301', 'Nizamnamə (nominal) kapitalı', P, ['partner']],
+  ['244.01', 'Təhtəlhesab məbləğlər (manatla)', AP, ['employee']],
+  ['244.02', 'Təhtəlhesab məbləğlər (valyuta ilə)', AP, ['employee'], { cur: true }],
+  ['301', 'Nizamnamə (nominal) kapitalı', P, ['partner', 'capitalChange']],
   ['341', 'Hesabat dövründə xalis mənfəət (zərər)', AP, []],
   ['343', 'Keçmiş illər üzrə bölüşdürülməmiş mənfəət (ödənilməmiş zərər)', AP, []],
   ['344', 'Elan edilmiş dividendlər', AP, []],
   ['401', 'Uzunmüddətli bank kreditləri', P, ['partner', 'contract']],
   ['422', 'Digər təxirə salınmış vergi öhdəlikləri', AP, ['partner', 'contract']],
   ['501', 'Qısamüddətli bank kreditləri', P, ['partner', 'contract']],
-  ['521', 'Vergi öhdəlikləri', AP, []],
-  ['521.01', 'Əlavə dəyər vergisi', AP, []],
-  ['521.02', 'Əmlak vergisi', AP, []],
-  ['521.03', 'Gəlir vergisi', AP, []],
-  ['521.04', 'Mənfəət vergisi', AP, []],
-  ['521.05', 'Torpaq vergisi', AP, []],
-  ['521.06', 'Sanksiyalar', AP, []],
-  ['521.07', 'Ödəmə mənbəyindən vergi', AP, ['partner']],
-  ['521.08', 'Sadələşdirilmiş vergi', AP, []],
-  ['521.09', 'Sair vergi və rüsumlar', AP, ['taxType']],
-  ['521.10', 'Yol vergisi', AP, []],
-  ['521.11', 'Aksizlər', AP, []],
-  ['521.12', 'Mədən vergisi', AP, []],
+  ['521', 'Vergi öhdəlikləri', AP, PK],
+  ['521.01', 'Əlavə dəyər vergisi', AP, PK],
+  ['521.02', 'Əmlak vergisi', AP, PK],
+  ['521.03', 'Gəlir vergisi', AP, PK],
+  ['521.04', 'Mənfəət vergisi', AP, PK],
+  ['521.05', 'Torpaq vergisi', AP, PK],
+  ['521.06', 'Sanksiyalar', AP, PK],
+  ['521.07', 'Ödəmə mənbəyindən vergi', AP, [...PK, 'partner']],
+  ['521.08', 'Sadələşdirilmiş vergi', AP, PK],
+  ['521.09', 'Sair vergi və rüsumlar', AP, PK],
+  ['521.10', 'Yol vergisi', AP, PK],
+  ['521.11', 'Aksizlər', AP, PK],
+  ['521.12', 'Mədən vergisi', AP, PK],
   ['521.13', 'ƏDV vergi agenti', AP, PCD],
-  ['522', 'Sosial sığorta və təminat üzrə öhdəliklər', AP, []],
-  ['522.01', 'Sosial sığorta və təminat üzrə öhdəliklər — əmək sazişi', AP, []],
-  ['522.02', 'Sosial sığorta və təminat üzrə öhdəliklər — xidmət müqaviləsi', AP, []],
-  ['522.03', 'İşsizlikdən sığorta haqları', AP, []],
-  ['522.03.1', 'İşsizlikdən sığorta haqları — işçi', AP, []],
-  ['522.03.2', 'İşsizlikdən sığorta haqları — işəgötürən', AP, []],
-  ['522.04', 'İcbari tibbi sığorta haqları', AP, []],
-  ['522.04.1', 'İcbari tibbi sığorta haqları — işçi', AP, []],
-  ['522.04.2', 'İcbari tibbi sığorta haqları — işəgötürən', AP, []],
+  ['522', 'Sosial sığorta və təminat üzrə öhdəliklər', AP, PK],
+  ['522.01', 'Sosial sığorta və təminat üzrə öhdəliklər — əmək sazişi', AP, PK],
+  ['522.02', 'Sosial sığorta və təminat üzrə öhdəliklər — xidmət müqaviləsi', AP, PK],
+  ['522.03', 'İşsizlikdən sığorta haqları', AP, PK],
+  ['522.03.1', 'İşsizlikdən sığorta haqları — işçi', AP, PK],
+  ['522.03.2', 'İşsizlikdən sığorta haqları — işəgötürən', AP, PK],
+  ['522.04', 'İcbari tibbi sığorta haqları', AP, PK],
+  ['522.04.1', 'İcbari tibbi sığorta haqları — işçi', AP, PK],
+  ['522.04.2', 'İcbari tibbi sığorta haqları — işəgötürən', AP, PK],
   ['531', 'Malsatan və podratçılara qısamüddətli kreditor borcları', AP, PCD],
   ['531.01', 'Malsatan və podratçılara qısamüddətli kreditor borcları (manatla)', AP, PCD],
   [

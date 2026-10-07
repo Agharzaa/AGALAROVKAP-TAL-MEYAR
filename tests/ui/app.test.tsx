@@ -44,7 +44,9 @@ function seed(h: ReturnType<typeof harness>) {
     note: '',
     archived: false,
   }).id;
-  return { companyId, bank, founder, customer, bankAccount, contract };
+  const catalog = h.ledger.query({ type: 'catalog', companyId }) as Catalog;
+  const capitalIn = catalog.items.find((i) => i.kind === 'capitalChange')!.id;
+  return { companyId, bank, founder, customer, bankAccount, contract, capitalIn };
 }
 
 test('first run: the company is created and Başlanğıc lists the first tasks', async () => {
@@ -86,6 +88,7 @@ test('manual operation: accounts and subkonto by keyboard, posting, storno on ed
     await pick('Sətir 1 debet 223.01 · Bank hesabı', 'Kapital');
     await pick('Sətir 1 kredit hesabı', '301');
     await pick('Sətir 1 kredit 301 · Kontragent', 'Ağarza');
+    await pick('Sətir 1 kredit 301 · Kapitalda dəyişiklik növü', 'qoyuluş');
     await user.type(editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }), '30000');
     await user.click(editor.getByRole('button', { name: 'Sətir əlavə et' }));
     await pick('Sətir 2 debet hesabı', '211.01');
@@ -134,7 +137,7 @@ test('trial balance: drill into bank accounts and partners, export to Excel', as
         dtAccount: '223.01',
         dtSk: [s.bankAccount],
         ktAccount: '301',
-        ktSk: [s.founder],
+        ktSk: [s.founder, s.capitalIn],
         amount: '30000',
         memo: '',
       },

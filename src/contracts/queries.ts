@@ -114,7 +114,14 @@ export interface EmployeeView {
   archived: boolean;
 }
 export type ItemKind =
-  'expenseItem' | 'incomeType' | 'taxType' | 'fund' | 'cashbox' | 'productGroup';
+  | 'expenseItem'
+  | 'incomeType'
+  | 'taxType'
+  | 'paymentKind'
+  | 'fund'
+  | 'capitalChange'
+  | 'cashbox'
+  | 'productGroup';
 export interface ItemView {
   id: string;
   version: number;
