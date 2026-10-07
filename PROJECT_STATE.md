@@ -35,7 +35,7 @@ Yenilənib: 07.10.2026. Növbəti sessiya buradan davam etməlidir.
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** 221 (221.01 / 221.04), 244 (244.01 / 244.02), 301 (kapital dəyişikliyi növü), "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu, qalan hesabların adları. 521/522-də "Vergi növü"/"Fond" subkontosunun götürülməsi icra təklifidir — istifadəçi ilə yoxlanılmalıdır (QERARLAR, axşam).
-- **Quraşdırıcı:** 0.3.1 hələ `download` branch-ində dərc olunmayıb.
+- **Quraşdırıcı:** v0.3.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.3.1.exe`). 0.3.0 üzərinə quraşdırılanda baza avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
 - **Audit:** mərhələ 1-in auditi öz yoxlamamdır, müstəqil yoxlayıcı deyil.
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
