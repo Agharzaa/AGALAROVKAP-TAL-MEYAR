@@ -16,6 +16,7 @@
     "src/main",
     "src/preload",
     "tests/domain",
-    "tests/integration"
+    "tests/integration",
+    "tests/perf"
   ]
 }

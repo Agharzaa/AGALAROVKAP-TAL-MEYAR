@@ -4,783 +4,579 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Db } from '../../src/infrastructure/sqlite/db.js';
-import { Ledger } from '../../src/application/ledger.js';
-import { DomainError } from '../../src/domain/errors.js';
-import type { PostingView } from '../../src/contracts/queries.js';
-import { fixture, newKey } from './fixture.js';
+import type { IntegrityView, OperationDetail } from '../../src/contracts/queries.js';
+import { fixture } from './fixture.js';
 
-const sides = (postings: PostingView[]) => postings.map((p) => [p.account, p.debit, p.credit]);
+/**
+ * The September example agreed with the user (docs/QERARLAR.md), entered as manual operations:
+ * opening capital in two banks and the VAT deposit, a purchase with VAT, its payment from the
+ * bank and the deposit, a 15 000 sale, an 18 000 payment split between 223.01/224.04 and between
+ * the invoice and an advance (543.01), a bank fee and the cost of goods sold.
+ */
+function september(f: ReturnType<typeof fixture>) {
+  const kapital = f.partner('Kapital Bank ASC', '9900003611');
+  const pasha = f.partner('PAŞA Bank ASC', '1700767721');
+  const founder = f.partner('Ağarza Ağalarov', '', 'individual');
+  const supplier = f.partner('Təchizat ASC', '1700000002');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const bankK = f.bankAccount(
+    kapital,
+    'AZ12AIIB38060019441234567890',
+    '223.01',
+    'AZN',
+    'Kapital Bank AZN',
+  );
+  const bankP = f.bankAccount(
+    pasha,
+    'AZ55PAHA40060AZNHC0101091203',
+    '223.01',
+    'AZN',
+    'PAŞA Bank AZN',
+  );
+  const deposit = f.bankAccount(
+    kapital,
+    'AZ77AIIB38060019449999999999',
+    '224.04',
+    'AZN',
+    'ƏDV depozit',
+  );
+  const c12 = f.contract(supplier, '12', 'purchase');
+  const c7 = f.contract(customer, '7', 'sale');
+  const paper = f.product('Kağız A4', 'qutu');
+  const goods = f.item('incomeType', 'Məhsul satışı');
+  const vat = f.item('taxType', 'ƏDV');
+  const fees = f.item('expenseItem', 'Bank xidmətləri');
+  const L = f.line;
+  f.operation(
+    '2026-08-31',
+    [
+      L('223.01', [bankK], '301', [founder], '30000'),
+      L('223.01', [bankP], '301', [founder], '10000'),
+      L('224.04', [deposit], '301', [founder], '3000'),
+    ],
+    'Başlanğıc qalıqlar',
+  );
+  const purchase = f.operation(
+    '2026-09-05',
+    [
+      L('205', [paper], '531', [supplier, c12, ''], '10000', { quantity: '100' }),
+      L('241', [supplier, '', '18'], '531', [supplier, c12, ''], '1800'),
+    ],
+    'Alış AA-001',
+  );
+  const purchaseDoc = `operation:${purchase.id}`;
+  f.operation(
+    '2026-09-18',
+    [
+      L('531', [supplier, c12, purchaseDoc], '223.01', [bankK], '10000'),
+      L('531', [supplier, c12, purchaseDoc], '224.04', [deposit], '1800'),
+    ],
+    'Malsatana ödəniş',
+  );
+  const sale = f.operation(
+    '2026-09-08',
+    [
+      L('211', [customer, c7, ''], '601', [goods, '18'], '15000'),
+      L('604.1', ['18'], '521', [vat], '2288.14'),
+    ],
+    'Satış SF-0001',
+  );
+  const saleDoc = `operation:${sale.id}`;
+  f.operation(
+    '2026-09-15',
+    [
+      L('223.01', [bankK], '211', [customer, c7, saleDoc], '12711.86'),
+      L('223.01', [bankK], '543.01', [customer, c7], '2542.38'),
+      L('224.04', [deposit], '211', [customer, c7, saleDoc], '2288.14'),
+      L('224.04', [deposit], '543.01', [customer, c7], '457.62'),
+    ],
+    'Alıcıdan 18 000',
+  );
+  f.operation('2026-09-30', [L('721', [fees], '223.01', [bankK], '3')], 'Bank xidmət haqqı');
+  f.operation(
+    '2026-09-30',
+    [L('701', [paper], '205', [paper], '7000', { quantity: '70' })],
+    'Maya dəyəri',
+  );
+  return {
+    kapital,
+    founder,
+    supplier,
+    customer,
+    bankK,
+    bankP,
+    deposit,
+    c12,
+    c7,
+    paper,
+    goods,
+    vat,
+    fees,
+    purchase,
+    sale,
+    saleDoc,
+  };
+}
 
-test('company creation seeds chart, units, a warehouse and expense items; VÖEN is unique', (t) => {
+test('company creation seeds the agreed chart and catalog lists', (t) => {
   const f = fixture(t);
   const c = f.catalog();
-  assert.equal(c.company.name, 'Meyar Test MMC');
-  assert.ok(c.accounts.some((a) => a.code === '224.04'));
-  assert.deepEqual(c.units.map((u) => u.code).sort(), [
-    'box',
-    'kg',
-    'l',
-    'm',
-    'm2',
-    'pair',
-    'pcs',
-    'set',
+  assert.ok(c.accounts.find((a) => a.code === '604.1'));
+  assert.deepEqual(c.accounts.find((a) => a.code === '211')!.subkonto, [
+    'partner',
+    'contract',
+    'document',
   ]);
-  assert.equal(c.warehouses[0]!.name, 'Əsas anbar');
+  assert.equal(c.accounts.find((a) => a.code === '223')!.postable, false);
   assert.deepEqual(
-    c.expenseItems.map((e) => e.name),
-    ['Bank xidmətləri', 'Nəqliyyat', 'Ofis xərcləri', 'Rabitə', 'Yemək'],
+    c.items
+      .filter((i) => i.kind === 'incomeType')
+      .map((i) => i.name)
+      .sort(),
+    ['Məhsul satışı', 'Xidmət satışı'],
   );
   assert.throws(
-    () => f.exec({ type: 'company.create', name: 'Başqa', taxId: '1234567890' }),
+    () => f.exec({ type: 'company.create', name: 'X', taxId: '1234567890', vatPayer: true }),
     /artıq var/,
   );
-  assert.throws(() => f.exec({ type: 'company.create', name: '', taxId: '1' }), /adı/);
 });
 
-test('acceptance 1 end-to-end: goods 100 + VAT 18 posts Dt 205/241, Kt 531 and stock', (t) => {
+test('September example: trial balance by account and subkonto, to the qəpik', (t) => {
   const f = fixture(t);
-  const supplier = f.partner('Təchizatçı MMC', '1700000002');
-  const paper = f.product();
-  const { id } = f.invoice('purchase', supplier, [f.stockLine(paper, '10', '10', { vat: '18' })]);
-  const d = f.invoiceDetail(id);
-  assert.deepEqual(sides(d.postings), [
-    ['205', '100.00', '0.00'],
-    ['241', '18.00', '0.00'],
-    ['531', '0.00', '118.00'],
-  ]);
-  assert.equal(d.total, '118.00');
-  assert.equal(d.remaining, '118.00');
-  assert.deepEqual(
-    f.stock().map((s) => [s.account, s.productName, s.quantity, s.value]),
-    [['205', 'Kağız A4', '10', '100.00']],
-  );
-  assert.equal(f.balances()[0]!.payable, '118.00');
-  f.balanced();
-});
-
-test('acceptance 2 and 3: line account 201 wins over the card; 2 boxes × 12 = 24 pieces', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı MMC', '1700000002');
-  const pens = f.product({ name: 'Qələm', purchaseUnit: 'box', factor: '12' });
-  const { id } = f.invoice('purchase', supplier, [
-    f.stockLine(pens, '2', '24', { unit: 'purchase', account: '201' }),
-  ]);
-  const d = f.invoiceDetail(id);
-  assert.deepEqual(sides(d.postings), [
-    ['201', '48.00', '0.00'],
-    ['531', '0.00', '48.00'],
-  ]);
-  assert.equal(d.lines[0]!.quantity, '2');
-  assert.equal(d.lines[0]!.baseQuantity, '24');
-  assert.equal(d.postings[0]!.quantity, '24');
-  assert.deepEqual(
-    f.stock().map((s) => [s.account, s.quantity, s.unit, s.value]),
-    [['201', '24', 'Ədəd', '48.00']],
-  );
-});
-
-test('acceptance 4: replayed request and identical re-save never post twice; numbers are unique per partner', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const key = newKey();
-  const cmd = {
-    type: 'invoice.save' as const,
-    companyId: f.companyId,
-    mode: 'post' as const,
-    direction: 'sale' as const,
-    number: 'S-0001',
-    date: '2026-01-10',
-    partnerId: customer,
-    note: '',
-    lines: [f.serviceLine('100', '18')],
+  const s = september(f);
+  const tb = f.trial('2026-09-01', '2026-09-30');
+  assert.deepEqual(tb.totals, {
+    openDt: '43000.00',
+    openKt: '43000.00',
+    turnDt: '65891.14',
+    turnKt: '65891.14',
+    closeDt: '63288.14',
+    closeKt: '63288.14',
+  });
+  const r = (key: string) => {
+    const x = f.row(
+      f.trial('2026-09-01', '2026-09-30', [
+        'a:223',
+        'a:223.01',
+        'a:211',
+        `a:211|${s.customer}`,
+        `a:211|${s.customer}|${s.c7}`,
+        'a:205',
+        'a:543',
+        'a:543.01',
+        `a:543.01|${s.customer}`,
+      ]),
+      key,
+    );
+    assert.ok(x, key);
+    return [x!.openDt, x!.openKt, x!.turnDt, x!.turnKt, x!.closeDt, x!.closeKt];
   };
-  const first = f.exec(cmd, key);
-  assert.deepEqual(f.exec(cmd, key), { ...first, replayed: true });
-  assert.throws(() => f.exec({ ...cmd, number: 'S-0002' }, key), /başqa məzmunla/);
-  assert.deepEqual(f.exec({ ...cmd, id: first.id, version: 1 }), { id: first.id, version: 1 });
-  assert.throws(() => f.exec(cmd), /artıq var/);
-  assert.throws(() => f.exec({ ...cmd, number: ' s-0001 ' }), /artıq var/);
-  // The same number from another partner is a different document.
-  const other = f.partner('Digər MMC', '1700000009');
-  f.exec({ ...cmd, partnerId: other });
-  assert.equal(f.db.all('SELECT * FROM journal_entries').length, 2);
-  f.balanced();
+  assert.deepEqual(r('a:223'), ['40000.00', '', '15254.24', '10003.00', '45251.24', '']);
+  assert.deepEqual(r(`a:223.01|${s.bankK}`), [
+    '30000.00',
+    '',
+    '15254.24',
+    '10003.00',
+    '35251.24',
+    '',
+  ]);
+  assert.deepEqual(r(`a:223.01|${s.bankP}`), ['10000.00', '', '', '', '10000.00', '']);
+  assert.deepEqual(r('a:224'), ['3000.00', '', '2745.76', '1800.00', '3945.76', '']);
+  assert.deepEqual(r('a:211'), ['', '', '15000.00', '15000.00', '', '']);
+  assert.deepEqual(r(`a:211|${s.customer}|${s.c7}|${s.saleDoc}`), [
+    '',
+    '',
+    '15000.00',
+    '15000.00',
+    '',
+    '',
+  ]);
+  assert.deepEqual(r('a:543'), ['', '', '', '3000.00', '', '3000.00']);
+  assert.deepEqual(r(`a:543.01|${s.customer}|${s.c7}`), ['', '', '', '3000.00', '', '3000.00']);
+  assert.deepEqual(r('a:241'), ['', '', '1800.00', '', '1800.00', '']);
+  assert.deepEqual(r('a:521'), ['', '', '', '2288.14', '', '2288.14']);
+  assert.deepEqual(r('a:604'), ['', '', '2288.14', '', '2288.14', '']);
+  assert.deepEqual(r('a:531'), ['', '', '11800.00', '11800.00', '', '']);
+  const productRow = f.row(f.trial('2026-09-01', '2026-09-30', ['a:205']), `a:205|${s.paper}`)!;
+  assert.deepEqual(
+    [productRow.closeDt, productRow.closeQty, productRow.turnQtyDt, productRow.turnQtyKt],
+    ['3000.00', '30', '100', '70'],
+  );
+  assert.equal(productRow.label, 'Kağız A4');
+
+  // "Only arising in the period": the 543.01 advance and 205 stock arose in September; 223.01 existed.
+  const arising = f
+    .trial('2026-09-01', '2026-09-30', [], { onlyArising: true })
+    .rows.map((x) => x.account);
+  assert.ok(arising.includes('543') && arising.includes('205') && !arising.includes('223'));
+  // Filter by partner.
+  const byPartner = f
+    .trial('2026-09-01', '2026-09-30', [], { partnerId: s.customer })
+    .rows.map((x) => x.account);
+  assert.deepEqual(byPartner, ['211', '543']);
+  // A part of a month: registers for whole months + postings of the partial month.
+  const mid = f.trial('2026-09-10', '2026-09-20');
+  assert.equal(mid.totals.openDt, mid.totals.openKt);
+  assert.equal(mid.totals.turnDt, mid.totals.turnKt);
 });
 
-test('acceptance 6: company A data is refused inside company B, also below the service layer', (t) => {
+test('October: the next invoice and the advance offset; home warns until offset', (t) => {
   const f = fixture(t);
-  const a = f.partner();
-  const paper = f.product();
-  const b = f.exec({ type: 'company.create', name: 'B MMC', taxId: '9999999999' }).id;
-  const bPartner = f.partner('B alıcı', '1700000003', b);
+  const s = september(f);
+  const L = f.line;
+  const inv = f.operation('2026-10-06', [
+    L('211', [s.customer, s.c7, ''], '601', [s.goods, '18'], '5000'),
+    L('604.1', ['18'], '521', [s.vat], '762.71'),
+  ]);
+  assert.match(
+    f
+      .home()
+      .warnings.map((w) => w.text)
+      .join('\n'),
+    /Alıcı MMC · Müqavilə №7 · satış: 211-də 5000.00 borc, 543-də 3000.00 avans/,
+  );
+  f.operation(
+    '2026-10-06',
+    [L('543.01', [s.customer, s.c7], '211', [s.customer, s.c7, `operation:${inv.id}`], '3000')],
+    'Avansın əvəzləşdirilməsi',
+  );
+  assert.equal(f.home().warnings.length, 0);
+  const tb = f.trial('2026-10-01', '2026-10-31', [
+    'a:211',
+    `a:211|${s.customer}`,
+    `a:211|${s.customer}|${s.c7}`,
+  ]);
+  assert.equal(f.row(tb, `a:211|${s.customer}|${s.c7}|operation:${inv.id}`)!.closeDt, '2000.00');
+  assert.equal(f.row(tb, 'a:543')!.closeKt, '');
+  const home = f.home();
+  assert.deepEqual(
+    home.balances.find((b) => b.account === '211'),
+    {
+      account: '211',
+      name: home.balances.find((b) => b.account === '211')!.name,
+      dt: '2000.00',
+      kt: '0.00',
+    },
+  );
+});
+
+test('account card: opening, running balance and closing on one bank account', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const card = f.card('223.01', '2026-09-01', '2026-09-30', [s.bankK]);
+  assert.equal(card.opening, '30000.00');
+  assert.deepEqual(
+    card.lines.map((l) => [l.date, l.debit, l.credit, l.corrAccount, l.balance]),
+    [
+      ['2026-09-15', '12711.86', '', '211', '42711.86'],
+      ['2026-09-15', '2542.38', '', '543.01', '45254.24'],
+      ['2026-09-18', '', '10000.00', '531', '35254.24'],
+      ['2026-09-30', '', '3.00', '721', '35251.24'],
+    ],
+  );
+  assert.equal(card.closing, '35251.24');
+  assert.match(card.lines[0]!.corrSk, /Alıcı MMC · Müqavilə №7 · satış · ƏƏ-/);
+  const whole = f.card('223', '2026-09-01', '2026-09-30');
+  assert.equal(whole.opening, '40000.00');
+  assert.equal(whole.closing, '45251.24');
+});
+
+test('corrections are red storno: turnovers show only the current version; cancel removes it', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const L = f.line;
+  const op = f.operation('2026-09-20', [L('721', [s.fees], '223.01', [s.bankK], '50')]);
+  f.exec({
+    type: 'operation.save',
+    companyId: f.companyId,
+    id: op.id,
+    version: 1,
+    number: '',
+    date: '2026-09-20',
+    memo: '',
+    lines: [L('721', [s.fees], '223.01', [s.bankK], '40')],
+  });
+  let row = f.row(f.trial('2026-09-01', '2026-09-30'), 'a:721')!;
+  assert.equal(row.turnDt, '43.00', '3 + 40, not 3 + 50 + 40');
+  const detail = f.query<OperationDetail>({ type: 'operation', companyId: f.companyId, id: op.id });
+  assert.equal(detail.version, 2);
+  assert.equal(detail.postings[0]!.amount, '40.00');
+  f.exec({
+    type: 'operation.cancel',
+    companyId: f.companyId,
+    id: op.id,
+    version: 2,
+    reason: 'səhv',
+  });
+  row = f.row(f.trial('2026-09-01', '2026-09-30'), 'a:721')!;
+  assert.equal(row.turnDt, '3.00');
+  assert.equal(
+    f.query<OperationDetail>({ type: 'operation', companyId: f.companyId, id: op.id }).status,
+    'cancelled',
+  );
+  // The journal itself cannot be changed or deleted.
+  assert.throws(() => f.db.run('UPDATE postings SET amount=1'), /storno/);
+  assert.throws(() => f.db.run('DELETE FROM entries'), /storno/);
+  assert.throws(() => f.db.run('DELETE FROM audit'), /silinmir/);
+});
+
+test('subkonto values are checked against the catalogs', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const L = f.line;
+  const other = f.partner('Başqa MMC', '1700000003');
   assert.throws(
-    () =>
-      f.exec({
-        type: 'invoice.save',
-        companyId: b,
-        mode: 'post',
-        direction: 'sale',
-        number: 'X',
-        date: '2026-01-10',
-        partnerId: a,
-        note: '',
-        lines: [f.serviceLine('1')],
-      }),
-    /kontragent tapılmadı/,
+    () => f.operation('2026-09-20', [L('211', [other, s.c7, ''], '601', [s.goods, '18'], '1')]),
+    /müqavilə seçilən kontragentə aid deyil/,
+  );
+  assert.throws(
+    () => f.operation('2026-09-20', [L('224.04', [s.bankK], '301', [s.founder], '1')]),
+    /223\.01 hesabına bağlıdır/,
   );
   assert.throws(
     () =>
-      f.exec({
-        type: 'invoice.save',
-        companyId: b,
-        mode: 'post',
-        direction: 'purchase',
-        number: 'X',
-        date: '2026-01-10',
-        partnerId: bPartner,
-        note: '',
-        lines: [f.stockLine(paper, '1', '1')],
-      }),
-    /nomenklatura seçin/,
+      f.operation('2026-09-20', [L('211', [s.customer, s.c7, ''], '601', [s.goods, '20'], '1')]),
+    /ƏDV dərəcəsi seçin/,
   );
-  const { id } = f.invoice('sale', a, [f.serviceLine('10')]);
   assert.throws(
-    () => f.exec({ type: 'invoice.cancel', companyId: b, id, version: 1, reason: 'x' }),
+    () => f.operation('2026-09-20', [L('721', [s.goods], '223.01', [s.bankK], '1')]),
     /tapılmadı/,
   );
-  assert.equal(
-    f.query<unknown[]>({
-      type: 'invoices',
-      companyId: b,
-      direction: 'sale',
-      from: '2000-01-01',
-      to: '2099-12-31',
-    }).length,
-    0,
-  );
-  // Composite foreign keys stop a cross-company reference even with raw SQL.
-  const entry = f.db.get('SELECT id FROM journal_entries LIMIT 1')!.id as string;
   assert.throws(
     () =>
-      f.db.run(
-        "INSERT INTO journal_lines(entry_id,line_no,company_id,account,debit,credit,partner_id) VALUES(?,99,?,'211',1,0,?)",
-        entry,
-        f.companyId,
-        bPartner,
-      ),
-    /FOREIGN KEY/,
+      f.operation('2026-09-20', [
+        L('211', [s.customer, s.c7, 'operation:nope'], '601', [s.goods, '18'], '1'),
+      ]),
+    /sənəd tapılmadı/,
   );
-});
-
-test('acceptance 7: a stale version never overwrites the latest document', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const { id } = f.invoice('sale', customer, [f.serviceLine('100')], { number: 'S-1' });
-  const base = {
-    type: 'invoice.save' as const,
-    companyId: f.companyId,
-    mode: 'post' as const,
-    direction: 'sale' as const,
-    number: 'S-1',
-    date: '2026-01-10',
-    partnerId: customer,
-    note: '',
-    id,
-  };
-  f.exec({ ...base, version: 1, lines: [f.serviceLine('150')] });
-  assert.throws(
-    () => f.exec({ ...base, version: 1, lines: [f.serviceLine('999')] }),
-    (e) => {
-      assert.ok(e instanceof DomainError);
-      assert.equal(e.code, 'stale');
-      return true;
-    },
-  );
-  assert.equal(f.invoiceDetail(id).total, '150.00');
-  assert.throws(() => f.exec({ ...base, lines: [f.serviceLine('1')] }), /dəyişdirilib/);
-});
-
-test('acceptance 8: closed period blocks new, edit and cancel; identical retries stay harmless', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const key = newKey();
-  const cmd = {
-    type: 'invoice.save' as const,
-    companyId: f.companyId,
-    mode: 'post' as const,
-    direction: 'sale' as const,
-    number: 'S-1',
-    date: '2026-01-10',
-    partnerId: customer,
-    note: '',
-    lines: [f.serviceLine('100')],
-  };
-  const { id } = f.exec(cmd, key);
-  const pay = f.payment('in', customer, '50').id;
-  f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-01-31' });
-  const before = f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n;
-  assert.equal(f.exec(cmd, key).replayed, true);
-  assert.deepEqual(f.exec({ ...cmd, id, version: 1 }), { id, version: 1 });
-  assert.throws(
-    () => f.exec({ ...cmd, id, version: 1, lines: [f.serviceLine('200')] }),
-    /bağlanıb/,
-  );
-  assert.throws(() => f.exec({ ...cmd, id, version: 1, date: '2026-02-01' }), /bağlanıb/);
-  assert.throws(() => f.exec({ ...cmd, number: 'S-2' }), /bağlanıb/);
-  assert.throws(
-    () => f.exec({ type: 'invoice.cancel', companyId: f.companyId, id, version: 1, reason: 'x' }),
-    /bağlanıb/,
-  );
-  assert.throws(
-    () =>
-      f.exec({ type: 'payment.cancel', companyId: f.companyId, id: pay, version: 1, reason: 'x' }),
-    /bağlanıb/,
-  );
-  assert.throws(
-    () => f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-01-15' }),
-    /artıq bağlıdır/,
-  );
-  assert.throws(
-    () => f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-12-31' }),
-    /keçmiş tarixə/,
-  );
-  assert.throws(() => f.db.run("UPDATE companies SET closed_through='2026-01-01'"), /açıla bilməz/);
-  assert.equal(f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n, before);
-  // A raw insert into the closed period is refused by the database itself.
-  assert.throws(
-    () =>
-      f.db.run(
-        "INSERT INTO journal_entries VALUES('x',?,'2026-01-05','invoice','x','x',1,0,'now')",
-        f.companyId,
-      ),
-    /bağlanıb/,
-  );
-});
-
-test('acceptance 9: an edit reverses the old version exactly once; cancel restores accounts and stock', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const paper = f.product();
-  const { id } = f.invoice('purchase', supplier, [f.stockLine(paper, '10', '10', { vat: '18' })], {
-    number: 'P-1',
-  });
-  const base = {
-    type: 'invoice.save' as const,
-    companyId: f.companyId,
-    mode: 'post' as const,
-    direction: 'purchase' as const,
-    number: 'P-1',
-    date: '2026-01-10',
-    partnerId: supplier,
-    note: '',
-    id,
-  };
-  f.exec({ ...base, version: 1, lines: [f.stockLine(paper, '5', '10', { vat: '9' })] });
-  const d = f.invoiceDetail(id);
-  assert.equal(d.version, 2);
-  assert.deepEqual(
-    d.postings.map((p) => [p.version, p.reversal, p.account, p.debit, p.credit]),
-    [
-      [1, false, '205', '100.00', '0.00'],
-      [1, false, '241', '18.00', '0.00'],
-      [1, false, '531', '0.00', '118.00'],
-      [1, true, '205', '0.00', '100.00'],
-      [1, true, '241', '0.00', '18.00'],
-      [1, true, '531', '118.00', '0.00'],
-      [2, false, '205', '50.00', '0.00'],
-      [2, false, '241', '9.00', '0.00'],
-      [2, false, '531', '0.00', '59.00'],
-    ],
-  );
-  assert.deepEqual(
-    f.stock().map((s) => [s.quantity, s.value]),
-    [['5', '50.00']],
-  );
-  assert.equal(f.row(f.trial(), '531')!.closingCredit, '59.00');
-  f.exec({ type: 'invoice.cancel', companyId: f.companyId, id, version: 2, reason: 'Səhv qaimə' });
-  assert.deepEqual(f.stock(), []);
-  assert.equal(f.row(f.trial(), '531')!.closingCredit, '0.00');
-  assert.equal(f.invoiceDetail(id).status, 'cancelled');
-  assert.deepEqual(
-    f.invoiceDetail(id).history.map((h) => [h.version, h.status]),
-    [
-      [1, 'posted'],
-      [2, 'posted'],
-      [3, 'cancelled'],
-    ],
-  );
-  assert.throws(
-    () => f.exec({ ...base, version: 3, lines: [f.stockLine(paper, '1', '1')] }),
-    /dəyişdirilmir/,
-  );
-  // Ledger rows can never be edited in place.
-  assert.throws(() => f.db.run('UPDATE journal_lines SET debit=1'), /dəyişdirilə bilməz/);
-  assert.throws(() => f.db.run('DELETE FROM journal_entries'), /silinə bilməz/);
-  f.balanced();
-});
-
-test('acceptance 10 and 11: average cost 60 on sale; a shortage saves nothing at all', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const customer = f.partner('Alıcı', '1700000001');
-  const goods = f.product({ name: 'Mal' });
-  f.invoice('purchase', supplier, [f.stockLine(goods, '10', '10')], { date: '2026-01-05' });
-  f.invoice('purchase', supplier, [f.stockLine(goods, '10', '20')], { date: '2026-01-06' });
-  const sale = (quantity: string, number: string, date = '2026-01-10') =>
-    f.invoice(
-      'sale',
-      customer,
-      [f.stockLine(goods, quantity, '50', { account: '601', stockAccount: '205', vat: '0' })],
-      { number, date },
-    );
-  const { id } = sale('4', 'S-1');
-  const d = f.invoiceDetail(id);
-  assert.deepEqual(sides(d.postings), [
-    ['211', '200.00', '0.00'],
-    ['601', '0.00', '200.00'],
-    ['701', '60.00', '0.00'],
-    ['205', '0.00', '60.00'],
-  ]);
-  const before = f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n;
-  const invoicesBefore = f.invoices('sale').length;
-  assert.throws(
-    () => sale('17', 'S-2'),
-    (e) => {
-      assert.ok(e instanceof DomainError);
-      assert.equal(e.code, 'insufficient-stock');
-      return true;
-    },
-  );
-  assert.equal(f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n, before);
-  assert.equal(f.invoices('sale').length, invoicesBefore);
-  // Selling the rest clears quantity and value together.
-  sale('16', 'S-3');
-  assert.deepEqual(f.stock(), []);
-  assert.equal(f.row(f.trial(), '701')!.closingDebit, '300.00');
-  f.balanced();
-});
-
-test('stock chronology: back-dated movements and edits behind later movements are refused', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const customer = f.partner('Alıcı', '1700000001');
-  const goods = f.product({ name: 'Mal' });
-  const receipt = f.invoice('purchase', supplier, [f.stockLine(goods, '10', '10')], {
-    date: '2026-01-05',
-    number: 'P-1',
-  });
-  f.invoice(
-    'sale',
-    customer,
-    [f.stockLine(goods, '2', '50', { account: '601', stockAccount: '205' })],
-    { date: '2026-01-10' },
-  );
-  assert.throws(
-    () => f.invoice('purchase', supplier, [f.stockLine(goods, '1', '99')], { date: '2026-01-07' }),
-    /sonrakı hərəkət/,
-  );
-  assert.throws(
-    () =>
-      f.exec({
-        type: 'invoice.cancel',
-        companyId: f.companyId,
-        id: receipt.id,
-        version: 1,
-        reason: 'x',
-      }),
-    /sonrakı hərəkət/,
-  );
-  // On the same or a later date the receipt is fine.
-  f.invoice('purchase', supplier, [f.stockLine(goods, '1', '99')], { date: '2026-01-10' });
-  f.balanced();
-});
-
-test('cancelling a receipt whose goods were sold on the same day would go negative and is refused', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const customer = f.partner('Alıcı', '1700000001');
-  const goods = f.product({ name: 'Mal' });
-  const receipt = f.invoice('purchase', supplier, [f.stockLine(goods, '5', '10')], {
-    date: '2026-01-05',
-  });
-  f.invoice(
-    'sale',
-    customer,
-    [f.stockLine(goods, '5', '20', { account: '601', stockAccount: '205' })],
-    { date: '2026-01-05' },
-  );
-  assert.throws(
-    () =>
-      f.exec({
-        type: 'invoice.cancel',
-        companyId: f.companyId,
-        id: receipt.id,
-        version: 1,
-        reason: 'x',
-      }),
-    /mənfiyə düşür/,
-  );
-});
-
-test('acceptance 12: a payment splits over invoices, never beyond either side; the rest is an advance', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const a = f.invoice('sale', customer, [f.serviceLine('100', '18')], { date: '2026-01-10' }).id;
-  const b = f.invoice('sale', customer, [f.serviceLine('50', '9')], { date: '2026-01-12' }).id;
-  assert.throws(
-    () => f.payment('in', customer, '300', { allocations: [{ invoiceId: a, amount: '118.01' }] }),
-    /qalıq borcu 118.00/,
-  );
-  assert.throws(
-    () =>
-      f.payment('in', customer, '100', {
-        allocations: [
-          { invoiceId: a, amount: '60' },
-          { invoiceId: b, amount: '40.01' },
-        ],
-      }),
-    /bağlanmamış qalığından/,
-  );
-  assert.throws(
-    () =>
-      f.payment('in', customer, '300', {
-        date: '2026-01-11',
-        allocations: [{ invoiceId: b, amount: '1' }],
-      }),
-    /bağlama tarixi ondan əvvəl/,
-  );
-  const pay = f.payment('in', customer, '300', {
-    allocations: [
-      { invoiceId: a, amount: '118' },
-      { invoiceId: b, amount: '20.50' },
-    ],
-  }).id;
-  const p = f.paymentDetail(pay);
-  assert.equal(p.allocated, '138.50');
-  assert.equal(p.unallocated, '161.50');
-  assert.deepEqual(sides(p.postings), [
-    ['223', '300.00', '0.00'],
-    ['211', '0.00', '300.00'],
-  ]);
-  assert.deepEqual(
-    f
-      .invoices('sale')
-      .map((i) => [i.total, i.paid, i.remaining])
-      .sort(),
-    [
-      ['118.00', '118.00', '0.00'],
-      ['59.00', '20.50', '38.50'],
-    ],
-  );
-  // 211: 177 invoiced − 300 received = 123 customer advance (credit side).
-  assert.equal(f.row(f.trial(), '211')!.closingCredit, '123.00');
-  assert.equal(f.balances()[0]!.receivable, '-123.00');
-  // Linking the advance later is analytics only: the ledger does not change.
-  const lines = f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n;
   f.exec({
-    type: 'allocation.create',
+    type: 'partner.save',
     companyId: f.companyId,
-    paymentId: pay,
-    date: '2026-01-25',
-    allocations: [{ invoiceId: b, amount: '38.50' }],
-  });
-  assert.equal(f.db.all('SELECT COUNT(*) AS n FROM journal_lines')[0]!.n, lines);
-  assert.equal(f.paymentDetail(pay).unallocated, '123.00');
-  // Linked invoices cannot be edited or cancelled until the link is released.
-  assert.throws(
-    () =>
-      f.exec({ type: 'invoice.cancel', companyId: f.companyId, id: a, version: 1, reason: 'x' }),
-    /bağlantını açın/,
-  );
-  const link = f.paymentDetail(pay).allocations.find((x) => x.invoiceId === a)!;
-  f.exec({
-    type: 'allocation.cancel',
-    companyId: f.companyId,
-    id: link.id,
-    reason: 'Səhv bağlanıb',
-  });
-  assert.equal(f.invoices('sale').find((i) => i.id === a)!.remaining, '118.00');
-  f.exec({
-    type: 'invoice.cancel',
-    companyId: f.companyId,
-    id: a,
+    id: other,
     version: 1,
-    reason: 'Səhv qaimə',
-  });
-  // Cancelling the payment releases every remaining link.
-  f.exec({
-    type: 'payment.cancel',
-    companyId: f.companyId,
-    id: pay,
-    version: 1,
-    reason: 'Bank qaytardı',
-  });
-  assert.equal(f.invoices('sale').find((i) => i.id === b)!.remaining, '59.00');
-  assert.ok(f.paymentDetail(pay).allocations.every((x) => x.status === 'cancelled'));
-  f.balanced();
-});
-
-test('editing a payment re-posts it and replaces its split atomically', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const inv = f.invoice('purchase', supplier, [
-    f.serviceLine('100', '18', { account: '721', expenseItemId: f.expenseItem() }),
-  ]).id;
-  const pay = f.payment('out', supplier, '50', {
-    reference: 'OUT-1',
-    allocations: [{ invoiceId: inv, amount: '50' }],
-  }).id;
-  const base = {
-    type: 'payment.save' as const,
-    companyId: f.companyId,
-    direction: 'out' as const,
-    bankAccount: '223',
-    reference: 'OUT-1',
-    date: '2026-01-20',
-    partnerId: supplier,
+    name: 'Başqa MMC',
+    taxId: '1700000003',
+    kind: 'legal',
     note: '',
-    id: pay,
-  };
-  assert.deepEqual(
-    f.exec({ ...base, version: 1, amount: '50', allocations: [{ invoiceId: inv, amount: '50' }] }),
-    { id: pay, version: 1 },
-  );
-  f.exec({ ...base, version: 1, amount: '118', allocations: [{ invoiceId: inv, amount: '118' }] });
-  const p = f.paymentDetail(pay);
-  assert.equal(p.version, 2);
-  assert.equal(p.allocations.filter((a) => a.status === 'active').length, 1);
-  assert.equal(f.invoices('purchase')[0]!.remaining, '0.00');
-  assert.equal(f.balances()[0]!.payable, '0.00');
-  assert.throws(() => f.payment('out', supplier, '1', { reference: 'out-1' }), /artıq var/);
-  f.balanced();
-});
-
-test('acceptance 14 and 15: DBC opening + turnover = closing; postings follow the document id', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  f.invoice('sale', customer, [f.serviceLine('100', '18')], {
-    date: '2026-01-10',
-    number: 'SAME-1',
+    archived: true,
   });
-  const purchase = f.invoice(
-    'purchase',
-    supplier,
-    [f.serviceLine('40', '7.20', { account: '721', expenseItemId: f.expenseItem() })],
-    {
-      date: '2026-02-03',
-      number: 'SAME-1',
-    },
-  ).id;
-  f.payment('in', customer, '118', { date: '2026-02-10' });
-  const tb = f.trial('2026-02-01', '2026-02-28');
-  for (const r of tb.rows) {
-    const open = Number(r.openingDebit) - Number(r.openingCredit);
-    const close = Number(r.closingDebit) - Number(r.closingCredit);
-    // Integer cents only; Number() is safe at these magnitudes in a test.
-    assert.equal(
-      Math.round((open + Number(r.debit) - Number(r.credit)) * 100),
-      Math.round(close * 100),
-      r.account,
-    );
-  }
-  assert.equal(f.row(tb, '211')!.openingDebit, '118.00');
-  assert.equal(f.row(tb, '211')!.closingDebit, '0.00');
-  assert.deepEqual(sides(f.invoiceDetail(purchase).postings), [
-    ['721', '40.00', '0.00'],
-    ['241', '7.20', '0.00'],
-    ['531', '0.00', '47.20'],
-  ]);
-  f.balanced();
-});
-
-test('settlement accounts are shown expanded: debtors and creditors are not netted', (t) => {
-  const f = fixture(t);
-  const a = f.partner('A', '1700000001');
-  const b = f.partner('B', '1700000002');
-  f.invoice('sale', a, [f.serviceLine('100')]);
-  f.payment('in', b, '30');
-  const r = f.row(f.trial(), '211')!;
-  assert.equal(r.closingDebit, '100.00');
-  assert.equal(r.closingCredit, '30.00');
-  f.balanced();
-});
-
-test('sub-accounts roll up into their parent and lock direct posting to it', (t) => {
-  const f = fixture(t);
-  const supplier = f.partner('Təchizatçı', '1700000002');
+  const c = f.contract(other, '1', 'sale');
   assert.throws(
-    () =>
-      f.exec({
-        type: 'account.create',
-        companyId: f.companyId,
-        parentCode: '531',
-        code: '531.01',
-        name: 'x',
-      }),
-    /yalnız/,
+    () => f.operation('2026-09-20', [L('211', [other, c, ''], '601', [s.goods, '18'], '1')]),
+    /arxivdədir/,
   );
-  f.exec({
-    type: 'account.create',
-    companyId: f.companyId,
-    parentCode: '205',
-    code: '205.01',
-    name: 'Tikinti malları',
-  });
-  const goods = f.product({ account: '205.01' });
   assert.throws(
-    () => f.invoice('purchase', supplier, [f.stockLine(goods, '1', '10', { account: '205' })]),
+    () => f.operation('2026-09-20', [L('223', [s.bankK], '301', [s.founder], '1')]),
     /subhesab seçin/,
   );
-  f.invoice('purchase', supplier, [f.stockLine(goods, '1', '10', { account: '205.01' })]);
-  const tb = f.trial();
-  assert.deepEqual(
-    tb.rows
-      .filter((r) => r.account.startsWith('205'))
-      .map((r) => [r.account, r.depth, r.closingDebit]),
-    [
-      ['205', 0, '10.00'],
-      ['205.01', 1, '10.00'],
-    ],
+});
+
+test('catalog rules: VÖEN, IBAN, contract numbers, bank account binding', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  assert.throws(() => f.partner('Kapital 2', '9900003611'), /artıq var: Kapital Bank ASC/);
+  assert.throws(() => f.partner('Adsız MMC', ''), /VÖEN yazılmalıdır/);
+  assert.throws(() => f.bankAccount(bank, 'AZ12AIIB3806'), /IBAN/);
+  assert.throws(
+    () => f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.02', 'AZN'),
+    /manat hesabı/,
   );
-  assert.equal(
-    f.trial('2026-01-01', '2026-12-31', true).rows.some((r) => r.account === '205.01'),
-    false,
+  assert.throws(
+    () => f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.01', 'USD'),
+    /223\.02/,
   );
-  // A used leaf cannot silently become a group.
-  f.invoice('purchase', supplier, [
-    f.serviceLine('5', '0', { account: '721', expenseItemId: f.expenseItem() }),
+  assert.throws(
+    () => f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '211', 'AZN'),
+    /Bank hesabı" subkontosu yoxdur/,
+  );
+  f.bankAccount(bank, 'AZ12 AIIB 3806 0019 4412 3456 7890');
+  assert.throws(() => f.bankAccount(bank, 'AZ12AIIB38060019441234567890'), /artıq mövcuddur/);
+  const p = f.partner('Alıcı MMC', '1700000001');
+  f.contract(p, '7', 'sale');
+  assert.throws(() => f.contract(p, ' 7 ', 'purchase'), /artıq var/);
+});
+
+test('currency bank account: USD amounts travel next to AZN', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const buyer = f.partner('Foreign LLC', '', 'foreign');
+  const usd = f.bankAccount(bank, 'AZ10AIIB38060019840000000001', '223.02', 'USD', 'Kapital USD');
+  const c = f.contract(buyer, 'EX-1', 'sale', 'USD');
+  f.operation('2026-09-10', [
+    f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+      dtCurAmount: '1000',
+      ktCurAmount: '1000',
+    }),
   ]);
+  const row = f.row(f.trial('2026-09-01', '2026-09-30', ['a:223', 'a:223.02']), `a:223.02|${usd}`)!;
+  assert.deepEqual([row.closeDt, row.currency, row.closeCur], ['1700.00', 'USD', '1000.00']);
+  assert.throws(
+    () => f.operation('2026-09-11', [f.line('223.02', [usd], '543.02', [buyer, c], '1700')]),
+    /valyuta məbləğini/,
+  );
+  assert.throws(
+    () =>
+      f.operation('2026-09-11', [
+        f.line('223.02', [usd], '543.02', [buyer, c], '1700', {
+          dtCurAmount: '1',
+          ktCurAmount: '1',
+          currency: 'EUR',
+        }),
+      ]),
+    /uyğun deyil/,
+  );
+});
+
+test('closed period: nothing posts on or before the closing date; reopening needs a reason', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-09-30', reason: '' });
+  assert.throws(
+    () => f.operation('2026-09-30', [f.line('721', [s.fees], '223.01', [s.bankK], '1')]),
+    /bağlanıb/,
+  );
+  const op = f.query<OperationDetail[]>({
+    type: 'operations',
+    companyId: f.companyId,
+    from: '2026-09-01',
+    to: '2026-09-30',
+  })[0]!;
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'operation.cancel',
+        companyId: f.companyId,
+        id: op.id,
+        version: op.version,
+        reason: 'x',
+      }),
+    /bağlanıb/,
+  );
+  assert.throws(
+    () =>
+      f.db.run(
+        "INSERT INTO entries VALUES('x',?,'2026-09-01','t','t','t',1,0,'x','x')",
+        f.companyId,
+      ) &&
+      f.db.run(
+        "INSERT INTO postings(entry_id,line_no,company_id,date,dt_account,kt_account,amount) VALUES('x',1,?,'2026-09-01','721','222',1)",
+        f.companyId,
+      ),
+    /bağlanıb/,
+  );
+  assert.throws(
+    () =>
+      f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-08-31', reason: '' }),
+    /Səbəb/,
+  );
+  f.exec({
+    type: 'period.close',
+    companyId: f.companyId,
+    through: '2026-08-31',
+    reason: 'Sentyabr düzəlişi',
+  });
+  f.operation('2026-09-30', [f.line('721', [s.fees], '223.01', [s.bankK], '1')]);
+});
+
+test('account shape is frozen once used; integrity check finds tampered registers', (t) => {
+  const f = fixture(t);
+  september(f);
+  const acc = f.catalog().accounts.find((a) => a.code === '205')!;
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'account.update',
+        companyId: f.companyId,
+        code: '205',
+        name: acc.name,
+        nature: acc.nature,
+        subkonto: [],
+        quantitative: true,
+        currency: false,
+        archived: false,
+      }),
+    /dəyişdirilmir/,
+  );
+  f.exec({
+    type: 'account.update',
+    companyId: f.companyId,
+    code: '205',
+    name: 'Mallar (anbar)',
+    nature: acc.nature,
+    subkonto: acc.subkonto,
+    quantitative: true,
+    currency: false,
+    archived: false,
+  });
+  assert.throws(
+    () => f.exec({ type: 'account.create', companyId: f.companyId, code: '205.01', name: 'Alt' }),
+    /subhesab açılmır/,
+  );
+  f.exec({ type: 'account.create', companyId: f.companyId, code: '711.01', name: 'Reklam' });
   assert.throws(
     () =>
       f.exec({
         type: 'account.create',
         companyId: f.companyId,
-        parentCode: '721',
         code: '721.01',
-        name: 'x',
+        name: 'Bank xərcləri',
       }),
-    /artıq yazılış var/,
+    /subhesab açılmır/,
   );
-  f.balanced();
-});
-
-test('drafts carry no financial effect until posted; posted documents never return to draft', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  const base = {
-    type: 'invoice.save' as const,
-    companyId: f.companyId,
-    direction: 'sale' as const,
-    number: 'D-1',
-    date: '2026-01-10',
-    partnerId: customer,
-    note: '',
-  };
-  const draft = f.exec({ ...base, mode: 'draft', lines: [] });
-  assert.equal(f.invoiceDetail(draft.id).status, 'draft');
-  assert.equal(f.db.all('SELECT * FROM journal_entries').length, 0);
-  assert.throws(
-    () => f.exec({ ...base, mode: 'post', id: draft.id, version: 1, lines: [] }),
-    /ən azı bir/,
-  );
-  f.exec({ ...base, mode: 'post', id: draft.id, version: 1, lines: [f.serviceLine('10')] });
-  assert.equal(f.invoiceDetail(draft.id).status, 'posted');
   assert.throws(
     () =>
-      f.exec({ ...base, mode: 'draft', id: draft.id, version: 2, lines: [f.serviceLine('10')] }),
-    /qaralamaya qaytarılmır/,
+      f.exec({
+        type: 'account.update',
+        companyId: f.companyId,
+        code: '223.01',
+        name: 'x',
+        nature: 'active',
+        subkonto: ['bankAccount'],
+        quantitative: false,
+        currency: false,
+        archived: true,
+      }),
+    /Qalığı olan/,
   );
-  f.exec({ ...base, mode: 'draft', number: 'D-2', lines: [] });
-  assert.throws(
-    () => f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-01-31' }),
-    /qaralama/,
-  );
+  let check = f.query<IntegrityView>({ type: 'integrity', companyId: f.companyId });
+  assert.equal(check.ok, true, check.problems.join());
+  f.db.run("UPDATE registers SET debit=debit+1 WHERE account='205'");
+  check = f.query<IntegrityView>({ type: 'integrity', companyId: f.companyId });
+  assert.equal(check.ok, false);
+  assert.match(check.problems.join('\n'), /üst-üstə düşmür/);
 });
 
-test('acceptance 16: a backup reopens with identical documents, ledger, stock and balances', async (t) => {
+test('idempotent commands and optimistic versions', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const cmd = {
+    type: 'operation.save' as const,
+    companyId: f.companyId,
+    number: '',
+    date: '2026-09-21',
+    memo: '',
+    lines: [f.line('721', [s.fees], '223.01', [s.bankK], '5')],
+  };
+  const a = f.exec(cmd, 'same-key-0001');
+  const b = f.exec(cmd, 'same-key-0001');
+  assert.equal(b.replayed, true);
+  assert.equal(a.id, b.id);
+  assert.throws(() => f.exec({ ...cmd, memo: 'başqa' }, 'same-key-0001'), /başqa məzmunla/);
+  assert.throws(() => f.exec({ ...cmd, id: a.id, version: 7 }), /dəyişdirilib/);
+});
+
+test('a file database survives reopen and refuses a newer schema', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'meyar-'));
-  const f = fixture(t, join(dir, 'live.sqlite'));
-  // After-hooks run in registration order: the fixture closes the database first.
-  // Windows refuses to delete a file that is still open.
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const supplier = f.partner('Təchizatçı', '1700000002');
-  const customer = f.partner();
-  const goods = f.product();
-  f.invoice('purchase', supplier, [f.stockLine(goods, '10', '10', { vat: '18' })]);
-  const sale = f.invoice('sale', customer, [
-    f.stockLine(goods, '3', '30', { account: '601', stockAccount: '205', vat: '16.20' }),
-  ]).id;
-  f.payment('in', customer, '50', { allocations: [{ invoiceId: sale, amount: '50' }] });
-  const target = join(dir, 'backup.sqlite');
-  await f.db.backup(target);
-  const copy = new Db(target);
-  try {
-    const restored = new Ledger(copy);
-    const read = (q: object) => JSON.stringify(restored.query({ companyId: f.companyId, ...q }));
-    const live = (q: object) => JSON.stringify(f.query({ companyId: f.companyId, ...q }));
-    for (const q of [
-      { type: 'catalog' },
-      { type: 'invoices', direction: 'sale', from: '2000-01-01', to: '2099-12-31' },
-      { type: 'payments', direction: 'in', from: '2000-01-01', to: '2099-12-31' },
-      { type: 'journal', from: '2000-01-01', to: '2099-12-31', account: '' },
-      { type: 'trialBalance', from: '2000-01-01', to: '2099-12-31', rollup: false },
-      { type: 'stock', asOf: '2099-12-31' },
-      { type: 'partnerBalances', asOf: '2099-12-31' },
-    ])
-      assert.equal(read(q), live(q), q.type);
-  } finally {
-    copy.close();
+  const path = join(dir, 'm.sqlite');
+  {
+    const f = fixture(t, path);
+    september(f);
+    f.db.close();
   }
-});
-
-test('a database from a newer program is refused unchanged', (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'meyar-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const path = join(dir, 'future.sqlite');
   const db = new Db(path);
+  assert.equal(Number(db.get('SELECT COUNT(*) AS n FROM operations')!.n), 7);
   db.raw.exec('PRAGMA user_version=99');
   db.close();
   assert.throws(() => new Db(path), /daha yeni versiyası/);
-});
-
-test('malformed commands are rejected at the boundary with a pointer to the field', (t) => {
-  const f = fixture(t);
-  assert.throws(
-    () => f.ledger.execute({ type: 'nope' }, { actor: 'x', correlationId: 'x' }),
-    /Sorğu düzgün deyil/,
-  );
-  assert.throws(
-    () =>
-      f.ledger.execute(
-        { type: 'partner.save', key: 'short', companyId: f.companyId, name: 'x', taxId: '1' },
-        { actor: 'x', correlationId: 'x' },
-      ),
-    /key/,
-  );
-  assert.throws(() => f.invoice('sale', f.partner(), [f.serviceLine('1.001')]), /2 onluq/);
-  assert.throws(
-    () =>
-      f.invoice('sale', f.partner('X', '1700000005'), [f.serviceLine('10')], {
-        date: '2026-02-30',
-      }),
-    /təqvimdə/,
-  );
-  assert.throws(() => f.partner('Y', '12345'), /10 rəqəm/);
-});
-
-test('audit records who changed what, in which company', (t) => {
-  const f = fixture(t);
-  const customer = f.partner();
-  f.invoice('sale', customer, [f.serviceLine('10')], { number: 'S-AUD' });
-  const audit = f.query<{ action: string; entity: string; detail: string; actor: string }[]>({
-    type: 'audit',
-    companyId: f.companyId,
-    limit: 10,
-  });
-  assert.equal(audit[0]!.action, 'Uçota alındı');
-  assert.match(audit[0]!.detail, /S-AUD · v1 · 10.00 AZN/);
-  assert.equal(audit[0]!.actor, 'test');
-  assert.throws(() => f.db.run('DELETE FROM audit'), /silinə bilməz/);
+  rmSync(dir, { recursive: true, force: true });
 });

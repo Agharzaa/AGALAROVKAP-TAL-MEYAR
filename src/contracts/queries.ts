@@ -1,8 +1,6 @@
 /** Read models. Amounts are canonical decimal strings ("1234.50"); dates are ISO strings. */
 import { z } from 'zod';
-import type { AccountNature, AnalyticKind } from '../domain/accounts.js';
-import type { PaymentKind } from '../domain/posting.js';
-import type { StatementSuggestion } from '../domain/statement.js';
+import type { AccountNature, SubkontoKind } from '../domain/chart.js';
 
 const id = z.string().min(1).max(80);
 const date = z.string().max(10);
@@ -10,64 +8,36 @@ const date = z.string().max(10);
 export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('companies') }),
   z.object({ type: z.literal('catalog'), companyId: id }),
-  z.object({
-    type: z.literal('invoices'),
-    companyId: id,
-    direction: z.enum(['purchase', 'sale']),
-    from: date,
-    to: date,
-  }),
-  z.object({ type: z.literal('invoice'), companyId: id, id }),
-  z.object({
-    type: z.literal('payments'),
-    companyId: id,
-    direction: z.enum(['in', 'out']),
-    from: date,
-    to: date,
-  }),
-  z.object({ type: z.literal('payment'), companyId: id, id }),
-  z.object({
-    type: z.literal('openInvoices'),
-    companyId: id,
-    partnerId: id,
-    direction: z.enum(['in', 'out']),
-  }),
-  z.object({
-    type: z.literal('journal'),
-    companyId: id,
-    from: date,
-    to: date,
-    account: z.string().max(20).default(''),
-  }),
+  z.object({ type: z.literal('operations'), companyId: id, from: date, to: date }),
+  z.object({ type: z.literal('operation'), companyId: id, id }),
   z.object({
     type: z.literal('trialBalance'),
     companyId: id,
     from: date,
     to: date,
-    rollup: z.boolean().default(false),
+    /** Row keys the user opened ("a:211", "a:211|<partner>", …). */
+    expand: z.array(z.string().max(400)).max(5000).default([]),
+    onlyMoved: z.boolean().default(false),
+    onlyArising: z.boolean().default(false),
+    accounts: z.array(z.string().max(20)).max(200).default([]),
+    partnerId: id.optional(),
   }),
   z.object({
     type: z.literal('accountCard'),
     companyId: id,
     account: z.string().max(20),
+    sk: z.array(z.string().max(120)).max(3).default([]),
     from: date,
     to: date,
-    partnerId: id.optional(),
   }),
-  z.object({ type: z.literal('partnerBalances'), companyId: id, asOf: date }),
-  z.object({ type: z.literal('stock'), companyId: id, asOf: date }),
+  z.object({ type: z.literal('home'), companyId: id }),
+  z.object({ type: z.literal('documents'), companyId: id, search: z.string().max(80).default('') }),
   z.object({
     type: z.literal('audit'),
     companyId: id,
-    limit: z.number().int().min(1).max(1000).default(300),
+    limit: z.number().int().min(1).max(2000).default(500),
   }),
-  z.object({ type: z.literal('dashboard'), companyId: id, asOf: date }),
-  z.object({
-    type: z.literal('bankStatement'),
-    companyId: id,
-    bankAccount: z.string().max(20).optional(),
-    status: z.enum(['new', 'posted', 'ignored', 'all']).default('new'),
-  }),
+  z.object({ type: z.literal('integrity'), companyId: id }),
 ]);
 export type Query = z.infer<typeof querySchema>;
 
@@ -75,235 +45,221 @@ export interface CompanyView {
   id: string;
   name: string;
   taxId: string;
-  currency: 'AZN';
+  vatPayer: boolean;
+  purchaseVat: 'offset' | 'cost';
   closedThrough: string;
-}
-export interface PartnerView {
-  id: string;
   version: number;
-  name: string;
-  taxId: string;
 }
 export interface AccountView {
   code: string;
   name: string;
   parentCode: string | null;
   nature: AccountNature;
-  analytics: AnalyticKind[];
+  subkonto: SubkontoKind[];
   quantitative: boolean;
+  currency: boolean;
   system: boolean;
   archived: boolean;
   postable: boolean;
+  used: boolean;
 }
-export interface NamedView {
+export interface PartnerView {
   id: string;
+  version: number;
   name: string;
+  taxId: string;
+  kind: 'legal' | 'individual' | 'foreign' | 'state';
+  note: string;
+  archived: boolean;
 }
-export interface UnitView {
-  code: string;
+export interface ContractView {
+  id: string;
+  version: number;
+  partnerId: string;
+  number: string;
+  date: string;
+  kind: 'sale' | 'purchase' | 'loan' | 'other';
+  currency: string;
+  note: string;
+  archived: boolean;
+  /** "№7 · satış · 01.02.2026" */
+  label: string;
+}
+export interface BankAccountView {
+  id: string;
+  version: number;
+  bankId: string;
+  bankName: string;
+  iban: string;
+  currency: string;
+  account: string;
   name: string;
+  archived: boolean;
 }
 export interface ProductView {
   id: string;
   version: number;
   code: string;
   name: string;
-  group: string;
-  barcode: string;
-  baseUnit: string;
-  purchaseUnit: string;
-  factor: string;
-  account: string;
+  unit: string;
+  kind: 'goods' | 'material' | 'asset' | 'service';
+  archived: boolean;
+}
+export interface EmployeeView {
+  id: string;
+  version: number;
+  name: string;
+  position: string;
+  fin: string;
+  archived: boolean;
+}
+export type ItemKind = 'expenseItem' | 'incomeType' | 'taxType' | 'fund' | 'cashbox';
+export interface ItemView {
+  id: string;
+  version: number;
+  kind: ItemKind;
+  name: string;
+  archived: boolean;
 }
 export interface Catalog {
   company: CompanyView;
-  partners: PartnerView[];
   accounts: AccountView[];
-  expenseItems: NamedView[];
-  warehouses: NamedView[];
-  units: UnitView[];
+  partners: PartnerView[];
+  contracts: ContractView[];
+  bankAccounts: BankAccountView[];
   products: ProductView[];
+  employees: EmployeeView[];
+  items: ItemView[];
 }
-export type DocumentStatus = 'draft' | 'posted' | 'cancelled';
-export interface InvoiceSummary {
-  id: string;
-  version: number;
-  direction: 'purchase' | 'sale';
-  number: string;
-  date: string;
-  partnerId: string;
-  partnerName: string;
-  partnerTaxId: string;
-  status: DocumentStatus;
-  net: string;
-  vat: string;
-  total: string;
-  paid: string;
-  remaining: string;
-}
-export interface InvoiceLineView {
-  kind: 'service' | 'stock';
-  description: string;
+
+export interface SideView {
   account: string;
-  stockAccount?: string;
-  productId?: string;
-  warehouseId?: string;
-  quantity?: string;
-  unit?: 'base' | 'purchase';
-  unitPrice?: string;
-  baseQuantity?: string;
-  net: string;
-  vat: string;
-  expenseItemId?: string;
-}
-export interface InvoiceDetail extends InvoiceSummary {
-  note: string;
-  lines: InvoiceLineView[];
-  postings: PostingView[];
-  history: { version: number; status: DocumentStatus; at: string; actor: string }[];
-}
-export interface AllocationView {
-  id: string;
-  paymentId: string;
-  paymentReference: string;
-  invoiceId: string;
-  invoiceNumber: string;
-  date: string;
-  amount: string;
-  status: 'active' | 'cancelled';
-  reason: string;
-}
-export interface PaymentView {
-  id: string;
-  version: number;
-  direction: 'in' | 'out';
-  /** Operation kind (settlement, tax, fee…); see domain/posting paymentKinds. */
-  kind: PaymentKind;
-  kindLabel: string;
-  bankAccount: string;
-  reference: string;
-  date: string;
-  /** Empty when the operation has no counterparty (tax, fee, transfer…). */
-  partnerId: string;
-  partnerName: string;
-  counterAccount: string;
-  expenseItemId: string;
-  expenseItemName: string;
-  amount: string;
-  allocated: string;
-  unallocated: string;
-  status: DocumentStatus;
-  note: string;
-  allocations: AllocationView[];
-}
-export interface PaymentDetail extends PaymentView {
-  postings: PostingView[];
-}
-export interface OpenInvoiceView {
-  id: string;
-  number: string;
-  date: string;
-  total: string;
-  remaining: string;
+  sk: string[];
+  /** Display names of the subkonto values, same order. */
+  skNames: string[];
+  currency: string;
+  curAmount: string;
 }
 export interface PostingView {
-  entryId: string;
-  date: string;
-  sourceType: 'invoice' | 'payment';
-  sourceDirection: 'purchase' | 'sale' | 'in' | 'out';
-  sourceId: string;
-  sourceNumber: string;
-  version: number;
-  reversal: boolean;
   lineNo: number;
-  account: string;
-  debit: string;
-  credit: string;
-  partnerName: string;
-  analytics: string;
-  quantity?: string;
+  dt: SideView;
+  kt: SideView;
+  amount: string;
+  quantity: string;
   memo: string;
 }
+export interface OperationSummary {
+  id: string;
+  version: number;
+  number: string;
+  date: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+  total: string;
+  lines: number;
+}
+export interface OperationDetail extends OperationSummary {
+  postings: PostingView[];
+  history: { version: number; status: string; at: string; actor: string }[];
+}
+
 export interface TrialRow {
+  key: string;
+  level: number;
+  /** account | subkonto */
+  kind: 'account' | 'subkonto';
   account: string;
-  name: string;
-  depth: number;
-  openingDebit: string;
-  openingCredit: string;
-  debit: string;
-  credit: string;
-  closingDebit: string;
-  closingCredit: string;
+  label: string;
+  /** Code shown for account rows, or the subkonto kind label for subkonto rows. */
+  hint: string;
+  expandable: boolean;
+  expanded: boolean;
+  sk: string[];
+  openDt: string;
+  openKt: string;
+  turnDt: string;
+  turnKt: string;
+  closeDt: string;
+  closeKt: string;
+  /** Quantity on quantitative accounts (net), empty otherwise. */
+  openQty: string;
+  turnQtyDt: string;
+  turnQtyKt: string;
+  closeQty: string;
+  /** Currency amounts on currency accounts (net), empty otherwise. */
+  currency: string;
+  openCur: string;
+  closeCur: string;
 }
 export interface TrialBalance {
+  from: string;
+  to: string;
   rows: TrialRow[];
-  totals: Omit<TrialRow, 'account' | 'name' | 'depth'>;
+  totals: {
+    openDt: string;
+    openKt: string;
+    turnDt: string;
+    turnKt: string;
+    closeDt: string;
+    closeKt: string;
+  };
+  ms: number;
+}
+
+export interface CardLine {
+  date: string;
+  sourceType: string;
+  sourceId: string;
+  number: string;
+  storno: boolean;
+  memo: string;
+  /** This account's subkonto names on this line. */
+  sk: string;
+  corrAccount: string;
+  corrSk: string;
+  debit: string;
+  credit: string;
+  qty: string;
+  balance: string;
 }
 export interface AccountCard {
   account: string;
   name: string;
+  filter: string;
   opening: string;
-  rows: (PostingView & { balance: string })[];
-  debit: string;
-  credit: string;
+  lines: CardLine[];
+  turnDt: string;
+  turnKt: string;
   closing: string;
+  truncated: boolean;
 }
-export interface PartnerBalanceView {
-  partnerId: string;
-  name: string;
-  taxId: string;
-  receivable: string;
-  payable: string;
+
+export interface HomeView {
+  balances: { account: string; name: string; dt: string; kt: string }[];
+  recent: OperationSummary[];
+  warnings: { kind: string; text: string; account: string; sk: string[] }[];
+  postings: number;
+  closedThrough: string;
 }
-export interface StockRowView {
-  account: string;
-  warehouseId: string;
-  warehouseName: string;
-  productId: string;
-  productCode: string;
-  productName: string;
-  unit: string;
-  quantity: string;
+
+export interface DocumentRef {
   value: string;
+  label: string;
 }
 export interface AuditView {
-  id: number;
+  seq: number;
   at: string;
   actor: string;
   action: string;
   entity: string;
+  entityId: string;
   detail: string;
 }
-export interface DashboardView {
-  /** Sum of customers that owe us (debit balances on 211); advances are shown apart. */
-  receivable: string;
-  customerAdvances: string;
-  /** Sum of suppliers we owe (credit balances on 531); our prepayments are shown apart. */
-  payable: string;
-  supplierAdvances: string;
-  bank: string;
-  purchases: number;
-  sales: number;
-  unallocatedPayments: number;
-  recentPayments: PaymentView[];
-  closedThrough: string;
-}
-
-export interface StatementLineView {
-  id: string;
-  bankAccount: string;
-  date: string;
-  direction: 'in' | 'out';
-  amount: string;
-  reference: string;
-  counterparty: string;
-  counterpartyTaxId: string;
-  purpose: string;
-  sourceFile: string;
-  status: 'new' | 'posted' | 'ignored';
-  reason: string;
-  paymentId: string | null;
-  paymentReference: string | null;
-  /** Booking proposal for rows not yet posted. */
-  suggestion: StatementSuggestion | null;
+export interface IntegrityView {
+  ok: boolean;
+  checkedAt: string;
+  postings: number;
+  registers: number;
+  problems: string[];
+  ms: number;
 }

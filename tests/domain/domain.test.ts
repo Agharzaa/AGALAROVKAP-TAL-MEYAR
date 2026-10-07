@@ -14,21 +14,11 @@ import {
   toBaseQty,
   formatQty,
 } from '../../src/domain/quantity.js';
-import { Chart, baseChart, newSubAccount } from '../../src/domain/accounts.js';
-import {
-  postInvoice,
-  postPayment,
-  reverse,
-  checkEntry,
-  type InvoiceDoc,
-} from '../../src/domain/posting.js';
 import { issueCost } from '../../src/domain/stock.js';
 import { numberKey, parseDate, parseTaxId } from '../../src/domain/values.js';
 import { DomainError } from '../../src/domain/errors.js';
-
-const chart = new Chart(baseChart);
-const sides = (lines: { account: string; debit: bigint; credit: bigint }[]) =>
-  lines.map((l) => [l.account, formatMinor(l.debit), formatMinor(l.credit)]);
+import { Chart, baseChart, checkSubkonto, newAccount } from '../../src/domain/chart.js';
+import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
   assert.equal(parseMoney('118'), 11800n);
@@ -71,255 +61,6 @@ test('values: dates, VÖEN and normalized document numbers', () => {
   assert.equal(numberKey('inv-1'), 'INV-1');
   assert.equal(numberKey('İNV-1'), 'INV-1');
   assert.equal(numberKey('ınv-1'), 'INV-1');
-});
-
-const purchase = (lines: InvoiceDoc['lines']): InvoiceDoc => ({
-  direction: 'purchase',
-  number: 'P-1',
-  partnerId: 'p1',
-  partnerName: 'Təchizatçı',
-  lines,
-});
-
-test('acceptance 1: goods 100 + VAT 18 → Dt 205 100, Dt 241 18, Kt 531 118', () => {
-  const lines = postInvoice(
-    chart,
-    purchase([
-      {
-        kind: 'stock',
-        description: 'Mal',
-        account: '205',
-        productId: 'pr',
-        warehouseId: 'w',
-        quantity: parseQty('10'),
-        net: 10000n,
-        vat: 1800n,
-      },
-    ]),
-  );
-  assert.deepEqual(sides(lines), [
-    ['205', '100.00', '0.00'],
-    ['241', '18.00', '0.00'],
-    ['531', '0.00', '118.00'],
-  ]);
-  assert.equal(lines[2]!.partnerId, 'p1');
-  assert.equal(lines[0]!.quantity, 10_000_000n);
-});
-
-test('acceptance 2: choosing 201 on the line debits 201, not 205', () => {
-  const lines = postInvoice(
-    chart,
-    purchase([
-      {
-        kind: 'stock',
-        description: 'Kağız',
-        account: '201',
-        productId: 'pr',
-        warehouseId: 'w',
-        quantity: parseQty('1'),
-        net: 5000n,
-        vat: 0n,
-      },
-    ]),
-  );
-  assert.deepEqual(sides(lines), [
-    ['201', '50.00', '0.00'],
-    ['531', '0.00', '50.00'],
-  ]);
-});
-
-test('services require an expense item on 721; wrong families and missing analytics are refused', () => {
-  const service = {
-    kind: 'service' as const,
-    description: 'Rabitə',
-    account: '721',
-    expenseItemId: 'telecom',
-    net: 2000n,
-    vat: 360n,
-  };
-  assert.deepEqual(sides(postInvoice(chart, purchase([service]))), [
-    ['721', '20.00', '0.00'],
-    ['241', '3.60', '0.00'],
-    ['531', '0.00', '23.60'],
-  ]);
-  assert.throws(
-    () => postInvoice(chart, purchase([{ ...service, expenseItemId: undefined }])),
-    /xərc maddəsi/,
-  );
-  assert.throws(() => postInvoice(chart, purchase([{ ...service, account: '205' }])), /721/);
-  assert.throws(
-    () => postInvoice(chart, purchase([{ ...service, kind: 'stock', account: '205' }])),
-    /nomenklatura/,
-  );
-  assert.throws(() => postInvoice(chart, purchase([])), /ən azı bir/);
-  assert.throws(() => postInvoice(chart, purchase([{ ...service, net: 0n }])), /sıfırdan/);
-});
-
-test('sale posts receivable, revenue, VAT and cost of goods from the supplied cost', () => {
-  const lines = postInvoice(
-    chart,
-    {
-      direction: 'sale',
-      number: 'S-1',
-      partnerId: 'c1',
-      partnerName: 'Alıcı',
-      lines: [
-        {
-          kind: 'stock',
-          description: 'Mal',
-          account: '601',
-          stockAccount: '205',
-          productId: 'pr',
-          warehouseId: 'w',
-          quantity: parseQty('4'),
-          net: 10000n,
-          vat: 1800n,
-        },
-        { kind: 'service', description: 'Çatdırılma', account: '601', net: 500n, vat: 90n },
-      ],
-    },
-    new Map([[0, 6000n]]),
-  );
-  assert.deepEqual(sides(lines), [
-    ['211', '123.90', '0.00'],
-    ['601', '0.00', '100.00'],
-    ['701', '60.00', '0.00'],
-    ['205', '0.00', '60.00'],
-    ['601', '0.00', '5.00'],
-    ['545', '0.00', '18.90'],
-  ]);
-  assert.equal(lines[3]!.quantity, -4_000_000n);
-  assert.throws(
-    () =>
-      postInvoice(chart, {
-        direction: 'sale',
-        number: 'S-2',
-        partnerId: 'c1',
-        partnerName: 'Alıcı',
-        lines: [
-          {
-            kind: 'stock',
-            description: 'Avadanlıq',
-            account: '601',
-            stockAccount: '113',
-            productId: 'pr',
-            warehouseId: 'w',
-            quantity: 1n,
-            net: 1n,
-            vat: 0n,
-          },
-        ],
-      }),
-    /205 və ya 201/,
-  );
-});
-
-test('payments and reversal mirror each other', () => {
-  const inbound = postPayment(chart, {
-    direction: 'in',
-    bankAccount: '223',
-    reference: 'B1',
-    partnerId: 'c1',
-    partnerName: 'Alıcı',
-    amount: 11800n,
-    memo: '',
-  });
-  assert.deepEqual(sides(inbound), [
-    ['223', '118.00', '0.00'],
-    ['211', '0.00', '118.00'],
-  ]);
-  const deposit = postPayment(chart, {
-    direction: 'in',
-    bankAccount: '224.04',
-    reference: 'B2',
-    partnerId: 'c1',
-    partnerName: 'Alıcı',
-    amount: 1800n,
-    memo: '',
-  });
-  assert.equal(deposit[0]!.account, '224.04');
-  const outbound = postPayment(chart, {
-    direction: 'out',
-    bankAccount: '223',
-    reference: 'B3',
-    partnerId: 's1',
-    partnerName: 'Təchizatçı',
-    amount: 500n,
-    memo: '',
-  });
-  assert.deepEqual(sides(outbound), [
-    ['531', '5.00', '0.00'],
-    ['223', '0.00', '5.00'],
-  ]);
-  assert.deepEqual(sides(reverse(inbound)), [
-    ['223', '0.00', '118.00'],
-    ['211', '118.00', '0.00'],
-  ]);
-  assert.throws(
-    () =>
-      postPayment(chart, {
-        ...{ direction: 'in', reference: 'x', partnerId: 'c', partnerName: 'c', memo: '' },
-        bankAccount: '211',
-        amount: 1n,
-      } as never),
-    /223/,
-  );
-});
-
-test('entries must balance, use postable accounts and carry required analytics', () => {
-  assert.throws(
-    () =>
-      checkEntry(chart, [
-        { account: '223', debit: 100n, credit: 0n, memo: '' },
-        { account: '211', debit: 0n, credit: 99n, partnerId: 'p', memo: '' },
-      ]),
-    /bərabər deyil/,
-  );
-  assert.throws(
-    () =>
-      checkEntry(chart, [
-        { account: '223', debit: 100n, credit: 0n, memo: '' },
-        { account: '211', debit: 0n, credit: 100n, memo: '' },
-      ]),
-    /analitika/,
-  );
-  assert.throws(
-    () => checkEntry(chart, [{ account: '223', debit: 1n, credit: 1n, memo: '' }]),
-    /yalnız debet/,
-  );
-  // A group with sub-accounts is not postable.
-  const sub = newSubAccount(
-    chart.get('205'),
-    '205.01',
-    'Tikinti malları',
-    new Set(chart.all().map((a) => a.code)),
-  );
-  const extended = new Chart([...baseChart, sub]);
-  assert.equal(extended.postable('205'), false);
-  assert.equal(extended.postable('205.01'), true);
-  assert.deepEqual(sub.analytics, ['warehouse', 'product']);
-  assert.throws(
-    () =>
-      postInvoice(
-        extended,
-        purchase([
-          {
-            kind: 'stock',
-            description: '',
-            account: '205',
-            productId: 'p',
-            warehouseId: 'w',
-            quantity: 1n,
-            net: 1n,
-            vat: 0n,
-          },
-        ]),
-      ),
-    /subhesab seçin/,
-  );
-  assert.throws(() => newSubAccount(chart.get('205'), '201.01', 'x', new Set()), /205.01/);
-  assert.throws(() => newSubAccount(chart.get('205'), '205.1', 'x', new Set()), /formatında/);
-  assert.throws(() => newSubAccount(undefined, '999.01', 'x', new Set()), /tapılmadı/);
 });
 
 test('acceptance 11: 10×10 + 10×20, issue 4 → average cost 60; full issue clears the value', () => {
@@ -372,4 +113,87 @@ test('bank statement amounts and dates are read the way banks print them', async
   assert.equal(kind('out', 'Artıq ödənilmiş məbləğin qaytarılması', '1700000001'), 'refund');
   assert.equal(kind('out', 'ƏDV depozit hesabına köçürmə'), 'transfer');
   assert.equal(kind('in', 'x', '1234567890'), 'transfer');
+});
+
+const chart = new Chart(baseChart);
+const P = (
+  dt: string,
+  dtSk: string[],
+  kt: string,
+  ktSk: string[],
+  amount: bigint,
+  extra: Partial<Posting> = {},
+): Posting => ({
+  dt: { account: dt, sk: dtSk },
+  kt: { account: kt, sk: ktSk },
+  amount,
+  memo: '',
+  ...extra,
+});
+
+test('chart: agreed accounts and subkonto, groups are not postable', () => {
+  assert.deepEqual(chart.get('211')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(chart.get('531')!.subkonto, ['partner', 'contract', 'document']);
+  assert.deepEqual(chart.get('601')!.subkonto, ['incomeType', 'vatRate']);
+  assert.deepEqual(chart.get('604.1')!.subkonto, ['vatRate']);
+  assert.deepEqual(chart.get('501')!.subkonto, ['partner', 'contract']);
+  assert.deepEqual(chart.get('543.01')!.subkonto, ['partner', 'contract']);
+  assert.deepEqual(chart.get('205')!.subkonto, ['product']);
+  assert.equal(chart.get('205')!.quantitative, true);
+  assert.equal(chart.get('223.02')!.currency, true);
+  assert.equal(chart.get('223.01')!.currency, false);
+  for (const group of ['223', '224', '243', '543', '604'])
+    assert.equal(chart.postable(group), false, group);
+  assert.throws(() => chart.require('223', 'x'), /subhesab seçin/);
+  assert.throws(() => chart.require('999', 'x'), /hesab planında yoxdur/);
+});
+
+test('chart: new accounts inherit from the parent; subkonto rules', () => {
+  const sub = newAccount(chart, { code: '721.01', name: 'Bank xərcləri' });
+  assert.deepEqual([sub.parentCode, sub.nature, sub.subkonto], ['721', 'active', ['expenseItem']]);
+  assert.throws(() => newAccount(chart, { code: '721', name: 'x' }), /artıq var/);
+  assert.throws(() => newAccount(chart, { code: '72', name: 'x' }), /3 rəqəmlə/);
+  assert.throws(() => newAccount(chart, { code: '999.01', name: 'x' }), /Əvvəlcə 999/);
+  assert.throws(() => newAccount(chart, { code: '999', name: 'x' }), /növünü seçin/);
+  assert.throws(() => checkSubkonto(['contract', 'partner']), /kontragentdən dərhal sonra/);
+  assert.throws(() => checkSubkonto(['partner', 'contract', 'document', 'vatRate']), /ən çox 3/);
+});
+
+test('postings: subkonto count, quantity and currency rules; storno negates everything', () => {
+  checkPostings(chart, [P('211', ['p', 'c', 'd'], '601', ['inc', '18'], 1000n)]);
+  assert.throws(
+    () => checkPostings(chart, [P('211', ['p', 'c'], '601', ['inc', '18'], 1000n)]),
+    /3 subkonto/,
+  );
+  assert.throws(
+    () => checkPostings(chart, [P('211', ['p', '', 'd'], '601', ['inc', '18'], 1000n)]),
+    /subkonto 2 seçilməyib/,
+  );
+  assert.throws(
+    () => checkPostings(chart, [P('205', ['x'], '531', ['p', 'c', 'd'], 1000n)]),
+    /miqdar yazılmalıdır/,
+  );
+  checkPostings(chart, [P('205', ['x'], '531', ['p', 'c', 'd'], 1000n, { quantity: 5_000_000n })]);
+  assert.throws(
+    () => checkPostings(chart, [P('721', ['e'], '531', ['p', 'c', 'd'], 10n, { quantity: 1n })]),
+    /miqdar uçotu aparılmır/,
+  );
+  assert.throws(
+    () => checkPostings(chart, [P('223.02', ['b'], '543.02', ['p', 'c'], 170n)]),
+    /valyuta məbləğini/,
+  );
+  checkPostings(chart, [
+    {
+      dt: { account: '223.02', sk: ['b'], currency: 'USD', curAmount: 100n },
+      kt: { account: '543.02', sk: ['p', 'c'], currency: 'USD', curAmount: 100n },
+      amount: 170n,
+      memo: '',
+    },
+  ]);
+  assert.throws(() => checkPostings(chart, [P('221', ['k'], '221', ['k'], 5n)]), /eyni ola bilməz/);
+  assert.throws(() => checkPostings(chart, [P('221', ['k'], '223.01', ['b'], 0n)]), /sıfır/);
+  const [s] = storno([P('205', ['x'], '531', ['p', 'c', 'd'], 1000n, { quantity: 5n })]);
+  assert.equal(s!.amount, -1000n);
+  assert.equal(s!.quantity, -5n);
+  checkPostings(chart, [s!]);
 });

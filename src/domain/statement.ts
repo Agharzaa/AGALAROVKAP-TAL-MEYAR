@@ -10,8 +10,29 @@
  *    the rest wait for a person.
  */
 import { formatMinor, parseMoney, type Minor } from './money.js';
-import type { PaymentDirection, PaymentKind } from './posting.js';
-import { roles } from './accounts.js';
+
+export type PaymentDirection = 'in' | 'out';
+/** Booking proposal kinds; stage 3 replaces them with learned rules over the full chart. */
+export type PaymentKind =
+  | 'settlement'
+  | 'refund'
+  | 'capital'
+  | 'loan'
+  | 'tax'
+  | 'social'
+  | 'salary'
+  | 'transfer'
+  | 'fee'
+  | 'other';
+const roles = {
+  transit: '222',
+  adminExpenses: '721',
+  social: '522',
+  taxPayable: '521',
+  payroll: '533',
+  capital: '301',
+  loans: '501',
+} as const;
 import { searchKey } from './values.js';
 
 export interface StatementLine {

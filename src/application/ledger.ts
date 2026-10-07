@@ -4,35 +4,31 @@ import { commandSchema, type Command, type CommandResult } from '../contracts/co
 import { querySchema } from '../contracts/queries.js';
 import type { Db } from '../infrastructure/sqlite/db.js';
 import {
+  closePeriod,
   createAccount,
   createCompany,
-  saveNamed,
+  saveBankAccount,
+  saveContract,
+  saveEmployee,
+  saveItem,
   savePartner,
   saveProduct,
-  saveUnit,
+  updateAccount,
+  updateCompany,
 } from './catalog.js';
-import { cancelInvoice, saveInvoice } from './invoices.js';
-import { ignoreStatement, importStatement, postStatement } from './statements.js';
-import {
-  autoAllocateCommand,
-  cancelAllocation,
-  cancelPayment,
-  closePeriod,
-  createAllocations,
-  savePayment,
-} from './payments.js';
+import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
 
 /**
  * The single entry point for changes. Each command is validated, de-duplicated by its
  * idempotency key and executed inside one write transaction: either every effect — document,
- * journal, settlement, history and audit — is stored, or none is.
+ * journal, registers, history and audit — is stored, or none is.
  */
 export class Ledger {
   constructor(
     readonly db: Db,
-    private readonly clock: Clock = systemClock,
+    readonly clock: Clock = systemClock,
   ) {}
 
   execute(input: unknown, ctx: Context): CommandResult {
@@ -75,45 +71,35 @@ export class Ledger {
   query(input: unknown): unknown {
     const parsed = querySchema.safeParse(input);
     if (!parsed.success) throw new DomainError('Sorğu düzgün deyil.');
-    return this.db.read(() => runQuery(this.db, parsed.data));
+    return this.db.read(() => runQuery(this.db, parsed.data, this.clock.today(), this.clock.now()));
   }
 
   private dispatch(tx: Tx, c: Command): CommandResult {
     switch (c.type) {
       case 'company.create':
         return createCompany(tx, c);
-      case 'partner.save':
-        return savePartner(tx, c);
+      case 'company.update':
+        return updateCompany(tx, c);
       case 'account.create':
         return createAccount(tx, c);
-      case 'expenseItem.save':
-        return saveNamed(tx, 'expense_items', 'Xərc maddəsi', c);
-      case 'warehouse.save':
-        return saveNamed(tx, 'warehouses', 'Anbar', c);
-      case 'unit.save':
-        return saveUnit(tx, c);
+      case 'account.update':
+        return updateAccount(tx, c);
+      case 'partner.save':
+        return savePartner(tx, c);
+      case 'contract.save':
+        return saveContract(tx, c);
+      case 'bankAccount.save':
+        return saveBankAccount(tx, c);
       case 'product.save':
         return saveProduct(tx, c);
-      case 'invoice.save':
-        return saveInvoice(tx, c);
-      case 'invoice.cancel':
-        return cancelInvoice(tx, c);
-      case 'payment.save':
-        return savePayment(tx, c);
-      case 'payment.cancel':
-        return cancelPayment(tx, c);
-      case 'allocation.create':
-        return createAllocations(tx, c);
-      case 'allocation.cancel':
-        return cancelAllocation(tx, c);
-      case 'allocation.auto':
-        return autoAllocateCommand(tx, c);
-      case 'bankStatement.import':
-        return importStatement(tx, c);
-      case 'bankStatement.post':
-        return postStatement(tx, c);
-      case 'bankStatement.ignore':
-        return ignoreStatement(tx, c);
+      case 'employee.save':
+        return saveEmployee(tx, c);
+      case 'item.save':
+        return saveItem(tx, c);
+      case 'operation.save':
+        return saveOperation(tx, c);
+      case 'operation.cancel':
+        return cancelOperation(tx, c);
       case 'period.close':
         return closePeriod(tx, c);
     }

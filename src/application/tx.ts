@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Chart, type Account, type AnalyticKind } from '../domain/accounts.js';
+import { Chart, type Account, type SubkontoKind } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import type { JournalLine } from '../domain/posting.js';
+import type { Posting } from '../domain/posting.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 
 export interface Clock {
@@ -22,7 +22,39 @@ export interface Context {
   correlationId: string;
 }
 
-export type SourceType = 'invoice' | 'payment';
+export function toAccount(r: Row): Account {
+  return {
+    code: String(r.code),
+    name: String(r.name),
+    parentCode: r.parent_code === null ? null : String(r.parent_code),
+    nature: r.nature as Account['nature'],
+    subkonto: JSON.parse(String(r.subkonto)) as SubkontoKind[],
+    quantitative: r.quantitative === 1n,
+    currency: r.currency === 1n,
+    system: r.system === 1n,
+    archived: r.archived === 1n,
+  };
+}
+
+export function loadChart(db: Db, companyId: string): Chart {
+  return new Chart(db.all('SELECT * FROM accounts WHERE company_id=?', companyId).map(toAccount));
+}
+
+export function expectVersion(row: Row, expected: number | undefined, label: string) {
+  if (expected === undefined || BigInt(expected) !== (row.version as bigint))
+    throw new DomainError(
+      `${label} başqa pəncərədə və ya başqa istifadəçi tərəfindən dəyişdirilib. Ən son versiyanı açıb dəyişikliyinizi yenidən edin.`,
+      'version',
+      'stale',
+    );
+}
+
+export interface Source {
+  type: string;
+  id: string;
+  number: string;
+  version: number;
+}
 
 /** Everything a command handler may touch, scoped to one write transaction. */
 export class Tx {
@@ -40,9 +72,7 @@ export class Tx {
     return company;
   }
   chart(companyId: string): Chart {
-    return new Chart(
-      this.db.all('SELECT * FROM accounts WHERE company_id=?', companyId).map(toAccount),
-    );
+    return loadChart(this.db, companyId);
   }
   /** Refuses dates on or before the company's closing date. */
   open(companyId: string, date: string, field = 'date') {
@@ -53,15 +83,6 @@ export class Tx {
         field,
         'closed-period',
       );
-  }
-  partner(companyId: string, partnerId: string): Row {
-    const p = this.db.get(
-      'SELECT * FROM partners WHERE company_id=? AND id=?',
-      companyId,
-      partnerId,
-    );
-    if (!p) throw new DomainError('Bu şirkətdə kontragent tapılmadı.', 'partnerId', 'not-found');
-    return p;
   }
   audit(companyId: string, action: string, entity: string, entityId: string, detail: string) {
     this.db.run(
@@ -78,7 +99,7 @@ export class Tx {
   }
   history(
     companyId: string,
-    type: SourceType,
+    type: string,
     id: string,
     version: number,
     status: string,
@@ -96,17 +117,21 @@ export class Tx {
       this.ctx.actor,
     );
   }
-  /** Appends one balanced entry; the lines were validated by the domain posting rules. */
+  /**
+   * Appends one entry. The postings were checked by the domain rules and the subkonto values
+   * against the catalogs; registers follow through the database triggers.
+   */
   post(
     companyId: string,
-    source: { type: SourceType; id: string; number: string; version: number },
+    chart: Chart,
+    source: Source,
     date: string,
-    reversal: boolean,
-    lines: readonly JournalLine[],
+    storno: boolean,
+    postings: readonly Posting[],
   ) {
     const entryId = this.id();
     this.db.run(
-      'INSERT INTO journal_entries VALUES(?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO entries VALUES(?,?,?,?,?,?,?,?,?,?)',
       entryId,
       companyId,
       date,
@@ -114,77 +139,90 @@ export class Tx {
       source.id,
       source.number,
       source.version,
-      reversal ? 1 : 0,
+      storno ? 1 : 0,
       this.clock.now(),
+      this.ctx.actor,
     );
-    lines.forEach((l, i) =>
+    postings.forEach((p, i) => {
+      const dt = chart.get(p.dt.account)!;
+      const kt = chart.get(p.kt.account)!;
+      const qty = p.quantity ?? 0n;
       this.db.run(
-        'INSERT INTO journal_lines VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+        `INSERT INTO postings(entry_id,line_no,company_id,date,dt_account,dt_s1,dt_s2,dt_s3,kt_account,kt_s1,kt_s2,kt_s3,
+           amount,dt_qty,kt_qty,dt_currency,dt_cur,kt_currency,kt_cur,memo) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         entryId,
         i + 1,
         companyId,
-        l.account,
-        l.debit,
-        l.credit,
-        l.partnerId ?? null,
-        l.warehouseId ?? null,
-        l.productId ?? null,
-        l.expenseItemId ?? null,
-        l.quantity ?? null,
-        l.memo,
-      ),
-    );
+        date,
+        p.dt.account,
+        p.dt.sk[0] ?? '',
+        p.dt.sk[1] ?? '',
+        p.dt.sk[2] ?? '',
+        p.kt.account,
+        p.kt.sk[0] ?? '',
+        p.kt.sk[1] ?? '',
+        p.kt.sk[2] ?? '',
+        p.amount,
+        dt.quantitative ? qty : 0n,
+        kt.quantitative ? qty : 0n,
+        p.dt.currency ?? '',
+        p.dt.curAmount ?? 0n,
+        p.kt.currency ?? '',
+        p.kt.curAmount ?? 0n,
+        p.memo,
+      );
+    });
+    return entryId;
   }
-  /** Lines of the original (non-reversal) entry of one document version. */
-  entryLines(
+  /** Postings of the latest non-storno entry of a document version. */
+  entryPostings(
     companyId: string,
-    type: SourceType,
+    type: string,
     id: string,
     version: number,
-  ): { date: string; lines: JournalLine[] } {
+  ): { date: string; postings: Posting[] } {
     const entry = this.db.get(
-      'SELECT id,date FROM journal_entries WHERE company_id=? AND source_type=? AND source_id=? AND source_version=? AND reversal=0',
+      'SELECT id,date FROM entries WHERE company_id=? AND source_type=? AND source_id=? AND source_version=? AND storno=0',
       companyId,
       type,
       id,
       version,
     );
-    if (!entry) throw new DomainError('Sənədin ilkin yazılışı tapılmadı.', undefined, 'not-found');
-    const lines = this.db
-      .all('SELECT * FROM journal_lines WHERE entry_id=? ORDER BY line_no', String(entry.id))
-      .map((r): JournalLine => ({
-        account: String(r.account),
-        debit: r.debit as bigint,
-        credit: r.credit as bigint,
-        ...(r.partner_id ? { partnerId: String(r.partner_id) } : {}),
-        ...(r.warehouse_id ? { warehouseId: String(r.warehouse_id) } : {}),
-        ...(r.product_id ? { productId: String(r.product_id) } : {}),
-        ...(r.expense_item_id ? { expenseItemId: String(r.expense_item_id) } : {}),
-        ...(r.quantity !== null ? { quantity: r.quantity as bigint } : {}),
-        memo: String(r.memo),
-      }));
-    return { date: String(entry.date), lines };
+    if (!entry) throw new DomainError('Sənədin yazılışı tapılmadı.', undefined, 'not-found');
+    return {
+      date: String(entry.date),
+      postings: this.db
+        .all('SELECT * FROM postings WHERE entry_id=? ORDER BY line_no', String(entry.id))
+        .map(rowToPosting),
+    };
   }
 }
 
-export function toAccount(r: Row): Account {
-  return {
-    code: String(r.code),
-    name: String(r.name),
-    parentCode: r.parent_code === null ? null : String(r.parent_code),
-    nature: r.nature as Account['nature'],
-    analytics: JSON.parse(String(r.analytics)) as AnalyticKind[],
-    quantitative: r.quantitative === 1n,
-    system: r.system === 1n,
-    archived: r.archived === 1n,
-  };
-}
+const trimSk = (...values: unknown[]) => {
+  const list = values.map((v) => String(v ?? ''));
+  while (list.length && !list[list.length - 1]) list.pop();
+  return list;
+};
 
-export function expectVersion(row: Row, expected: number | undefined, label: string) {
-  if (expected === undefined || BigInt(expected) !== (row.version as bigint))
-    throw new DomainError(
-      `${label} başqa pəncərədə və ya istifadəçi tərəfindən dəyişdirilib. Ən son versiyanı açıb dəyişikliyinizi yenidən tətbiq edin.`,
-      'version',
-      'stale',
-    );
+export function rowToPosting(r: Row): Posting {
+  const qty = (r.dt_qty as bigint) || (r.kt_qty as bigint);
+  return {
+    dt: {
+      account: String(r.dt_account),
+      sk: trimSk(r.dt_s1, r.dt_s2, r.dt_s3),
+      ...(r.dt_currency
+        ? { currency: String(r.dt_currency) as never, curAmount: r.dt_cur as bigint }
+        : {}),
+    },
+    kt: {
+      account: String(r.kt_account),
+      sk: trimSk(r.kt_s1, r.kt_s2, r.kt_s3),
+      ...(r.kt_currency
+        ? { currency: String(r.kt_currency) as never, curAmount: r.kt_cur as bigint }
+        : {}),
+    },
+    amount: r.amount as bigint,
+    ...(qty ? { quantity: qty } : {}),
+    memo: String(r.memo),
+  };
 }
