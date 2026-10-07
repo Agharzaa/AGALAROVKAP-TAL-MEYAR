@@ -16,7 +16,9 @@ const backupDir = path.join(app.getPath('userData'), 'backups');
 // Ledger v3 (subkonto model) starts in its own file; the stage-A test database stays untouched.
 const databaseFile = path.join(dataDir, 'meyar-v3.sqlite');
 // Worker code must load from the real file system, not from inside app.asar.
-const workerScript = path.join(here, 'ledger-worker.js').replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+const workerScript = path
+  .join(here, 'ledger-worker.js')
+  .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
 let ledger: LedgerClient | undefined;
 let reader: LedgerClient | undefined;

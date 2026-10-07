@@ -558,8 +558,9 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
   for (const side of ['dt', 'kt'] as const) {
     const conds = sk.map((_, i) => ` AND p.${side}_s${i + 1}=?`).join('');
     db.all(
-      `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq
+      `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq, o.memo AS doc_memo
        FROM postings p JOIN entries e ON e.id=p.entry_id
+       LEFT JOIN operations o ON e.source_type='operation' AND o.id=e.source_id
        WHERE p.company_id=? AND p.${side}_account IN (${codes.map(() => '?').join(',')}) AND p.date>=? AND p.date<=?${conds}
        ORDER BY p.date, e.rowid, p.line_no LIMIT ${LIMIT + 1}`,
       q.companyId,
@@ -599,7 +600,7 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
       sourceId: str(r.source_id),
       number: str(r.source_number),
       storno: flag(r.storno),
-      memo: str(r.memo),
+      memo: str(r.memo) || str(r.doc_memo),
       sk: skNames(str(r[`${side}_account`]), own),
       corrAccount: str(r[`${other}_account`]),
       corrSk: skNames(str(r[`${other}_account`]), corr),

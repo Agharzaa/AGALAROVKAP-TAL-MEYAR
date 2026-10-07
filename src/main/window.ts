@@ -102,18 +102,24 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
   handle('meyar:save-file', async (_e, arg) => {
     const { defaultName, bytes } = arg as { defaultName: string; bytes: Uint8Array };
     try {
-      if (!(bytes instanceof Uint8Array) || bytes.length > 200 * 1024 * 1024) throw new Error('Fayl düzgün deyil.');
-      const safe = path.basename(String(defaultName)).replace(/[<>:"/\\|?*]/g, '_') || 'hesabat.xlsx';
+      if (!(bytes instanceof Uint8Array) || bytes.length > 200 * 1024 * 1024)
+        throw new Error('Fayl düzgün deyil.');
+      const safe =
+        path.basename(String(defaultName)).replace(/[<>:"/\\|?*]/g, '_') || 'hesabat.xlsx';
       const result = await dialog.showSaveDialog(window, {
         title: 'Faylı saxla',
         defaultPath: safe,
         filters: [{ name: 'Excel', extensions: ['xlsx'] }],
       });
-      if (result.canceled || !result.filePath) return { ok: true, value: null } satisfies Outcome<string | null>;
+      if (result.canceled || !result.filePath)
+        return { ok: true, value: null } satisfies Outcome<string | null>;
       await writeFile(result.filePath, bytes);
       return { ok: true, value: result.filePath } satisfies Outcome<string | null>;
     } catch (error) {
-      return { ok: false, error: { message: (error as Error).message, code: 'save' } } satisfies Outcome<string | null>;
+      return {
+        ok: false,
+        error: { message: (error as Error).message, code: 'save' },
+      } satisfies Outcome<string | null>;
     }
   });
   let dirty = false;

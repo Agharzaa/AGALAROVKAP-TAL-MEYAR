@@ -28,7 +28,10 @@ export class LedgerClient {
     });
     this.worker.on('exit', () => {
       for (const done of this.pending.values())
-        done({ ok: false, error: { message: 'Uçot modulu dayandı. Proqramı yenidən açın.', code: 'internal' } });
+        done({
+          ok: false,
+          error: { message: 'Uçot modulu dayandı. Proqramı yenidən açın.', code: 'internal' },
+        });
       this.pending.clear();
     });
   }

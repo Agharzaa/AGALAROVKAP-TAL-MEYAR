@@ -1,39 +1,30 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react';
-import type { CompanyView } from '../contracts/queries';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import type { CompanyView, IntegrityView } from '../contracts/queries';
+import { searchKey } from '../domain/values';
 import { api } from './api';
-import { useMutation } from './hooks';
-import { footerPages, navigation, pages, viewTitle } from './pages';
-import { QuickOpen } from './quick-open';
+import { useCatalog } from './catalog';
+import { useMutation, useQuery } from './hooks';
+import { pages, ribbon, viewTitle, type RibbonAction } from './pages';
 import { Confirm, Field, Modal, Notice } from './ui';
 import {
   WindowContext,
   WorkspaceProvider,
+  monthOf,
   useWorkspace,
   type Page,
   type View,
   type Win,
 } from './workspace';
-import { InvoiceList } from './pages/invoices';
-import { InvoiceEditor } from './pages/invoice-editor';
-import { PaymentList } from './pages/payments';
-import { BankStatement } from './pages/bank-statement';
-import { PaymentEditor } from './pages/payment-editor';
-import {
-  AccountCardPage,
-  JournalPage,
-  PartnerBalancesPage,
-  StockPage,
-  TrialBalancePage,
-} from './pages/reports';
-import {
-  AccountsPage,
-  AuditPage,
-  PartnersPage,
-  ProductsPage,
-  WarehousesPage,
-} from './pages/catalogs';
-import { Home, Onboarding, SettingsPage } from './pages/home';
+import { HomePage } from './pages/home';
+import { OperationsPage } from './pages/operations';
+import { OperationEditor } from './pages/operation-editor';
+import { TrialPage } from './pages/trial';
+import { CardPage } from './pages/card';
+import { AccountsPage } from './pages/accounts';
+import { PartnersPage } from './pages/partners';
+import { BankAccountsPage, EmployeesPage, ListsPage, ProductsPage } from './pages/catalogs';
+import { AuditPage, SettingsPage } from './pages/settings';
 
 export default function App() {
   const [companies, setCompanies] = useState<CompanyView[] | null>(null);
@@ -70,12 +61,15 @@ export default function App() {
     );
   if (!companies.length)
     return (
-      <Onboarding
-        onCreated={(id) => {
-          setInitial(id);
-          void load();
-        }}
-      />
+      <div className="startup">
+        <CompanyForm
+          first
+          onCreated={(id) => {
+            setInitial(id);
+            void load();
+          }}
+        />
+      </div>
     );
   return (
     <WorkspaceProvider initialCompany={initial || companies[0]!.id}>
@@ -84,19 +78,233 @@ export default function App() {
   );
 }
 
-function useNarrow() {
-  const query = '(max-width: 1180px)';
-  const [narrow, setNarrow] = useState(
-    () => typeof window.matchMedia === 'function' && window.matchMedia(query).matches,
+function CompanyForm({
+  first = false,
+  onCreated,
+  onCancel,
+}: {
+  first?: boolean;
+  onCreated: (id: string) => void;
+  onCancel?: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [vatPayer, setVatPayer] = useState(true);
+  const m = useMutation();
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const r = await m.run({ type: 'company.create', name, taxId, vatPayer });
+    if (r) onCreated(r.id);
+  };
+  return (
+    <form
+      className={first ? 'onboarding' : 'dialog-form'}
+      onSubmit={(e) => void submit(e)}
+      noValidate
+    >
+      {first && (
+        <header>
+          <span className="brand-mark" aria-hidden="true">
+            M
+          </span>
+          <h1>Meyar-a xoş gəlmisiniz</h1>
+          <p>
+            Uçotu aparacağınız şirkəti daxil edin. Hesab planı, subkontolar və əsas siyahılar
+            avtomatik yaradılacaq.
+          </p>
+        </header>
+      )}
+      <Field label="Şirkətin adı">
+        <input
+          autoFocus
+          required
+          maxLength={200}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Field>
+      <Field label="VÖEN" hint="10 rəqəm">
+        <input
+          required
+          inputMode="numeric"
+          maxLength={10}
+          value={taxId}
+          onChange={(e) => setTaxId(e.target.value)}
+        />
+      </Field>
+      <label className="check">
+        <input type="checkbox" checked={vatPayer} onChange={(e) => setVatPayer(e.target.checked)} />{' '}
+        ƏDV ödəyicisidir
+      </label>
+      {m.error && <Notice>{m.error.message}</Notice>}
+      <div className="form-actions">
+        {onCancel && (
+          <button type="button" className="button secondary" onClick={onCancel}>
+            Ləğv et
+          </button>
+        )}
+        <button type="submit" className="button primary" disabled={m.busy}>
+          {m.busy ? 'Yaradılır…' : 'Şirkəti yarat'}
+        </button>
+      </div>
+    </form>
   );
+}
+
+const monthNames = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'İyun',
+  'İyul',
+  'Avqust',
+  'Sentyabr',
+  'Oktyabr',
+  'Noyabr',
+  'Dekabr',
+];
+
+function PeriodSwitch() {
+  const ws = useWorkspace();
+  const [y, m] = ws.period.from.split('-').map(Number) as [number, number];
+  const shift = (d: number) => {
+    const date = new Date(Date.UTC(y, m - 1 + d, 1));
+    ws.setPeriod(monthOf(date.toISOString().slice(0, 10)));
+  };
+  return (
+    <div className="period-switch" role="group" aria-label="İş dövrü">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Əvvəlki ay"
+        onClick={() => shift(-1)}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <span title="Hesabatların və yeni sənədlərin standart dövrü">
+        Dövr: {monthNames[m - 1]} {y}
+      </span>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Növbəti ay"
+        onClick={() => shift(1)}
+      >
+        <ChevronRight size={14} />
+      </button>
+    </div>
+  );
+}
+
+interface SearchHit {
+  label: string;
+  hint: string;
+  view: View;
+}
+
+function QuickSearch() {
+  const ws = useWorkspace();
+  const { catalog } = useCatalog(ws.companyId);
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const m = window.matchMedia(query);
-    const update = () => setNarrow(m.matches);
-    m.addEventListener('change', update);
-    return () => m.removeEventListener('change', update);
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        input.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
-  return narrow;
+  const hits = useMemo((): SearchHit[] => {
+    const q = searchKey(text.trim());
+    if (!q) return [];
+    const out: SearchHit[] = [];
+    for (const [page, meta] of Object.entries(pages) as [Page, (typeof pages)[Page]][])
+      if (searchKey(meta.title).includes(q))
+        out.push({ label: meta.title, hint: 'Bölmə', view: { type: 'page', page } });
+    if ('yeni əməliyyat'.includes(q) || q.startsWith('yeni'))
+      out.push({ label: 'Yeni əl ilə əməliyyat', hint: 'Əmr', view: { type: 'operation' } });
+    for (const a of catalog?.accounts ?? [])
+      if (a.code.startsWith(text.trim()) || searchKey(a.name).includes(q))
+        out.push({
+          label: `${a.code} ${a.name}`,
+          hint: 'Hesab kartı',
+          view: { type: 'accountCard', account: a.code },
+        });
+    for (const p of catalog?.partners ?? [])
+      if (searchKey(p.name).includes(q) || p.taxId.startsWith(text.trim()))
+        out.push({
+          label: p.name,
+          hint: `Kontragent ${p.taxId}`,
+          view: { type: 'page', page: 'partners' },
+        });
+    return out.slice(0, 12);
+  }, [text, catalog]);
+  const go = (h: SearchHit) => {
+    ws.open(h.view);
+    setText('');
+    setOpen(false);
+    input.current?.blur();
+  };
+  return (
+    <div className="quick-search">
+      <Search size={14} aria-hidden="true" />
+      <input
+        ref={input}
+        aria-label="Axtarış və əmrlər"
+        placeholder="Nə etmək istəyirsiniz? Hesab, kontragent, bölmə…"
+        value={text}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setActive(0);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActive((a) => Math.min(a + 1, hits.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === 'Enter' && hits[active]) {
+            e.preventDefault();
+            go(hits[active]);
+          } else if (e.key === 'Escape') {
+            setText('');
+            input.current?.blur();
+          }
+        }}
+      />
+      <kbd>Ctrl+K</kbd>
+      {open && hits.length > 0 && (
+        <ul className="quick-results" role="listbox" aria-label="Nəticələr">
+          {hits.map((h, i) => (
+            <li
+              key={`${h.label}${i}`}
+              role="option"
+              aria-selected={i === active}
+              className={i === active ? 'active' : ''}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                go(h);
+              }}
+            >
+              <span>{h.label}</span>
+              <small>{h.hint}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Shell({
@@ -107,356 +315,262 @@ function Shell({
   reloadCompanies: () => Promise<void>;
 }) {
   const ws = useWorkspace();
-  const narrow = useNarrow();
-  const [rail, setRail] = useState<'auto' | 'open' | 'closed'>('auto');
-  const railOpen = rail === 'open' || (rail === 'auto' && !narrow);
-  const [quick, setQuick] = useState(false);
+  const [tab, setTab] = useState(0);
+  const [message, setMessage] = useState<{
+    kind: 'info' | 'error' | 'success';
+    text: string;
+  } | null>(null);
   const [newCompany, setNewCompany] = useState(false);
+  const company = companies.find((c) => c.id === ws.companyId) ?? companies[0]!;
+  const integrity = useQuery<IntegrityView>({ type: 'integrity', companyId: company.id });
+  const act = async (a: RibbonAction, label: string) => {
+    if (a.kind === 'view') ws.open(a.view);
+    else if (a.kind === 'soon')
+      setMessage({ kind: 'info', text: `"${label}" ${a.stage}də bu təmələ köçürüləcək.` });
+    else {
+      try {
+        const file = await api.backup();
+        if (file) setMessage({ kind: 'success', text: `Ehtiyat nüsxə saxlanıldı: ${file}` });
+      } catch (e) {
+        setMessage({ kind: 'error', text: (e as Error).message });
+      }
+    }
+  };
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault();
-        setQuick(true);
+        ws.open({ type: 'operation' });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [ws]);
   const active = ws.windows.find((w) => w.id === ws.activeId);
-  const activePage =
-    active?.view.type === 'page' ? active.view.page : ws.activeId === 'home' ? 'home' : undefined;
-  const nav = (page: Page) => (
-    <button
-      key={page}
-      type="button"
-      className={`nav-item${activePage === page ? ' active' : ''}`}
-      aria-current={activePage === page ? 'page' : undefined}
-      title={pages[page].title}
-      onClick={() => ws.open({ type: 'page', page })}
-    >
-      {(() => {
-        const I = pages[page].icon;
-        return <I size={16} aria-hidden="true" />;
-      })()}
-      <span className="nav-label">{pages[page].title}</span>
-    </button>
-  );
-  const companyName = (id: string) => companies.find((c) => c.id === id)?.name ?? '';
   return (
-    <div className={`shell ${railOpen ? 'rail-open' : 'rail-closed'}`}>
-      <aside className="sidebar" aria-label="Naviqasiya">
-        <div className="sidebar-top">
-          <div className="brand-row">
-            <button
-              type="button"
-              className="brand"
-              onClick={() => ws.open({ type: 'page', page: 'home' })}
-              aria-label="Meyar · iş masası"
-            >
-              <span className="brand-mark" aria-hidden="true">
-                M
-              </span>
-              <span className="brand-name">Meyar</span>
-            </button>
-            <button
-              type="button"
-              className="icon-button rail-toggle"
-              aria-label={railOpen ? 'Menyunu yığ' : 'Menyunu aç'}
-              title={railOpen ? 'Menyunu yığ' : 'Menyunu aç'}
-              onClick={() => setRail(railOpen ? 'closed' : 'open')}
-            >
-              {railOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-            </button>
-          </div>
-          <div className="company">
-            <select
-              aria-label="Aktiv şirkət"
-              value={ws.companyId}
-              onChange={(e) => ws.setCompany(e.target.value)}
-              title={companyName(ws.companyId)}
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Yeni şirkət"
-              title="Yeni şirkət"
-              onClick={() => setNewCompany(true)}
-            >
-              <Plus size={15} />
-            </button>
-          </div>
-          <span className="company-tax">
-            VÖEN {companies.find((c) => c.id === ws.companyId)?.taxId}
+    <div className="shell">
+      <header className="titlebar">
+        <strong className="brand">
+          <span className="brand-mark small" aria-hidden="true">
+            M
           </span>
-        </div>
-        <nav className="nav" aria-label="Bölmələr">
-          {navigation.map((group, i) => (
-            <div
-              className="nav-group"
-              key={i}
-              role={group.heading ? 'group' : undefined}
-              aria-label={group.heading}
-            >
-              {group.heading && (
-                <h2 className="nav-heading" aria-hidden="true">
-                  {group.heading}
-                </h2>
-              )}
-              {group.items.map(nav)}
-            </div>
-          ))}
-        </nav>
-        <div className="sidebar-foot">{footerPages.map(nav)}</div>
-      </aside>
-      <div className="main">
-        <div className="strip">
-          <div className="tabs" role="tablist" aria-label="Açıq pəncərələr">
-            <Tab
-              id="home"
-              label="İş masası"
-              active={ws.activeId === 'home'}
-              onSelect={() => ws.focus('home')}
-            />
-            {ws.windows.map((w) => (
-              <Tab
-                key={w.id}
-                id={w.id}
-                label={viewTitle(w.view, w.label)}
-                company={w.companyId !== ws.companyId ? companyName(w.companyId) : undefined}
-                dirty={w.dirty}
-                active={ws.activeId === w.id}
-                onSelect={() => ws.focus(w.id)}
-                onClose={() => ws.close(w.id)}
-              />
+          Meyar
+        </strong>
+        <label className="company-switch">
+          <span className="sr-only">Şirkət</span>
+          <select
+            value={company.id}
+            onChange={(e) => {
+              if (e.target.value === '__new') setNewCompany(true);
+              else ws.setCompany(e.target.value);
+            }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.taxId}
+              </option>
             ))}
-          </div>
+            <option value="__new">+ Yeni şirkət…</option>
+          </select>
+        </label>
+        <PeriodSwitch />
+        <QuickSearch />
+      </header>
+      <nav className="ribbon-tabs" aria-label="Lent menyu">
+        {ribbon.map((r, i) => (
           <button
+            key={r.tab}
             type="button"
-            className="quick-button"
-            onClick={() => setQuick(true)}
-            aria-keyshortcuts="Control+K"
+            aria-pressed={tab === i}
+            className={tab === i ? 'active' : ''}
+            onClick={() => setTab(i)}
           >
-            <Search size={14} aria-hidden="true" /> Tez keçid <kbd>Ctrl K</kbd>
+            {r.tab}
           </button>
-        </div>
-        <div className="panes">
-          <div
-            className="pane home-pane"
-            role="tabpanel"
-            id="pane-home"
-            hidden={ws.activeId !== 'home'}
-          >
-            <Home key={ws.companyId} />
-          </div>
-          {ws.windows.map((w) => (
-            <div
-              key={w.id}
-              className={`pane${w.restored ? ' restored' : ''}`}
-              role="tabpanel"
-              id={`pane-${w.id}`}
-              hidden={ws.activeId !== w.id}
-            >
-              <WindowContext.Provider value={w}>
-                <WindowBody win={w} />
-              </WindowContext.Provider>
+        ))}
+      </nav>
+      <section className="ribbon" aria-label="Alətlər lenti">
+        {ribbon[tab]!.groups.map((g) => (
+          <div key={g.name} className="ribbon-group">
+            <div className="ribbon-buttons">
+              {g.buttons
+                .filter((b) => b.size === 'large')
+                .map((b) => (
+                  <button
+                    key={b.label}
+                    type="button"
+                    className={`ribbon-large${b.action.kind === 'soon' ? ' soon' : ''}`}
+                    onClick={() => void act(b.action, b.label)}
+                  >
+                    <b.icon size={24} strokeWidth={1.5} aria-hidden="true" />
+                    <span>{b.label}</span>
+                  </button>
+                ))}
+              {g.buttons.some((b) => b.size === 'small') && (
+                <div className="ribbon-small-stack">
+                  {g.buttons
+                    .filter((b) => b.size === 'small')
+                    .map((b) => (
+                      <button
+                        key={b.label}
+                        type="button"
+                        className={`ribbon-small${b.action.kind === 'soon' ? ' soon' : ''}`}
+                        title={
+                          b.action.kind === 'soon'
+                            ? `Növbəti mərhələ: ${b.action.stage}`
+                            : undefined
+                        }
+                        onClick={() => void act(b.action, b.label)}
+                      >
+                        <b.icon size={14} strokeWidth={1.6} aria-hidden="true" />
+                        {b.label}
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+            <span className="ribbon-group-name">{g.name}</span>
+          </div>
+        ))}
+      </section>
+      <div className="window-tabs" role="tablist" aria-label="Açıq pəncərələr">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={ws.activeId === 'home'}
+          className={ws.activeId === 'home' ? 'active' : ''}
+          onClick={() => ws.focus('home')}
+        >
+          Başlanğıc
+        </button>
+        {ws.windows.map((w) => (
+          <span key={w.id} className={`window-tab${ws.activeId === w.id ? ' active' : ''}`}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={ws.activeId === w.id}
+              onClick={() => ws.focus(w.id)}
+              title={viewTitle(w.view, w.label)}
+            >
+              {w.dirty && <i className="dirty-dot" aria-label="Saxlanmayıb" />}
+              {viewTitle(w.view, w.label)}
+            </button>
+            <button
+              type="button"
+              className="tab-close"
+              aria-label={`Bağla: ${viewTitle(w.view, w.label)}`}
+              onClick={() => ws.close(w.id)}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
       </div>
-      {quick && (
-        <QuickOpen
-          companyId={ws.companyId}
-          onOpen={(view) => ws.open(view)}
-          onClose={() => setQuick(false)}
-        />
+      {message && (
+        <div className="shell-message">
+          <Notice kind={message.kind} onClose={() => setMessage(null)}>
+            {message.text}
+          </Notice>
+        </div>
       )}
+      <main className="workspace">
+        <div className="pane" hidden={ws.activeId !== 'home'}>
+          <HomePage
+            integrity={integrity.data}
+            integrityLoading={integrity.loading}
+            onRecheck={integrity.reload}
+          />
+        </div>
+        {ws.windows.map((w) => (
+          <div key={w.id} className="pane" hidden={ws.activeId !== w.id}>
+            <WindowContext.Provider value={w}>
+              <Routed win={w} />
+            </WindowContext.Provider>
+          </div>
+        ))}
+      </main>
+      <footer className="statusbar">
+        <span>
+          {company.closedThrough
+            ? `Bağlı dövr: ${company.closedThrough.split('-').reverse().join('.')}-dək`
+            : 'Dövr bağlanmayıb'}
+        </span>
+        <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
+          {integrity.loading && !integrity.data
+            ? 'Baza yoxlanılır…'
+            : integrity.data
+              ? integrity.data.ok
+                ? `Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
+              : ''}
+        </span>
+        <span className="statusbar-keys">
+          {active ? viewTitle(active.view, active.label) : 'Başlanğıc'} · Ctrl+N yeni əməliyyat ·
+          Ctrl+K axtarış · Ctrl+S saxla
+        </span>
+      </footer>
       {ws.pendingClose && (
         <Confirm
           title="Saxlanmamış dəyişikliklər"
           confirmLabel="Saxlamadan bağla"
           destructive
-          onCancel={() => ws.resolveClose(false)}
           onConfirm={() => ws.resolveClose(true)}
+          onCancel={() => ws.resolveClose(false)}
         >
           <p>
-            «{viewTitle(ws.pendingClose.view, ws.pendingClose.label)}» pəncərəsində uçota alınmamış
-            dəyişikliklər var. Bağlasanız, onlar itəcək.
+            “{viewTitle(ws.pendingClose.view, ws.pendingClose.label)}” pəncərəsində saxlanmamış
+            dəyişikliklər var.
           </p>
         </Confirm>
       )}
       {newCompany && (
-        <NewCompany
-          onClose={() => setNewCompany(false)}
-          onCreated={async (id) => {
-            await reloadCompanies();
-            ws.setCompany(id);
-            setNewCompany(false);
-          }}
-        />
+        <Modal title="Yeni şirkət" onClose={() => setNewCompany(false)} size="small">
+          <CompanyForm
+            onCancel={() => setNewCompany(false)}
+            onCreated={(id) => {
+              setNewCompany(false);
+              void reloadCompanies().then(() => ws.setCompany(id));
+            }}
+          />
+        </Modal>
       )}
     </div>
   );
 }
 
-function Tab({
-  id,
-  label,
-  company,
-  dirty,
-  active,
-  onSelect,
-  onClose,
-}: {
-  id: string;
-  label: string;
-  company?: string;
-  dirty?: boolean;
-  active: boolean;
-  onSelect: () => void;
-  onClose?: () => void;
-}) {
-  return (
-    <div className={`tab${active ? ' active' : ''}`}>
-      <button
-        type="button"
-        role="tab"
-        id={`tab-${id}`}
-        aria-selected={active}
-        aria-controls={`pane-${id}`}
-        title={company ? `${label} · ${company}` : label}
-        onClick={onSelect}
-        onAuxClick={(e) => e.button === 1 && onClose?.()}
-      >
-        {dirty && (
-          <span className="dirty" aria-label="saxlanmayıb">
-            ●
-          </span>
-        )}
-        <span className="tab-label">{label}</span>
-        {company && <span className="tab-company">{company}</span>}
-      </button>
-      {onClose && (
-        <button
-          type="button"
-          className="tab-close"
-          aria-label={`${label} pəncərəsini bağla`}
-          onClick={onClose}
-        >
-          <X size={13} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-function WindowBody({ win }: { win: Win }) {
-  const v: View = win.view;
+function Routed({ win }: { win: Win }) {
+  const v = win.view;
   switch (v.type) {
-    case 'invoice':
-      return <InvoiceEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
-    case 'payment':
-      return <PaymentEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
+    case 'operation':
+      return <OperationEditor {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
-      return (
-        <AccountCardPage account={v.account} {...(v.partnerId ? { partnerId: v.partnerId } : {})} />
-      );
+      return <CardPage initial={v} />;
     case 'page':
       switch (v.page) {
-        case 'purchases':
-          return <InvoiceList direction="purchase" />;
-        case 'sales':
-          return <InvoiceList direction="sale" />;
-        case 'bankStatement':
-          return <BankStatement />;
-        case 'bankIn':
-          return <PaymentList direction="in" />;
-        case 'bankOut':
-          return <PaymentList direction="out" />;
+        case 'operations':
+          return <OperationsPage />;
         case 'trial':
-          return <TrialBalancePage />;
-        case 'journal':
-          return <JournalPage />;
-        case 'receivables':
-          return <PartnerBalancesPage side="receivable" />;
-        case 'payables':
-          return <PartnerBalancesPage side="payable" />;
-        case 'stock':
-          return <StockPage />;
-        case 'products':
-          return <ProductsPage />;
-        case 'partners':
-          return <PartnersPage />;
+          return <TrialPage />;
+        case 'card':
+          return <CardPage />;
         case 'accounts':
           return <AccountsPage />;
-        case 'warehouses':
-          return <WarehousesPage />;
+        case 'partners':
+          return <PartnersPage />;
+        case 'bankAccounts':
+          return <BankAccountsPage />;
+        case 'products':
+          return <ProductsPage />;
+        case 'employees':
+          return <EmployeesPage />;
+        case 'lists':
+          return <ListsPage />;
         case 'audit':
           return <AuditPage />;
         case 'settings':
           return <SettingsPage />;
         case 'home':
-          return <Home />;
+          return null;
       }
   }
-}
-
-function NewCompany({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (id: string) => Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [taxId, setTaxId] = useState('');
-  const m = useMutation();
-  return (
-    <Modal title="Yeni şirkət" onClose={onClose} size="small">
-      <form
-        noValidate
-        onSubmit={async (e: FormEvent) => {
-          e.preventDefault();
-          const r = await m.run({ type: 'company.create', name, taxId });
-          if (r) await onCreated(r.id);
-        }}
-      >
-        <fieldset className="modal-body form-grid" disabled={m.busy}>
-          {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
-          <Field label="Şirkətin adı" wide>
-            <input
-              autoFocus
-              required
-              maxLength={200}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
-          <Field label="VÖEN" wide hint="10 rəqəm">
-            <input
-              required
-              inputMode="numeric"
-              pattern="[0-9]{10}"
-              maxLength={10}
-              value={taxId}
-              onChange={(e) => setTaxId(e.target.value)}
-            />
-          </Field>
-        </fieldset>
-        <div className="modal-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
-            Geri
-          </button>
-          <button className="button primary" disabled={m.busy}>
-            Yarat
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
 }

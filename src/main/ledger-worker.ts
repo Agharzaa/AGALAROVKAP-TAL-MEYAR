@@ -30,11 +30,21 @@ const port = parentPort!;
 
 function fail(error: unknown): Outcome<never> {
   if (error instanceof DomainError)
-    return { ok: false, error: { message: error.message, code: error.code, ...(error.field ? { field: error.field } : {}) } };
+    return {
+      ok: false,
+      error: {
+        message: error.message,
+        code: error.code,
+        ...(error.field ? { field: error.field } : {}),
+      },
+    };
   console.error(error);
   return {
     ok: false,
-    error: { message: 'Gözlənilməz xəta baş verdi. Məlumat dəyişdirilmədi; əməliyyatı yenidən yoxlayın.', code: 'internal' },
+    error: {
+      message: 'Gözlənilməz xəta baş verdi. Məlumat dəyişdirilmədi; əməliyyatı yenidən yoxlayın.',
+      code: 'internal',
+    },
   };
 }
 
@@ -43,7 +53,10 @@ try {
   db = new Db(file, { readOnly });
   port.postMessage({ ready: true });
 } catch (error) {
-  port.postMessage({ ready: false, message: error instanceof Error ? error.message : String(error) });
+  port.postMessage({
+    ready: false,
+    message: error instanceof Error ? error.message : String(error),
+  });
   process.exit(0);
 }
 const ledger = new Ledger(db);
@@ -53,13 +66,22 @@ port.on('message', async ({ id, body }: WorkerRequest) => {
   try {
     switch (body.op) {
       case 'command':
-        outcome = { ok: true, value: ledger.execute(body.command, { actor: body.actor, correlationId: body.correlationId }) };
+        outcome = {
+          ok: true,
+          value: ledger.execute(body.command, {
+            actor: body.actor,
+            correlationId: body.correlationId,
+          }),
+        };
         break;
       case 'query':
         outcome = { ok: true, value: ledger.query(body.query) };
         break;
       case 'integrity':
-        outcome = { ok: true, value: db.read(() => integrity(db, body.companyId, systemClock.now())) };
+        outcome = {
+          ok: true,
+          value: db.read(() => integrity(db, body.companyId, systemClock.now())),
+        };
         break;
       case 'backup':
         await db.backup(body.target);

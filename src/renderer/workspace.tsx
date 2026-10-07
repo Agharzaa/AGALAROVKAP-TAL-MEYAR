@@ -12,27 +12,21 @@ import { api } from './api';
 
 export type Page =
   | 'home'
-  | 'purchases'
-  | 'sales'
-  | 'bankStatement'
-  | 'bankIn'
-  | 'bankOut'
+  | 'operations'
   | 'trial'
-  | 'journal'
-  | 'receivables'
-  | 'payables'
-  | 'stock'
-  | 'products'
-  | 'partners'
+  | 'card'
   | 'accounts'
-  | 'warehouses'
+  | 'partners'
+  | 'bankAccounts'
+  | 'products'
+  | 'employees'
+  | 'lists'
   | 'audit'
   | 'settings';
 export type View =
   | { type: 'page'; page: Page }
-  | { type: 'invoice'; direction: 'purchase' | 'sale'; id?: string }
-  | { type: 'payment'; direction: 'in' | 'out'; id?: string }
-  | { type: 'accountCard'; account: string; partnerId?: string };
+  | { type: 'operation'; id?: string }
+  | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
   companyId: string;
@@ -43,8 +37,15 @@ export interface Win {
   restored: boolean;
 }
 
+/** Working period (month) used as the default range of reports and new documents. */
+export interface Period {
+  from: string;
+  to: string;
+}
 interface Workspace {
   companyId: string;
+  period: Period;
+  setPeriod: (p: Period) => void;
   setCompany: (id: string) => void;
   windows: Win[];
   activeId: string;
@@ -76,9 +77,20 @@ export function useWindow(): Win {
 
 const sameView = (a: View, b: View) => JSON.stringify(a) === JSON.stringify(b);
 /** New documents may be opened several times; everything else is focused if already open. */
-const reusable = (v: View) => !((v.type === 'invoice' || v.type === 'payment') && !v.id);
+const reusable = (v: View) => !(v.type === 'operation' && !v.id);
 
 let sequence = 0;
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** First and last day of the month containing `iso`. */
+export function monthOf(iso: string): Period {
+  const [y, m] = iso.split('-').map(Number) as [number, number];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, '0');
+  return { from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+}
 export function WorkspaceProvider({
   initialCompany,
   children,
@@ -87,6 +99,7 @@ export function WorkspaceProvider({
   children: ReactNode;
 }) {
   const [companyId, setCompanyId] = useState(initialCompany);
+  const [period, setPeriod] = useState<Period>(() => monthOf(todayIso()));
   const [windows, setWindows] = useState<Win[]>([]);
   const [activeId, setActiveId] = useState('home');
   const [pendingClose, setPendingClose] = useState<Win | null>(null);
@@ -141,6 +154,8 @@ export function WorkspaceProvider({
     setWindows((ws) => ws.map((w) => (w.id === id ? { ...w, ...patch } : w)));
   const value: Workspace = {
     companyId,
+    period,
+    setPeriod,
     setCompany: setCompanyId,
     windows,
     activeId,
@@ -167,7 +182,7 @@ export function WorkspaceProvider({
     <Context.Provider
       value={useMemo(
         () => value,
-        [companyId, windows, activeId, pendingClose, open, close, remove],
+        [companyId, period, windows, activeId, pendingClose, open, close, remove],
       )}
     >
       {children}

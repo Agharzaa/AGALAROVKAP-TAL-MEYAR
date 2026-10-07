@@ -12,6 +12,7 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
   const ledger = new Ledger(db);
   const listeners = new Set<(companyId: string) => void>();
   const commands: { type: string }[] = [];
+  const saved: { name: string; bytes: Uint8Array }[] = [];
   let release: (() => void) | undefined;
   let dirty = false;
   const wrap = <T,>(fn: () => T): Outcome<T> => {
@@ -42,6 +43,10 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     async backup() {
       return { ok: true, value: null };
     },
+    async saveFile(name, bytes) {
+      saved.push({ name, bytes });
+      return { ok: true, value: `C:\\Hesabatlar\\${name}` };
+    },
     async version() {
       return 'test';
     },
@@ -66,6 +71,7 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     ledger,
     run,
     commands,
+    saved,
     release: () => release?.(),
     dirty: () => dirty,
     close() {

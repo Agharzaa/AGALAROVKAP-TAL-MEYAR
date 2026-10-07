@@ -47,6 +47,9 @@ export const api = {
   async backup(): Promise<string | null> {
     return unwrap(await bridge().backup());
   },
+  async saveFile(defaultName: string, bytes: Uint8Array): Promise<string | null> {
+    return unwrap(await bridge().saveFile(defaultName, bytes));
+  },
   version(): Promise<string> {
     return bridge().version();
   },
