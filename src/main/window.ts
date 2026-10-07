@@ -2,41 +2,19 @@ import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from '
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { DomainError } from '../domain/errors.js';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { Outcome } from '../contracts/bridge.js';
-import type { Ledger } from '../application/ledger.js';
+import type { LedgerClient } from './ledger-client.js';
 
 export interface WindowOptions {
-  ledger: Ledger;
+  ledger: LedgerClient;
+  /** Read-only connection for integrity checks, so they never hold up the writer. */
+  reader: LedgerClient;
   rendererFile: string;
   preloadFile: string;
   version: string;
   backup: (window: BrowserWindow) => Promise<string | null>;
-}
-
-/** Errors the user can act on are returned as data; anything else is logged and generalized. */
-function outcome<T>(fn: () => T): Outcome<T> {
-  try {
-    return { ok: true, value: fn() };
-  } catch (error) {
-    if (error instanceof DomainError)
-      return {
-        ok: false,
-        error: {
-          message: error.message,
-          code: error.code,
-          ...(error.field ? { field: error.field } : {}),
-        },
-      };
-    console.error(error);
-    return {
-      ok: false,
-      error: {
-        message: 'Gözlənilməz xəta baş verdi. Məlumat dəyişdirilmədi; əməliyyatı yenidən yoxlayın.',
-        code: 'internal',
-      },
-    };
-  }
 }
 
 /**
@@ -92,16 +70,24 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     });
   };
   const actor = userInfo().username || 'local';
-  handle('meyar:command', (_e, command) => {
-    const result = outcome(() =>
-      options.ledger.execute(command, { actor, correlationId: randomUUID() }),
-    );
+  handle('meyar:command', async (_e, command) => {
+    const result = await options.ledger.call<import('../contracts/commands.js').CommandResult>({
+      op: 'command',
+      command,
+      actor,
+      correlationId: randomUUID(),
+    });
     const companyId = (command as { companyId?: unknown })?.companyId;
     if (result.ok && !result.value.replayed)
       contents.send('meyar:changed', typeof companyId === 'string' ? companyId : result.value.id);
     return result;
   });
-  handle('meyar:query', (_e, query) => outcome(() => options.ledger.query(query)));
+  handle('meyar:query', (_e, query) => {
+    const q = query as { type?: unknown; companyId?: unknown };
+    if (q?.type === 'integrity' && typeof q.companyId === 'string')
+      return options.reader.call({ op: 'integrity', companyId: q.companyId });
+    return options.ledger.call({ op: 'query', query });
+  });
   handle('meyar:version', () => options.version);
   handle('meyar:backup', async () => {
     try {
@@ -111,6 +97,23 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
         ok: false,
         error: { message: (error as Error).message, code: 'backup' },
       } satisfies Outcome<string | null>;
+    }
+  });
+  handle('meyar:save-file', async (_e, arg) => {
+    const { defaultName, bytes } = arg as { defaultName: string; bytes: Uint8Array };
+    try {
+      if (!(bytes instanceof Uint8Array) || bytes.length > 200 * 1024 * 1024) throw new Error('Fayl düzgün deyil.');
+      const safe = path.basename(String(defaultName)).replace(/[<>:"/\\|?*]/g, '_') || 'hesabat.xlsx';
+      const result = await dialog.showSaveDialog(window, {
+        title: 'Faylı saxla',
+        defaultPath: safe,
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+      });
+      if (result.canceled || !result.filePath) return { ok: true, value: null } satisfies Outcome<string | null>;
+      await writeFile(result.filePath, bytes);
+      return { ok: true, value: result.filePath } satisfies Outcome<string | null>;
+    } catch (error) {
+      return { ok: false, error: { message: (error as Error).message, code: 'save' } } satisfies Outcome<string | null>;
     }
   });
   let dirty = false;

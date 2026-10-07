@@ -13,9 +13,15 @@ export class Db {
   readonly raw: DatabaseSync;
   private readonly statements = new Map<string, StatementSync>();
   private depth = 0;
-  constructor(path: string) {
-    this.raw = new DatabaseSync(path);
+  constructor(path: string, options: { readOnly?: boolean } = {}) {
+    this.raw = new DatabaseSync(path, { readOnly: !!options.readOnly });
     try {
+      if (options.readOnly) {
+        // A second, read-only connection (integrity checks) beside the writer; WAL lets it read
+        // a consistent snapshot without blocking or being blocked.
+        this.raw.exec('PRAGMA busy_timeout=5000; PRAGMA query_only=1;');
+        return;
+      }
       this.raw.exec(
         'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;',
       );

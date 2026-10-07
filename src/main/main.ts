@@ -3,8 +3,7 @@ import { DatabaseSync, backup } from 'node:sqlite';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Db } from '../infrastructure/sqlite/db.js';
-import { Ledger } from '../application/ledger.js';
+import { LedgerClient } from './ledger-client.js';
 import { createMainWindow } from './window.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -14,9 +13,13 @@ const preloadFile = path.join(here, '../preload/preload.cjs');
 app.setPath('userData', path.join(app.getPath('appData'), 'Meyar'));
 const dataDir = path.join(app.getPath('userData'), 'data');
 const backupDir = path.join(app.getPath('userData'), 'backups');
-const databaseFile = path.join(dataDir, 'meyar.sqlite');
+// Ledger v3 (subkonto model) starts in its own file; the stage-A test database stays untouched.
+const databaseFile = path.join(dataDir, 'meyar-v3.sqlite');
+// Worker code must load from the real file system, not from inside app.asar.
+const workerScript = path.join(here, 'ledger-worker.js').replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
-let db: Db | undefined;
+let ledger: LedgerClient | undefined;
+let reader: LedgerClient | undefined;
 
 /** Copy taken before migrations run, so a failed upgrade can always be undone. */
 async function startupBackup() {
@@ -44,10 +47,13 @@ else {
       await mkdir(dataDir, { recursive: true });
       await mkdir(backupDir, { recursive: true });
       await startupBackup();
-      db = new Db(databaseFile);
-      const ledger = new Ledger(db);
+      ledger = new LedgerClient(workerScript, databaseFile);
+      await ledger.ready;
+      reader = new LedgerClient(workerScript, databaseFile, true);
+      await reader.ready;
       const window = await createMainWindow({
         ledger,
+        reader,
         rendererFile,
         preloadFile,
         version: app.getVersion(),
@@ -60,7 +66,8 @@ else {
           if (result.canceled || !result.filePath) return null;
           if (path.resolve(result.filePath) === path.resolve(databaseFile))
             throw new Error('İşlək bazanın üzərinə yazmaq olmaz; başqa fayl adı seçin.');
-          await db!.backup(result.filePath);
+          const done = await ledger!.call<string>({ op: 'backup', target: result.filePath });
+          if (!done.ok) throw new Error(done.error.message);
           return result.filePath;
         },
       });
@@ -75,4 +82,7 @@ else {
     });
 }
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', () => db?.close());
+app.on('will-quit', () => {
+  void ledger?.terminate();
+  void reader?.terminate();
+});

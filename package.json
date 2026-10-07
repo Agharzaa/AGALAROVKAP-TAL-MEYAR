@@ -31,6 +31,10 @@
     "productName": "Meyar",
     "artifactName": "Meyar-Setup-${version}.${ext}",
     "asar": true,
+    "asarUnpack": [
+      "dist/node/**",
+      "node_modules/zod/**"
+    ],
     "directories": {
       "output": "release"
     },

@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('meyar', {
   query: (query: unknown) => ipcRenderer.invoke('meyar:query', query),
   backup: () => ipcRenderer.invoke('meyar:backup'),
   version: () => ipcRenderer.invoke('meyar:version'),
+  saveFile: (defaultName: string, bytes: Uint8Array) =>
+    ipcRenderer.invoke('meyar:save-file', { defaultName: String(defaultName), bytes }),
   setDirty: (dirty: boolean) => ipcRenderer.send('meyar:dirty', dirty === true),
   onChanged: (listener: (companyId: string) => void) => {
     const handler = (_event: IpcRendererEvent, companyId: unknown) => {
