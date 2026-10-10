@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus } from '../icons';
 import type { InvoiceSummary } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { RangeFields, SearchField, matches, useRange } from '../filters';

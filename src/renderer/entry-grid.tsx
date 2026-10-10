@@ -3,7 +3,7 @@
  * and currency amounts where the accounts keep them, amount and text. Used by the manual
  * operation and by an invoice's manual postings (1C "Əl ilə düzəliş").
  */
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Copy, Plus, Trash2 } from './icons';
 import { parseMoney } from '../domain/money';
 import type { OperationLineInput } from '../contracts/commands';
 import type { Catalog, PostingView } from '../contracts/queries';

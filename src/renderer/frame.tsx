@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from './icons';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';

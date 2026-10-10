@@ -25,7 +25,9 @@ import {
   Square,
   SquareX,
   X,
-} from 'lucide-react';
+  Navigation,
+  Restore,
+} from './icons';
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
 import { api } from './api';
@@ -39,7 +41,6 @@ import {
   viewTitle,
   type NavAction,
   type NavItem,
-  type Section,
 } from './pages';
 import { Confirm, Field, Modal, Notice } from './ui';
 import { day } from './format';
@@ -466,60 +467,6 @@ function ZoomControl() {
   );
 }
 
-/** A section's functions (1C "Funksiyalar paneli"): its documents, reports and lists. */
-function SectionPanel({
-  section,
-  onPick,
-  onClose,
-}: {
-  section: Section;
-  onPick: (item: NavItem) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLButtonElement>('.section-link')?.focus();
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, section.id]);
-  return (
-    <>
-      <div className="section-scrim" onPointerDown={onClose} aria-hidden="true" />
-      <div className="section-panel" ref={ref} role="dialog" aria-label={section.label}>
-        <header>
-          <section.icon size={20} strokeWidth={1.7} aria-hidden="true" />
-          <h2>{section.label}</h2>
-          <button type="button" className="icon-button" aria-label="Bağla" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </header>
-        <div className="section-groups">
-          {section.groups.map((g) => (
-            <div key={g.title} className="section-group">
-              <h3>{g.title}</h3>
-              {g.items.map((i) => (
-                <button
-                  key={i.label}
-                  type="button"
-                  className={`section-link${i.action.kind === 'soon' ? ' soon' : ''}`}
-                  onClick={() => onPick(i)}
-                >
-                  <i.icon size={16} strokeWidth={1.7} aria-hidden="true" />
-                  <span>{i.label}</span>
-                  {i.action.kind === 'soon' && <small>{i.action.stage}</small>}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
 function Shell({
   companies,
   reloadCompanies,
@@ -533,7 +480,22 @@ function Shell({
     text: string;
   } | null>(null);
   const [newCompany, setNewCompany] = useState(false);
-  const [section, setSection] = useState<string | null>(null);
+  // Navigation pane (Windows NavigationView): open with labels, or compact with icons only.
+  const [compact, setCompact] = useState(() => {
+    try {
+      return window.localStorage.getItem('meyar.pane') === 'compact';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('meyar.pane', compact ? 'compact' : 'open');
+    } catch {
+      /* the pane simply opens expanded next time */
+    }
+  }, [compact]);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const company = companies.find((c) => c.id === ws.companyId) ?? companies[0]!;
   const integrity = useQuery<IntegrityView>({ type: 'integrity', companyId: company.id });
   const active = ws.windows.find((w) => w.id === ws.activeId);
@@ -571,144 +533,187 @@ function Shell({
     return () => window.removeEventListener('keydown', onKey);
   }, [ws]);
   const current = active ? sectionOfView(active.view) : 'home';
-  const pick = (item: NavItem) => {
-    setSection(null);
-    void act(item.action, item.label);
-  };
+  useEffect(() => {
+    if (current !== 'home') setExpanded(current);
+  }, [current]);
+  const pick = (item: NavItem) => void act(item.action, item.label);
   return (
     <div className="shell">
-      <aside className="rail">
-        <div className="rail-brand" title="Meyar">
+      {/* Windows 11 title bar: the app draws it, Windows draws the caption buttons on the right. */}
+      <header className="titlebar">
+        <button
+          type="button"
+          className="pane-toggle"
+          aria-label={compact ? 'Menyunu aç' : 'Menyunu yığ'}
+          title={compact ? 'Menyunu aç' : 'Menyunu yığ'}
+          onClick={() => setCompact((c) => !c)}
+        >
+          <Navigation size={18} />
+        </button>
+        <span className="app-title">
           <span className="brand-mark" aria-hidden="true">
             M
           </span>
-        </div>
-        <nav className="rail-nav" aria-label="Əsas menyu">
-          {sections.map((sec) => {
-            const on = section ? section === sec.id : current === sec.id;
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                aria-label={sec.label}
-                aria-expanded={sec.groups.length ? section === sec.id : undefined}
-                className={`rail-item${on ? ' active' : ''}`}
-                onClick={() => {
-                  if (!sec.groups.length) {
-                    setSection(null);
-                    ws.focus('home');
-                  } else setSection((s) => (s === sec.id ? null : sec.id));
-                }}
-              >
-                <sec.icon size={19} strokeWidth={1.7} aria-hidden="true" />
-                <span>{sec.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div
-          className={`rail-state${integrity.data && !integrity.data.ok ? ' bad' : ''}`}
-          title={
-            integrity.data
-              ? integrity.data.ok
-                ? `Jurnal tarazdır, registrlər jurnala uyğundur (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
-                : integrity.data.problems.join(' ')
-              : 'Baza yoxlanılır'
-          }
-        >
-          {integrity.data && !integrity.data.ok ? (
-            <CircleAlert size={17} aria-hidden="true" />
-          ) : (
-            <CheckCircle2 size={17} aria-hidden="true" />
-          )}
-          <span>{integrity.data ? (integrity.data.ok ? 'Taraz' : 'Xəta') : '…'}</span>
-        </div>
-      </aside>
-      <div className="main">
-        <header className="topbar">
-          <label className="company-switch" title="Şirkəti dəyiş">
-            <span className="avatar" aria-hidden="true">
-              {initials(company.name)}
-            </span>
-            <span className="company-text">
-              <b>{company.name}</b>
-              <small>VÖEN {company.taxId}</small>
-            </span>
-            <ChevronDown size={14} aria-hidden="true" />
-            <select
-              aria-label="Şirkət"
-              value={company.id}
-              onChange={(e) => {
-                if (e.target.value === '__new') setNewCompany(true);
-                else ws.setCompany(e.target.value);
-              }}
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {c.taxId}
-                </option>
-              ))}
-              <option value="__new">+ Yeni şirkət…</option>
-            </select>
-          </label>
-          <PeriodSwitch />
-          <div className="crumbs" aria-hidden="true">
-            <span>{sections.find((x) => x.id === current)?.label ?? 'Başlanğıc'}</span>
-            {active && (
-              <>
-                <ChevronRight size={12} />
-                <b>{viewTitle(active.view, active.label)}</b>
-              </>
-            )}
-          </div>
+          Meyar
+        </span>
+        <label className="company-switch" title="Şirkəti dəyiş">
+          <span className="avatar" aria-hidden="true">
+            {initials(company.name)}
+          </span>
+          <span className="company-text">
+            <b>{company.name}</b>
+            <small>VÖEN {company.taxId}</small>
+          </span>
+          <ChevronDown size={12} aria-hidden="true" />
+          <select
+            aria-label="Şirkət"
+            value={company.id}
+            onChange={(e) => {
+              if (e.target.value === '__new') setNewCompany(true);
+              else ws.setCompany(e.target.value);
+            }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.taxId}
+              </option>
+            ))}
+            <option value="__new">+ Yeni şirkət…</option>
+          </select>
+        </label>
+        <PeriodSwitch />
+        <div className="title-center">
           <QuickSearch />
-          <NavMenu label="Yarat" icon={Plus} primary items={createItems} onPick={pick} />
-        </header>
-        {message && (
-          <div className="shell-message">
-            <Notice kind={message.kind} onClose={() => setMessage(null)}>
-              {message.text}
-            </Notice>
-          </div>
-        )}
-        <div className="stage">
-          {section && (
-            <SectionPanel
-              section={sections.find((x) => x.id === section)!}
-              onPick={pick}
-              onClose={() => setSection(null)}
-            />
-          )}
-          <Desktop>
-            <HomePage
-              integrity={integrity.data}
-              integrityLoading={integrity.loading}
-              onRecheck={integrity.reload}
-            />
-          </Desktop>
         </div>
-        <WindowBar />
-        <footer className="statusbar">
-          <span>
-            {company.closedThrough
-              ? `Bağlı dövr: ${company.closedThrough.split('-').reverse().join('.')}-dək`
-              : 'Dövr bağlanmayıb'}
-          </span>
-          <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
-            {integrity.loading && !integrity.data
-              ? 'Baza yoxlanılır…'
-              : integrity.data
+        <NavMenu label="Yarat" icon={Plus} primary items={createItems} onPick={pick} />
+        <span className="caption-space" aria-hidden="true" />
+      </header>
+      <div className="body">
+        <nav className={`navpane${compact ? ' compact' : ''}`} aria-label="Əsas menyu">
+          <div className="nav-items">
+            {sections.map((sec) => {
+              const open = !compact && expanded === sec.id;
+              const here = current === sec.id;
+              return (
+                <div key={sec.id} className={`nav-section${open ? ' open' : ''}`}>
+                  <button
+                    type="button"
+                    aria-label={sec.label}
+                    title={compact ? sec.label : undefined}
+                    aria-expanded={sec.groups.length ? open : undefined}
+                    aria-current={!sec.groups.length && here ? 'page' : undefined}
+                    className={`nav-item${here && (!open || !sec.groups.length) ? ' selected' : ''}`}
+                    onClick={() => {
+                      if (!sec.groups.length) {
+                        ws.focus('home');
+                        return;
+                      }
+                      if (compact) {
+                        setCompact(false);
+                        setExpanded(sec.id);
+                      } else setExpanded((e) => (e === sec.id ? null : sec.id));
+                    }}
+                  >
+                    <sec.icon size={18} />
+                    <span className="nav-label">{sec.label}</span>
+                    {sec.groups.length > 0 && <ChevronDown size={12} className="nav-chevron" />}
+                  </button>
+                  {open && (
+                    <div className="nav-children">
+                      {sec.groups.map((g) => (
+                        <div key={g.title} className="nav-group">
+                          <span className="nav-group-title">{g.title}</span>
+                          {g.items.map((i) => {
+                            const sel =
+                              i.action.kind === 'view' &&
+                              !!active &&
+                              JSON.stringify(i.action.view) === JSON.stringify(active.view);
+                            return (
+                              <button
+                                key={i.label}
+                                type="button"
+                                className={`nav-item child${sel ? ' selected' : ''}${i.action.kind === 'soon' ? ' soon' : ''}`}
+                                aria-current={sel ? 'page' : undefined}
+                                title={i.action.kind === 'soon' ? `${i.action.stage}də` : i.label}
+                                onClick={() => pick(i)}
+                              >
+                                <span className="nav-label">{i.label}</span>
+                                {i.action.kind === 'soon' && <small>tezliklə</small>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div
+            className={`nav-foot${integrity.data && !integrity.data.ok ? ' bad' : ''}`}
+            title={
+              integrity.data
                 ? integrity.data.ok
-                  ? `Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
-                  : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
-                : ''}
-          </span>
-          <ZoomControl />
-          <span className="statusbar-keys">
-            {active ? viewTitle(active.view, active.label) : 'Başlanğıc'} · Ctrl+N yeni əməliyyat ·
-            Ctrl+K axtarış · Ctrl+Enter uçota al və bağla · Ctrl+Tab növbəti pəncərə · Ctrl+F4 bağla
-          </span>
-        </footer>
+                  ? `Jurnal tarazdır, registrlər jurnala uyğundur (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                  : integrity.data.problems.join(' ')
+                : 'Baza yoxlanılır'
+            }
+          >
+            {integrity.data && !integrity.data.ok ? (
+              <CircleAlert size={18} />
+            ) : (
+              <CheckCircle2 size={18} />
+            )}
+            <span className="nav-label">
+              {integrity.data
+                ? integrity.data.ok
+                  ? 'Baza tarazdır'
+                  : 'Bazada uyğunsuzluq var'
+                : 'Baza yoxlanılır…'}
+            </span>
+          </div>
+        </nav>
+        <div className="layer">
+          {message && (
+            <div className="shell-message">
+              <Notice kind={message.kind} onClose={() => setMessage(null)}>
+                {message.text}
+              </Notice>
+            </div>
+          )}
+          <div className="stage">
+            <Desktop>
+              <HomePage
+                integrity={integrity.data}
+                integrityLoading={integrity.loading}
+                onRecheck={integrity.reload}
+              />
+            </Desktop>
+          </div>
+          <WindowBar />
+          <footer className="statusbar">
+            <span>
+              {company.closedThrough
+                ? `Bağlı dövr: ${company.closedThrough.split('-').reverse().join('.')}-dək`
+                : 'Dövr bağlanmayıb'}
+            </span>
+            <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
+              {integrity.loading && !integrity.data
+                ? 'Baza yoxlanılır…'
+                : integrity.data
+                  ? integrity.data.ok
+                    ? `Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                    : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
+                  : ''}
+            </span>
+            <ZoomControl />
+            <span className="statusbar-keys">
+              Ctrl+N yeni əməliyyat · Ctrl+K axtarış · Ctrl+Enter uçota al və bağla · Ctrl+Tab
+              növbəti pəncərə · Ctrl+F4 bağla
+            </span>
+          </footer>
+        </div>
       </div>
       {ws.pendingClose && (
         <Confirm
@@ -902,7 +907,7 @@ function MdiWindow({
             title={max ? 'Əvvəlki ölçü' : 'Böyüt'}
             onClick={() => layout.toggleMaximize(win.id)}
           >
-            {max ? <Copy size={12} /> : <Square size={11} />}
+            {max ? <Restore size={14} /> : <Square size={13} />}
           </button>
           <button
             type="button"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from '../icons';
 import type { AuditView } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';

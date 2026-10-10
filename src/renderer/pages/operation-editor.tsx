@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, CheckCheck } from 'lucide-react';
+import { Ban, Check, CheckCheck } from '../icons';
 import type { Catalog, OperationDetail } from '../../contracts/queries';
 import {
   blankEntryLine,

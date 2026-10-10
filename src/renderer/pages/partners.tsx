@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileSpreadsheet, Pencil, Plus } from 'lucide-react';
+import { FileSpreadsheet, Pencil, Plus } from '../icons';
 import { currencies } from '../../domain/chart';
 import type { ContractView, PartnerView } from '../../contracts/queries';
 import { useCatalog } from '../catalog';

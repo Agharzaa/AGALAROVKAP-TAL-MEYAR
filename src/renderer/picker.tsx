@@ -4,7 +4,7 @@
  * 60 matches are drawn at a time.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from './icons';
 import { subkontoLabel, vatRates, type SubkontoKind } from '../domain/chart';
 import { searchKey } from '../domain/values';
 import type { Catalog, DocumentRef } from '../contracts/queries';

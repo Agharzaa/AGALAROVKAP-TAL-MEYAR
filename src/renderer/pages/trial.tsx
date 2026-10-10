@@ -1,5 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ChevronDown, ChevronRight, FileDown, FoldVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileDown, FoldVertical } from '../icons';
 import type { TrialBalance, TrialRow } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';

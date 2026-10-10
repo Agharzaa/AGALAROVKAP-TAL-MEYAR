@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus } from '../icons';
 import { currencies } from '../../domain/chart';
 import type { CommandInput } from '../api';
 import type {

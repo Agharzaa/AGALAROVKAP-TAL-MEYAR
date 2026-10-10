@@ -7,7 +7,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** "Mühasib masası" (10.10.2026, istifadəçi sıfırdan fərqli dizayn istədi, iş qaydası 1C kimi): solda tünd bölmələr paneli (Başlanğıc, Bank və kassa, Satış, Alış, Anbar, Mühasibat, Hesabatlar, Kitabçalar, Müəssisə); bölmə açılanda onun sənədləri, "Yarat", hesabatları və kitabçaları (1C funksiyalar paneli); formalar pəncərədə, yuxarıda 1C kimi əmr paneli ("Uçota al və bağla" Ctrl+Enter, "Uçota al", "Dt/Kt yazılışlar", "Ləğv et"), sənəd başlığında etiketlər solda; aktiv sətir, sahə və bölmə tunc (sarı) rənglə — 1C kursoru kimi. Şrift IBM Plex Sans (proqramla birlikdə). Başlanğıc "İş masası": iş xəritəsi (sənəddən hesabata), diqqət, qalıqlar, son sənədlər, nəzarət.
+- **Dizayn:** Windows 11 (Fluent 2) üslubu (10.10.2026, istifadəçi: "Windows şirkəti ilə birlikdə dizayn edilmiş kimi, tam peşəkar"): proqramın öz başlıq zolağı (Windows düymələri sağda, snap), solda NavigationView (bölmələr açılır: sənədlər, yarat, hesabatlar, kitabçalar), açıq məzmun qatı, Fluent düymə/sahə/cədvəl/dialoq/bildiriş, Fluent ikonları, Segoe UI Variable. Vurğu rəngi Microsoft-un mühasibat yaşılı (#107C41). İş qaydası 1C kimi: formalar pəncərədə, əmr panelində "Uçota al və bağla" (Ctrl+Enter), aşağıda pəncərələr paneli (Windows taskbar kimi).
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
 
@@ -76,6 +76,11 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - Miqyas: Ctrl + / Ctrl − / Ctrl 0, Ctrl + siçan təkəri və status sətrindəki "− 100% +" (80–150%); proqram yadda saxlayır.
 - Proqram ilk dəfə tam ekran açılır, sonra ölçü və yerini yadda saxlayır (ekran ayrılıbsa, standarta qayıdır).
 - Hər forma növü son qoyulduğu yerdə və ölçüdə açılır; eyni növdən ikinci forma üst-üstə düşmür.
+
+## 0.4.5 — Windows 11 (Fluent) dizaynı (10.10.2026)
+
+- Başlıq zolağı proqramın özünündür (titleBarOverlay), naviqasiya Windows NavigationView kimi, bütün idarəetmə elementləri Fluent 2 ölçü və rənglərində, ikonlar Fluent System Icons (@fluentui/react-icons).
+- Testlər: `npm test` (46), `npm run test:ui` (7); Electron ekran şəkilləri 1366×768.
 
 ## Açıq məsələlər
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Inbox, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Inbox, X } from './icons';
 import { isNegative, isZero, money } from './format';
 
 export function Amount({ value, strong = false }: { value: string; strong?: boolean }) {

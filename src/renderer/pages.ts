@@ -11,6 +11,7 @@ import {
   ListTree,
   Lock,
   Package,
+  Reports,
   ReceiptText,
   Scale,
   ScrollText,
@@ -21,7 +22,7 @@ import {
   Users,
   Wallet,
   type LucideIcon,
-} from 'lucide-react';
+} from './icons';
 import type { Page, View } from './workspace';
 
 export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon }> = {
@@ -238,7 +239,7 @@ export const sections: Section[] = [
   {
     id: 'reports',
     label: 'Hesabatlar',
-    icon: Scale,
+    icon: Reports,
     groups: [
       {
         title: 'Standart hesabatlar',

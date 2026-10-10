@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronRight, CircleAlert, Clock3, RefreshCw } from 'lucide-react';
+import { CheckCircle2, ChevronRight, CircleAlert, Clock3, RefreshCw } from '../icons';
 import type { HomeView, IntegrityView, RecentDocument } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { day, longDate, money, today } from '../format';

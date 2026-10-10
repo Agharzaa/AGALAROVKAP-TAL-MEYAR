@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileDown } from 'lucide-react';
+import { FileDown } from '../icons';
 import type { AccountCard } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';

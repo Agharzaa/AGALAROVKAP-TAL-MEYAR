@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X } from './icons';
 import { startOfYear, today } from './format';
 import { DateInput } from './ui';
 import { searchKey } from '../domain/values';

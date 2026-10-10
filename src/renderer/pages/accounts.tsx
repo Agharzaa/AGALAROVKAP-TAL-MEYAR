@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus } from '../icons';
 import {
   subkontoKinds,
   subkontoLabel,

@@ -4,7 +4,7 @@
  * entry is shown under the document after saving, so every figure can be traced.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, CheckCheck, Copy, Plus, Trash2 } from 'lucide-react';
+import { Ban, Check, CheckCheck, Copy, Plus, Trash2 } from '../icons';
 import { vatRates, type VatRate } from '../../domain/chart';
 import { aznAmounts, AZN_RATE, lineAmounts, type LineAmounts } from '../../domain/invoice';
 import { formatMinor } from '../../domain/money';
