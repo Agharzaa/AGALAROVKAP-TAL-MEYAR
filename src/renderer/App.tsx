@@ -428,6 +428,44 @@ function NavMenu({
   );
 }
 
+/** Page zoom in the status bar (also Ctrl + / Ctrl − / Ctrl 0 and Ctrl + mouse wheel). */
+function ZoomControl() {
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    void api.zoom().then(setZoom);
+    return api.onZoom(setZoom);
+  }, []);
+  const go = (step: 'in' | 'out' | 'reset') => void api.zoom(step).then(setZoom);
+  return (
+    <span className="zoom" role="group" aria-label="Miqyas">
+      <button
+        type="button"
+        title="Kiçilt (Ctrl −)"
+        aria-label="Miqyası kiçilt"
+        onClick={() => go('out')}
+      >
+        <Minus size={12} />
+      </button>
+      <button
+        type="button"
+        title="100% (Ctrl 0)"
+        className="zoom-value"
+        onClick={() => go('reset')}
+      >
+        {Math.round(zoom * 100)}%
+      </button>
+      <button
+        type="button"
+        title="Böyüt (Ctrl +)"
+        aria-label="Miqyası böyüt"
+        onClick={() => go('in')}
+      >
+        <Plus size={12} />
+      </button>
+    </span>
+  );
+}
+
 /** A section's functions (1C "Funksiyalar paneli"): its documents, reports and lists. */
 function SectionPanel({
   section,
@@ -665,6 +703,7 @@ function Shell({
                   : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
                 : ''}
           </span>
+          <ZoomControl />
           <span className="statusbar-keys">
             {active ? viewTitle(active.view, active.label) : 'Başlanğıc'} · Ctrl+N yeni əməliyyat ·
             Ctrl+K axtarış · Ctrl+Enter uçota al və bağla · Ctrl+Tab növbəti pəncərə · Ctrl+F4 bağla

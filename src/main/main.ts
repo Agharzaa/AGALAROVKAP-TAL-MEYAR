@@ -63,6 +63,7 @@ else {
         rendererFile,
         preloadFile,
         version: app.getVersion(),
+        uiFile: path.join(app.getPath('userData'), 'ui.json'),
         backup: async (owner) => {
           const result = await dialog.showSaveDialog(owner, {
             title: 'Ehtiyat nüsxəni saxla',

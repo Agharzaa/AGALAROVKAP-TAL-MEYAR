@@ -13,6 +13,10 @@ export interface MeyarBridge {
   saveFile(defaultName: string, bytes: Uint8Array): Promise<Outcome<string | null>>;
   /** Unsaved-change state of the window, used by the close guard. */
   setDirty(dirty: boolean): void;
+  /** Page zoom: one step in or out, back to 100%, or (no step) the current factor. */
+  zoom?(step?: 'in' | 'out' | 'reset'): Promise<number>;
+  /** Called when the zoom changes (keyboard, mouse wheel or the status bar). */
+  onZoom?(listener: (factor: number) => void): () => void;
   /** Called after any successful change, with the affected company. */
   onChanged(listener: (companyId: string) => void): () => void;
 }

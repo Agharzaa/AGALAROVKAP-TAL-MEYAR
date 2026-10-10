@@ -53,6 +53,15 @@ export const api = {
   version(): Promise<string> {
     return bridge().version();
   },
+  /** Zoom of the whole page (1 = 100%); previews without the desktop bridge stay at 100%. */
+  async zoom(step?: 'in' | 'out' | 'reset'): Promise<number> {
+    const b = override ?? window.meyar;
+    return b?.zoom ? b.zoom(step) : 1;
+  },
+  onZoom(listener: (factor: number) => void): () => void {
+    const b = override ?? window.meyar;
+    return b?.onZoom ? b.onZoom(listener) : () => {};
+  },
   setDirty(dirty: boolean) {
     bridge().setDirty(dirty);
   },

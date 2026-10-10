@@ -82,7 +82,7 @@ export function useLayout(): Layout {
 
 /** Size and state remembered per kind of window (all invoices, the sales list…), like 1C. */
 const MEMORY = 'meyar.windows.v2';
-type Memory = Record<string, { w: number; h: number; max: boolean }>;
+type Memory = Record<string, { x?: number; y?: number; w: number; h: number; max: boolean }>;
 const kindOf = (v: View) => (v.type === 'page' ? `page:${v.page}` : v.type);
 function readMemory(): Memory {
   try {
@@ -95,7 +95,13 @@ function readMemory(): Memory {
 function remember(view: View, l: WinLayout) {
   try {
     const m = readMemory();
-    m[kindOf(view)] = { w: l.geom.w, h: l.geom.h, max: l.state === 'maximized' };
+    m[kindOf(view)] = {
+      x: l.geom.x,
+      y: l.geom.y,
+      w: l.geom.w,
+      h: l.geom.h,
+      max: l.state === 'maximized',
+    };
     window.localStorage.setItem(MEMORY, JSON.stringify(m));
   } catch {
     /* storage unavailable: layout is simply not remembered */
@@ -234,9 +240,22 @@ export function WorkspaceProvider({
       const saved = readMemory()[kindOf(view)];
       const w = Math.max(360, Math.min(saved?.w ?? Math.min(1180, dw - 48), dw));
       const h = Math.max(220, Math.min(saved?.h ?? dh - 32, dh));
+      // Each kind of form reopens where the user last put it (1C remembers form positions);
+      // a second form of the same kind steps aside so neither hides the other.
       const step = m.order.filter((x) => m.layout[x]?.state !== 'minimized').length % 8;
-      const x = Math.max(0, Math.min(8 + step * CASCADE, dw - w));
-      const y = Math.max(0, Math.min(8 + step * CASCADE, dh - h));
+      const taken = (px: number, py: number) =>
+        m.order.some((id) => {
+          const g = m.layout[id];
+          return g && g.state !== 'minimized' && g.geom.x === px && g.geom.y === py;
+        });
+      let x = saved?.x ?? 8 + step * CASCADE;
+      let y = saved?.y ?? 8 + step * CASCADE;
+      for (let i = 0; i < 8 && taken(x, y); i++) {
+        x += CASCADE;
+        y += CASCADE;
+      }
+      x = Math.max(0, Math.min(x, dw - w));
+      y = Math.max(0, Math.min(y, dh - h));
       // Lists and reports fill the work area (like tabs); documents open as windows over them,
       // as in 1C. What the user last chose for a kind of window wins.
       const state: WinLayout['prev'] = (saved ? saved.max : view.type === 'page')

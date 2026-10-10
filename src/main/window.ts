@@ -1,7 +1,8 @@
-import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, dialog, ipcMain, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Outcome } from '../contracts/bridge.js';
@@ -15,6 +16,36 @@ export interface WindowOptions {
   preloadFile: string;
   version: string;
   backup: (window: BrowserWindow) => Promise<string | null>;
+  /** Where the window's size, position and zoom are kept between sessions. */
+  uiFile: string;
+}
+
+/** Zoom steps (Ctrl + / Ctrl − / Ctrl 0, Ctrl + mouse wheel): readable on any screen. */
+const ZOOMS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+interface UiState {
+  zoom?: number;
+  bounds?: { x: number; y: number; width: number; height: number };
+  maximized?: boolean;
+}
+function readUi(file: string): UiState {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as UiState;
+  } catch {
+    return {};
+  }
+}
+/** Saved bounds are used only while they still fall on a connected screen. */
+function visible(b: UiState['bounds']): b is NonNullable<UiState['bounds']> {
+  if (!b || b.width < 600 || b.height < 400) return false;
+  return screen.getAllDisplays().some((d) => {
+    const a = d.workArea;
+    return (
+      b.x < a.x + a.width - 100 &&
+      b.x + b.width > a.x + 100 &&
+      b.y >= a.y - 20 &&
+      b.y < a.y + a.height - 100
+    );
+  });
 }
 
 /**
@@ -23,14 +54,22 @@ export interface WindowOptions {
  */
 export async function createMainWindow(options: WindowOptions): Promise<BrowserWindow> {
   const appUrl = pathToFileURL(options.rendererFile).href;
+  const ui = readUi(options.uiFile);
+  const saveUi = (patch: UiState) => {
+    Object.assign(ui, patch);
+    try {
+      writeFileSync(options.uiFile, JSON.stringify(ui));
+    } catch {
+      /* the next session simply starts with the defaults */
+    }
+  };
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    ...(visible(ui.bounds) ? ui.bounds : { width: 1440, height: 900 }),
     minWidth: 1024,
     minHeight: 640,
     show: false,
     title: 'Meyar',
-    backgroundColor: '#eef1f3',
+    backgroundColor: '#e4e9e6',
     autoHideMenuBar: true,
     webPreferences: {
       preload: options.preloadFile,
@@ -141,7 +180,52 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     if (choice === 0) event.preventDefault();
   });
   window.on('closed', () => ipcMain.removeListener('meyar:dirty', onDirty));
-  window.once('ready-to-show', () => window.show());
+  // Zoom: one factor for the whole page, so windows, pointer and layout stay consistent.
+  let zoom = ZOOMS.includes(ui.zoom ?? 1) ? (ui.zoom ?? 1) : 1;
+  const setZoom = (next: number) => {
+    zoom = next;
+    contents.setZoomFactor(zoom);
+    contents.send('meyar:zoom', zoom);
+    saveUi({ zoom });
+  };
+  const step = (dir: 'in' | 'out' | 'reset') => {
+    const i = ZOOMS.indexOf(zoom);
+    if (dir === 'reset') setZoom(1);
+    else if (dir === 'in' && i < ZOOMS.length - 1) setZoom(ZOOMS[i + 1]!);
+    else if (dir === 'out' && i > 0) setZoom(ZOOMS[i - 1]!);
+    return zoom;
+  };
+  contents.on('did-finish-load', () => contents.setZoomFactor(zoom));
+  contents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control || input.alt) return;
+    const dir =
+      input.key === '+' || input.key === '=' || input.code === 'NumpadAdd'
+        ? 'in'
+        : input.key === '-' || input.code === 'NumpadSubtract'
+          ? 'out'
+          : input.key === '0' || input.code === 'Numpad0'
+            ? 'reset'
+            : null;
+    if (dir) {
+      event.preventDefault();
+      step(dir);
+    }
+  });
+  contents.on('zoom-changed', (_event, direction) => step(direction));
+  handle('meyar:zoom', (_e, arg) =>
+    arg === 'in' || arg === 'out' || arg === 'reset' ? step(arg) : zoom,
+  );
+  const keepBounds = () =>
+    saveUi({ bounds: window.getNormalBounds(), maximized: window.isMaximized() });
+  window.on('resized', keepBounds);
+  window.on('moved', keepBounds);
+  window.on('maximize', keepBounds);
+  window.on('unmaximize', keepBounds);
+  window.once('ready-to-show', () => {
+    // Accountants work full screen: the first start is maximized, later ones as left.
+    if (ui.maximized ?? true) window.maximize();
+    window.show();
+  });
   await window.loadFile(options.rendererFile);
   return window;
 }

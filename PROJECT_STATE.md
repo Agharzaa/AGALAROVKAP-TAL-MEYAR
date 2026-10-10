@@ -71,6 +71,12 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - 0.4.2-dəki yaşıl görünüş köhnə proqramın surəti kimi qəbul edilmədi; sıfırdan yeni dizayn: 1C-nin iş qaydası (bölmələr → funksiyalar → jurnal → sənəd forması, əmr paneli, Ctrl+Enter), öz vizual dili.
 - Testlər: `npm test` (46), `npm run test:ui` (7); Electron ekran şəkilləri 1366×768-də yoxlanıldı.
 
+## 0.4.4 — uzun iş günü üçün (10.10.2026)
+
+- Miqyas: Ctrl + / Ctrl − / Ctrl 0, Ctrl + siçan təkəri və status sətrindəki "− 100% +" (80–150%); proqram yadda saxlayır.
+- Proqram ilk dəfə tam ekran açılır, sonra ölçü və yerini yadda saxlayır (ekran ayrılıbsa, standarta qayıdır).
+- Hər forma növü son qoyulduğu yerdə və ölçüdə açılır; eyni növdən ikinci forma üst-üstə düşmür.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
