@@ -24,7 +24,7 @@ Azərbaycan şirkətləri üçün Windows mühasibat proqramı: qaimələr, ƏDV
   - Əvəzləşdirilməmiş avans, mənfi anbar və mənfi pul qalığı üzrə xəbərdarlıq verilir.
   - Avtomatik ehtiyat nüsxə alınır.
 - **Sürət:** uçot ayrıca axında işləyir; 500 000 yazılışda dövriyyə balansı 1 saniyədən tez açılır.
-- **İnterfeys:** yaşıl Meyar ERP görünüşü — yuxarıda modullar paneli, şirkət, iş dövrü, sürətli axtarış (Ctrl+K), "Yeni sənəd"; 1C kimi pəncərələr (aşağıda pəncərələr paneli; Ctrl+Tab, Ctrl+F4).
+- **İnterfeys:** "Mühasib masası" — solda bölmələr, bölmənin funksiyaları, formalarda 1C kimi əmr paneli (Ctrl+Enter uçota al və bağla), 1C kimi pəncərələr və pəncərələr paneli (Ctrl+Tab, Ctrl+F4), sürətli axtarış (Ctrl+K), "Yarat".
 
 Uçot qaydaları: [docs/ACCOUNTING.md](docs/ACCOUNTING.md). Razılaşdırılmış qərarlar: [docs/QERARLAR.md](docs/QERARLAR.md). Cari vəziyyət: [PROJECT_STATE.md](PROJECT_STATE.md).
 

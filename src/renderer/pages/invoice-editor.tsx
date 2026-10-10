@@ -4,7 +4,7 @@
  * entry is shown under the document after saving, so every figure can be traced.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, Copy, Plus, Trash2 } from 'lucide-react';
+import { Ban, Check, CheckCheck, Copy, Plus, Trash2 } from 'lucide-react';
 import { vatRates, type VatRate } from '../../domain/chart';
 import { aznAmounts, AZN_RATE, lineAmounts, type LineAmounts } from '../../domain/invoice';
 import { formatMinor } from '../../domain/money';
@@ -223,7 +223,7 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
   }, [catalog, sale]);
 
   const locked = doc?.status === 'cancelled';
-  async function save() {
+  async function save(close = false) {
     if (!form || locked || m.busy) return;
     setMessage('');
     const r = await m.run({
@@ -245,6 +245,10 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       ...(id && doc ? { id, version: doc.version } : {}),
     });
     if (!r) return;
+    if (close) {
+      ws.discard(win.id);
+      return;
+    }
     setMessage(
       id
         ? 'Düzəliş uçota alındı: köhnə yazılış storno edildi, yenisi yazıldı.'
@@ -263,6 +267,10 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        // 1C: Ctrl+Enter posts the document and closes its form.
+        e.preventDefault();
+        void save(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -310,23 +318,54 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
       actions={
         <>
-          {doc && doc.status === 'posted' && (
+          {!locked && (
             <button
               type="button"
-              className="button secondary"
-              onClick={() => (setReason(''), setCancel(true))}
+              className="button primary"
+              title="Ctrl+Enter"
+              disabled={m.busy || (!!id && !dirty)}
+              onClick={() => void save(true)}
             >
-              <Ban size={15} /> Ləğv et
+              <CheckCheck size={15} /> Uçota al və bağla
             </button>
           )}
           {!locked && (
             <button
               type="button"
-              className="button primary"
+              className="button secondary"
+              title="Ctrl+S"
               disabled={m.busy || (!!id && !dirty)}
               onClick={() => void save()}
             >
               <Check size={15} /> {m.busy ? 'Saxlanılır…' : id ? 'Düzəlişi uçota al' : 'Uçota al'}
+            </button>
+          )}
+          {doc && (
+            <button
+              type="button"
+              className="button secondary"
+              title="Sənədin yazılışlarına keç"
+              onClick={() =>
+                document
+                  .getElementById(`postings-${win.id}`)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            >
+              <span className="dtkt" aria-hidden="true">
+                Dt
+                <br />
+                Kt
+              </span>
+              Yazılışlar
+            </button>
+          )}
+          {doc && doc.status === 'posted' && (
+            <button
+              type="button"
+              className="button secondary push-right"
+              onClick={() => (setReason(''), setCancel(true))}
+            >
+              <Ban size={15} /> Ləğv et
             </button>
           )}
         </>
@@ -687,7 +726,7 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
         </p>
         {doc && (
-          <section className="invoice-postings" aria-label="Yazılışlar">
+          <section className="invoice-postings" aria-label="Yazılışlar" id={`postings-${win.id}`}>
             <div className="section-head">
               <h2>Yazılışlar</h2>
               <label className="check">

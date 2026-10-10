@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check } from 'lucide-react';
+import { Ban, Check, CheckCheck } from 'lucide-react';
 import type { Catalog, OperationDetail } from '../../contracts/queries';
 import {
   blankEntryLine,
@@ -78,7 +78,7 @@ export function OperationEditor({ id }: { id?: string }) {
   }, [doc?.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const locked = doc?.status === 'cancelled';
-  async function save() {
+  async function save(close = false) {
     if (!form || locked || m.busy) return;
     setMessage('');
     const r = await m.run({
@@ -91,6 +91,10 @@ export function OperationEditor({ id }: { id?: string }) {
       ...(id && doc ? { id, version: doc.version } : {}),
     });
     if (!r) return;
+    if (close) {
+      ws.discard(win.id);
+      return;
+    }
     setMessage(
       id
         ? 'Düzəliş uçota alındı: köhnə yazılış storno edildi, yenisi yazıldı.'
@@ -113,6 +117,10 @@ export function OperationEditor({ id }: { id?: string }) {
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        // 1C: Ctrl+Enter posts the document and closes its form.
+        e.preventDefault();
+        void save(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -132,23 +140,35 @@ export function OperationEditor({ id }: { id?: string }) {
       hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
       actions={
         <>
-          {doc && doc.status === 'posted' && (
+          {!locked && (
             <button
               type="button"
-              className="button secondary"
-              onClick={() => (setReason(''), setCancel(true))}
+              className="button primary"
+              title="Ctrl+Enter"
+              disabled={m.busy || (!!id && !dirty)}
+              onClick={() => void save(true)}
             >
-              <Ban size={15} /> Ləğv et
+              <CheckCheck size={15} /> Uçota al və bağla
             </button>
           )}
           {!locked && (
             <button
               type="button"
-              className="button primary"
+              className="button secondary"
+              title="Ctrl+S"
               disabled={m.busy || (!!id && !dirty)}
               onClick={() => void save()}
             >
               <Check size={15} /> {m.busy ? 'Saxlanılır…' : id ? 'Düzəlişi uçota al' : 'Uçota al'}
+            </button>
+          )}
+          {doc && doc.status === 'posted' && (
+            <button
+              type="button"
+              className="button secondary push-right"
+              onClick={() => (setReason(''), setCancel(true))}
+            >
+              <Ban size={15} /> Ləğv et
             </button>
           )}
         </>

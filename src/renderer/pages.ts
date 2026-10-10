@@ -19,6 +19,7 @@ import {
   Upload,
   UserRound,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type { Page, View } from './workspace';
@@ -71,52 +72,274 @@ export interface NavItem {
   icon: LucideIcon;
   action: NavAction;
 }
-/** A top-bar entry: a module, or a menu of modules (Kitabçalar, Servis). */
-export type NavEntry = NavItem | { label: string; icon: LucideIcon; items: NavItem[] };
-
 const page = (p: Page): NavAction => ({ kind: 'view', view: { type: 'page', page: p } });
 const soon = (stage: string): NavAction => ({ kind: 'soon', stage });
 
-/** The module bar, left to right (the green Meyar ERP layout: modules across the top). */
-export const nav: NavEntry[] = [
-  { label: 'Başlanğıc', icon: LayoutDashboard, action: page('home') },
+/**
+ * Sections of the program (1C's main menu, as a rail on the left). Opening a section shows its
+ * documents, what can be created there, its reports and the lists it uses.
+ */
+export interface Section {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  /** Empty for Başlanğıc, which simply shows the work area. */
+  groups: { title: string; items: NavItem[] }[];
+}
+const card = (account: string, label: string): NavItem => ({
+  label,
+  icon: FileSpreadsheet,
+  action: { kind: 'view', view: { type: 'accountCard', account } },
+});
+export const sections: Section[] = [
+  { id: 'home', label: 'Başlanğıc', icon: LayoutDashboard, groups: [] },
   {
-    label: 'Əl ilə əməliyyatlar',
-    short: 'Əməliyyatlar',
-    icon: ScrollText,
-    action: page('operations'),
-  },
-  { label: 'Satış qaimələri', short: 'Satış', icon: ArrowUpRight, action: page('sales') },
-  { label: 'Alış qaimələri', short: 'Alış', icon: ArrowDownLeft, action: page('purchases') },
-  { label: 'Bank', icon: Landmark, action: soon('3-cü mərhələ') },
-  { label: 'Kontragentlər', icon: Users, action: page('partners') },
-  { label: 'Dövriyyə balansı', short: 'DBC', icon: Scale, action: page('trial') },
-  { label: 'Hesab kartı', icon: FileSpreadsheet, action: page('card') },
-  {
-    label: 'Kitabçalar',
-    icon: BookOpen,
-    items: [
-      { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
-      { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
-      { label: 'Nomenklatura', icon: Package, action: page('products') },
-      { label: 'İşçilər', icon: UserRound, action: page('employees') },
-      { label: 'Siyahılar', icon: Building2, action: page('lists') },
-      { label: 'Hesab planı', icon: ListTree, action: page('accounts') },
+    id: 'bank',
+    label: 'Bank və kassa',
+    icon: Landmark,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [
+          { label: 'Bank sənədləri', icon: Landmark, action: soon('3-cü mərhələ') },
+          { label: 'Bank çıxarışının yüklənməsi', icon: Upload, action: soon('3-cü mərhələ') },
+          { label: 'Kassa sənədləri', icon: Wallet, action: soon('5-ci mərhələ') },
+        ],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [card('223', 'Hesab kartı 223'), card('221', 'Hesab kartı 221')],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [{ label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') }],
+      },
     ],
   },
   {
-    label: 'Servis',
+    id: 'sales',
+    label: 'Satış',
+    icon: ArrowUpRight,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [{ label: 'Satış qaimələri', icon: ReceiptText, action: page('sales') }],
+      },
+      {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'Satış qaiməsi',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'invoice', direction: 'sale' } },
+          },
+        ],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [card('211', 'Alıcılarla hesablaşma (211)'), card('543', 'Alınmış avanslar (543)')],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [
+          { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
+          { label: 'Nomenklatura', icon: Package, action: page('products') },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'purchases',
+    label: 'Alış',
+    icon: ArrowDownLeft,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [{ label: 'Alış qaimələri', icon: ReceiptText, action: page('purchases') }],
+      },
+      {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'Alış qaiməsi',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'invoice', direction: 'purchase' } },
+          },
+        ],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [
+          card('531', 'Malsatanlarla hesablaşma (531)'),
+          card('243', 'Verilmiş avanslar (243)'),
+        ],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [
+          { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
+          { label: 'Nomenklatura', icon: Package, action: page('products') },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'stock',
+    label: 'Anbar',
+    icon: Package,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [{ label: 'Anbar hərəkəti', icon: Package, action: soon('5-ci mərhələ') }],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [card('205', 'Mallar (205)'), card('201', 'Materiallar (201)')],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [{ label: 'Nomenklatura', icon: Package, action: page('products') }],
+      },
+    ],
+  },
+  {
+    id: 'ledger',
+    label: 'Mühasibat',
+    icon: ScrollText,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [{ label: 'Əl ilə əməliyyatlar', icon: ScrollText, action: page('operations') }],
+      },
+      {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'Əl ilə əməliyyat',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'operation' } },
+          },
+        ],
+      },
+      {
+        title: 'Dövr',
+        items: [{ label: 'Dövrün bağlanması', icon: Lock, action: page('settings') }],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [
+          { label: 'Hesab planı', icon: ListTree, action: page('accounts') },
+          { label: 'İşçilər', icon: UserRound, action: page('employees') },
+          { label: 'Siyahılar', icon: Building2, action: page('lists') },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'reports',
+    label: 'Hesabatlar',
+    icon: Scale,
+    groups: [
+      {
+        title: 'Standart hesabatlar',
+        items: [
+          { label: 'Dövriyyə balansı', icon: Scale, action: page('trial') },
+          { label: 'Hesab kartı', icon: FileSpreadsheet, action: page('card') },
+        ],
+      },
+      {
+        title: 'Nəzarət',
+        items: [{ label: 'Dəyişiklik tarixçəsi', icon: History, action: page('audit') }],
+      },
+    ],
+  },
+  {
+    id: 'lists',
+    label: 'Kitabçalar',
+    icon: BookOpen,
+    groups: [
+      {
+        title: 'Hesablaşma',
+        items: [
+          { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
+          { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
+        ],
+      },
+      {
+        title: 'Uçot obyektləri',
+        items: [
+          { label: 'Nomenklatura', icon: Package, action: page('products') },
+          { label: 'İşçilər', icon: UserRound, action: page('employees') },
+          { label: 'Siyahılar', icon: Building2, action: page('lists') },
+          { label: 'Hesab planı', icon: ListTree, action: page('accounts') },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'company',
+    label: 'Müəssisə',
     icon: Settings,
-    items: [
-      { label: 'Parametrlər və dövrün bağlanması', icon: Lock, action: page('settings') },
-      { label: 'Dəyişiklik tarixçəsi', icon: History, action: page('audit') },
-      { label: 'Ehtiyat nüsxə', icon: ShieldCheck, action: { kind: 'backup' } },
-      { label: 'DVX-dan e-qaimələr', icon: Upload, action: soon('4-cü mərhələ') },
+    groups: [
+      {
+        title: 'Parametrlər',
+        items: [
+          { label: 'Şirkət və dövrün bağlanması', icon: Settings, action: page('settings') },
+          { label: 'Dəyişiklik tarixçəsi', icon: History, action: page('audit') },
+        ],
+      },
+      {
+        title: 'Baza',
+        items: [
+          { label: 'Ehtiyat nüsxə', icon: ShieldCheck, action: { kind: 'backup' } },
+          { label: 'DVX-dan e-qaimələr', icon: Upload, action: soon('4-cü mərhələ') },
+        ],
+      },
     ],
   },
 ];
 
-/** "+ Yeni" menu: the documents a new window can be opened for. */
+/** The section a window belongs to, so the rail shows where the user is. */
+export function sectionOfView(view: View): string {
+  switch (view.type) {
+    case 'invoice':
+      return view.direction === 'sale' ? 'sales' : 'purchases';
+    case 'operation':
+      return 'ledger';
+    case 'accountCard': {
+      const a = view.account;
+      if (a.startsWith('211') || a.startsWith('543')) return 'sales';
+      if (a.startsWith('531') || a.startsWith('243')) return 'purchases';
+      if (a.startsWith('22')) return 'bank';
+      if (a.startsWith('20')) return 'stock';
+      return 'reports';
+    }
+    case 'page':
+      switch (view.page) {
+        case 'home':
+          return 'home';
+        case 'sales':
+          return 'sales';
+        case 'purchases':
+          return 'purchases';
+        case 'operations':
+        case 'accounts':
+          return 'ledger';
+        case 'trial':
+        case 'card':
+        case 'audit':
+          return 'reports';
+        case 'bankAccounts':
+          return 'bank';
+        case 'settings':
+          return 'company';
+        default:
+          return 'lists';
+      }
+  }
+}
+
+/** "Yarat" menu: the documents a new window can be opened for. */
 export const createItems: NavItem[] = [
   {
     label: 'Əl ilə əməliyyat',
@@ -135,34 +358,6 @@ export const createItems: NavItem[] = [
   },
   { label: 'Bank sənədi', icon: Landmark, action: soon('3-cü mərhələ') },
 ];
-
-/** Small label above a window's title, telling which part of the program it belongs to. */
-export function sectionOf(view: View): string {
-  switch (view.type) {
-    case 'operation':
-    case 'invoice':
-      return 'Sənəd';
-    case 'accountCard':
-      return 'Hesabat';
-    case 'page':
-      switch (view.page) {
-        case 'operations':
-        case 'sales':
-        case 'purchases':
-          return 'Sənədlər';
-        case 'trial':
-        case 'card':
-          return 'Hesabatlar';
-        case 'audit':
-        case 'settings':
-          return 'Servis';
-        case 'home':
-          return 'İdarəetmə paneli';
-        default:
-          return 'Kitabçalar';
-      }
-  }
-}
 
 export function viewTitle(view: View, label?: string): string {
   switch (view.type) {

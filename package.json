@@ -1,7 +1,7 @@
 {
   "name": "meyar",
   "productName": "Meyar",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Meyar — Azərbaycan şirkətləri üçün mühasibat və biznes idarəetmə proqramı",
   "author": "Ağarza Ağalarov",
@@ -65,6 +65,7 @@
     ]
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "5.3.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -1,15 +1,7 @@
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  CheckCircle2,
-  CircleAlert,
-  Clock3,
-  FilePlus2,
-  RefreshCw,
-} from 'lucide-react';
+import { CheckCircle2, ChevronRight, CircleAlert, Clock3, RefreshCw } from 'lucide-react';
 import type { HomeView, IntegrityView, RecentDocument } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
-import { addAmounts, day, longDate, money, today } from '../format';
+import { day, longDate, money, today } from '../format';
 import { useQuery } from '../hooks';
 import { Notice, Status } from '../ui';
 import { useWorkspace, type View } from '../workspace';
@@ -22,17 +14,82 @@ interface Task {
   view?: View;
 }
 
+/** One step of a section's work: a document or report, and what it posts. */
+interface Step {
+  title: string;
+  posts?: string;
+  view?: View;
+  /** Stage that brings it, for steps not built yet. */
+  soon?: string;
+}
+const page = (p: Extract<View, { type: 'page' }>['page']): View => ({ type: 'page', page: p });
+const card = (account: string): View => ({ type: 'accountCard', account });
+
+/**
+ * The work map (1C "Funksiyalar paneli"): each row is how one area of the accounting flows,
+ * left to right, from the lists it needs to the report that closes it.
+ */
+const flows: { name: string; steps: Step[] }[] = [
+  {
+    name: 'Satış',
+    steps: [
+      { title: 'Kontragentlər', posts: 'VÖEN, müqavilə', view: page('partners') },
+      {
+        title: 'Satış qaiməsi',
+        posts: 'Dt 211 · Kt 601, 521',
+        view: { type: 'invoice', direction: 'sale' },
+      },
+      { title: 'Alıcıdan ödəniş', posts: 'Dt 223 · Kt 211', soon: '3-cü mərhələ' },
+      { title: 'Alıcılar', posts: 'Hesab kartı 211', view: card('211') },
+    ],
+  },
+  {
+    name: 'Alış',
+    steps: [
+      { title: 'Kontragentlər', posts: 'VÖEN, müqavilə', view: page('partners') },
+      {
+        title: 'Alış qaiməsi',
+        posts: 'Dt 205, 241 · Kt 531',
+        view: { type: 'invoice', direction: 'purchase' },
+      },
+      { title: 'Malsatana ödəniş', posts: 'Dt 531 · Kt 223', soon: '3-cü mərhələ' },
+      { title: 'Malsatanlar', posts: 'Hesab kartı 531', view: card('531') },
+    ],
+  },
+  {
+    name: 'Bank',
+    steps: [
+      { title: 'Bank hesabları', posts: 'IBAN, 223.01 / 223.02', view: page('bankAccounts') },
+      { title: 'Bank çıxarışı', posts: 'Excel-dən yükləmə', soon: '3-cü mərhələ' },
+      { title: 'Bank sənədləri', posts: 'Dt/Kt 223', soon: '3-cü mərhələ' },
+      { title: 'Bank qalığı', posts: 'Hesab kartı 223', view: card('223') },
+    ],
+  },
+  {
+    name: 'Mühasibat',
+    steps: [
+      {
+        title: 'Əl ilə əməliyyat',
+        posts: 'Başlanğıc qalıqlar, düzəlişlər',
+        view: { type: 'operation' },
+      },
+      { title: 'Dövriyyə balansı', posts: 'Hesab və subkonto üzrə', view: page('trial') },
+      { title: 'Dövrün bağlanması', posts: 'Bağlı dövrə yazılmır', view: page('settings') },
+    ],
+  },
+];
+
 const kindLabel: Record<RecentDocument['kind'], string> = {
   operation: 'Əməliyyat',
-  sale: 'Satış',
-  purchase: 'Alış',
+  sale: 'Satış qaiməsi',
+  purchase: 'Alış qaiməsi',
 };
 const viewOf = (d: RecentDocument): View =>
   d.kind === 'operation'
     ? { type: 'operation', id: d.id }
     : { type: 'invoice', direction: d.kind, id: d.id };
 
-/** The start page: the work area's background, "İdarəetmə paneli" of the green Meyar layout. */
+/** The work area's background: "İş masası". */
 export function HomePage({
   integrity,
   integrityLoading,
@@ -77,157 +134,79 @@ export function HomePage({
         action: 'Hesab kartı',
         view: { type: 'accountCard', account: w.account, sk: w.sk },
       });
-    if (!h.warnings.length && h.postings > 0)
-      tasks.push({
-        state: 'ok',
-        title: 'Hesablaşmalar qaydasındadır',
-        detail: 'Avanslar, anbar və pul qalıqları üzrə xəbərdarlıq yoxdur',
-        action: 'Dövriyyə balansı',
-        view: { type: 'page', page: 'trial' },
-      });
   }
-  const bal = (code: string) => h?.balances.find((b) => b.account === code);
-  /** Debit minus credit of some accounts, canonical. */
-  const net = (codes: string[], side: 'dt' | 'kt') =>
-    addAmounts(
-      codes.flatMap((c) => {
-        const b = bal(c);
-        if (!b) return [];
-        return side === 'dt' ? [b.dt, `-${b.kt}`] : [b.kt, `-${b.dt}`];
-      }),
-    );
-  const kpis = [
-    {
-      label: 'Pul vəsaitləri',
-      accounts: '221 · 223 · 224',
-      value: net(['221', '223', '224'], 'dt'),
-    },
-    { label: 'Debitorlar', accounts: '211 Dt', value: bal('211')?.dt ?? '0.00' },
-    { label: 'Kreditorlar', accounts: '531 Kt', value: bal('531')?.kt ?? '0.00' },
-    { label: 'Alınmış avanslar', accounts: '543 Kt', value: bal('543')?.kt ?? '0.00' },
-    { label: 'Vergi öhdəlikləri', accounts: '521 Kt', value: bal('521')?.kt ?? '0.00' },
-  ];
-  const balance = (dt: string, kt: string) => {
-    const d = dt !== '0.00';
-    const k = kt !== '0.00';
-    if (!d && !k) return <span className="muted">0,00</span>;
-    return (
-      <>
-        {d && (
-          <b>
-            {money(dt)} <small>Dt</small>
-          </b>
-        )}
-        {d && k && <br />}
-        {k && (
-          <b>
-            {money(kt)} <small>Kt</small>
-          </b>
-        )}
-      </>
-    );
-  };
-  const advanceWarning = h?.warnings.some((w) => w.kind === 'advance');
+  const amount = (v: string) => (v === '0.00' ? '' : money(v));
   return (
     <div className="home">
-      <header className="pagehead">
-        <div>
-          <span className="eyebrow">İdarəetmə paneli</span>
-          <h1>Ümumi vəziyyət</h1>
-          <p>
-            {company ? `${company.name} · ` : ''}
-            {longDate(today())}
-          </p>
-        </div>
-        <div className="pagehead-actions">
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => ws.open({ type: 'operation' })}
-          >
-            <FilePlus2 size={15} aria-hidden="true" /> Əl ilə əməliyyat
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => ws.open({ type: 'invoice', direction: 'purchase' })}
-          >
-            <ArrowDownLeft size={15} aria-hidden="true" /> Alış qaiməsi
-          </button>
-          <button
-            type="button"
-            className="button primary"
-            onClick={() => ws.open({ type: 'invoice', direction: 'sale' })}
-          >
-            <ArrowUpRight size={15} aria-hidden="true" /> Satış qaiməsi
-          </button>
-        </div>
+      <header className="desk-head">
+        <h1>İş masası</h1>
+        <p>
+          {company ? `${company.name}, VÖEN ${company.taxId}` : ''}
+          <span>{longDate(today())}</span>
+        </p>
       </header>
       {home.error && <Notice>{home.error}</Notice>}
-      <section className="kpis" aria-label="Əsas göstəricilər">
-        {kpis.map((k) => (
-          <div key={k.label} className="kpi">
-            <span>{k.label}</span>
-            <strong className={k.value.startsWith('-') ? 'negative' : ''}>
-              {h ? money(k.value) : '…'} <small>₼</small>
-            </strong>
-            <small>{k.accounts}</small>
-          </div>
-        ))}
-      </section>
-      <div className="home-grid">
-        <div className="home-main">
-          <section className="panel" aria-label="Gözləyən işlər">
+      <div className="desk">
+        <div className="desk-main">
+          <section className="panel" aria-label="İş xəritəsi">
             <header className="panel-head">
-              <div>
-                <h2>Gözləyən işlər</h2>
-                <small>Bu gün diqqət tələb edənlər</small>
-              </div>
+              <h2>İş xəritəsi</h2>
+              <small>Sənəddən hesabata qədər, soldan sağa</small>
             </header>
-            {!h && !home.error && <p className="panel-empty">Yüklənir…</p>}
-            {h && !tasks.length && <p className="panel-empty">Gözləyən iş yoxdur.</p>}
-            {tasks.map((t, i) => (
-              <div key={i} className={`task-row ${t.state}`}>
-                {t.state === 'ok' ? (
-                  <CheckCircle2 size={17} className="ok" aria-label="Qaydasındadır" />
-                ) : t.state === 'bad' ? (
-                  <CircleAlert size={17} className="bad" aria-label="Diqqət" />
-                ) : (
-                  <Clock3 size={17} className="wait" aria-label="Gözləyir" />
-                )}
-                <span className="task-text">
-                  <b>{t.title}</b>
-                  <span>{t.detail}</span>
-                </span>
-                {t.view && (
-                  <button
-                    type="button"
-                    className={`button ${t.state === 'ok' ? 'secondary' : 'primary'} small`}
-                    onClick={() => ws.open(t.view!)}
-                  >
-                    {t.action}
-                  </button>
-                )}
-              </div>
-            ))}
+            <div className="flows">
+              {flows.map((f) => (
+                <div key={f.name} className="flow">
+                  <span className="flow-name">{f.name}</span>
+                  <ol className="flow-steps">
+                    {f.steps.map((s, i) => (
+                      <li key={s.title}>
+                        {i > 0 && (
+                          <ChevronRight size={15} className="flow-arrow" aria-hidden="true" />
+                        )}
+                        {s.view ? (
+                          <button
+                            type="button"
+                            className="step"
+                            aria-label={s.title}
+                            title={s.posts ? `${s.title} — ${s.posts}` : s.title}
+                            onClick={() => ws.open(s.view!)}
+                          >
+                            <b>{s.title}</b>
+                            {s.posts && <small>{s.posts}</small>}
+                          </button>
+                        ) : (
+                          <span className="step soon" title={`${s.soon}də əlavə olunacaq`}>
+                            <b>{s.title}</b>
+                            <small>{s.soon}</small>
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
           </section>
-          <section className="panel grow" aria-label="Son sənədlər">
+          <section className="panel" aria-label="Son sənədlər">
             <header className="panel-head">
-              <div>
-                <h2>Son sənədlər</h2>
-                <small>Əməliyyatlar və qaimələr, yenidən köhnəyə</small>
-              </div>
+              <h2>Son sənədlər</h2>
+              <small>Bütün növlər, yenidən köhnəyə</small>
             </header>
-            {h && !h.documents.length && <p className="panel-empty">Hələ sənəd yoxdur.</p>}
+            {h && !h.documents.length && (
+              <p className="panel-empty">
+                Hələ sənəd yoxdur. İlk sənədi iş xəritəsindən və ya yuxarıdakı “Yarat” düyməsindən
+                açın.
+              </p>
+            )}
             {h && h.documents.length > 0 && (
               <div className="table-scroll flat">
                 <table className="grid">
                   <thead>
                     <tr>
                       <th scope="col">Tarix</th>
-                      <th scope="col">Növ</th>
+                      <th scope="col">Sənəd</th>
                       <th scope="col">Nömrə</th>
-                      <th scope="col">Kontragent / məzmun</th>
+                      <th scope="col">Kontragent və ya məzmun</th>
                       <th scope="col" className="num">
                         Məbləğ
                       </th>
@@ -242,18 +221,18 @@ export function HomePage({
                         onDoubleClick={() => ws.open(viewOf(d))}
                       >
                         <td className="nowrap">{day(d.date)}</td>
-                        <td>
-                          <span className={`badge ${d.kind}`}>{kindLabel[d.kind]}</span>
-                        </td>
+                        <td className="nowrap">{kindLabel[d.kind]}</td>
                         <td className="nowrap">
                           <button type="button" className="link" onClick={() => ws.open(viewOf(d))}>
                             {d.number}
                           </button>
                         </td>
                         <td className="ellipsis">{d.title || '—'}</td>
-                        <td className="num mono">
+                        <td className="num">
                           {money(d.total)}
-                          {d.currency !== 'AZN' && <small> {d.currency}</small>}
+                          {d.currency !== 'AZN' && (
+                            <small className="currency"> {d.currency}</small>
+                          )}
                         </td>
                         <td>
                           <Status status={d.status} />
@@ -266,13 +245,85 @@ export function HomePage({
             )}
           </section>
         </div>
-        <div className="home-side">
+        <div className="desk-side">
+          <section className="panel" aria-label="Diqqət">
+            <header className="panel-head">
+              <h2>Diqqət</h2>
+              <small>
+                {tasks.length ? `${tasks.length} iş gözləyir` : 'Hər şey qaydasındadır'}
+              </small>
+            </header>
+            {!h && !home.error && <p className="panel-empty">Yüklənir…</p>}
+            {h && !tasks.length && (
+              <div className="task-row ok">
+                <CheckCircle2 size={17} className="ok" aria-label="Qaydasındadır" />
+                <span className="task-text">
+                  <b>Hesablaşmalar qaydasındadır</b>
+                  <span>Avans, anbar və pul qalıqları üzrə xəbərdarlıq yoxdur</span>
+                </span>
+              </div>
+            )}
+            {tasks.map((t, i) => (
+              <div key={i} className={`task-row ${t.state}`}>
+                {t.state === 'bad' ? (
+                  <CircleAlert size={17} className="bad" aria-label="Diqqət" />
+                ) : (
+                  <Clock3 size={17} className="wait" aria-label="Gözləyir" />
+                )}
+                <span className="task-text">
+                  <b>{t.title}</b>
+                  <span>{t.detail}</span>
+                </span>
+                {t.view && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    onClick={() => ws.open(t.view!)}
+                  >
+                    {t.action}
+                  </button>
+                )}
+              </div>
+            ))}
+          </section>
+          <section className="panel" aria-label="Qalıqlar">
+            <header className="panel-head">
+              <h2>Qalıqlar</h2>
+              <small>{day(today())} vəziyyətinə</small>
+            </header>
+            <table className="grid balances">
+              <thead>
+                <tr>
+                  <th scope="col">Hesab</th>
+                  <th scope="col" className="num">
+                    Debet
+                  </th>
+                  <th scope="col" className="num">
+                    Kredit
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {h?.balances.map((b) => (
+                  <tr
+                    key={b.account}
+                    className="clickable"
+                    title="Hesab kartını aç"
+                    onClick={() => ws.open({ type: 'accountCard', account: b.account })}
+                  >
+                    <td className="balance-name">
+                      <span className="code">{b.account}</span> {b.name}
+                    </td>
+                    <td className="num">{amount(b.dt)}</td>
+                    <td className="num">{amount(b.kt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
           <section className="panel" aria-label="Nəzarət">
             <header className="panel-head">
-              <div>
-                <h2>Nəzarət</h2>
-                <small>Uçotun bütövlüyü</small>
-              </div>
+              <h2>Nəzarət</h2>
               <button
                 type="button"
                 className="icon-button"
@@ -285,75 +336,25 @@ export function HomePage({
             </header>
             {integrityLoading && !integrity && <p className="panel-empty">Baza yoxlanılır…</p>}
             {integrity && (
-              <>
-                <div className="check-row">
-                  <span>
-                    <b>Jurnal və registrlər</b>
-                    <small>
-                      {integrity.ok
-                        ? `${integrity.postings.toLocaleString('az-AZ')} yazılış · ${integrity.ms} ms`
-                        : integrity.problems.join(' ')}
-                    </small>
-                  </span>
-                  <span className={`badge ${integrity.ok ? 'green' : 'red'}`}>
-                    {integrity.ok ? 'Tarazdır' : 'Uyğunsuz'}
-                  </span>
-                </div>
-                <div className="check-row">
-                  <span>
-                    <b>Dəyişməzlik</b>
-                    <small>Jurnal və audit silinmir, düzəliş storno ilə</small>
-                  </span>
-                  <span className="badge green">Qorunur</span>
-                </div>
-                <div className="check-row">
-                  <span>
-                    <b>Avanslar</b>
-                    <small>
-                      {advanceWarning
-                        ? 'Əvəzləşdirilməmiş avans var'
-                        : 'Əvəzləşdirilməmiş avans yoxdur'}
-                    </small>
-                  </span>
-                  <span className={`badge ${advanceWarning ? 'orange' : 'green'}`}>
-                    {advanceWarning ? 'Yoxlayın' : 'Qaydasında'}
-                  </span>
-                </div>
-                <div className="check-row">
-                  <span>
-                    <b>Dövr</b>
-                    <small>
-                      {company?.closedThrough
-                        ? `${day(company.closedThrough)}-dək bağlıdır`
-                        : 'Hələ bağlanmayıb'}
-                    </small>
-                  </span>
-                  <span className={`badge ${company?.closedThrough ? 'green' : 'blue'}`}>
-                    {company?.closedThrough ? 'Bağlı' : 'Açıq'}
-                  </span>
-                </div>
-              </>
+              <ul className="checks">
+                <li className={integrity.ok ? 'ok' : 'bad'}>
+                  {integrity.ok ? <CheckCircle2 size={15} /> : <CircleAlert size={15} />}
+                  {integrity.ok
+                    ? `Jurnal tarazdır, registrlər jurnala uyğundur (${integrity.postings.toLocaleString('az-AZ')} yazılış)`
+                    : integrity.problems.join(' ')}
+                </li>
+                <li className="ok">
+                  <CheckCircle2 size={15} />
+                  Jurnal və audit silinmir, düzəliş yalnız storno ilə
+                </li>
+                <li className={company?.closedThrough ? 'ok' : 'wait'}>
+                  {company?.closedThrough ? <CheckCircle2 size={15} /> : <Clock3 size={15} />}
+                  {company?.closedThrough
+                    ? `Dövr ${day(company.closedThrough)}-dək bağlıdır`
+                    : 'Dövr hələ bağlanmayıb'}
+                </li>
+              </ul>
             )}
-          </section>
-          <section className="panel" aria-label="Qalıqlar">
-            <header className="panel-head">
-              <div>
-                <h2>Qalıqlar</h2>
-                <small>{day(today())} vəziyyətinə · hesab kartını açın</small>
-              </div>
-            </header>
-            {h?.balances.map((b) => (
-              <button
-                key={b.account}
-                type="button"
-                className="balance-row"
-                onClick={() => ws.open({ type: 'accountCard', account: b.account })}
-              >
-                <span className="code">{b.account}</span>
-                <span className="name">{b.name}</span>
-                <span className="sum mono">{balance(b.dt, b.kt)}</span>
-              </button>
-            ))}
           </section>
         </div>
       </div>

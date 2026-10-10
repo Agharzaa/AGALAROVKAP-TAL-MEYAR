@@ -7,7 +7,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** köhnə Meyar ERP v1.17-nin yaşıl görünüşü (istifadəçi seçib, 10.10.2026): yuxarıda modullar paneli, altında şirkət / dövr / axtarış / "Yeni sənəd", nanə rəngli iş sahəsi, tünd yaşıl cədvəl başlıqları, rəqəmlər monoşriftlə. İş sahəsində 1C kimi pəncərələr (siyahılar böyüdülmüş, sənədlər üstündə pəncərə kimi) və aşağıda pəncərələr paneli.
+- **Dizayn:** "Mühasib masası" (10.10.2026, istifadəçi sıfırdan fərqli dizayn istədi, iş qaydası 1C kimi): solda tünd bölmələr paneli (Başlanğıc, Bank və kassa, Satış, Alış, Anbar, Mühasibat, Hesabatlar, Kitabçalar, Müəssisə); bölmə açılanda onun sənədləri, "Yarat", hesabatları və kitabçaları (1C funksiyalar paneli); formalar pəncərədə, yuxarıda 1C kimi əmr paneli ("Uçota al və bağla" Ctrl+Enter, "Uçota al", "Dt/Kt yazılışlar", "Ləğv et"), sənəd başlığında etiketlər solda; aktiv sətir, sahə və bölmə tunc (sarı) rənglə — 1C kursoru kimi. Şrift IBM Plex Sans (proqramla birlikdə). Başlanğıc "İş masası": iş xəritəsi (sənəddən hesabata), diqqət, qalıqlar, son sənədlər, nəzarət.
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
 
@@ -65,6 +65,11 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - İstifadəçi "Klassik ofis" lent menyusunu bəyənmədi; köhnə Meyar ERP v1.17-nin (meyar-desktop repo) yaşıl dizaynı əsas götürüldü: modullar yuxarıda, lent menyu yoxdur (1366×768 ekranda iş sahəsi ~100 px böyüdü).
 - Başlanğıc səhifəsi "İdarəetmə paneli": əsas göstəricilər (pul, 211, 531, 543, 521), gözləyən işlər, bütün növ son sənədlər, nəzarət, qalıqlar.
 - Siyahı və hesabatlar böyüdülmüş pəncərədə, sənədlər onların üstündə pəncərə kimi açılır; seçim pəncərə növünə görə yadda qalır.
+
+## 0.4.3 — "Mühasib masası" dizaynı (10.10.2026)
+
+- 0.4.2-dəki yaşıl görünüş köhnə proqramın surəti kimi qəbul edilmədi; sıfırdan yeni dizayn: 1C-nin iş qaydası (bölmələr → funksiyalar → jurnal → sənəd forması, əmr paneli, Ctrl+Enter), öz vizual dili.
+- Testlər: `npm test` (46), `npm run test:ui` (7); Electron ekran şəkilləri 1366×768-də yoxlanıldı.
 
 ## Açıq məsələlər
 

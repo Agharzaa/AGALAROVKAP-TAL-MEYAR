@@ -2,11 +2,10 @@ import { RefreshCw } from 'lucide-react';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';
-import { sectionOf } from './pages';
 
 /**
- * One module window: title line with actions, an optional filter strip, notices and the work
- * area. It sits inside a child window (App.tsx, Desktop), which carries the window controls.
+ * One form: command bar, an optional filter strip, notices and the work area. It sits inside a
+ * child window (App.tsx, Desktop), whose caption carries the title and window controls.
  */
 export function ModuleFrame({
   title,
@@ -35,21 +34,9 @@ export function ModuleFrame({
   const foreign = win && company && win.companyId !== ws.companyId;
   return (
     <section className="module" aria-label={title}>
+      {/* 1C form layout: the window caption names the form, so the form opens with its
+          command bar (actions on the left), and what it shows is summed up on the right. */}
       <header className="module-heading">
-        <div className="module-title">
-          {win && <span className="eyebrow">{sectionOf(win.view)}</span>}
-          <h1>
-            {title}
-            {count !== undefined && <span className="count">{count.toLocaleString('az-AZ')}</span>}
-          </h1>
-          {(hint || foreign) && (
-            <p>
-              {foreign ? <b className="company-flag">{company.name}</b> : null}
-              {foreign && hint ? ' · ' : null}
-              {hint}
-            </p>
-          )}
-        </div>
         <div className="module-actions">
           {actions}
           {onRefresh && (
@@ -62,6 +49,23 @@ export function ModuleFrame({
             >
               <RefreshCw size={15} />
             </button>
+          )}
+        </div>
+        <div className="module-title">
+          <h1>
+            <span className="sr-only">{title}</span>
+            {count !== undefined && (
+              <span className="count" title="Sətir sayı">
+                {count.toLocaleString('az-AZ')}
+              </span>
+            )}
+          </h1>
+          {(hint || foreign) && (
+            <p>
+              {foreign ? <b className="company-flag">{company.name}</b> : null}
+              {foreign && hint ? ', ' : null}
+              {hint}
+            </p>
           )}
         </div>
       </header>

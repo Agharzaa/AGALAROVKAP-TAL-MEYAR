@@ -119,6 +119,8 @@ interface Workspace {
   /** Brings a window to the front (restoring it if minimized); 'home' shows the work area. */
   focus: (id: string) => void;
   close: (id: string) => void;
+  /** Closes a window whose work was just saved, without asking about unsaved changes. */
+  discard: (id: string) => void;
   setDirty: (id: string, dirty: boolean) => void;
   setLabel: (id: string, label: string) => void;
   /** Replaces a "new document" window's view once the document has an id. */
@@ -286,6 +288,7 @@ export function WorkspaceProvider({
     open,
     focus: (id) => (id === 'home' ? open({ type: 'page', page: 'home' }) : raise(id)),
     close,
+    discard: remove,
     setDirty: (id, dirty) => {
       if (windowsRef.current.find((w) => w.id === id)?.dirty !== dirty) update(id, { dirty });
     },
