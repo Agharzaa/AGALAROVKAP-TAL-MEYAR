@@ -1,9 +1,17 @@
-import { CheckCircle2, CircleAlert, Clock3 } from 'lucide-react';
-import type { HomeView, IntegrityView } from '../../contracts/queries';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  FilePlus2,
+  RefreshCw,
+} from 'lucide-react';
+import type { HomeView, IntegrityView, RecentDocument } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
-import { day, longDate, money, today } from '../format';
+import { addAmounts, day, longDate, money, today } from '../format';
 import { useQuery } from '../hooks';
-import { Notice } from '../ui';
+import { Notice, Status } from '../ui';
 import { useWorkspace, type View } from '../workspace';
 
 interface Task {
@@ -14,6 +22,17 @@ interface Task {
   view?: View;
 }
 
+const kindLabel: Record<RecentDocument['kind'], string> = {
+  operation: 'Əməliyyat',
+  sale: 'Satış',
+  purchase: 'Alış',
+};
+const viewOf = (d: RecentDocument): View =>
+  d.kind === 'operation'
+    ? { type: 'operation', id: d.id }
+    : { type: 'invoice', direction: d.kind, id: d.id };
+
+/** The start page: the work area's background, "İdarəetmə paneli" of the green Meyar layout. */
 export function HomePage({
   integrity,
   integrityLoading,
@@ -24,7 +43,7 @@ export function HomePage({
   onRecheck: () => void;
 }) {
   const ws = useWorkspace();
-  const { catalog } = useCatalog(ws.companyId);
+  const { catalog, company } = useCatalog(ws.companyId);
   const home = useQuery<HomeView>({ type: 'home', companyId: ws.companyId });
   const h = home.data;
   const tasks: Task[] = [];
@@ -67,6 +86,27 @@ export function HomePage({
         view: { type: 'page', page: 'trial' },
       });
   }
+  const bal = (code: string) => h?.balances.find((b) => b.account === code);
+  /** Debit minus credit of some accounts, canonical. */
+  const net = (codes: string[], side: 'dt' | 'kt') =>
+    addAmounts(
+      codes.flatMap((c) => {
+        const b = bal(c);
+        if (!b) return [];
+        return side === 'dt' ? [b.dt, `-${b.kt}`] : [b.kt, `-${b.dt}`];
+      }),
+    );
+  const kpis = [
+    {
+      label: 'Pul vəsaitləri',
+      accounts: '221 · 223 · 224',
+      value: net(['221', '223', '224'], 'dt'),
+    },
+    { label: 'Debitorlar', accounts: '211 Dt', value: bal('211')?.dt ?? '0.00' },
+    { label: 'Kreditorlar', accounts: '531 Kt', value: bal('531')?.kt ?? '0.00' },
+    { label: 'Alınmış avanslar', accounts: '543 Kt', value: bal('543')?.kt ?? '0.00' },
+    { label: 'Vergi öhdəlikləri', accounts: '521 Kt', value: bal('521')?.kt ?? '0.00' },
+  ];
   const balance = (dt: string, kt: string) => {
     const d = dt !== '0.00';
     const k = kt !== '0.00';
@@ -87,146 +127,235 @@ export function HomePage({
       </>
     );
   };
+  const advanceWarning = h?.warnings.some((w) => w.kind === 'advance');
   return (
     <div className="home">
-      <div className="home-main">
-        <section className="panel" aria-label="Gözləyən işlər">
-          <h1 className="panel-title">
-            Gözləyən işlər <span>· {longDate(today())}</span>
-          </h1>
-          {home.error && <Notice>{home.error}</Notice>}
-          {!h && !home.error && <p className="panel-empty">Yüklənir…</p>}
-          {tasks.map((t, i) => (
-            <div key={i} className="task-row">
-              {t.state === 'ok' ? (
-                <CheckCircle2 size={17} className="ok" aria-label="Qaydasındadır" />
-              ) : t.state === 'bad' ? (
-                <CircleAlert size={17} className="bad" aria-label="Diqqət" />
-              ) : (
-                <Clock3 size={17} className="wait" aria-label="Gözləyir" />
-              )}
-              <span className="task-text">
-                <b>{t.title}</b>
-                <span>{t.detail}</span>
-              </span>
-              {t.view && (
-                <button
-                  type="button"
-                  className={`button ${t.state === 'ok' ? 'secondary' : 'primary'} small`}
-                  onClick={() => ws.open(t.view!)}
-                >
-                  {t.action}
-                </button>
-              )}
-            </div>
-          ))}
-        </section>
-        <section className="panel" aria-label="Son sənədlər">
-          <h2 className="panel-title">Son sənədlər</h2>
-          {h && !h.recent.length && <p className="panel-empty">Hələ sənəd yoxdur.</p>}
-          {h && h.recent.length > 0 && (
-            <table className="grid">
-              <thead>
-                <tr>
-                  <th scope="col">Tarix</th>
-                  <th scope="col">Sənəd</th>
-                  <th scope="col">Məzmun</th>
-                  <th scope="col" className="num">
-                    Sətir
-                  </th>
-                  <th scope="col" className="num">
-                    Məbləğ
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {h.recent.map((o) => (
-                  <tr
-                    key={o.id}
-                    className={o.status === 'cancelled' ? 'cancelled' : ''}
-                    onDoubleClick={() => ws.open({ type: 'operation', id: o.id })}
+      <header className="pagehead">
+        <div>
+          <span className="eyebrow">İdarəetmə paneli</span>
+          <h1>Ümumi vəziyyət</h1>
+          <p>
+            {company ? `${company.name} · ` : ''}
+            {longDate(today())}
+          </p>
+        </div>
+        <div className="pagehead-actions">
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => ws.open({ type: 'operation' })}
+          >
+            <FilePlus2 size={15} aria-hidden="true" /> Əl ilə əməliyyat
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => ws.open({ type: 'invoice', direction: 'purchase' })}
+          >
+            <ArrowDownLeft size={15} aria-hidden="true" /> Alış qaiməsi
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => ws.open({ type: 'invoice', direction: 'sale' })}
+          >
+            <ArrowUpRight size={15} aria-hidden="true" /> Satış qaiməsi
+          </button>
+        </div>
+      </header>
+      {home.error && <Notice>{home.error}</Notice>}
+      <section className="kpis" aria-label="Əsas göstəricilər">
+        {kpis.map((k) => (
+          <div key={k.label} className="kpi">
+            <span>{k.label}</span>
+            <strong className={k.value.startsWith('-') ? 'negative' : ''}>
+              {h ? money(k.value) : '…'} <small>₼</small>
+            </strong>
+            <small>{k.accounts}</small>
+          </div>
+        ))}
+      </section>
+      <div className="home-grid">
+        <div className="home-main">
+          <section className="panel" aria-label="Gözləyən işlər">
+            <header className="panel-head">
+              <div>
+                <h2>Gözləyən işlər</h2>
+                <small>Bu gün diqqət tələb edənlər</small>
+              </div>
+            </header>
+            {!h && !home.error && <p className="panel-empty">Yüklənir…</p>}
+            {h && !tasks.length && <p className="panel-empty">Gözləyən iş yoxdur.</p>}
+            {tasks.map((t, i) => (
+              <div key={i} className={`task-row ${t.state}`}>
+                {t.state === 'ok' ? (
+                  <CheckCircle2 size={17} className="ok" aria-label="Qaydasındadır" />
+                ) : t.state === 'bad' ? (
+                  <CircleAlert size={17} className="bad" aria-label="Diqqət" />
+                ) : (
+                  <Clock3 size={17} className="wait" aria-label="Gözləyir" />
+                )}
+                <span className="task-text">
+                  <b>{t.title}</b>
+                  <span>{t.detail}</span>
+                </span>
+                {t.view && (
+                  <button
+                    type="button"
+                    className={`button ${t.state === 'ok' ? 'secondary' : 'primary'} small`}
+                    onClick={() => ws.open(t.view!)}
                   >
-                    <td>{day(o.date)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="link"
-                        onClick={() => ws.open({ type: 'operation', id: o.id })}
+                    {t.action}
+                  </button>
+                )}
+              </div>
+            ))}
+          </section>
+          <section className="panel grow" aria-label="Son sənədlər">
+            <header className="panel-head">
+              <div>
+                <h2>Son sənədlər</h2>
+                <small>Əməliyyatlar və qaimələr, yenidən köhnəyə</small>
+              </div>
+            </header>
+            {h && !h.documents.length && <p className="panel-empty">Hələ sənəd yoxdur.</p>}
+            {h && h.documents.length > 0 && (
+              <div className="table-scroll flat">
+                <table className="grid">
+                  <thead>
+                    <tr>
+                      <th scope="col">Tarix</th>
+                      <th scope="col">Növ</th>
+                      <th scope="col">Nömrə</th>
+                      <th scope="col">Kontragent / məzmun</th>
+                      <th scope="col" className="num">
+                        Məbləğ
+                      </th>
+                      <th scope="col">Vəziyyət</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h.documents.map((d) => (
+                      <tr
+                        key={`${d.kind}${d.id}`}
+                        className={d.status === 'cancelled' ? 'cancelled' : ''}
+                        onDoubleClick={() => ws.open(viewOf(d))}
                       >
-                        {o.number}
-                      </button>
-                    </td>
-                    <td className="ellipsis">{o.memo || '—'}</td>
-                    <td className="num">{o.lines}</td>
-                    <td className="num">{o.status === 'cancelled' ? 'ləğv' : money(o.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
-      <div className="home-side">
-        <section className="panel" aria-label="Qalıqlar">
-          <h2 className="panel-title">
-            Qalıqlar <span>· {day(today())}</span>
-          </h2>
-          {h?.balances.map((b) => (
-            <button
-              key={b.account}
-              type="button"
-              className="balance-row"
-              onClick={() => ws.open({ type: 'accountCard', account: b.account })}
-            >
-              <span className="code">{b.account}</span>
-              <span className="name">{b.name}</span>
-              <span className="sum">{balance(b.dt, b.kt)}</span>
-            </button>
-          ))}
-        </section>
-        <section className="panel" aria-label="Nəzarət">
-          <h2 className="panel-title">Nəzarət</h2>
-          {integrityLoading && !integrity && <p className="panel-empty">Baza yoxlanılır…</p>}
-          {integrity && (
-            <>
-              <div className="check-row">
-                {integrity.ok ? (
-                  <CheckCircle2 size={16} className="ok" aria-hidden="true" />
-                ) : (
-                  <CircleAlert size={16} className="bad" aria-hidden="true" />
-                )}
-                <span>
-                  {integrity.ok
-                    ? 'Jurnal tarazdır, qalıq registrləri jurnala uyğundur'
-                    : integrity.problems.join(' ')}
-                </span>
+                        <td className="nowrap">{day(d.date)}</td>
+                        <td>
+                          <span className={`badge ${d.kind}`}>{kindLabel[d.kind]}</span>
+                        </td>
+                        <td className="nowrap">
+                          <button type="button" className="link" onClick={() => ws.open(viewOf(d))}>
+                            {d.number}
+                          </button>
+                        </td>
+                        <td className="ellipsis">{d.title || '—'}</td>
+                        <td className="num mono">
+                          {money(d.total)}
+                          {d.currency !== 'AZN' && <small> {d.currency}</small>}
+                        </td>
+                        <td>
+                          <Status status={d.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="check-row">
-                <CheckCircle2 size={16} className="ok" aria-hidden="true" />
-                <span>Jurnal və audit dəyişdirilə və silinə bilməz (yalnız storno)</span>
+            )}
+          </section>
+        </div>
+        <div className="home-side">
+          <section className="panel" aria-label="Nəzarət">
+            <header className="panel-head">
+              <div>
+                <h2>Nəzarət</h2>
+                <small>Uçotun bütövlüyü</small>
               </div>
-              <div className="check-row">
-                {h?.warnings.some((w) => w.kind === 'advance') ? (
-                  <CircleAlert size={16} className="bad" aria-hidden="true" />
-                ) : (
-                  <CheckCircle2 size={16} className="ok" aria-hidden="true" />
-                )}
-                <span>
-                  {h?.warnings.some((w) => w.kind === 'advance')
-                    ? 'Əvəzləşdirilməmiş avans var'
-                    : 'Əvəzləşdirilməmiş avans yoxdur'}
-                </span>
+              <button
+                type="button"
+                className="icon-button"
+                title="Yenidən yoxla"
+                aria-label="Yenidən yoxla"
+                onClick={onRecheck}
+              >
+                <RefreshCw size={14} />
+              </button>
+            </header>
+            {integrityLoading && !integrity && <p className="panel-empty">Baza yoxlanılır…</p>}
+            {integrity && (
+              <>
+                <div className="check-row">
+                  <span>
+                    <b>Jurnal və registrlər</b>
+                    <small>
+                      {integrity.ok
+                        ? `${integrity.postings.toLocaleString('az-AZ')} yazılış · ${integrity.ms} ms`
+                        : integrity.problems.join(' ')}
+                    </small>
+                  </span>
+                  <span className={`badge ${integrity.ok ? 'green' : 'red'}`}>
+                    {integrity.ok ? 'Tarazdır' : 'Uyğunsuz'}
+                  </span>
+                </div>
+                <div className="check-row">
+                  <span>
+                    <b>Dəyişməzlik</b>
+                    <small>Jurnal və audit silinmir, düzəliş storno ilə</small>
+                  </span>
+                  <span className="badge green">Qorunur</span>
+                </div>
+                <div className="check-row">
+                  <span>
+                    <b>Avanslar</b>
+                    <small>
+                      {advanceWarning
+                        ? 'Əvəzləşdirilməmiş avans var'
+                        : 'Əvəzləşdirilməmiş avans yoxdur'}
+                    </small>
+                  </span>
+                  <span className={`badge ${advanceWarning ? 'orange' : 'green'}`}>
+                    {advanceWarning ? 'Yoxlayın' : 'Qaydasında'}
+                  </span>
+                </div>
+                <div className="check-row">
+                  <span>
+                    <b>Dövr</b>
+                    <small>
+                      {company?.closedThrough
+                        ? `${day(company.closedThrough)}-dək bağlıdır`
+                        : 'Hələ bağlanmayıb'}
+                    </small>
+                  </span>
+                  <span className={`badge ${company?.closedThrough ? 'green' : 'blue'}`}>
+                    {company?.closedThrough ? 'Bağlı' : 'Açıq'}
+                  </span>
+                </div>
+              </>
+            )}
+          </section>
+          <section className="panel" aria-label="Qalıqlar">
+            <header className="panel-head">
+              <div>
+                <h2>Qalıqlar</h2>
+                <small>{day(today())} vəziyyətinə · hesab kartını açın</small>
               </div>
-              <p className="panel-foot">
-                {integrity.postings.toLocaleString('az-AZ')} yazılış ·{' '}
-                {integrity.registers.toLocaleString('az-AZ')} registr · {integrity.ms} ms{' '}
-                <button type="button" className="link" onClick={onRecheck}>
-                  Yenidən yoxla
-                </button>
-              </p>
-            </>
-          )}
-        </section>
+            </header>
+            {h?.balances.map((b) => (
+              <button
+                key={b.account}
+                type="button"
+                className="balance-row"
+                onClick={() => ws.open({ type: 'accountCard', account: b.account })}
+              >
+                <span className="code">{b.account}</span>
+                <span className="name">{b.name}</span>
+                <span className="sum mono">{balance(b.dt, b.kt)}</span>
+              </button>
+            ))}
+          </section>
+        </div>
       </div>
     </div>
   );

@@ -63,7 +63,7 @@ test('first run: the company is created and Başlanğıc lists the first tasks',
     await user.clear(screen.getByRole('textbox', { name: /^VÖEN/ }));
     await user.type(screen.getByRole('textbox', { name: /^VÖEN/ }), '1234567890');
     await user.click(screen.getByRole('button', { name: 'Şirkəti yarat' }));
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await screen.findByText('Bank hesablarını daxil edin');
     await screen.findByText('Başlanğıc qalıqları daxil edin');
     await screen.findByText(/Baza yoxlanıldı: tarazdır/);
@@ -78,7 +78,7 @@ test('manual operation: accounts and subkonto by keyboard, posting, storno on ed
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.click(screen.getAllByRole('button', { name: 'Əl ilə əməliyyat' })[0]!);
     const editor = within(pane());
     const pick = async (label: string, text: string) => {
@@ -148,7 +148,7 @@ test('trial balance: drill into bank accounts and partners, export to Excel', as
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.click(screen.getAllByRole('button', { name: 'Dövriyyə balansı' })[0]!);
     const page = within(pane());
     await user.click(await page.findByRole('button', { name: 'Aç: Bank hesablaşma hesabları' }));
@@ -171,7 +171,7 @@ test('partners: a partner and its contract are created from the master–detail 
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.click(screen.getAllByRole('button', { name: 'Kontragentlər' })[0]!);
     const page = within(pane());
     await user.click(await page.findByRole('button', { name: 'Yeni kontragent' }));
@@ -199,7 +199,7 @@ test('unsaved operation: closing its tab asks first', async () => {
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.keyboard('{Control>}n{/Control}');
     const editor = within(pane());
     await user.type(await editor.findByRole('textbox', { name: 'Sətir 1 məbləğ' }), '5');
@@ -233,7 +233,7 @@ test('sales invoice: partner, contract, product and price by keyboard; entry sho
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
     const editor = within(pane());
     const pick = async (label: string, text: string) => {
@@ -321,7 +321,7 @@ test('windows: sections open as 1C-like child windows that minimize, maximize an
   try {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole('navigation', { name: 'Lent menyu' });
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
     await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
     await user.keyboard('{Control>}n{/Control}');
     const windows = () => [...document.querySelectorAll<HTMLElement>('.mdi-window')];

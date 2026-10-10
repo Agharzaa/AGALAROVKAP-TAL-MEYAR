@@ -7,7 +7,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** "Klassik ofis" — lent menyu, iş dövrü, 1C kimi pəncərələr (iş sahəsində sürüşdürülən, kiçildilən/böyüdülən pəncərələr və aşağıda pəncərələr paneli), status sətri. İstifadəçi üç fərqli konsepsiyadan bunu seçib.
+- **Dizayn:** köhnə Meyar ERP v1.17-nin yaşıl görünüşü (istifadəçi seçib, 10.10.2026): yuxarıda modullar paneli, altında şirkət / dövr / axtarış / "Yeni sənəd", nanə rəngli iş sahəsi, tünd yaşıl cədvəl başlıqları, rəqəmlər monoşriftlə. İş sahəsində 1C kimi pəncərələr (siyahılar böyüdülmüş, sənədlər üstündə pəncərə kimi) və aşağıda pəncərələr paneli.
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
 
@@ -59,6 +59,12 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 | Siyahıda və redaktorda kontragentə dar yer                                                                                        | Electron ekran şəkilləri                      |
 | Qaimənin yazılışlarını əl ilə düzəltmək (1C "Əl ilə düzəliş"); bayraq sənəddə saxlanılır, storno ilə                              | `invoices.test.ts`, `tests/ui`                |
 | 1C kimi pəncərələr: sürüşdürmə, ölçü, kiçilt/böyüt/bağla, pəncərələr paneli, kaskad, yan-yana, hamısını bağla, Ctrl+Tab / Ctrl+F4 | `tests/ui` (7 test), Electron ekran şəkilləri |
+
+## 0.4.2 — yaşıl dizayn (10.10.2026)
+
+- İstifadəçi "Klassik ofis" lent menyusunu bəyənmədi; köhnə Meyar ERP v1.17-nin (meyar-desktop repo) yaşıl dizaynı əsas götürüldü: modullar yuxarıda, lent menyu yoxdur (1366×768 ekranda iş sahəsi ~100 px böyüdü).
+- Başlanğıc səhifəsi "İdarəetmə paneli": əsas göstəricilər (pul, 211, 531, 543, 521), gözləyən işlər, bütün növ son sənədlər, nəzarət, qalıqlar.
+- Siyahı və hesabatlar böyüdülmüş pəncərədə, sənədlər onların üstündə pəncərə kimi açılır; seçim pəncərə növünə görə yadda qalır.
 
 ## Açıq məsələlər
 

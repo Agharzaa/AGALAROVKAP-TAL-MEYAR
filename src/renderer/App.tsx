@@ -9,8 +9,13 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
+  Plus,
+  type LucideIcon,
   Copy,
   Home,
   Layers,
@@ -26,8 +31,9 @@ import { searchKey } from '../domain/values';
 import { api } from './api';
 import { useCatalog } from './catalog';
 import { useMutation, useQuery } from './hooks';
-import { pages, ribbon, viewTitle, type RibbonAction } from './pages';
+import { createItems, nav, pages, viewTitle, type NavAction, type NavItem } from './pages';
 import { Confirm, Field, Modal, Notice } from './ui';
+import { day } from './format';
 import {
   WindowContext,
   WorkspaceProvider,
@@ -333,6 +339,86 @@ function QuickSearch() {
   );
 }
 
+const initials = (name: string) =>
+  name
+    .replace(/["«»“”]/g, '')
+    .split(/\s+/)
+    .filter((w) => w && !/^(MMC|ASC|QSC|LLC|MTK|İB)$/i.test(w))
+    .slice(0, 2)
+    .map((w) => w[0]!.toLocaleUpperCase('az'))
+    .join('') || 'M';
+
+/** A module-bar entry that opens a short list (Kitabçalar, Servis, Yeni sənəd). */
+function NavMenu({
+  label,
+  icon: Icon,
+  items,
+  active = false,
+  primary = false,
+  onPick,
+}: {
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+  active?: boolean;
+  primary?: boolean;
+  onPick: (item: NavItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (
+        e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)
+      )
+        setOpen(false);
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [open]);
+  return (
+    <div className={`nav-menu${primary ? ' primary' : ''}`} ref={ref}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={primary ? 'button primary' : `module-item${active ? ' active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
+        <span>{label}</span>
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul className="menu" role="menu" aria-label={label}>
+          {items.map((i) => (
+            <li key={i.label} role="none">
+              <button
+                type="button"
+                role="menuitem"
+                className={i.action.kind === 'soon' ? 'soon' : ''}
+                onClick={() => {
+                  setOpen(false);
+                  onPick(i);
+                }}
+              >
+                <i.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+                <span>{i.label}</span>
+                {i.action.kind === 'soon' && <small>{i.action.stage}</small>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Shell({
   companies,
   reloadCompanies,
@@ -341,7 +427,6 @@ function Shell({
   reloadCompanies: () => Promise<void>;
 }) {
   const ws = useWorkspace();
-  const [tab, setTab] = useState(0);
   const [message, setMessage] = useState<{
     kind: 'info' | 'error' | 'success';
     text: string;
@@ -349,7 +434,14 @@ function Shell({
   const [newCompany, setNewCompany] = useState(false);
   const company = companies.find((c) => c.id === ws.companyId) ?? companies[0]!;
   const integrity = useQuery<IntegrityView>({ type: 'integrity', companyId: company.id });
-  const act = async (a: RibbonAction, label: string) => {
+  const active = ws.windows.find((w) => w.id === ws.activeId);
+  const isActive = (a: NavAction) =>
+    a.kind === 'view' &&
+    a.view.type === 'page' &&
+    (active
+      ? active.view.type === 'page' && active.view.page === a.view.page
+      : a.view.page === 'home');
+  const act = async (a: NavAction, label: string) => {
     if (a.kind === 'view') ws.open(a.view);
     else if (a.kind === 'soon')
       setMessage({ kind: 'info', text: `"${label}" ${a.stage}də bu təmələ köçürüləcək.` });
@@ -382,19 +474,89 @@ function Shell({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ws]);
-  const active = ws.windows.find((w) => w.id === ws.activeId);
   return (
     <div className="shell">
-      <header className="titlebar">
-        <strong className="brand">
-          <span className="brand-mark small" aria-hidden="true">
-            M
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            ME
           </span>
-          Meyar
-        </strong>
-        <label className="company-switch">
-          <span className="sr-only">Şirkət</span>
+          <span className="brand-text">
+            <b>MEYAR</b>
+            <small>UÇOT SİSTEMİ</small>
+          </span>
+        </div>
+        <nav className="modules" aria-label="Əsas menyu">
+          {nav.map((entry) =>
+            'items' in entry ? (
+              <NavMenu
+                key={entry.label}
+                label={entry.label}
+                icon={entry.icon}
+                items={entry.items}
+                active={
+                  entry.items.some((i) => isActive(i.action)) &&
+                  !nav.some((n) => 'action' in n && isActive(n.action))
+                }
+                onPick={(i) => void act(i.action, i.label)}
+              />
+            ) : (
+              <button
+                key={entry.label}
+                type="button"
+                aria-label={entry.label}
+                title={entry.label}
+                aria-current={isActive(entry.action) ? 'page' : undefined}
+                className={`module-item${isActive(entry.action) ? ' active' : ''}${entry.action.kind === 'soon' ? ' soon' : ''}`}
+                onClick={() => void act(entry.action, entry.label)}
+              >
+                <entry.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+                <span>{entry.short ?? entry.label}</span>
+              </button>
+            ),
+          )}
+        </nav>
+        <div
+          className={`system-state${integrity.data && !integrity.data.ok ? ' bad' : ''}`}
+          title={
+            integrity.data
+              ? integrity.data.ok
+                ? 'Jurnal tarazdır, registrlər jurnala uyğundur'
+                : integrity.data.problems.join(' ')
+              : 'Baza yoxlanılır'
+          }
+        >
+          {integrity.data && !integrity.data.ok ? (
+            <CircleAlert size={15} aria-hidden="true" />
+          ) : (
+            <CheckCircle2 size={15} aria-hidden="true" />
+          )}
+          <span>
+            <b>
+              {integrity.data
+                ? integrity.data.ok
+                  ? 'Sistem hazırdır'
+                  : 'Uyğunsuzluq var'
+                : 'Yoxlanılır…'}
+            </b>
+            <small>
+              {company.closedThrough ? `Bağlı: ${day(company.closedThrough)}` : 'Dövr açıqdır'}
+            </small>
+          </span>
+        </div>
+      </header>
+      <div className="contextbar">
+        <label className="company-switch" title="Şirkəti dəyiş">
+          <span className="avatar" aria-hidden="true">
+            {initials(company.name)}
+          </span>
+          <span className="company-text">
+            <b>{company.name}</b>
+            <small>VÖEN {company.taxId}</small>
+          </span>
+          <ChevronDown size={14} aria-hidden="true" />
           <select
+            aria-label="Şirkət"
             value={company.id}
             onChange={(e) => {
               if (e.target.value === '__new') setNewCompany(true);
@@ -410,65 +572,20 @@ function Shell({
           </select>
         </label>
         <PeriodSwitch />
+        <div className="crumbs" aria-hidden="true">
+          <span>Meyar</span>
+          <ChevronRight size={12} />
+          <b>{active ? viewTitle(active.view, active.label) : 'Başlanğıc'}</b>
+        </div>
         <QuickSearch />
-      </header>
-      <nav className="ribbon-tabs" aria-label="Lent menyu">
-        {ribbon.map((r, i) => (
-          <button
-            key={r.tab}
-            type="button"
-            aria-pressed={tab === i}
-            className={tab === i ? 'active' : ''}
-            onClick={() => setTab(i)}
-          >
-            {r.tab}
-          </button>
-        ))}
-      </nav>
-      <section className="ribbon" aria-label="Alətlər lenti">
-        {ribbon[tab]!.groups.map((g) => (
-          <div key={g.name} className="ribbon-group">
-            <div className="ribbon-buttons">
-              {g.buttons
-                .filter((b) => b.size === 'large')
-                .map((b) => (
-                  <button
-                    key={b.label}
-                    type="button"
-                    className={`ribbon-large${b.action.kind === 'soon' ? ' soon' : ''}`}
-                    onClick={() => void act(b.action, b.label)}
-                  >
-                    <b.icon size={24} strokeWidth={1.5} aria-hidden="true" />
-                    <span>{b.label}</span>
-                  </button>
-                ))}
-              {g.buttons.some((b) => b.size === 'small') && (
-                <div className="ribbon-small-stack">
-                  {g.buttons
-                    .filter((b) => b.size === 'small')
-                    .map((b) => (
-                      <button
-                        key={b.label}
-                        type="button"
-                        className={`ribbon-small${b.action.kind === 'soon' ? ' soon' : ''}`}
-                        title={
-                          b.action.kind === 'soon'
-                            ? `Növbəti mərhələ: ${b.action.stage}`
-                            : undefined
-                        }
-                        onClick={() => void act(b.action, b.label)}
-                      >
-                        <b.icon size={14} strokeWidth={1.6} aria-hidden="true" />
-                        {b.label}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-            <span className="ribbon-group-name">{g.name}</span>
-          </div>
-        ))}
-      </section>
+        <NavMenu
+          label="Yeni sənəd"
+          icon={Plus}
+          primary
+          items={createItems}
+          onPick={(i) => void act(i.action, i.label)}
+        />
+      </div>
       {message && (
         <div className="shell-message">
           <Notice kind={message.kind} onClose={() => setMessage(null)}>

@@ -202,3 +202,10 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 2. **Cədvəllərdə kontragentə az yer.** Siyahıda kontragent sütunu dar və bir sətirlik (uzun ad "…" ilə kəsilir, tam adı üzərinə gələndə görünür); redaktorda kontragent sahəsi digər sahələr qədərdir.
 3. **Yazılışları əl ilə düzəltmək olar (1C "Əl ilə düzəliş").** Saxlanmış qaimənin "Yazılışlar" bölməsində bayraq qoyulanda yazılışlar əl ilə əməliyyatdakı kimi cədvəldə dəyişdirilir (hesab, subkonto, miqdar, valyuta, məbləğ, məzmun). Bayraq sənəddə saxlanılır; belə qaimədə sətirlərin dəyişməsi yazılışları yenidən hesablamır. Bayraq götürüləndə yazılışlar yenə qaydalarla qurulur. Düzəliş adi qaydada qırmızı storno ilə gedir; yazılışlar əl ilə əməliyyatın bütün yoxlamalarından keçir (subkonto məcburidir, qrup hesabına yazılmır və s.). Boş "hesablaşma sənədi" bu qaimənin özü deməkdir.
 4. **1C kimi pəncərələr.** Hər bölmə (qaimələr, əl ilə əməliyyatlar, hesabatlar, kitabçalar…) və hər sənəd iş sahəsində ayrıca pəncərədə açılır: sürüşdürülür, ölçüsü dəyişdirilir, üst-üstə düşür, kiçildilir, böyüdülür (başlığa iki klik), bağlanır. Aşağıda 1C-dəki kimi pəncərələr paneli var: açıq pəncərələr, "Başlanğıc" (hamısını kiçildir), kaskad, yan-yana, hamısını bağla. Ctrl+Tab növbəti pəncərə, Ctrl+F4 bağla. Pəncərənin ölçüsü və böyüdülmüş olması növünə görə yadda saxlanılır (məs. bütün satış qaimələri).
+
+## 2026-10-10 — interfeysin dizaynı
+
+### TƏSDİQLƏNDİ
+
+1. **Yaşıl dizayn.** Əsas köhnə Meyar ERP v1.17-nin yaşıl görünüşüdür (istifadəçinin bəyəndiyi son versiyalardan): yuxarıda modullar paneli, tünd yaşıl düymə və cədvəl başlıqları, nanə rəngli iş sahəsi, rəqəmlər monoşriftlə. "Klassik ofis" lent menyusu götürüldü.
+2. **Pəncərələr qalır (1C kimi).** Siyahı və hesabatlar böyüdülmüş açılır (tab kimi), sənədlər onların üstündə ayrıca pəncərədə; aşağıda pəncərələr paneli.

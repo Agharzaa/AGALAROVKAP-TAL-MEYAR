@@ -32,6 +32,7 @@ import type {
   ItemView,
   OperationDetail,
   OperationSummary,
+  RecentDocument,
   PartnerView,
   PostingView,
   ProductView,
@@ -882,14 +883,46 @@ function home(db: Db, companyId: string, today: string): HomeView {
         text: `${a.code} · ${names.name(a.subkonto[0] ?? 'bankAccount', r.key[1]!)}: mənfi pul qalığı (−${money(r.agg.closeKt)}).`,
       });
   }
-  return {
-    balances,
-    recent: db
+  const recent = db
+    .all(
+      'SELECT * FROM operations WHERE company_id=? ORDER BY date DESC, rowid DESC LIMIT 12',
+      companyId,
+    )
+    .map((r) => operationSummary(db, r));
+  const documents: RecentDocument[] = [
+    ...recent.map((o) => ({
+      kind: 'operation' as const,
+      id: o.id,
+      number: o.number,
+      date: o.date,
+      title: o.memo,
+      total: o.total,
+      currency: 'AZN',
+      status: o.status,
+    })),
+    ...db
       .all(
-        'SELECT * FROM operations WHERE company_id=? ORDER BY date DESC, rowid DESC LIMIT 12',
+        'SELECT * FROM invoices WHERE company_id=? ORDER BY date DESC, rowid DESC LIMIT 12',
         companyId,
       )
-      .map((r) => operationSummary(db, r)),
+      .map((r) => invoiceSummary(names, r))
+      .map((i) => ({
+        kind: i.direction,
+        id: i.id,
+        number: i.number,
+        date: i.date,
+        title: i.partner,
+        total: i.total,
+        currency: i.currency,
+        status: i.status,
+      })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number))
+    .slice(0, 12);
+  return {
+    balances,
+    recent,
+    documents,
     warnings,
     postings: Number(db.get('SELECT COUNT(*) AS n FROM postings WHERE company_id=?', companyId)!.n),
     closedThrough: co.closedThrough,

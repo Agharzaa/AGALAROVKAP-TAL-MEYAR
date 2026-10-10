@@ -81,7 +81,7 @@ export function useLayout(): Layout {
 }
 
 /** Size and state remembered per kind of window (all invoices, the sales list…), like 1C. */
-const MEMORY = 'meyar.windows.v1';
+const MEMORY = 'meyar.windows.v2';
 type Memory = Record<string, { w: number; h: number; max: boolean }>;
 const kindOf = (v: View) => (v.type === 'page' ? `page:${v.page}` : v.type);
 function readMemory(): Memory {
@@ -230,12 +230,16 @@ export function WorkspaceProvider({
       const m = mdiRef.current;
       const { w: dw, h: dh } = desktop.current;
       const saved = readMemory()[kindOf(view)];
-      const w = Math.max(360, Math.min(saved?.w ?? Math.min(1180, dw - 24), dw));
-      const h = Math.max(220, Math.min(saved?.h ?? dh - 24, dh));
+      const w = Math.max(360, Math.min(saved?.w ?? Math.min(1180, dw - 48), dw));
+      const h = Math.max(220, Math.min(saved?.h ?? dh - 32, dh));
       const step = m.order.filter((x) => m.layout[x]?.state !== 'minimized').length % 8;
       const x = Math.max(0, Math.min(8 + step * CASCADE, dw - w));
       const y = Math.max(0, Math.min(8 + step * CASCADE, dh - h));
-      const state: WinLayout['prev'] = saved?.max ? 'maximized' : 'normal';
+      // Lists and reports fill the work area (like tabs); documents open as windows over them,
+      // as in 1C. What the user last chose for a kind of window wins.
+      const state: WinLayout['prev'] = (saved ? saved.max : view.type === 'page')
+        ? 'maximized'
+        : 'normal';
       windowsRef.current = [...windowsRef.current, { id, companyId: target, view, dirty: false }];
       setWindows(windowsRef.current);
       setMdi({

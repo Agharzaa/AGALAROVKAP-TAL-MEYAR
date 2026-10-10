@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';
+import { sectionOf } from './pages';
 
 /**
  * One module window: title line with actions, an optional filter strip, notices and the work
@@ -36,6 +37,7 @@ export function ModuleFrame({
     <section className="module" aria-label={title}>
       <header className="module-heading">
         <div className="module-title">
+          {win && <span className="eyebrow">{sectionOf(win.view)}</span>}
           <h1>
             {title}
             {count !== undefined && <span className="count">{count.toLocaleString('az-AZ')}</span>}

@@ -307,9 +307,23 @@ export interface AccountCard {
   truncated: boolean;
 }
 
+/** A document of any kind on the start page ("Son sənədlər"). */
+export interface RecentDocument {
+  kind: 'operation' | 'sale' | 'purchase';
+  id: string;
+  number: string;
+  date: string;
+  /** Partner of an invoice, content of an operation. */
+  title: string;
+  total: string;
+  currency: string;
+  status: 'posted' | 'cancelled';
+}
 export interface HomeView {
   balances: { account: string; name: string; dt: string; kt: string }[];
   recent: OperationSummary[];
+  /** The latest documents of every kind, newest first. */
+  documents: RecentDocument[];
   warnings: { kind: string; text: string; account: string; sk: string[] }[];
   postings: number;
   closedThrough: string;
