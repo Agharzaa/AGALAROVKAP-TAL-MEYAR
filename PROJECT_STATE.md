@@ -82,6 +82,14 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - Başlıq zolağı proqramın özünündür (titleBarOverlay), naviqasiya Windows NavigationView kimi, bütün idarəetmə elementləri Fluent 2 ölçü və rənglərində, ikonlar Fluent System Icons (@fluentui/react-icons).
 - Testlər: `npm test` (46), `npm run test:ui` (7); Electron ekran şəkilləri 1366×768.
 
+## 0.4.6 — "Jurnal" dizaynı, 1C kimi əsas menyu (10.10.2026)
+
+- İstifadəçi Fluent/Office görünüşünü bəyənmədi; üç maketdən 2-cini ("Jurnal") seçdi, "bir az daha yaxşısı" ilə.
+- Görünüş mühasibat kitabı kimi: kağız fon (#fbfaf8), mürəkkəb-göy yazı (#1c2a44), cədvəllərdə göy xətli sətirlər, başlıq altında və yekunlarda ikiqat xətt, cari yer qırmızı haşiyə xətti ilə (#b0303b). Şriftlər proqrama daxildir: Inter (iş, rəqəmlər), Lora (başlıqlar, etiketlər, yekunlar).
+- Yuxarıda başlıq zolağı (Meyar, axtarış Ctrl+K, şirkət, dövr), altında 1C kimi əsas menyu: Başlanğıc, Bank və kassa, Satış, Alış, Anbar, Mühasibat, Hesabatlar, Kitabçalar, Müəssisə; hər birinin açılan menyusunda Sənədlər / Yarat / Hesabatlar / Kitabçalar sütunları. Sağda "Yarat".
+- Pəncərələr paneli aşağıda kitab vərəqləri kimi; status sətrində Excel kimi miqyas sürgüsü.
+- Sol naviqasiya paneli və lent menyusu çıxarıldı.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.

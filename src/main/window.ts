@@ -69,12 +69,12 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     minHeight: 640,
     show: false,
     title: 'Meyar',
-    backgroundColor: '#f3f3f3',
+    backgroundColor: '#fbfaf8',
     autoHideMenuBar: true,
-    // Windows 11 look: the app draws its own title bar; Windows keeps the caption buttons
-    // (minimize, maximize, close) and snap layouts.
+    // The app draws its own title bar (the main menu lives in it); Windows keeps the caption
+    // buttons (minimize, maximize, close) and snap layouts.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#f3f3f3', symbolColor: '#1b1b1b', height: 40 },
+    titleBarOverlay: { color: '#fbfaf8', symbolColor: '#1c2a44', height: 40 },
     webPreferences: {
       preload: options.preloadFile,
       contextIsolation: true,

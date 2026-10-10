@@ -27,6 +27,10 @@ import {
   X,
   Navigation,
   Restore,
+  Settings,
+  ShieldCheck,
+  History,
+  ChevronUp,
 } from './icons';
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
@@ -41,6 +45,7 @@ import {
   viewTitle,
   type NavAction,
   type NavItem,
+  type Section,
 } from './pages';
 import { Confirm, Field, Modal, Notice } from './ui';
 import { day } from './format';
@@ -429,7 +434,8 @@ function NavMenu({
   );
 }
 
-/** Page zoom in the status bar (also Ctrl + / Ctrl − / Ctrl 0 and Ctrl + mouse wheel). */
+/** Excel-style zoom in the status bar: − slider + and the percentage (Ctrl +/−/0, Ctrl+wheel). */
+const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 function ZoomControl() {
   const [zoom, setZoom] = useState(1);
   useEffect(() => {
@@ -437,6 +443,7 @@ function ZoomControl() {
     return api.onZoom(setZoom);
   }, []);
   const go = (step: 'in' | 'out' | 'reset') => void api.zoom(step).then(setZoom);
+  const index = Math.max(0, ZOOM_STEPS.indexOf(zoom));
   return (
     <span className="zoom" role="group" aria-label="Miqyas">
       <button
@@ -447,14 +454,13 @@ function ZoomControl() {
       >
         <Minus size={12} />
       </button>
-      <button
-        type="button"
-        title="100% (Ctrl 0)"
-        className="zoom-value"
-        onClick={() => go('reset')}
-      >
-        {Math.round(zoom * 100)}%
-      </button>
+      <span className="zoom-track" aria-hidden="true">
+        <span className="zoom-mid" />
+        <span
+          className="zoom-thumb"
+          style={{ left: `${(index / (ZOOM_STEPS.length - 1)) * 100}%` }}
+        />
+      </span>
       <button
         type="button"
         title="Böyüt (Ctrl +)"
@@ -463,7 +469,87 @@ function ZoomControl() {
       >
         <Plus size={12} />
       </button>
+      <button
+        type="button"
+        title="100% (Ctrl 0)"
+        className="zoom-value"
+        onClick={() => go('reset')}
+      >
+        {Math.round(zoom * 100)}%
+      </button>
     </span>
+  );
+}
+
+/** One entry of the main menu: the section name, and its functions in a drop-down. */
+function MainMenuItem({
+  section,
+  open,
+  current,
+  onOpen,
+  onHover,
+  onClose,
+  onPick,
+}: {
+  section: Section;
+  open: boolean;
+  current: boolean;
+  onOpen: () => void;
+  onHover: () => void;
+  onClose: () => void;
+  onPick: (item: NavItem) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (
+        e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)
+      )
+        onClose();
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [open, onClose]);
+  return (
+    <div className="menu-entry" ref={ref} onPointerEnter={onHover}>
+      <button
+        type="button"
+        aria-label={section.label}
+        aria-haspopup={section.groups.length ? 'menu' : undefined}
+        aria-expanded={section.groups.length ? open : undefined}
+        className={`menu-item${current ? ' current' : ''}${open ? ' open' : ''}`}
+        onClick={onOpen}
+      >
+        {section.label}
+      </button>
+      {open && (
+        <div className="menu-drop" role="menu" aria-label={section.label}>
+          {section.groups.map((g) => (
+            <div key={g.title} className="menu-group">
+              <span className="menu-group-title">{g.title}</span>
+              {g.items.map((i) => (
+                <button
+                  key={i.label}
+                  type="button"
+                  role="menuitem"
+                  className={i.action.kind === 'soon' ? 'soon' : ''}
+                  onClick={() => onPick(i)}
+                >
+                  <i.icon size={16} />
+                  <span>{i.label}</span>
+                  {i.action.kind === 'soon' && <small>{i.action.stage}</small>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -480,22 +566,8 @@ function Shell({
     text: string;
   } | null>(null);
   const [newCompany, setNewCompany] = useState(false);
-  // Navigation pane (Windows NavigationView): open with labels, or compact with icons only.
-  const [compact, setCompact] = useState(() => {
-    try {
-      return window.localStorage.getItem('meyar.pane') === 'compact';
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('meyar.pane', compact ? 'compact' : 'open');
-    } catch {
-      /* the pane simply opens expanded next time */
-    }
-  }, [compact]);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // Main menu (1C): which section's menu is open.
+  const [menu, setMenu] = useState<string | null>(null);
   const company = companies.find((c) => c.id === ws.companyId) ?? companies[0]!;
   const integrity = useQuery<IntegrityView>({ type: 'integrity', companyId: company.id });
   const active = ws.windows.find((w) => w.id === ws.activeId);
@@ -532,39 +604,34 @@ function Shell({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ws]);
-  const current = active ? sectionOfView(active.view) : 'home';
-  useEffect(() => {
-    if (current !== 'home') setExpanded(current);
-  }, [current]);
   const pick = (item: NavItem) => void act(item.action, item.label);
+  const current = active ? sectionOfView(active.view) : 'home';
   return (
     <div className="shell">
-      {/* Windows 11 title bar: the app draws it, Windows draws the caption buttons on the right. */}
+      {/* Title bar (brand, search, company, period), then the main menu row (1C). */}
       <header className="titlebar">
         <button
           type="button"
-          className="pane-toggle"
-          aria-label={compact ? 'Menyunu aç' : 'Menyunu yığ'}
-          title={compact ? 'Menyunu aç' : 'Menyunu yığ'}
-          onClick={() => setCompact((c) => !c)}
+          className="brand"
+          title="Başlanğıc"
+          onClick={() => {
+            setMenu(null);
+            ws.focus('home');
+          }}
         >
-          <Navigation size={18} />
-        </button>
-        <span className="app-title">
           <span className="brand-mark" aria-hidden="true">
             M
           </span>
-          Meyar
-        </span>
+          <span className="brand-name">Meyar</span>
+        </button>
+        <span className="title-fill" />
+        <QuickSearch />
         <label className="company-switch" title="Şirkəti dəyiş">
-          <span className="avatar" aria-hidden="true">
-            {initials(company.name)}
-          </span>
           <span className="company-text">
             <b>{company.name}</b>
             <small>VÖEN {company.taxId}</small>
           </span>
-          <ChevronDown size={12} aria-hidden="true" />
+          <ChevronDown size={12} />
           <select
             aria-label="Şirkət"
             value={company.id}
@@ -582,139 +649,70 @@ function Shell({
           </select>
         </label>
         <PeriodSwitch />
-        <div className="title-center">
-          <QuickSearch />
-        </div>
-        <NavMenu label="Yarat" icon={Plus} primary items={createItems} onPick={pick} />
         <span className="caption-space" aria-hidden="true" />
       </header>
-      <div className="body">
-        <nav className={`navpane${compact ? ' compact' : ''}`} aria-label="Əsas menyu">
-          <div className="nav-items">
-            {sections.map((sec) => {
-              const open = !compact && expanded === sec.id;
-              const here = current === sec.id;
-              return (
-                <div key={sec.id} className={`nav-section${open ? ' open' : ''}`}>
-                  <button
-                    type="button"
-                    aria-label={sec.label}
-                    title={compact ? sec.label : undefined}
-                    aria-expanded={sec.groups.length ? open : undefined}
-                    aria-current={!sec.groups.length && here ? 'page' : undefined}
-                    className={`nav-item${here && (!open || !sec.groups.length) ? ' selected' : ''}`}
-                    onClick={() => {
-                      if (!sec.groups.length) {
-                        ws.focus('home');
-                        return;
-                      }
-                      if (compact) {
-                        setCompact(false);
-                        setExpanded(sec.id);
-                      } else setExpanded((e) => (e === sec.id ? null : sec.id));
-                    }}
-                  >
-                    <sec.icon size={18} />
-                    <span className="nav-label">{sec.label}</span>
-                    {sec.groups.length > 0 && <ChevronDown size={12} className="nav-chevron" />}
-                  </button>
-                  {open && (
-                    <div className="nav-children">
-                      {sec.groups.map((g) => (
-                        <div key={g.title} className="nav-group">
-                          <span className="nav-group-title">{g.title}</span>
-                          {g.items.map((i) => {
-                            const sel =
-                              i.action.kind === 'view' &&
-                              !!active &&
-                              JSON.stringify(i.action.view) === JSON.stringify(active.view);
-                            return (
-                              <button
-                                key={i.label}
-                                type="button"
-                                className={`nav-item child${sel ? ' selected' : ''}${i.action.kind === 'soon' ? ' soon' : ''}`}
-                                aria-current={sel ? 'page' : undefined}
-                                title={i.action.kind === 'soon' ? `${i.action.stage}də` : i.label}
-                                onClick={() => pick(i)}
-                              >
-                                <span className="nav-label">{i.label}</span>
-                                {i.action.kind === 'soon' && <small>tezliklə</small>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div
-            className={`nav-foot${integrity.data && !integrity.data.ok ? ' bad' : ''}`}
-            title={
-              integrity.data
-                ? integrity.data.ok
-                  ? `Jurnal tarazdır, registrlər jurnala uyğundur (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
-                  : integrity.data.problems.join(' ')
-                : 'Baza yoxlanılır'
-            }
-          >
-            {integrity.data && !integrity.data.ok ? (
-              <CircleAlert size={18} />
-            ) : (
-              <CheckCircle2 size={18} />
-            )}
-            <span className="nav-label">
-              {integrity.data
-                ? integrity.data.ok
-                  ? 'Baza tarazdır'
-                  : 'Bazada uyğunsuzluq var'
-                : 'Baza yoxlanılır…'}
-            </span>
-          </div>
+      <div className="menubar">
+        <nav className="main-menu" aria-label="Əsas menyu">
+          {sections.map((sec) => (
+            <MainMenuItem
+              key={sec.id}
+              section={sec}
+              open={menu === sec.id}
+              current={current === sec.id}
+              onOpen={() => {
+                if (!sec.groups.length) {
+                  setMenu(null);
+                  ws.focus('home');
+                } else setMenu((m) => (m === sec.id ? null : sec.id));
+              }}
+              onHover={() => setMenu((m) => (m && sec.groups.length ? sec.id : m))}
+              onClose={() => setMenu(null)}
+              onPick={(i) => {
+                setMenu(null);
+                pick(i);
+              }}
+            />
+          ))}
         </nav>
-        <div className="layer">
-          {message && (
-            <div className="shell-message">
-              <Notice kind={message.kind} onClose={() => setMessage(null)}>
-                {message.text}
-              </Notice>
-            </div>
-          )}
-          <div className="stage">
-            <Desktop>
-              <HomePage
-                integrity={integrity.data}
-                integrityLoading={integrity.loading}
-                onRecheck={integrity.reload}
-              />
-            </Desktop>
-          </div>
-          <WindowBar />
-          <footer className="statusbar">
-            <span>
-              {company.closedThrough
-                ? `Bağlı dövr: ${company.closedThrough.split('-').reverse().join('.')}-dək`
-                : 'Dövr bağlanmayıb'}
-            </span>
-            <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
-              {integrity.loading && !integrity.data
-                ? 'Baza yoxlanılır…'
-                : integrity.data
-                  ? integrity.data.ok
-                    ? `Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
-                    : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
-                  : ''}
-            </span>
-            <ZoomControl />
-            <span className="statusbar-keys">
-              Ctrl+N yeni əməliyyat · Ctrl+K axtarış · Ctrl+Enter uçota al və bağla · Ctrl+Tab
-              növbəti pəncərə · Ctrl+F4 bağla
-            </span>
-          </footer>
-        </div>
+        <NavMenu label="Yarat" icon={Plus} primary items={createItems} onPick={pick} />
       </div>
+      {message && (
+        <div className="shell-message">
+          <Notice kind={message.kind} onClose={() => setMessage(null)}>
+            {message.text}
+          </Notice>
+        </div>
+      )}
+      <div className="stage">
+        <Desktop>
+          <HomePage
+            integrity={integrity.data}
+            integrityLoading={integrity.loading}
+            onRecheck={integrity.reload}
+          />
+        </Desktop>
+      </div>
+      <WindowBar />
+      <footer className="statusbar">
+        <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
+          {integrity.loading && !integrity.data
+            ? 'Baza yoxlanılır…'
+            : integrity.data
+              ? integrity.data.ok
+                ? `Hazır · Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
+              : 'Hazır'}
+        </span>
+        <span>
+          {company.closedThrough
+            ? `Bağlı dövr: ${company.closedThrough.split('-').reverse().join('.')}-dək`
+            : 'Dövr bağlanmayıb'}
+        </span>
+        <span className="statusbar-keys">
+          Ctrl+Enter uçota al və bağla · Ctrl+Tab növbəti pəncərə · Ctrl+K axtarış
+        </span>
+        <ZoomControl />
+      </footer>
       {ws.pendingClose && (
         <Confirm
           title="Saxlanmamış dəyişikliklər"

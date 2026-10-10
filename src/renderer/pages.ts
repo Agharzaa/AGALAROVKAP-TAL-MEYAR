@@ -300,7 +300,7 @@ export const sections: Section[] = [
   },
 ];
 
-/** The section a window belongs to, so the rail shows where the user is. */
+/** The section a window belongs to. */
 export function sectionOfView(view: View): string {
   switch (view.type) {
     case 'invoice':

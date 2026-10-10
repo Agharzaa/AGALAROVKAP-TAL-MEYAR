@@ -1,15 +1,14 @@
 import { Component, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-// IBM Plex Sans, bundled (the app works offline): Latin and Latin Extended cover ə, ğ, ş, İ and ₼.
-import '@fontsource/ibm-plex-sans/latin-400.css';
-import '@fontsource/ibm-plex-sans/latin-ext-400.css';
-import '@fontsource/ibm-plex-sans/latin-500.css';
-import '@fontsource/ibm-plex-sans/latin-ext-500.css';
-import '@fontsource/ibm-plex-sans/latin-600.css';
-import '@fontsource/ibm-plex-sans/latin-ext-600.css';
-import '@fontsource/ibm-plex-sans/latin-700.css';
-import '@fontsource/ibm-plex-sans/latin-ext-700.css';
+// Fonts are bundled (the app works offline): Inter for work, Lora for titles. The combined
+// files declare each subset with its unicode-range, so ə, ğ, ş, İ and ₼ come from the same font.
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/lora/400.css';
+import '@fontsource/lora/400-italic.css';
+import '@fontsource/lora/600.css';
 import './styles.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
