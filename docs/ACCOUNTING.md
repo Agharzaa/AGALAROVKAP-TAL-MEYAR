@@ -103,6 +103,16 @@ Hesab planının qaydaları:
 - **Ayrılma:** sənəd ləğv ediləndə və ya cütə uyğun olmayan şəkildə düzəldiləndə cüt avtomatik ayrılır; əl ilə də ayrılır. Hər dəyişiklik audit jurnalındadır.
 - **İş masasında nəzarət:** yolda qalmış köçürmə (222.01 / 222.03 qalığı), cütsüz ƏDV depoziti sənədi, 18/118 fərqi (bağlı dövrdən sonrakı sənədlər üzrə; hər növdən 10-u ayrıca, qalanı bir sətirdə).
 
+### Bank çıxarışı (mərhələ 3c)
+
+- **Yükləmə:** XLSX və ya CSV (köhnə .xls — Excel-də .xlsx kimi saxlanmalıdır). Başlıq sətri sütun adlarına görə tapılır; IBAN və qalıqlar cədvəlin üstündən/altından oxunur. Yükləmədən əvvəl ilkin baxış: hesab, dövr, sətir sayı, qalıqlar, oxunmayan sətirlər.
+- **Hesab:** fayldakı IBAN-a görə; IBAN kitabçada yoxdursa yükləmə rədd olunur. IBAN çap olunmayıbsa, istifadəçi seçir.
+- **Dublikat:** hər sətrin barmaq izi (hesab, tarix, istiqamət, məbləğ, nömrə, VÖEN, təyinat + fayl daxilində eyni sətrin sırası). Eyni sətir ikinci dəfə yaranmır.
+- **Vəziyyətlər:** gözləyir (sistemin təklifi və ya naməlum), uçota alınıb (bank sənədi ilə), kənara qoyulub (səbəb məcburidir). Sətir silinmir, bankın yazdığı sahələr dəyişdirilmir.
+- **Uçot:** sətirdən açılan bank sənədinin tarixi, bank hesabı, istiqaməti və cəmi sətrə bərabər olmalıdır (düzəlişdə də). Sənəd ləğv ediləndə sətir yenə gözləyir. Əl ilə daxil edilmiş uyğun sənəd (eyni hesab, istiqamət, məbləğ, ±2 gün) varsa, yeni sənəd yox, bağlama təklif olunur.
+- **Tutuşdurma:** fayldakı əvvələ və sona qalıq uçotdakı bank hesabı qalığı ilə (hesabın valyutasında) müqayisə olunur.
+- **Pul vəsaitlərinin hərəkəti maddəsi:** bank sənədi sətrinin atributudur (subkonto deyil); ayrıca kitabçadır.
+
 ## Qalıqlar, registrlər və hesabatlar
 
 - **Qalıq registri:** hesab × subkonto × ay üzrə yekunlardır. Hər yazılışla eyni tranzaksiyada bazanın trigger-ləri tərəfindən yenilənir.

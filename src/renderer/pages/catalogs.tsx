@@ -469,6 +469,7 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'capitalChange', label: 'Kapital dəyişiklikləri' },
   { kind: 'cashbox', label: 'Kassalar' },
   { kind: 'productGroup', label: 'Nomenklatura qrupları' },
+  { kind: 'cashFlowItem', label: 'Pul vəsaitlərinin hərəkəti maddələri' },
 ];
 
 type Role = '' | 'vatTax' | 'cogs' | 'defaultProductGroup' | 'goodsIncome' | 'serviceIncome';

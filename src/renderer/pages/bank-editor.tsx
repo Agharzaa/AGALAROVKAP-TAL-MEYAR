@@ -10,7 +10,7 @@ import { formatMinor, parseMoney } from '../../domain/money';
 import { AZN_RATE, toAzn } from '../../domain/invoice';
 import { parsePrice } from '../../domain/quantity';
 import type { BankLineInput } from '../../contracts/commands';
-import type { BankDocumentDetail, Catalog } from '../../contracts/queries';
+import type { BankDocumentDetail, Catalog, StatementLineView } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { entryErrorAt } from '../entry-grid';
 import { ModuleFrame } from '../frame';
@@ -29,6 +29,7 @@ interface LineForm {
   sk: string[];
   amount: string;
   curAmount: string;
+  cashFlowItem: string;
   memo: string;
 }
 interface Form {
@@ -50,6 +51,7 @@ const blank = (account = ''): LineForm => ({
   sk: [],
   amount: '',
   curAmount: '',
+  cashFlowItem: '',
   memo: '',
 });
 
@@ -97,6 +99,7 @@ function fromDetail(d: BankDocumentDetail): Form {
       sk: l.sk,
       amount: toField(l.amount),
       curAmount: toField(l.curAmount),
+      cashFlowItem: l.cashFlowItem,
       memo: l.memo,
     })),
   };
@@ -107,6 +110,7 @@ const toInput = (l: LineForm): BankLineInput => ({
   sk: l.sk,
   amount: l.amount.trim(),
   ...(l.curAmount.trim() ? { curAmount: l.curAmount.trim() } : {}),
+  cashFlowItem: l.cashFlowItem,
   memo: l.memo,
 });
 
@@ -118,7 +122,15 @@ const minor = (value: string): bigint | null => {
   }
 };
 
-export function BankEditor({ direction, id }: { direction: Direction; id?: string }) {
+export function BankEditor({
+  direction,
+  id,
+  statementLineId,
+}: {
+  direction: Direction;
+  id?: string;
+  statementLineId?: string;
+}) {
   const win = useWindow();
   const ws = useWorkspace();
   const { catalog } = useCatalog(win.companyId);
@@ -133,29 +145,55 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
   const doc = detail.data;
+  // A new document for a statement row starts from what the bank wrote and what was recognised.
+  const fromStatement = !id && !!statementLineId;
+  const source = useQuery<StatementLineView>(
+    fromStatement ? { type: 'statementLine', companyId: win.companyId, id: statementLineId } : null,
+  );
+  const row = source.data;
   const incoming = direction === 'in';
   const snapshot = (f: Form) => JSON.stringify({ ...f, lines: f.lines.map(toInput) });
 
   useEffect(() => {
     if (form || !catalog) return;
     if (id && !doc) return;
+    if (fromStatement && !row) return;
     const accounts = catalog.bankAccounts.filter((b) => !b.archived);
     const initial: Form = doc
       ? fromDetail(doc)
-      : {
-          number: '',
-          date: ws.period.to < todayIso() ? ws.period.to : todayIso(),
-          bankAccountId: accounts.length === 1 ? accounts[0]!.id : '',
-          rate: '',
-          bankReference: '',
-          counterpartyName: '',
-          counterpartyTaxId: '',
-          purpose: '',
-          lines: [blank()],
-        };
-    baseline.current = snapshot(initial);
+      : row
+        ? {
+            number: '',
+            date: row.date,
+            bankAccountId: row.bankAccountId,
+            rate: '',
+            bankReference: row.reference,
+            counterpartyName: row.counterparty,
+            counterpartyTaxId: row.counterpartyTaxId,
+            purpose: row.purpose,
+            lines: [
+              {
+                ...blank(row.proposal?.account ?? ''),
+                sk: row.proposal?.sk ?? [],
+                amount: toField(row.amount),
+              },
+            ],
+          }
+        : {
+            number: '',
+            date: ws.period.to < todayIso() ? ws.period.to : todayIso(),
+            bankAccountId: accounts.length === 1 ? accounts[0]!.id : '',
+            rate: '',
+            bankReference: '',
+            counterpartyName: '',
+            counterpartyTaxId: '',
+            purpose: '',
+            lines: [blank()],
+          };
+    // A prefilled statement row is not saved yet: it counts as unsaved work.
+    baseline.current = row && !doc ? '' : snapshot(initial);
     setForm(initial);
-  }, [doc, form, id, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc, form, id, catalog, row]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!doc || !resync.current) return;
     resync.current = false;
@@ -169,6 +207,13 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
     if (doc) ws.setLabel(win.id, doc.number);
   }, [doc?.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const cashFlowOptions = useMemo(
+    (): Option[] =>
+      (catalog?.items ?? [])
+        .filter((i) => i.kind === 'cashFlowItem' && !i.archived)
+        .map((i) => ({ value: i.id, label: i.name })),
+    [catalog],
+  );
   const bankOptions = useMemo(
     (): Option[] =>
       (catalog?.bankAccounts ?? [])
@@ -199,6 +244,7 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
       purpose: form.purpose,
       lines: form.lines.map(toInput),
       ...(id && doc ? { id, version: doc.version } : {}),
+      ...(fromStatement && statementLineId ? { statementLineId } : {}),
     });
     if (!r) return;
     if (close) {
@@ -244,7 +290,7 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
   if (!catalog || !form)
     return (
       <ModuleFrame title={viewTitle(win.view, win.label)}>
-        <div className="loading">{detail.error || 'Yüklənir…'}</div>
+        <div className="loading">{detail.error || source.error || 'Yüklənir…'}</div>
       </ModuleFrame>
     );
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
@@ -347,6 +393,15 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
       }
       notices={
         <>
+          {row && !doc && (
+            <Notice kind="info">
+              Çıxarış sətri {row.row}: {row.direction === 'in' ? 'daxilolma' : 'məxaric'}{' '}
+              {money(row.amount)}. {row.proposal?.reason}
+              {row.proposal?.newPartner &&
+                ` Kontragentlər kitabçasına əlavə edin: ${row.proposal.newPartner.name}, VÖEN ${row.proposal.newPartner.taxId}.`}{' '}
+              Sətirlərin cəmi çıxarışdakı məbləğə bərabər olmalıdır.
+            </Notice>
+          )}
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
@@ -377,23 +432,40 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
               onChange={(e) => set({ number: e.target.value })}
             />
           </Field>
-          <Field label="Tarix" error={headerError('date')}>
-            <DateInput
-              required
-              value={form.date}
-              onChange={(date) => set({ date })}
-              aria-label="Tarix"
-            />
-          </Field>
-          <Field label="Bank hesabı" className="partner" error={headerError('bankAccountId')}>
-            <Picker
-              ariaLabel="Bank hesabı"
-              value={form.bankAccountId}
-              options={bankOptions}
-              invalid={m.error?.field === 'bankAccountId'}
-              onChange={(bankAccountId) => set({ bankAccountId, rate: '' })}
-            />
-          </Field>
+          {fromStatement ? (
+            <>
+              <Field label="Tarix" hint="Çıxarışdan">
+                <input aria-label="Tarix" readOnly value={day(form.date)} />
+              </Field>
+              <Field label="Bank hesabı" className="partner" hint="Çıxarışdan">
+                <input
+                  aria-label="Bank hesabı"
+                  readOnly
+                  value={bankOptions.find((o) => o.value === form.bankAccountId)?.label ?? ''}
+                />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Tarix" error={headerError('date')}>
+                <DateInput
+                  required
+                  value={form.date}
+                  onChange={(date) => set({ date })}
+                  aria-label="Tarix"
+                />
+              </Field>
+              <Field label="Bank hesabı" className="partner" error={headerError('bankAccountId')}>
+                <Picker
+                  ariaLabel="Bank hesabı"
+                  value={form.bankAccountId}
+                  options={bankOptions}
+                  invalid={m.error?.field === 'bankAccountId'}
+                  onChange={(bankAccountId) => set({ bankAccountId, rate: '' })}
+                />
+              </Field>
+            </>
+          )}
           {foreign && (
             <Field
               label={`${currency} məzənnəsi`}
@@ -473,7 +545,7 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
                 <th scope="col" className="num narrow">
                   Məbləğ, {currency}
                 </th>
-                <th scope="col">Məzmun</th>
+                <th scope="col">Məzmun · pul hərəkəti maddəsi</th>
                 <th scope="col" className="n">
                   <span className="sr-only">Əməliyyat</span>
                 </th>
@@ -538,6 +610,14 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
                         maxLength={300}
                         value={l.memo}
                         onChange={(ev) => setLine(i, { memo: ev.target.value })}
+                      />
+                      <Picker
+                        ariaLabel={`Sətir ${i + 1} pul vəsaitlərinin hərəkəti maddəsi`}
+                        value={l.cashFlowItem}
+                        options={cashFlowOptions}
+                        emptyLabel="Pul hərəkəti maddəsi seçilməyib"
+                        invalid={e?.part === 'cashFlowItem'}
+                        onChange={(cashFlowItem) => setLine(i, { cashFlowItem })}
                       />
                     </td>
                     <td className="n row-tools">

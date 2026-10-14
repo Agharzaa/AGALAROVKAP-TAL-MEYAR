@@ -503,3 +503,59 @@ test('VAT pair: a signal on İş masası opens the deposit document; unpair and 
     h.close();
   }
 });
+
+test('bank statement: CSV preview, load, book a row from its prefilled form', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const dmy = `05.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+  const csv = [
+    'Hesabdan çıxarış',
+    'Hesab;AZ12AIIB38060019441234567890',
+    'Əvvələ qalıq;0,00',
+    'Tarix;Sənəd №;Qarşı tərəf;VÖEN;Debet;Kredit;Təyinat',
+    `${dmy};PT-9;ALICI MMC;1700000001;;250,00;Müqavilə 7 üzrə ödəniş`,
+    `${dmy};;Kapital Bank;;1,50;;Hesabın aparılmasına görə komissiya`,
+    'Sona qalıq;248,50',
+  ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Bank çıxarışı' })[0]!);
+    const page = within(pane());
+    await page.findByText('Hələ çıxarış yüklənməyib');
+    await user.upload(
+      page.getByLabelText('Çıxarış faylı'),
+      new File([csv], 'cixaris.csv', { type: 'text/csv' }),
+    );
+    const preview = await page.findByRole('region', { name: 'İlkin baxış' });
+    assert.match(preview.textContent ?? '', /AZ12AIIB38060019441234567890/);
+    assert.match(preview.textContent ?? '', /fayl öz-özünə tarazdır/);
+    await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
+    await page.findByText(/Yükləndi: yeni 2 sətir/);
+    const head = await page.findByRole('region', { name: 'Çıxarış ilə uçotun tutuşdurulması' });
+    assert.match(head.textContent ?? '', /fərq/);
+    await user.click(page.getByRole('button', { name: /Sətir 5: uçota al/ }));
+    const editor = within(pane());
+    await editor.findByText(/Çıxarış sətri 5: daxilolma/);
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }) as HTMLInputElement).value,
+      '250,00',
+    );
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'VÖEN (bankda)' }) as HTMLInputElement).value,
+      '1700000001',
+    );
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Sənəd BD-000001 uçota alındı/);
+    const imports = h.ledger.query({ type: 'statementImports', companyId: s.companyId }) as {
+      id: string;
+      posted: number;
+      waiting: number;
+    }[];
+    assert.deepEqual([imports[0]!.posted, imports[0]!.waiting], [1, 1]);
+  } finally {
+    h.close();
+  }
+});

@@ -29,6 +29,7 @@ import {
 } from '../../src/domain/invoice.js';
 import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
 import { allocatePayment, openPart, splitProportionally } from '../../src/domain/bank.js';
+import { readStatementTable, statementAddsUp } from '../../src/domain/statement.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
   assert.equal(parseMoney('118'), 11800n);
@@ -341,4 +342,85 @@ test('bank: proportional split always adds up to the total', () => {
     100n,
   );
   assert.deepEqual(pieces, [33n, 34n, 33n]);
+});
+
+test('statement reader: title block IBAN, balances, debit/credit columns, totals ignored', () => {
+  // A Kapital-like export: a title block above the table, debit and credit columns, totals below.
+  const rows = [
+    ['Hesabdan çıxarış'],
+    ['Hesab: AZ12 AIIB 3806 0019 4412 3456 7890', '', 'Valyuta: AZN'],
+    ['Dövr: 01.09.2026 - 30.09.2026'],
+    ['Əvvələ qalıq:', '', '1 000,00'],
+    [],
+    [
+      'Tarix',
+      'Sənəd №',
+      'Qarşı tərəf',
+      'VÖEN',
+      'Qarşı tərəfin hesabı',
+      'Debet',
+      'Kredit',
+      'Təyinat',
+    ],
+    [
+      '15.09.2026',
+      'PT-77',
+      'ALICI MMC',
+      '1700000001',
+      'AZ55PAHA40060AZNHC0101091203',
+      '',
+      '15 254,24',
+      'SQ-000001 üzrə ödəniş',
+    ],
+    ['30.09.2026', '', 'KAPITAL BANK', '', '', '3,00', '', 'Hesabın aparılmasına görə komissiya'],
+    ['30.09.2026', 'x', '', '', '', '', '', 'məbləğ yoxdur'],
+    ['Cəmi', '', '', '', '', '3,00', '15 254,24'],
+    ['Sona qalıq', '', '', '', '', '', '16 251,24'],
+  ];
+  const r = readStatementTable(rows);
+  assert.equal(r.iban, 'AZ12AIIB38060019441234567890');
+  assert.deepEqual(
+    [r.opening, r.closing, r.from, r.to],
+    ['1000.00', '16251.24', '2026-09-15', '2026-09-30'],
+  );
+  assert.deepEqual(
+    r.lines.map((l) => [
+      l.row,
+      l.date,
+      l.direction,
+      l.amount,
+      l.reference,
+      l.counterpartyTaxId,
+      l.counterpartyIban,
+    ]),
+    [
+      [7, '2026-09-15', 'in', '15254.24', 'PT-77', '1700000001', 'AZ55PAHA40060AZNHC0101091203'],
+      [8, '2026-09-30', 'out', '3.00', '', '', ''],
+    ],
+  );
+  assert.deepEqual(r.problems, [{ row: 9, message: 'Məbləğ oxunmadı.' }]);
+  assert.equal(statementAddsUp(r), true);
+  assert.equal(statementAddsUp({ ...r, closing: '16000.00' }), false);
+});
+
+test('statement reader: one signed amount column, Russian headers, no IBAN, overdraft balance', () => {
+  const rows = [
+    ['Выписка по счету'],
+    ['Входящий остаток', '-50,00'],
+    ['Дата', 'Номер', 'Контрагент', 'ИНН', 'Сумма', 'Назначение'],
+    ['01/10/2026', '1', 'ООО Поставщик', '1700000002', '-100.50', 'Оплата по счету'],
+    ['02/10/2026', '2', 'ООО Покупатель', '', '250', 'Оплата VÖEN 1700000001'],
+    ['Исходящий остаток', '99,50'],
+  ];
+  const r = readStatementTable(rows);
+  assert.equal(r.iban, undefined);
+  assert.deepEqual([r.opening, r.closing], ['-50.00', '99.50']);
+  assert.deepEqual(
+    r.lines.map((l) => [l.direction, l.amount, l.counterpartyTaxId]),
+    [
+      ['out', '100.50', '1700000002'],
+      ['in', '250.00', '1700000001'],
+    ],
+  );
+  assert.equal(statementAddsUp(r), true);
 });

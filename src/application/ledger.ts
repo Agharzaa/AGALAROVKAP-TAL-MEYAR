@@ -18,6 +18,12 @@ import {
 } from './catalog.js';
 import { cancelBankDocument, saveBankDocument } from './bank.js';
 import { pairBankDocuments } from './bank-pair.js';
+import {
+  ignoreStatementLine,
+  importStatement,
+  linkStatementLine,
+  restoreStatementLine,
+} from './statements.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
 import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
@@ -113,6 +119,14 @@ export class Ledger {
         return cancelBankDocument(tx, c);
       case 'bank.pair':
         return pairBankDocuments(tx, c.companyId, c.id, c.pairId);
+      case 'statement.import':
+        return importStatement(tx, c);
+      case 'statement.ignore':
+        return ignoreStatementLine(tx, c);
+      case 'statement.restore':
+        return restoreStatementLine(tx, c);
+      case 'statement.link':
+        return linkStatementLine(tx, c);
       case 'period.close':
         return closePeriod(tx, c);
     }

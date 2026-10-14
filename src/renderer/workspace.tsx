@@ -16,6 +16,7 @@ export type Page =
   | 'sales'
   | 'purchases'
   | 'bank'
+  | 'statements'
   | 'trial'
   | 'card'
   | 'accounts'
@@ -30,7 +31,13 @@ export type View =
   | { type: 'page'; page: Page }
   | { type: 'operation'; id?: string }
   | { type: 'invoice'; direction: 'sale' | 'purchase'; id?: string }
-  | { type: 'bank'; direction: 'in' | 'out'; id?: string }
+  | {
+      type: 'bank';
+      direction: 'in' | 'out';
+      id?: string;
+      /** A new document for this statement row, prefilled from it. */
+      statementLineId?: string;
+    }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;

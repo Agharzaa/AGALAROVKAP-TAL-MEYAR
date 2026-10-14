@@ -1,5 +1,6 @@
 /** Company, chart of accounts and the catalogs that subkonto values point to. */
 import { baseChart, checkSubkonto, currencies, newAccount } from '../domain/chart.js';
+import { CASH_FLOW_ITEMS } from '../domain/bank.js';
 import { DomainError } from '../domain/errors.js';
 import { numberKey, parseDate, parseTaxId, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
@@ -45,6 +46,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
   ],
   ['cashbox', ['Əsas kassa']],
   ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],
+  ['cashFlowItem', CASH_FLOW_ITEMS],
 ];
 
 export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): CommandResult {
@@ -474,6 +476,7 @@ const itemLabels = {
   capitalChange: 'Kapitalda dəyişiklik növü',
   cashbox: 'Kassa',
   productGroup: 'Nomenklatura qrupu',
+  cashFlowItem: 'Pul vəsaitlərinin hərəkəti maddəsi',
 } as const;
 
 /** Posting-rule roles of catalog elements and the kind each belongs to. */

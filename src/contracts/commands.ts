@@ -90,9 +90,25 @@ export const bankLineInput = z.object({
    * exchange); otherwise it follows from the line amount.
    */
   curAmount: decimal.optional(),
+  /** "Pul vəsaitlərinin hərəkəti maddəsi" — an attribute of the line, not a subkonto. */
+  cashFlowItem: z.string().max(80).default(''),
   memo: text(300).default(''),
 });
 export type BankLineInput = z.infer<typeof bankLineInput>;
+
+/** One operation of a bank statement as the reader found it (docs/MERHELE-3-BANK.md §6). */
+export const statementLineInput = z.object({
+  row: z.number().int().nonnegative(),
+  date,
+  direction: z.enum(['in', 'out']),
+  amount: decimal,
+  reference: text(80).default(''),
+  counterparty: text(240).default(''),
+  counterpartyTaxId: text(20).default(''),
+  counterpartyIban: text(40).default(''),
+  purpose: text(500).default(''),
+});
+export type StatementLineInput = z.infer<typeof statementLineInput>;
 
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({
@@ -193,6 +209,7 @@ export const commandSchema = z.discriminatedUnion('type', [
       'capitalChange',
       'cashbox',
       'productGroup',
+      'cashFlowItem',
     ]),
     name: text(160),
     /**
@@ -274,6 +291,36 @@ export const commandSchema = z.discriminatedUnion('type', [
     counterpartyTaxId: text(20).default(''),
     purpose: text(500).default(''),
     lines: z.array(bankLineInput).min(1).max(500),
+    /** The statement row this document books; date, amount and account must match it. */
+    statementLineId: id.optional(),
+  }),
+  z.object({
+    type: z.literal('statement.import'),
+    ...base,
+    /** Chosen by the user when the file does not print the account's IBAN. */
+    bankAccountId: id.optional(),
+    /** IBAN printed in the file's title block, if any. */
+    iban: text(40).default(''),
+    fileName: text(240),
+    fileHash: z.string().regex(/^[0-9a-f]{64}$/, 'Faylın həşi düzgün deyil.'),
+    /** Balances printed by the bank (may be negative). */
+    opening: decimal.optional(),
+    closing: decimal.optional(),
+    lines: z.array(statementLineInput).min(1).max(20000),
+  }),
+  z.object({
+    type: z.literal('statement.ignore'),
+    ...base,
+    lineId: id,
+    reason: text(240),
+  }),
+  z.object({ type: z.literal('statement.restore'), ...base, lineId: id }),
+  z.object({
+    type: z.literal('statement.link'),
+    ...base,
+    lineId: id,
+    /** A bank document entered by hand for the same payment. */
+    documentId: id,
   }),
   z.object({
     type: z.literal('bank.pair'),
@@ -307,6 +354,10 @@ export interface CommandResult {
   number?: string;
   /** True when the same request was already applied; nothing changed. */
   replayed?: boolean;
+  /** Statement import: new rows, rows already loaded before, rows refused with the reason. */
+  added?: number;
+  duplicates?: number;
+  rejected?: { row: number; message: string }[];
 }
 
 export interface ErrorPayload {

@@ -27,6 +27,9 @@ export const querySchema = z.discriminatedUnion('type', [
     bankAccountId: id.optional(),
   }),
   z.object({ type: z.literal('bankDocument'), companyId: id, id }),
+  z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
+  z.object({ type: z.literal('statement'), companyId: id, id }),
+  z.object({ type: z.literal('statementLine'), companyId: id, id }),
   z.object({
     type: z.literal('trialBalance'),
     companyId: id,
@@ -139,7 +142,8 @@ export type ItemKind =
   | 'fund'
   | 'capitalChange'
   | 'cashbox'
-  | 'productGroup';
+  | 'productGroup'
+  | 'cashFlowItem';
 export interface ItemView {
   id: string;
   version: number;
@@ -249,6 +253,8 @@ export interface BankLineView {
   skNames: string[];
   amount: string;
   curAmount: string;
+  cashFlowItem: string;
+  cashFlowItemName: string;
   memo: string;
 }
 export interface BankDocumentSummary {
@@ -295,6 +301,67 @@ export interface BankDocumentDetail extends BankDocumentSummary {
   lines: BankLineView[];
   postings: PostingView[];
   history: { version: number; status: string; at: string; actor: string }[];
+}
+
+/** How a waiting statement row could be booked (never posted without the accountant). */
+export interface StatementProposal {
+  /** proposal: something was recognised; unknown: the accountant fills the document. */
+  state: 'proposal' | 'unknown';
+  reason: string;
+  /** Counter account and its subkonto for the bank document's line (may be empty). */
+  account: string;
+  sk: string[];
+  /** A VÖEN the partner list does not know yet: the accountant creates the partner. */
+  newPartner?: { name: string; taxId: string };
+  /** Bank documents typed by hand for the same payment: link instead of a new document. */
+  matches: { id: string; number: string; date: string }[];
+}
+export interface StatementLineView {
+  id: string;
+  importId: string;
+  bankAccountId: string;
+  row: number;
+  date: string;
+  direction: 'in' | 'out';
+  amount: string;
+  reference: string;
+  counterparty: string;
+  counterpartyTaxId: string;
+  counterpartyIban: string;
+  purpose: string;
+  state: 'new' | 'posted' | 'ignored';
+  documentId: string;
+  documentNumber: string;
+  reason: string;
+  proposal: StatementProposal | null;
+}
+export interface StatementImportView {
+  id: string;
+  bankAccountId: string;
+  fileName: string;
+  from: string;
+  to: string;
+  importedAt: string;
+  rowsRead: number;
+  rowsAdded: number;
+  waiting: number;
+  posted: number;
+  ignored: number;
+}
+export interface StatementView extends StatementImportView {
+  bankAccount: string;
+  iban: string;
+  currency: string;
+  /** Statement ↔ ledger, in the account's currency; empty where the file prints no balance. */
+  balances: {
+    fileOpening: string;
+    fileClosing: string;
+    ledgerOpening: string;
+    ledgerClosing: string;
+    openingDifference: string;
+    closingDifference: string;
+  };
+  lines: StatementLineView[];
 }
 
 export interface TrialRow {

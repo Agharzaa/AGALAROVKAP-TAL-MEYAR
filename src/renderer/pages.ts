@@ -47,6 +47,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Daxilolma və məxaric, qaimələrə bölgü, ƏDV depoziti',
     icon: Landmark,
   },
+  statements: {
+    title: 'Bank çıxarışları',
+    hint: 'Excel/CSV yükləmə, sətirlərin uçotu, bank ↔ uçot qalığı',
+    icon: Upload,
+  },
   trial: { title: 'Dövriyyə balansı', hint: 'Hesablar və subkontolar üzrə', icon: Scale },
   card: { title: 'Hesab kartı', hint: 'Hesab və subkonto üzrə hərəkət', icon: FileSpreadsheet },
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
@@ -108,7 +113,7 @@ export const sections: Section[] = [
         title: 'Sənədlər',
         items: [
           { label: 'Bank sənədləri', icon: Landmark, action: page('bank') },
-          { label: 'Bank çıxarışının yüklənməsi', icon: Upload, action: soon('3c mərhələsi') },
+          { label: 'Bank çıxarışları', icon: Upload, action: page('statements') },
           { label: 'Kassa sənədləri', icon: Wallet, action: soon('5-ci mərhələ') },
         ],
       },
@@ -357,6 +362,7 @@ export function sectionOfView(view: View): string {
         case 'audit':
           return 'reports';
         case 'bank':
+        case 'statements':
         case 'bankAccounts':
           return 'bank';
         case 'settings':

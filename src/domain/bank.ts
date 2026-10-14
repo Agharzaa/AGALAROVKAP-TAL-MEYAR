@@ -8,6 +8,22 @@
  */
 import { roundHalfAwayFromZero, type Minor } from './money.js';
 
+/**
+ * Starting list of "Pul vəsaitlərinin hərəkəti maddələri" (cash-flow items) for a new company,
+ * grouped the way IAS 7 reads cash flows. The accountant renames, adds and archives them; the
+ * list was not taken from a real 1C base.
+ */
+export const CASH_FLOW_ITEMS = [
+  'Alıcılardan daxilolmalar',
+  'Malsatan və podratçılara ödənişlər',
+  'İşçilərə ödənişlər',
+  'Vergi və məcburi ödənişlər',
+  'Kreditlər və faizlər',
+  'Təsisçilərlə əməliyyatlar',
+  'Öz hesabları arasında köçürmələr',
+  'Sair daxilolmalar və ödənişlər',
+];
+
 /** Which part of an invoice a bank document can settle. */
 export type SettlementPart = 'vat' | 'net' | 'whole';
 

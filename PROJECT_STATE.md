@@ -127,6 +127,25 @@ Testlər Windows-da: `npm test` 62, `npm run test:ui` 9, `npm run test:perf` ke�
 
 **Yoxlanmayıb:** formanın yeni panelinin görünüşü ekran şəkli ilə; müstəqil audit (mərhələ 3-ün sonunda).
 
+## Mərhələ 3c — bank çıxarışının yüklənməsi (14.10.2026)
+
+| Sahə                                                                                                                                                                                    | Sübut                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Oxuyucu: başlıq blokundakı IBAN, əvvələ/sona qalıq (AZ/RU/EN etiketlər, overdraft), debet/kredit və ya işarəli məbləğ, qarşı tərəfin hesabı; "fayl öz-özünə tarazdır" yoxlaması         | `tests/domain` (2 format)                      |
+| Sxem v8: `statement_imports`, `statement_lines` (bankın yazdığı sahələr dəyişdirilmir, silinmir)                                                                                        | `schema v1 → current`, real Electron (v7 → v8) |
+| Bank hesabı IBAN-a görə; IBAN yoxdursa istifadəçi seçir; uyğunsuzluq rədd olunur                                                                                                        | `statements.test.ts`                           |
+| Dublikat yoxdur (barmaq izi + eyni sətrin təkrar sayı): ikinci yükləmə 0 yeni sətir, üst-üstə düşən dövr yalnız yeni sətirləri əlavə edir, eyni gündə iki eyni komissiya ikisi də qalır | `statements.test.ts` (B9)                      |
+| Üç vəziyyət: gözləyir (təklif / naməlum), uçota alınıb, kənara qoyulub (səbəblə, geri qaytarılır). Avtomatik uçot yoxdur — qaydalar 3d-də                                               | `statements.test.ts` (B12)                     |
+| Sətirdən bank sənədi: forma çıxarışdan doldurulur, tarix/hesab/məbləğ çıxarışa bərabər olmalıdır (düzəlişdə də); ləğv sətri geri qaytarır                                               | `statements.test.ts`, `tests/ui`               |
+| Əl ilə daxil edilmiş ödəniş ±2 gün: "Bu sənədlə bağla" təklifi, ikinci sənəd yaranmır                                                                                                   | `statements.test.ts` (B13)                     |
+| Bank ↔ uçot: əvvələ və sona qalıq, fərq                                                                                                                                                 | `statements.test.ts` (B14), `tests/ui`         |
+| Pul vəsaitlərinin hərəkəti maddəsi: sətrin atributu, ayrıca kitabça (8 başlanğıc element, IFRS 7/IAS 7 qrupları, 1C-də yoxlanılmayıb)                                                   | `statements.test.ts`                           |
+| Yük: 5 000 sətir yüklənir ~0,1 s (hədd 10 s), açılır ~0,1 s (hədd 3 s)                                                                                                                  | `npm run test:perf`                            |
+
+Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` keçir; real Electron təmiz və v7 bazasında ok.
+
+**Sadələşdirmə / sonraya:** sətrin forması ayrıca pəncərədə açılır (çıxarış pəncərəsində yan panel və "növbəti sətir" axını yoxdur); pul hərəkəti hesabatı mərhələ 5-də (idarə paneli). **Real bank faylları ilə yoxlanmayıb** — yalnız sintetik formatlar; istifadəçidən anonimləşdirilmiş nümunələr gözlənilir.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -137,7 +156,7 @@ Testlər Windows-da: `npm test` 62, `npm run test:ui` 9, `npm run test:perf` ke�
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
-3. **Bank (davam edir):** ~~3a bank sənədi~~, ~~3b ƏDV cütü və siqnallar~~ — hazır. **Növbəti: 3c** — bank çıxarışının idxalı (XLSX/CSV, IBAN, dublikatsız, üç vəziyyət, çıxarış ↔ uçot qalığı), "Pul vəsaitlərinin hərəkəti maddəsi" atributu. Real bank çıxarışı nümunələri (anonimləşdirilmiş) istifadəçidən gözlənilir. Sonra 3d öyrənən qaydalar, audit, 0.5.0.
+3. **Bank (davam edir):** ~~3a bank sənədi~~, ~~3b ƏDV cütü və siqnallar~~, ~~3c çıxarış idxalı~~ — hazır. **Növbəti: 3d** — öyrənən qaydalar (mühasibin qərarından qayda, "təklif" → "avtomatik" yalnız mühasib qoşanda, geri qaytarma, büdcə təsnifat kodu → 521/522 subhesab cədvəli). Sonra müstəqil audit, 0.5.0. Real bank çıxarışı nümunələri (anonimləşdirilmiş) hələ də gözlənilir.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 

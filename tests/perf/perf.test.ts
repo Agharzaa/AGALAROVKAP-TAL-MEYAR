@@ -134,6 +134,43 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     ),
   );
   assert.ok((receipt as { id: string }).id);
+  // A busy month on one account: 5 000 statement rows, half of them from known partners. The
+  // stamp keeps a reused perf database (MEYAR_PERF_DB) from treating them as already loaded.
+  const stamp = Date.now();
+  const iban = String(db.get('SELECT iban FROM bank_accounts WHERE id=?', banks[0]!)!.iban);
+  const taxIds = db
+    .all('SELECT tax_id FROM partners WHERE company_id=? LIMIT 200', companyId)
+    .map((r) => String(r.tax_id));
+  const rows = Array.from({ length: 5000 }, (_, i) => ({
+    row: i + 2,
+    date: `2026-11-${String((i % 28) + 1).padStart(2, '0')}`,
+    direction: i % 2 ? 'out' : 'in',
+    amount: `${100 + (i % 977)}.${String(i % 100).padStart(2, '0')}`,
+    reference: `PT-${i}-${stamp}`,
+    counterparty: `Kontragent ${i % 400}`,
+    counterpartyTaxId: i % 2 ? '' : taxIds[i % taxIds.length]!,
+    counterpartyIban: '',
+    purpose: i % 7 ? `Müqavilə üzrə ödəniş ${i}` : 'Hesabın aparılmasına görə komissiya',
+  }));
+  const loaded = time('Çıxarışın yüklənməsi (5 000 sətir)', 10000, () =>
+    ledger.execute(
+      {
+        key: `perf-statement-${Date.now()}`,
+        type: 'statement.import',
+        companyId,
+        iban,
+        fileName: 'perf.xlsx',
+        fileHash: 'b'.repeat(64),
+        lines: rows,
+      },
+      { actor: 'perf', correlationId: 'perf' },
+    ),
+  ) as { id: string; added: number };
+  assert.equal(loaded.added, 5000);
+  const opened = time('Çıxarışın açılması (təkliflər, qalıqlar)', 3000, () =>
+    q({ type: 'statement', id: loaded.id }),
+  ) as { lines: unknown[] };
+  assert.equal(opened.lines.length, 5000);
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

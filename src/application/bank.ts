@@ -37,6 +37,7 @@ import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { BankLineInput, CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { refreshPair } from './bank-pair.js';
+import { bindStatementLine, releaseStatementLine } from './statements.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 
@@ -57,6 +58,8 @@ interface StoredLine {
   curAmount: string;
   /** "auto": matched to open invoices when posted; the postings show the result. */
   settle: 'auto' | '';
+  /** Cash-flow item (an attribute, not a subkonto); absent when not chosen. */
+  cashFlowItem?: string;
   memo: string;
 }
 
@@ -141,6 +144,25 @@ function normalize(tx: Tx, cmd: SaveBank, chart: Chart) {
       if (curInput <= 0n)
         throw new DomainError(`${where}: valyuta məbləği müsbət olmalıdır.`, f('curAmount'));
     }
+    const cashFlowItem = l.cashFlowItem.trim();
+    if (cashFlowItem) {
+      const item = tx.db.get(
+        "SELECT archived FROM items WHERE company_id=? AND id=? AND kind='cashFlowItem'",
+        cmd.companyId,
+        cashFlowItem,
+      );
+      if (!item)
+        throw new DomainError(
+          `${where}: pul vəsaitlərinin hərəkəti maddəsi tapılmadı.`,
+          f('cashFlowItem'),
+          'not-found',
+        );
+      if (item.archived === 1n)
+        throw new DomainError(
+          `${where}: pul vəsaitlərinin hərəkəti maddəsi arxivdədir.`,
+          f('cashFlowItem'),
+        );
+    }
     const stored: StoredLine = {
       account: account.code,
       sk,
@@ -148,6 +170,7 @@ function normalize(tx: Tx, cmd: SaveBank, chart: Chart) {
       amountAzn: money(amountAzn),
       curAmount: curInput !== undefined ? money(curInput) : '',
       settle,
+      ...(cashFlowItem ? { cashFlowItem } : {}),
       memo: parseText(l.memo, `${where}: məzmun`, 300, false),
     };
     return { account, amount, amountAzn, sk, settle, curInput, stored };
@@ -577,8 +600,15 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
       id,
       existing.version as bigint,
     );
-    if (last && String(last.payload) === JSON.stringify(data))
+    // Unchanged content is not posted again; binding a statement row is done by statement.link.
+    if (last && String(last.payload) === JSON.stringify(data)) {
+      if (cmd.statementLineId && cmd.statementLineId !== existing.statement_line_id)
+        throw new DomainError(
+          'Mövcud sənədi çıxarış sətrinə bağlamaq üçün çıxarışda “Bu sənədlə bağla” seçin.',
+          'statementLineId',
+        );
       return { id, version: Number(existing.version), number };
+    }
     tx.open(cmd.companyId, String(existing.date));
   }
   tx.open(cmd.companyId, n.header.date);
@@ -645,6 +675,24 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
     postings,
   );
   guardAdvances(tx, cmd.companyId, id, previous);
+  // The statement row stays what the bank wrote: account, direction, date and amount.
+  const bound =
+    existing?.statement_line_id &&
+    tx.db.get(
+      "SELECT 1 AS x FROM statement_lines WHERE company_id=? AND id=? AND state='posted' AND document_id=?",
+      cmd.companyId,
+      String(existing.statement_line_id),
+      id,
+    )
+      ? String(existing.statement_line_id)
+      : undefined;
+  bindStatementLine(
+    tx,
+    cmd.companyId,
+    tx.db.get('SELECT * FROM bank_documents WHERE company_id=? AND id=?', cmd.companyId, id)!,
+    cmd.statementLineId,
+    bound,
+  );
   refreshPair(tx, cmd.companyId, id);
   tx.history(cmd.companyId, BANK, id, version, 'posted', data);
   tx.audit(
@@ -690,6 +738,7 @@ export function cancelBankDocument(tx: Tx, cmd: CommandOf<'bank.cancel'>): Comma
   );
   guardAdvances(tx, cmd.companyId, cmd.id, prev.postings);
   refreshPair(tx, cmd.companyId, cmd.id);
+  releaseStatementLine(tx, cmd.companyId, cmd.id);
   tx.history(cmd.companyId, BANK, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

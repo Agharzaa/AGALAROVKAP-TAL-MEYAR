@@ -37,12 +37,15 @@ const roles = {
 import { searchKey } from './values.js';
 
 export interface StatementLine {
+  /** 1-based row of the sheet, for messages and the preview. */
+  row: number;
   date: string;
   direction: PaymentDirection;
   amount: string;
   reference: string;
   counterparty: string;
   counterpartyTaxId: string;
+  counterpartyIban: string;
   purpose: string;
 }
 
@@ -52,6 +55,14 @@ export interface StatementReadResult {
   problems: { row: number; message: string }[];
   /** Which columns were recognised, for the preview. */
   columns: Partial<Record<Column, string>>;
+  /** The account the statement is for, when the bank prints its IBAN above the table. */
+  iban?: string;
+  /** Balances printed by the bank (canonical, may be negative on an overdraft). */
+  opening?: string;
+  closing?: string;
+  /** First and last operation date. */
+  from?: string;
+  to?: string;
 }
 
 type Column =
@@ -62,6 +73,7 @@ type Column =
   | 'direction'
   | 'reference'
   | 'counterparty'
+  | 'counterpartyIban'
   | 'taxId'
   | 'purpose';
 
@@ -118,6 +130,15 @@ const headerWords: Record<Column, string[]> = {
     'получатель',
     'плательщик',
     'müştəri',
+  ],
+  counterpartyIban: [
+    'qarşı tərəfin hesabı',
+    'kontragentin hesabı',
+    'benefisiarın hesabı',
+    'alanın hesabı',
+    'ödəyicinin hesabı',
+    'счет контрагента',
+    'counterparty account',
   ],
   taxId: ['vöen', 'voen', 'inn', 'инн', 'tax id', 'vergi ödəyicisinin'],
   purpose: [
@@ -244,6 +265,34 @@ export function readStatementAmount(
 const cell = (row: readonly string[], index: number | undefined) =>
   index === undefined ? '' : String(row[index] ?? '').trim();
 
+/** An Azerbaijani IBAN: AZ, 2 check digits, 4-letter bank code, 20 characters. */
+const IBAN = /AZ\d{2}[A-Z]{4}[A-Z0-9]{20}/;
+export function findIban(text: string): string | undefined {
+  return IBAN.exec(text.toUpperCase().replace(/[\s-]/g, ''))?.[0];
+}
+
+// Labels are matched in `searchKey` form (lower case, ı and İ as i), like the cells.
+const label = (source: string) => new RegExp(searchKey(source));
+const openingLabel = label(
+  '(əvvələ|evvele|əvvəlki|evvelki|açılış|acilis|ilkin|giriş|giris|dövrün əvvəlinə|dovrun evveline)\\s*(qalıq|qaliq)|входящий остаток|начальный остаток|остаток на начало|opening balance',
+);
+const closingLabel = label(
+  '(sona|son|bağlanış|baglanis|çıxış|cixis|dövrün sonuna|dovrun sonuna)\\s*(qalıq|qaliq)|исходящий остаток|конечный остаток|остаток на конец|closing balance',
+);
+
+/** The amount printed after a balance label in the same row ("Əvvələ qalıq: | 1 234,56"). */
+function balanceIn(row: readonly string[], label: RegExp): string | undefined {
+  const at = row.findIndex((c) => label.test(searchKey(String(c ?? ''))));
+  if (at < 0) return undefined;
+  // The amount may share the label's cell ("Əvvələ qalıq: 1 234,56") or follow it.
+  const sameCell = String(row[at] ?? '').split(/[:：]/)[1];
+  for (const text of [sameCell, ...row.slice(at + 1)]) {
+    const a = readStatementAmount(String(text ?? ''));
+    if (a) return formatMinor(a.negative ? -a.amount : a.amount);
+  }
+  return undefined;
+}
+
 export function readStatementTable(rows: readonly string[][]): StatementReadResult {
   const header = findHeader(rows);
   if (!header)
@@ -263,14 +312,16 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
   for (const [column, index] of map) columns[column] = rows[header.index]![index] ?? '';
   const lines: StatementLine[] = [];
   const problems: StatementReadResult['problems'] = [];
+  /** Rows outside the table body: the title block above it and the totals below it. */
+  const around: (readonly string[])[] = rows.slice(0, header.index);
   for (let r = header.index + 1; r < rows.length; r++) {
     const row = rows[r]!;
     if (row.every((c) => !String(c ?? '').trim())) continue;
     const rawDate = cell(row, map.get('date'));
     const date = readStatementDate(rawDate);
     if (!date) {
-      // Totals and page footers ("Cəmi", "Qalıq") have no date; they are not operations.
-      if (rawDate || /c[əe]mi|qal[ıi]q|итого|остаток|total/i.test(row.join(' '))) continue;
+      // Totals, balances and page footers ("Cəmi", "Qalıq") have no date; they are not operations.
+      around.push(row);
       continue;
     }
     let direction: PaymentDirection | undefined;
@@ -299,6 +350,7 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
     }
     const taxId = (/\b\d{10}\b/.exec(cell(row, map.get('taxId'))) ?? [''])[0];
     lines.push({
+      row: r + 1,
       date,
       direction,
       amount: formatMinor(amount),
@@ -307,10 +359,44 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
       counterpartyTaxId:
         taxId ||
         (/\b(?:VÖEN|VOEN)[:\s]*(\d{10})\b/i.exec(cell(row, map.get('purpose')))?.[1] ?? ''),
+      counterpartyIban: findIban(cell(row, map.get('counterpartyIban'))) ?? '',
       purpose: cell(row, map.get('purpose')).slice(0, 500),
     });
   }
-  return { lines, problems, columns };
+  const result: StatementReadResult = { lines, problems, columns };
+  // The statement's own account is printed in the title block, never inside the table.
+  const iban = rows
+    .slice(0, header.index)
+    .map((row) => findIban(row.join(' ')))
+    .find(Boolean);
+  if (iban) result.iban = iban;
+  let opening: string | undefined;
+  let closing: string | undefined;
+  for (const row of around) {
+    opening ??= balanceIn(row, openingLabel);
+    closing ??= balanceIn(row, closingLabel);
+  }
+  if (opening !== undefined) result.opening = opening;
+  if (closing !== undefined) result.closing = closing;
+  if (lines.length) {
+    const dates = lines.map((l) => l.date).sort();
+    result.from = dates[0]!;
+    result.to = dates[dates.length - 1]!;
+  }
+  return result;
+}
+
+/**
+ * The file adds up when the printed opening balance plus receipts minus payments gives the
+ * printed closing balance; otherwise some rows were not read (or the file is cut).
+ */
+export function statementAddsUp(r: StatementReadResult): boolean | undefined {
+  if (r.opening === undefined || r.closing === undefined) return undefined;
+  const sign = (v: string) => (v.startsWith('-') ? -parseMoney(v.slice(1)) : parseMoney(v));
+  let balance = sign(r.opening);
+  for (const l of r.lines)
+    balance += l.direction === 'in' ? parseMoney(l.amount) : -parseMoney(l.amount);
+  return balance === sign(r.closing);
 }
 
 /** Splits CSV text (comma, semicolon or tab separated; quoted fields) into rows. */

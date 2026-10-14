@@ -46,6 +46,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
+import { statementImports, statementLineView, statementView } from './statements.js';
 import { loadChart, toAccount } from './tx.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
@@ -806,6 +807,7 @@ interface StoredBankLine {
   sk: string[];
   amount: string;
   curAmount: string;
+  cashFlowItem?: string;
   memo: string;
 }
 
@@ -848,6 +850,13 @@ function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
       skNames: kinds.map((k, i) => (l.sk[i] ? names.name(k, l.sk[i]!) : '')),
       amount: l.amount,
       curAmount: l.curAmount,
+      cashFlowItem: l.cashFlowItem ?? '',
+      cashFlowItemName: l.cashFlowItem
+        ? str(
+            db.get('SELECT name FROM items WHERE company_id=? AND id=?', companyId, l.cashFlowItem)
+              ?.name,
+          )
+        : '',
       memo: l.memo,
     };
   });
@@ -1289,6 +1298,13 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'bankDocument':
       return bankDetail(db, q.companyId, q.id);
+    case 'statementImports':
+      company(db, q.companyId);
+      return statementImports(db, q.companyId, q.bankAccountId);
+    case 'statement':
+      return statementView(db, q.companyId, q.id);
+    case 'statementLine':
+      return statementLineView(db, q.companyId, q.id);
     case 'trialBalance':
       company(db, q.companyId);
       return trialBalance(db, q);

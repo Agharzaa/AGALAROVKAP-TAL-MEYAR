@@ -358,7 +358,7 @@ Hər addım ayrıca commit-dir və testləri yaşıl saxlayır.
 2. **3b — ƏDV cütü və nəzarətlər.** ✅ Hazır (14.10.2026). Dəqiqləşmə: cüt yalnız hesablaşma sətri (211/531/243/543) olan sənədlər arasındadır — depozitdən büdcəyə ödəniş cütləşmir; sxem v7 bağlı dövr qoruyucusunu cütdən ayırır.
    - `pair_id`, 18/118 yoxlaması, İş masasında siqnallar;
    - testlər B2–B5.
-3. **3c — Çıxarış idxalı.**
+3. **3c — Çıxarış idxalı.** ✅ Hazır (14.10.2026). Fərqlər: təklif oxunanda hesablanır (saxlanmır, köhnəlmir); sətrin forması ayrıca pəncərədə açılır, yan panel və "növbəti sətir" axını sonraya qaldı; pul hərəkəti maddəsi kitabçası 8 başlanğıc elementlə (sxem v8); hesabat mərhələ 5-də.
    - oxuyucunun genişlənməsi, `statement.import`, çıxarış pəncərəsi, tutuşdurma;
    - testlər B9, B12–B15, B17.
 4. **3d — Qaydalar.**

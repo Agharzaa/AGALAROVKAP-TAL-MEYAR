@@ -69,7 +69,7 @@ const flows: { name: string; steps: Step[] }[] = [
     steps: [
       { title: 'Bank hesabları', posts: 'IBAN, 223.01 / 223.02', view: page('bankAccounts') },
       { title: 'Bank sənədləri', posts: 'Dt/Kt 223, 224.04', view: page('bank') },
-      { title: 'Bank çıxarışı', posts: 'Excel-dən yükləmə', soon: '3c mərhələsi' },
+      { title: 'Bank çıxarışı', posts: 'Excel-dən yükləmə', view: page('statements') },
       { title: 'Bank qalığı', posts: 'Hesab kartı 223', view: card('223') },
     ],
   },

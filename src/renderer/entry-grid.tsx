@@ -70,7 +70,7 @@ export function toEntryInput(l: EntryLine): OperationLineInput {
 /** Which line/side/slot a server error points at ("lines.2.kt.sk.1"). */
 export function entryErrorAt(field: string | undefined, prefix = 'lines') {
   const m = new RegExp(
-    `^${prefix}\\.(\\d+)(?:\\.(dt|kt))?(?:\\.(account|sk|amount|quantity|curAmount))?(?:\\.(\\d+))?`,
+    `^${prefix}\\.(\\d+)(?:\\.(dt|kt))?(?:\\.(account|sk|amount|quantity|curAmount|cashFlowItem))?(?:\\.(\\d+))?`,
   ).exec(field ?? '');
   if (!m) return null;
   return {

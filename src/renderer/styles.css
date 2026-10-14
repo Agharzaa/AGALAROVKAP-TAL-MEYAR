@@ -2589,3 +2589,76 @@ button.step:active {
 .pair-candidates li {
   margin-bottom: 4px;
 }
+
+/* Bank statement (3c) */
+.statement-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--sheet);
+  border: 1px solid var(--frame);
+}
+.statement-head p {
+  margin: 0;
+}
+.statement-balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: baseline;
+}
+.statement-balance > span:first-child {
+  min-width: 110px;
+  font-family: var(--serif);
+  font-style: italic;
+}
+.statement-balance .pair-ok,
+.statement-balance .pair-bad {
+  margin: 0;
+  padding: 1px 8px;
+}
+.statement-preview ul {
+  margin: 6px 0;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--frame);
+}
+.tab {
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+.tab.active {
+  background: var(--sheet);
+  border-color: var(--frame);
+  color: inherit;
+  font-weight: 600;
+}
+.chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.chip-ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.chip-wait {
+  color: var(--ink-2);
+  background: var(--frame);
+}

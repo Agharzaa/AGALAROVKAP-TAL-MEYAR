@@ -68,6 +68,7 @@ import { InvoiceEditor } from './pages/invoice-editor';
 import { InvoicesPage } from './pages/invoices';
 import { BankDocumentsPage } from './pages/bank-documents';
 import { BankEditor } from './pages/bank-editor';
+import { StatementsPage } from './pages/statements';
 import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
 import { AccountsPage } from './pages/accounts';
@@ -1026,7 +1027,13 @@ function Routed({ win }: { win: Win }) {
     case 'invoice':
       return <InvoiceEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
     case 'bank':
-      return <BankEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
+      return (
+        <BankEditor
+          direction={v.direction}
+          {...(v.id ? { id: v.id } : {})}
+          {...(v.statementLineId ? { statementLineId: v.statementLineId } : {})}
+        />
+      );
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
@@ -1039,6 +1046,8 @@ function Routed({ win }: { win: Win }) {
           return <InvoicesPage direction="purchase" />;
         case 'bank':
           return <BankDocumentsPage />;
+        case 'statements':
+          return <StatementsPage />;
         case 'trial':
           return <TrialPage />;
         case 'card':

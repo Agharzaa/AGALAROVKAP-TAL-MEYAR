@@ -156,7 +156,7 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
     sk: string[],
     amount: string,
     extra: Partial<BankLineInput> = {},
-  ): BankLineInput => ({ account, sk, amount, memo: '', ...extra });
+  ): BankLineInput => ({ account, sk, amount, cashFlowItem: '', memo: '', ...extra });
   const bank = (
     direction: 'in' | 'out',
     date: string,

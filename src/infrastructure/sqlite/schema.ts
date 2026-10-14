@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 const v1 = `
 CREATE TABLE companies(
@@ -697,6 +697,110 @@ BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); EN
 CREATE INDEX bank_documents_pair ON bank_documents(company_id,pair_id) WHERE pair_id IS NOT NULL;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v8 — bank statement import (stage 3c; docs/MERHELE-3-BANK.md §3.2, §6). A loaded file and its
+// rows are kept as they came; a row is booked by a bank document (state posted), set aside with
+// a reason (ignored) or waits (new). The fingerprint makes a second load of the same rows a no-op.
+
+/** Frozen snapshot of the starting cash-flow items (domain/bank.ts CASH_FLOW_ITEMS, 0.5.0). */
+const v8CashFlow = [
+  'Alıcılardan daxilolmalar',
+  'Malsatan və podratçılara ödənişlər',
+  'İşçilərə ödənişlər',
+  'Vergi və məcburi ödənişlər',
+  'Kreditlər və faizlər',
+  'Təsisçilərlə əməliyyatlar',
+  'Öz hesabları arasında köçürmələr',
+  'Sair daxilolmalar və ödənişlər',
+];
+const v8 = `
+CREATE TABLE statement_imports(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  bank_account_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_hash TEXT NOT NULL,
+  period_from TEXT NOT NULL,
+  period_to TEXT NOT NULL,
+  opening INTEGER,
+  closing INTEGER,
+  rows_read INTEGER NOT NULL,
+  rows_added INTEGER NOT NULL,
+  imported_at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  FOREIGN KEY(company_id,bank_account_id) REFERENCES bank_accounts(company_id,id)
+);
+CREATE INDEX statement_imports_account ON statement_imports(company_id,bank_account_id,imported_at);
+
+CREATE TABLE statement_lines(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  import_id TEXT NOT NULL,
+  bank_account_id TEXT NOT NULL,
+  row_no INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN('in','out')),
+  amount INTEGER NOT NULL CHECK(typeof(amount)='integer' AND amount>0),
+  reference TEXT NOT NULL DEFAULT '',
+  counterparty TEXT NOT NULL DEFAULT '',
+  counterparty_tax_id TEXT NOT NULL DEFAULT '',
+  counterparty_iban TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  fingerprint TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'new' CHECK(state IN('new','posted','ignored')),
+  document_id TEXT,
+  reason TEXT NOT NULL DEFAULT '',
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,bank_account_id,fingerprint),
+  FOREIGN KEY(company_id,import_id) REFERENCES statement_imports(company_id,id),
+  FOREIGN KEY(company_id,bank_account_id) REFERENCES bank_accounts(company_id,id),
+  FOREIGN KEY(company_id,document_id) REFERENCES bank_documents(company_id,id),
+  CHECK((state='posted')=(document_id IS NOT NULL)),
+  CHECK(state<>'ignored' OR reason<>'')
+);
+CREATE INDEX statement_lines_import ON statement_lines(company_id,import_id,row_no);
+CREATE INDEX statement_lines_account ON statement_lines(company_id,bank_account_id,date);
+CREATE TRIGGER statement_imports_no_delete BEFORE DELETE ON statement_imports BEGIN SELECT RAISE(ABORT,'guard: Çıxarış silinmir.'); END;
+CREATE TRIGGER statement_lines_no_delete BEFORE DELETE ON statement_lines BEGIN SELECT RAISE(ABORT,'guard: Çıxarış sətri silinmir; kənara qoyulur.'); END;
+CREATE TRIGGER statement_lines_fixed BEFORE UPDATE OF company_id,import_id,bank_account_id,date,direction,amount,fingerprint ON statement_lines
+BEGIN SELECT RAISE(ABORT,'guard: Çıxarış sətri bankın yazdığı kimi qalır.'); END;
+CREATE INDEX bank_documents_statement ON bank_documents(company_id,statement_line_id) WHERE statement_line_id IS NOT NULL;
+
+-- "Pul vəsaitlərinin hərəkəti maddəsi" (QERARLAR 2026-10-14 §6): a catalog for an attribute of
+-- bank document lines, not a subkonto. SQLite cannot alter a CHECK; the items table is rebuilt
+-- with its role column, role index and delete guard.
+CREATE TABLE items_v8(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN(${[...v3Kinds, 'cashFlowItem'].map(q).join(',')})),
+  name TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  role TEXT NOT NULL DEFAULT '',
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,name)
+);
+INSERT INTO items_v8(id,company_id,kind,name,archived,version,role)
+  SELECT id,company_id,kind,name,archived,version,role FROM items;
+DROP TABLE items;
+ALTER TABLE items_v8 RENAME TO items;
+CREATE TRIGGER items_no_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT,'guard: Kitabça elementi silinmir; arxivləşdirilir.'); END;
+CREATE UNIQUE INDEX items_role ON items(company_id,role) WHERE role<>'';
+${v8CashFlow
+  .map(
+    (
+      name,
+    ) => `INSERT INTO items(id,company_id,kind,name) SELECT ${uuid},id,'cashFlowItem',${q(name)}
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies);`,
+  )
+  .join('\n')}
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-8','Yeniləndi','Baza',id,
+  'Bank çıxarışlarının yüklənməsi və pul vəsaitlərinin hərəkəti maddələri kitabçası əlavə olundu.'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -705,4 +809,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 5, sql: v5 },
   { version: 6, sql: v6 },
   { version: 7, sql: v7 },
+  { version: 8, sql: v8, foreignKeysOff: true },
 ];
