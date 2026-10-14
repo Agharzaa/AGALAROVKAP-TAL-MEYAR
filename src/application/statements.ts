@@ -22,7 +22,10 @@ import type {
   StatementView,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
-import type { Tx } from './tx.js';
+import type { Chart } from '../domain/chart.js';
+import { chooseRule, findBudgetCode, ruleAmounts, type Rule } from '../domain/rules.js';
+import { activeRules, ruleRow } from './rule-store.js';
+import { loadChart, type Tx } from './tx.js';
 
 /** Days between a statement row and a bank document typed by hand for the same payment. */
 export const MATCH_DAYS = 2;
@@ -292,9 +295,10 @@ export function bindStatementLine(
 /** Called when a bank document is cancelled: its statement row waits again. */
 export function releaseStatementLine(tx: Tx, companyId: string, documentId: string): void {
   tx.db.run(
-    "UPDATE statement_lines SET state='new', document_id=NULL WHERE company_id=? AND document_id=?",
-    companyId,
+    // A row a rule posted by itself is left to the accountant once that posting is undone.
+    "UPDATE statement_lines SET state='new', document_id=NULL, manual_only=CASE WHEN (SELECT rule_id FROM bank_documents WHERE id=?1) IS NOT NULL THEN 1 ELSE manual_only END WHERE company_id=?2 AND document_id=?1",
     documentId,
+    companyId,
   );
 }
 
@@ -349,6 +353,10 @@ interface ProposalContext extends ClassifyContext {
   /** Unlinked posted bank documents of the account, for matching rows typed by hand. */
   manual: Row[];
   capitalIn?: string;
+  rules: Rule[];
+  /** Budget classification code → 521 / 522 sub-account and payment kind. */
+  budget: Map<string, { account: string; paymentKindId: string }>;
+  chart: Chart;
 }
 
 function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext {
@@ -386,6 +394,19 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     ),
     ...(fee ? { bankFeeItemId: String(fee.id) } : {}),
     ...(capital ? { capitalIn: String(capital.id) } : {}),
+    rules: activeRules(db, companyId),
+    budget: new Map(
+      db
+        .all(
+          'SELECT code, account, payment_kind_id FROM budget_codes WHERE company_id=? AND archived=0',
+          companyId,
+        )
+        .map((b) => [
+          String(b.code),
+          { account: String(b.account), paymentKindId: String(b.payment_kind_id) },
+        ]),
+    ),
+    chart: loadChart(db, companyId),
     manual: db.all(
       `SELECT b.* FROM bank_documents b WHERE b.company_id=? AND b.bank_account_id=? AND b.status='posted'
          AND (b.statement_line_id IS NULL OR NOT EXISTS(
@@ -414,6 +435,43 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
     .filter((d) => !mismatch(r, d, MATCH_DAYS))
     .map((d) => ({ id: String(d.id), number: String(d.number), date: String(d.date) }));
   const closed = String(r.date) <= ctx.closedThrough;
+  const matchText = matches.length
+    ? `Əl ilə daxil edilmiş ${matches.map((m) => m.number).join(', ')} bu ödənişə uyğundur — yeni sənəd yaratmayın, bağlayın.`
+    : '';
+  const notes = [
+    closed ? 'Tarix bağlı dövrdədir: əvvəlcə dövrü açmaq lazımdır.' : '',
+    r.manual_only === 1n
+      ? 'Avtomatik uçot geri qaytarılıb: qayda bu sətri yalnız təklif edir.'
+      : '',
+    r.auto_note ? `Avtomatik uçot alınmadı — ${String(r.auto_note)}` : '',
+  ];
+  // 1. The accountant's own rules.
+  const choice = chooseRule(ctx.rules, ruleRow(r));
+  if (choice.kind === 'rule') {
+    const rule = choice.rule;
+    const amounts = ruleAmounts(rule, r.amount as bigint, (v) => parseMoney(v));
+    if (amounts)
+      return {
+        state: 'proposal',
+        reason: [
+          matchText || `Qayda “${rule.name}”${rule.mode === 'auto' ? ' (avtomatik)' : ''}.`,
+          ...notes,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        account: rule.lines[0]!.account,
+        sk: rule.lines[0]!.sk,
+        lines: rule.lines.map((l, i) => ({ ...l, amount: money(amounts[i]!) })),
+        rule: { id: rule.id, name: rule.name, mode: rule.mode },
+        matches,
+      };
+    notes.push(`Qayda “${rule.name}”: sabit məbləğlər sətrin məbləğindən böyükdür.`);
+  }
+  if (choice.kind === 'conflict')
+    notes.push(
+      `Qaydalar ziddiyyətlidir (${choice.rules.map((x) => `“${x.name}”`).join(', ')}): birini dəqiqləşdirin və ya arxivləşdirin.`,
+    );
+  // 2. What the statement itself tells: VÖEN, purpose words, budget code.
   const s = classifyStatementLine(
     {
       direction,
@@ -455,23 +513,31 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       account = '721';
       sk = s.expenseItemId ? [s.expenseItemId] : [];
       break;
-    // Taxes and social payments: the sub-account is the accountant's (or a rule's) choice.
+    // Taxes and social payments: the sub-account comes from the budget classification code.
     default:
       account = '';
   }
-  const known = s.confidence !== 'low' || matches.length > 0;
+  let reason = s.reason;
+  let known = s.confidence !== 'low';
+  const code = findBudgetCode(String(r.purpose), new Set(ctx.budget.keys()));
+  const budget = code ? ctx.budget.get(code) : undefined;
+  if (budget) {
+    account = budget.account;
+    sk = (ctx.chart.get(account)?.subkonto ?? []).map((k) =>
+      k === 'paymentKind' ? budget.paymentKindId : k === 'partner' ? p : '',
+    );
+    reason = `Büdcə təsnifat kodu ${code} → ${account}.`;
+    known = true;
+  } else if (code && (s.kind === 'tax' || s.kind === 'social'))
+    notes.push(
+      `Büdcə təsnifat kodu ${code} cədvəldə yoxdur — Kitabçalar → Büdcə təsnifat kodları.`,
+    );
   return {
-    state: known ? 'proposal' : 'unknown',
-    reason: [
-      matches.length
-        ? `Əl ilə daxil edilmiş ${matches.map((m) => m.number).join(', ')} bu ödənişə uyğundur — yeni sənəd yaratmayın, bağlayın.`
-        : s.reason,
-      closed ? 'Tarix bağlı dövrdədir: əvvəlcə dövrü açmaq lazımdır.' : '',
-    ]
-      .filter(Boolean)
-      .join(' '),
+    state: known || matches.length > 0 ? 'proposal' : 'unknown',
+    reason: [matchText || reason, ...notes].filter(Boolean).join(' '),
     account,
     sk,
+    ...(code ? { budgetCode: code } : {}),
     ...(s.createPartner && !p && String(r.counterparty_tax_id)
       ? { newPartner: { name: String(r.counterparty), taxId: String(r.counterparty_tax_id) } }
       : {}),
@@ -482,8 +548,9 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
 function lineView(
   ctx: ProposalContext | null,
   r: Row,
-  numbers: Map<string, string>,
+  numbers: Map<string, { number: string; rule: string }>,
 ): StatementLineView {
+  const doc = r.document_id ? numbers.get(String(r.document_id)) : undefined;
   return {
     id: String(r.id),
     importId: String(r.import_id),
@@ -499,8 +566,11 @@ function lineView(
     purpose: String(r.purpose),
     state: r.state as StatementLineView['state'],
     documentId: r.document_id ? String(r.document_id) : '',
-    documentNumber: r.document_id ? (numbers.get(String(r.document_id)) ?? '') : '',
+    documentNumber: doc?.number ?? '',
+    documentRule: doc?.rule ?? '',
     reason: String(r.reason),
+    manualOnly: r.manual_only === 1n,
+    autoNote: String(r.auto_note),
     proposal: ctx && r.state === 'new' ? propose(ctx, r) : null,
   };
 }
@@ -589,12 +659,14 @@ export function statementView(db: Db, companyId: string, importId: string): Stat
   const numbers = new Map(
     db
       .all(
-        `SELECT b.id, b.number FROM bank_documents b JOIN statement_lines s ON s.document_id=b.id
+        `SELECT b.id, b.number, COALESCE(q.name,'') AS rule FROM bank_documents b
+           JOIN statement_lines s ON s.document_id=b.id
+           LEFT JOIN bank_rules q ON q.id=b.rule_id
          WHERE s.company_id=? AND s.import_id=?`,
         companyId,
         importId,
       )
-      .map((d) => [String(d.id), String(d.number)]),
+      .map((d) => [String(d.id), { number: String(d.number), rule: String(d.rule) }]),
   );
   // Balances are compared in the account's own currency.
   const foreign = bank.currency !== 'AZN';
@@ -634,14 +706,17 @@ export function statementLineView(db: Db, companyId: string, lineId: string): St
     companyId,
     String(r.bank_account_id),
   )!;
-  const number = r.document_id
-    ? String(
-        db.get('SELECT number FROM bank_documents WHERE id=?', String(r.document_id))?.number ?? '',
+  const doc = r.document_id
+    ? db.get(
+        "SELECT b.number, COALESCE(q.name,'') AS rule FROM bank_documents b LEFT JOIN bank_rules q ON q.id=b.rule_id WHERE b.id=?",
+        String(r.document_id),
       )
-    : '';
+    : undefined;
   return lineView(
     proposalContext(db, companyId, bank),
     r,
-    new Map([[String(r.document_id), number]]),
+    new Map(
+      doc ? [[String(r.document_id), { number: String(doc.number), rule: String(doc.rule) }]] : [],
+    ),
   );
 }

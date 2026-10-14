@@ -146,6 +146,23 @@ Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` ke
 
 **Sadələşdirmə / sonraya:** sətrin forması ayrıca pəncərədə açılır (çıxarış pəncərəsində yan panel və "növbəti sətir" axını yoxdur); pul hərəkəti hesabatı mərhələ 5-də (idarə paneli). **Real bank faylları ilə yoxlanmayıb** — yalnız sintetik formatlar; istifadəçidən anonimləşdirilmiş nümunələr gözlənilir.
 
+## Mərhələ 3d — öyrənən qaydalar (14.10.2026)
+
+| Sahə                                                                                                                                                                                               | Sübut                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Sxem v9: `bank_rules` (silinmir, arxivləşir, versiyalı, tarixçə), `budget_codes`, çıxarış sətrində `manual_only` / `auto_note`                                                                     | `schema v1 → current`, real Electron (v8 → v9) |
+| Qayda mühasibin qərarından: bank sənədində "Qayda kimi saxla" → layihə (VÖEN varsa söz lazım deyil; yoxdursa təyinatdan 4+ hərfli, rəqəmsiz 2 söz), mühasib düzəldir; "Təklif" rejimində başlayır  | `rules.test.ts` (B10), `tests/ui`              |
+| Ən dəqiq qayda qalib gəlir (VÖEN > söz > bank hesabı > məbləğ aralığı); eyni dəqiqlikdə fərqli yazılış — ziddiyyət, heç nə uçota alınmır; eyni şərtli ikinci qayda rədd olunur                     | `rules.test.ts` (B11), `tests/domain`          |
+| "Avtomatik" rejim yalnız mühasib qoşanda: idxalda və "Avtomatik qaydaları tətbiq et" ilə; hər sətir ayrıca savepoint-də (biri alınmasa digərləri gedir, səbəb sətirdə qalır); audit "qayda X (vN)" | `rules.test.ts`, `tests/perf`                  |
+| Sabit məbləğli sətirlər + qalan (kredit: faiz sabit, əsas borc qalan); valyuta hesabında avtomatik uçot yoxdur (məzənnə)                                                                           | `rules.test.ts`                                |
+| Geri qaytarma: avtomatik sənədin ləğvi sətri qaytarır və o sətri artıq yalnız təklif edir                                                                                                          | `rules.test.ts` (B10), `tests/ui`              |
+| Büdcə təsnifat kodu → 521/522 subhesab + ödəniş növü (cədvəli mühasib doldurur); təyinatda "BTK"/"büdcə təsnifat kodu" və ya cədvəldə olan 6 rəqəm                                                 | `rules.test.ts`, `tests/domain`                |
+| Yük: 5 000 sətir, ~700 avtomatik uçot ilə idxal ~0,4 s (hədd 10 s)                                                                                                                                 | `npm run test:perf`                            |
+
+Testlər Windows-da: `npm test` 75, `npm run test:ui` 11, `npm run test:perf` keçir; real Electron təmiz və v8 bazasında ok.
+
+**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: müstəqil audit (işi yazmayan yoxlayıcı, ən azı 2 tur), real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -156,7 +173,7 @@ Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` ke
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
-3. **Bank (davam edir):** ~~3a bank sənədi~~, ~~3b ƏDV cütü və siqnallar~~, ~~3c çıxarış idxalı~~ — hazır. **Növbəti: 3d** — öyrənən qaydalar (mühasibin qərarından qayda, "təklif" → "avtomatik" yalnız mühasib qoşanda, geri qaytarma, büdcə təsnifat kodu → 521/522 subhesab cədvəli). Sonra müstəqil audit, 0.5.0. Real bank çıxarışı nümunələri (anonimləşdirilmiş) hələ də gözlənilir.
+3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~ — hazır. **Növbəti:** müstəqil audit (mərhələ 2-dəki kimi, ayrıca yoxlayıcı), real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması, versiya 0.5.0, GitHub-a push və Windows CI.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 

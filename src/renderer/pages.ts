@@ -52,6 +52,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Excel/CSV yükləmə, sətirlərin uçotu, bank ↔ uçot qalığı',
     icon: Upload,
   },
+  rules: {
+    title: 'Bank qaydaları',
+    hint: 'Mühasibin qərarlarından öyrənilən uçot qaydaları: təklif və avtomatik',
+    icon: ListTree,
+  },
+  budgetCodes: {
+    title: 'Büdcə təsnifat kodları',
+    hint: 'Vergi ödənişinin kodu → 521 / 522 subhesabı',
+    icon: ListTree,
+  },
   trial: { title: 'Dövriyyə balansı', hint: 'Hesablar və subkontolar üzrə', icon: Scale },
   card: { title: 'Hesab kartı', hint: 'Hesab və subkonto üzrə hərəkət', icon: FileSpreadsheet },
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
@@ -142,7 +152,11 @@ export const sections: Section[] = [
       },
       {
         title: 'Kitabçalar',
-        items: [{ label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') }],
+        items: [
+          { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
+          { label: 'Bank qaydaları', icon: ListTree, action: page('rules') },
+          { label: 'Büdcə təsnifat kodları', icon: ListTree, action: page('budgetCodes') },
+        ],
       },
     ],
   },
@@ -363,6 +377,8 @@ export function sectionOfView(view: View): string {
           return 'reports';
         case 'bank':
         case 'statements':
+        case 'rules':
+        case 'budgetCodes':
         case 'bankAccounts':
           return 'bank';
         case 'settings':

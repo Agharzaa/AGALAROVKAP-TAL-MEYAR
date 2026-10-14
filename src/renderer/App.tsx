@@ -69,6 +69,7 @@ import { InvoicesPage } from './pages/invoices';
 import { BankDocumentsPage } from './pages/bank-documents';
 import { BankEditor } from './pages/bank-editor';
 import { StatementsPage } from './pages/statements';
+import { BudgetCodesPage, RulesPage } from './pages/rules';
 import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
 import { AccountsPage } from './pages/accounts';
@@ -1048,6 +1049,10 @@ function Routed({ win }: { win: Win }) {
           return <BankDocumentsPage />;
         case 'statements':
           return <StatementsPage />;
+        case 'rules':
+          return <RulesPage />;
+        case 'budgetCodes':
+          return <BudgetCodesPage />;
         case 'trial':
           return <TrialPage />;
         case 'card':

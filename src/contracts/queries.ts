@@ -30,6 +30,10 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
   z.object({ type: z.literal('statement'), companyId: id, id }),
   z.object({ type: z.literal('statementLine'), companyId: id, id }),
+  z.object({ type: z.literal('rules'), companyId: id }),
+  /** A rule prefilled from a bank document the accountant posted. */
+  z.object({ type: z.literal('ruleDraft'), companyId: id, documentId: id }),
+  z.object({ type: z.literal('budgetCodes'), companyId: id }),
   z.object({
     type: z.literal('trialBalance'),
     companyId: id,
@@ -292,6 +296,10 @@ export interface BankPairView {
   ok: boolean;
 }
 export interface BankDocumentDetail extends BankDocumentSummary {
+  /** manual: typed by hand; statement: booked from a statement row. */
+  origin: 'manual' | 'statement';
+  /** The rule that posted it by itself, if any. */
+  ruleName: string;
   /** The document can take part in a VAT deposit pair (AZN, 223 / 224). */
   pairable: boolean;
   pair: BankPairView | null;
@@ -315,6 +323,56 @@ export interface StatementProposal {
   newPartner?: { name: string; taxId: string };
   /** Bank documents typed by hand for the same payment: link instead of a new document. */
   matches: { id: string; number: string; date: string }[];
+  /** All lines of the booking when a rule proposes it (amounts already split). */
+  lines?: { account: string; sk: string[]; amount: string; cashFlowItem: string; memo: string }[];
+  /** The rule behind the proposal. */
+  rule?: { id: string; name: string; mode: 'suggest' | 'auto' };
+  /** Budget classification code found in the purpose of a tax payment. */
+  budgetCode?: string;
+}
+export interface RuleLineView {
+  account: string;
+  sk: string[];
+  skNames: string[];
+  amount: string;
+  cashFlowItem: string;
+  memo: string;
+}
+export interface RuleView {
+  id: string;
+  version: number;
+  name: string;
+  direction: 'in' | 'out';
+  bankAccountId: string;
+  counterpartyTaxId: string;
+  terms: string[];
+  amountMin: string;
+  amountMax: string;
+  lines: RuleLineView[];
+  mode: 'suggest' | 'auto';
+  archived: boolean;
+  uses: number;
+  lastUsedAt: string;
+}
+/** Fields of rule.save prefilled from a posted bank document. */
+export interface RuleDraft {
+  name: string;
+  direction: 'in' | 'out';
+  bankAccountId: string;
+  counterpartyTaxId: string;
+  terms: string[];
+  lines: { account: string; sk: string[]; amount: string; cashFlowItem: string; memo: string }[];
+  /** A rule that already books rows like this one (edit it rather than add another). */
+  existing?: { id: string; name: string };
+}
+export interface BudgetCodeView {
+  id: string;
+  version: number;
+  code: string;
+  name: string;
+  account: string;
+  paymentKindId: string;
+  archived: boolean;
 }
 export interface StatementLineView {
   id: string;
@@ -332,7 +390,13 @@ export interface StatementLineView {
   state: 'new' | 'posted' | 'ignored';
   documentId: string;
   documentNumber: string;
+  /** Rule that posted the row by itself, if any ("Avtomatik uçota alındı"). */
+  documentRule: string;
   reason: string;
+  /** The automatic booking was undone: rules only propose this row from now on. */
+  manualOnly: boolean;
+  /** Why an "auto" rule could not post the row. */
+  autoNote: string;
   proposal: StatementProposal | null;
 }
 export interface StatementImportView {

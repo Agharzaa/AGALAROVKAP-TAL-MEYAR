@@ -12,10 +12,12 @@ import {
   type StatementReadResult,
 } from '../../domain/statement';
 import type {
+  BankDocumentDetail,
   StatementImportView,
   StatementLineView,
   StatementView,
 } from '../../contracts/queries';
+import { api } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day, isZero, money } from '../format';
@@ -107,7 +109,7 @@ export function StatementsPage() {
     setPreview(null);
     setSelected(r.id);
     setMessage(
-      `Yükləndi: yeni ${r.added ?? 0} sətir${r.duplicates ? `, ${r.duplicates} sətir əvvəl yüklənmişdi (təkrar yaradılmadı)` : ''}${r.rejected?.length ? `, ${r.rejected.length} sətir oxunmadı` : ''}.`,
+      `Yükləndi: yeni ${r.added ?? 0} sətir${r.duplicates ? `, ${r.duplicates} sətir əvvəl yüklənmişdi (təkrar yaradılmadı)` : ''}${r.rejected?.length ? `, ${r.rejected.length} sətir oxunmadı` : ''}${r.posted ? `, ${r.posted} sətir qaydalarla avtomatik uçota alındı` : ''}${r.failed?.length ? `, ${r.failed.length} sətri qayda uçota ala bilmədi (səbəb sətirdə)` : ''}.`,
     );
     imports.reload();
   }
@@ -127,6 +129,43 @@ export function StatementsPage() {
       documentId,
     });
     if (r) setMessage('Sətir mövcud sənədlə bağlandı.');
+  }
+  async function apply() {
+    if (!s) return;
+    const r = await m.run({ type: 'statement.apply', companyId: win.companyId, importId: s.id });
+    if (r)
+      setMessage(
+        r.posted || r.failed?.length
+          ? `Avtomatik qaydalarla uçota alındı: ${r.posted ?? 0}${r.failed?.length ? `; alınmadı: ${r.failed.length} (səbəb sətirdə)` : ''}.`
+          : 'Avtomatik qaydaya uyğun gözləyən sətir yoxdur.',
+      );
+  }
+  async function undo(l: StatementLineView) {
+    setMessage('');
+    let version: number;
+    try {
+      version = (
+        await api.query<BankDocumentDetail>({
+          type: 'bankDocument',
+          companyId: win.companyId,
+          id: l.documentId,
+        })
+      ).version;
+    } catch (e) {
+      setMessage((e as Error).message);
+      return;
+    }
+    const r = await m.run({
+      type: 'bank.cancel',
+      companyId: win.companyId,
+      id: l.documentId,
+      version,
+      reason: `Avtomatik uçot geri qaytarıldı (qayda: ${l.documentRule})`,
+    });
+    if (r)
+      setMessage(
+        `Avtomatik uçot geri qaytarıldı: ${l.documentNumber} storno edildi; sətir sizi gözləyir.`,
+      );
   }
   async function restore(l: StatementLineView) {
     const r = await m.run({ type: 'statement.restore', companyId: win.companyId, lineId: l.id });
@@ -173,9 +212,12 @@ export function StatementsPage() {
       className: 'clip',
       render: (l) =>
         l.state === 'posted' ? (
-          <button type="button" className="link" onClick={() => openDoc(l)}>
-            {l.documentNumber}
-          </button>
+          <span>
+            <button type="button" className="link" onClick={() => openDoc(l)}>
+              {l.documentNumber}
+            </button>
+            {l.documentRule && <small> · avtomatik, qayda: {l.documentRule}</small>}
+          </span>
         ) : l.state === 'ignored' ? (
           <span title={l.reason}>{l.reason}</span>
         ) : (
@@ -222,6 +264,16 @@ export function StatementsPage() {
               Kənara qoy
             </button>
           </>
+        ) : l.state === 'posted' && l.documentRule ? (
+          <button
+            type="button"
+            className="button secondary small"
+            disabled={m.busy}
+            aria-label={`Sətir ${l.row}: avtomatik uçotu geri qaytar`}
+            onClick={() => void undo(l)}
+          >
+            Geri qaytar
+          </button>
         ) : l.state === 'ignored' ? (
           <button
             type="button"
@@ -403,7 +455,17 @@ export function StatementsPage() {
         <>
           <section className="statement-head" aria-label="Çıxarış ilə uçotun tutuşdurulması">
             <p>
-              <b>{s.bankAccount}</b> · {s.iban} · {day(s.from)}–{day(s.to)} · {s.currency}
+              <b>{s.bankAccount}</b> · {s.iban} · {day(s.from)}–{day(s.to)} · {s.currency}{' '}
+              {s.waiting > 0 && (
+                <button
+                  type="button"
+                  className="button secondary small"
+                  disabled={m.busy}
+                  onClick={() => void apply()}
+                >
+                  Avtomatik qaydaları tətbiq et
+                </button>
+              )}
             </p>
             {balance(
               'Əvvələ qalıq',

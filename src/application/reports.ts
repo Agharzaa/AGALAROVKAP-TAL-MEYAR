@@ -46,6 +46,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
+import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -864,6 +865,10 @@ function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
   const check = other ? vatCheck(r, other) : undefined;
   return {
     ...bankSummary(names, r),
+    origin: r.origin as BankDocumentDetail['origin'],
+    ruleName: r.rule_id
+      ? str(db.get('SELECT name FROM bank_rules WHERE id=?', str(r.rule_id))?.name)
+      : '',
     pairable: isPairable(r),
     pair:
       other && check
@@ -1305,6 +1310,16 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       return statementView(db, q.companyId, q.id);
     case 'statementLine':
       return statementLineView(db, q.companyId, q.id);
+    case 'rules': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return rulesView(db, q.companyId, (kind, id) => names.name(kind as SubkontoKind, id));
+    }
+    case 'ruleDraft':
+      return ruleDraft(db, q.companyId, q.documentId);
+    case 'budgetCodes':
+      company(db, q.companyId);
+      return budgetCodes(db, q.companyId);
     case 'trialBalance':
       company(db, q.companyId);
       return trialBalance(db, q);

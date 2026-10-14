@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 const v1 = `
 CREATE TABLE companies(
@@ -801,6 +801,56 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v9 — learned rules (stage 3d; docs/MERHELE-3-BANK.md §3.3, §6.3) and the budget
+// classification codes that name the 521 / 522 sub-account of a tax payment. A rule is
+// archived, never deleted; a statement row whose automatic booking was undone is left to the
+// accountant (manual_only) so the same rule does not post it again.
+
+const v9 = `
+CREATE TABLE bank_rules(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN('in','out')),
+  bank_account_id TEXT,
+  counterparty_tax_id TEXT NOT NULL DEFAULT '',
+  terms TEXT NOT NULL DEFAULT '[]',
+  amount_min INTEGER,
+  amount_max INTEGER,
+  lines TEXT NOT NULL,
+  mode TEXT NOT NULL DEFAULT 'suggest' CHECK(mode IN('suggest','auto')),
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  uses INTEGER NOT NULL DEFAULT 0,
+  last_used_at TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  FOREIGN KEY(company_id,bank_account_id) REFERENCES bank_accounts(company_id,id)
+);
+CREATE INDEX bank_rules_lookup ON bank_rules(company_id,direction,archived);
+CREATE TRIGGER bank_rules_no_delete BEFORE DELETE ON bank_rules BEGIN SELECT RAISE(ABORT,'guard: Qayda silinmir; arxivləşdirilir.'); END;
+
+CREATE TABLE budget_codes(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  code TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  account TEXT NOT NULL,
+  payment_kind_id TEXT NOT NULL DEFAULT '',
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,code),
+  FOREIGN KEY(company_id,account) REFERENCES accounts(company_id,code)
+);
+CREATE TRIGGER budget_codes_no_delete BEFORE DELETE ON budget_codes BEGIN SELECT RAISE(ABORT,'guard: Kod silinmir; arxivləşdirilir.'); END;
+
+ALTER TABLE statement_lines ADD COLUMN manual_only INTEGER NOT NULL DEFAULT 0 CHECK(manual_only IN(0,1));
+ALTER TABLE statement_lines ADD COLUMN auto_note TEXT NOT NULL DEFAULT '';
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -810,4 +860,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 6, sql: v6 },
   { version: 7, sql: v7 },
   { version: 8, sql: v8, foreignKeysOff: true },
+  { version: 9, sql: v9 },
 ];

@@ -18,6 +18,7 @@ import {
 } from './catalog.js';
 import { cancelBankDocument, saveBankDocument } from './bank.js';
 import { pairBankDocuments } from './bank-pair.js';
+import { applyRules, applyStatementRules, saveBudgetCode, saveRule } from './rules.js';
 import {
   ignoreStatementLine,
   importStatement,
@@ -119,8 +120,18 @@ export class Ledger {
         return cancelBankDocument(tx, c);
       case 'bank.pair':
         return pairBankDocuments(tx, c.companyId, c.id, c.pairId);
-      case 'statement.import':
-        return importStatement(tx, c);
+      case 'statement.import': {
+        // New rows that an "auto" rule recognises are posted right away (each on its own).
+        const loaded = importStatement(tx, c);
+        const auto = applyRules(tx, c.companyId, { importId: loaded.id });
+        return { ...loaded, posted: auto.posted, failed: auto.failed };
+      }
+      case 'statement.apply':
+        return applyStatementRules(tx, c);
+      case 'rule.save':
+        return saveRule(tx, c);
+      case 'budgetCode.save':
+        return saveBudgetCode(tx, c);
       case 'statement.ignore':
         return ignoreStatementLine(tx, c);
       case 'statement.restore':

@@ -113,6 +113,15 @@ Hesab planının qaydaları:
 - **Tutuşdurma:** fayldakı əvvələ və sona qalıq uçotdakı bank hesabı qalığı ilə (hesabın valyutasında) müqayisə olunur.
 - **Pul vəsaitlərinin hərəkəti maddəsi:** bank sənədi sətrinin atributudur (subkonto deyil); ayrıca kitabçadır.
 
+### Öyrənən qaydalar (mərhələ 3d)
+
+- **Qayda:** istiqamət + (məcburi olmayan) bank hesabı, ödəyicinin VÖEN-i, təyinatda olmalı sözlər, məbləğ aralığı → yazılış sətirləri (hesab, subkonto, pul hərəkəti maddəsi; biri "qalan", digərləri sabit məbləğ). VÖEN və ya ən azı bir söz məcburidir.
+- **Yaranma:** mühasib çıxarış sətrini uçota aldıqdan sonra sənəddə "Qayda kimi saxla"; layihəni düzəldir. Qayda "Təklif" rejimində başlayır; "Avtomatik" rejimini yalnız mühasib qoşur.
+- **Seçim:** ən dəqiq uyğun qayda (VÖEN > sözlərin sayı > bank hesabı > məbləğ aralığı). Eyni dəqiqlikdə fərqli yazılışlı iki qayda — ziddiyyət: sətir təklif olaraq qalır, səbəb göstərilir.
+- **Avtomatik uçot:** idxal zamanı və "Avtomatik qaydaları tətbiq et" ilə; adi bank sənədi kimi (eyni yoxlamalar). Alınmayan sətir gözləyir, səbəbi sətirdə yazılır. Valyuta hesabında avtomatik uçot yoxdur. Sənəddə və audit jurnalında qaydanın adı və versiyası saxlanılır.
+- **Geri qaytarma:** avtomatik sənədin ləğvi (storno) sətri qaytarır; həmin sətir bundan sonra yalnız təklif olunur.
+- **Büdcə təsnifat kodları:** kod (6 rəqəm) → 521.xx / 522.xx subhesab və ödəniş növü. Təyinatda "BTK" / "büdcə təsnifat kodu" ilə yazılan və ya cədvəldə olan kod vergi ödənişinin subhesabını təklif edir.
+
 ## Qalıqlar, registrlər və hesabatlar
 
 - **Qalıq registri:** hesab × subkonto × ay üzrə yekunlardır. Hər yazılışla eyni tranzaksiyada bazanın trigger-ləri tərəfindən yenilənir.

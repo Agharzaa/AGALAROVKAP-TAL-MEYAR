@@ -10,7 +10,13 @@ import { formatMinor, parseMoney } from '../../domain/money';
 import { AZN_RATE, toAzn } from '../../domain/invoice';
 import { parsePrice } from '../../domain/quantity';
 import type { BankLineInput } from '../../contracts/commands';
-import type { BankDocumentDetail, Catalog, StatementLineView } from '../../contracts/queries';
+import type {
+  BankDocumentDetail,
+  Catalog,
+  RuleDraft,
+  StatementLineView,
+} from '../../contracts/queries';
+import { formFromDraft, RuleDialog } from './rules';
 import { useCatalog } from '../catalog';
 import { entryErrorAt } from '../entry-grid';
 import { ModuleFrame } from '../frame';
@@ -144,7 +150,11 @@ export function BankEditor({
   const [message, setMessage] = useState('');
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
+  const [learn, setLearn] = useState(false);
   const doc = detail.data;
+  const draft = useQuery<RuleDraft>(
+    learn && id ? { type: 'ruleDraft', companyId: win.companyId, documentId: id } : null,
+  );
   // A new document for a statement row starts from what the bank wrote and what was recognised.
   const fromStatement = !id && !!statementLineId;
   const source = useQuery<StatementLineView>(
@@ -171,13 +181,22 @@ export function BankEditor({
             counterpartyName: row.counterparty,
             counterpartyTaxId: row.counterpartyTaxId,
             purpose: row.purpose,
-            lines: [
-              {
-                ...blank(row.proposal?.account ?? ''),
-                sk: row.proposal?.sk ?? [],
-                amount: toField(row.amount),
-              },
-            ],
+            // A rule proposes all its lines with the row's amount already split.
+            lines: row.proposal?.lines?.length
+              ? row.proposal.lines.map((l) => ({
+                  ...blank(l.account),
+                  sk: l.sk,
+                  amount: toField(l.amount),
+                  cashFlowItem: l.cashFlowItem,
+                  memo: l.memo,
+                }))
+              : [
+                  {
+                    ...blank(row.proposal?.account ?? ''),
+                    sk: row.proposal?.sk ?? [],
+                    amount: toField(row.amount),
+                  },
+                ],
           }
         : {
             number: '',
@@ -378,6 +397,16 @@ export function BankEditor({
                 Kt
               </span>
               Yazılışlar
+            </button>
+          )}
+          {doc && doc.status === 'posted' && doc.origin === 'statement' && !doc.ruleName && (
+            <button
+              type="button"
+              className="button secondary"
+              title="Bu qərarı növbəti oxşar sətirlər üçün qayda kimi yadda saxla"
+              onClick={() => setLearn(true)}
+            >
+              Qayda kimi saxla
             </button>
           )}
           {doc && doc.status === 'posted' && (
@@ -777,6 +806,18 @@ export function BankEditor({
           </section>
         )}
       </form>
+      {learn && draft.data && (
+        <RuleDialog
+          companyId={win.companyId}
+          catalog={catalog as Catalog}
+          initial={formFromDraft(draft.data)}
+          existing={draft.data.existing}
+          onClose={() => setLearn(false)}
+          onSaved={() =>
+            setMessage('Qayda saxlanıldı (“Təklif” rejimi). Bank və kassa → Bank qaydaları.')
+          }
+        />
+      )}
       {cancel && doc && (
         <Confirm
           title={`Sənədi ləğv et · ${doc.number}`}

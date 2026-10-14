@@ -62,6 +62,25 @@ export class Db {
   read<T>(fn: () => T): T {
     return this.transaction('BEGIN DEFERRED', fn);
   }
+  /**
+   * Inside a write transaction: runs `fn` so that its failure undoes only its own changes (one
+   * statement row posted by a rule must not take the others down with it).
+   */
+  savepoint<T>(fn: () => T): T {
+    if (this.depth === 0) throw new Error('savepoint outside a transaction');
+    const name = `sp${++this.savepoints}`;
+    this.raw.exec(`SAVEPOINT ${name}`);
+    try {
+      const result = fn();
+      this.raw.exec(`RELEASE ${name}`);
+      return result;
+    } catch (error) {
+      this.raw.exec(`ROLLBACK TO ${name}`);
+      this.raw.exec(`RELEASE ${name}`);
+      throw translate(error);
+    }
+  }
+  private savepoints = 0;
   private transaction<T>(begin: string, fn: () => T): T {
     if (this.depth > 0) return fn();
     this.raw.exec(begin);

@@ -152,7 +152,27 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     counterpartyIban: '',
     purpose: i % 7 ? `Müqavilə üzrə ödəniş ${i}` : 'Hesabın aparılmasına görə komissiya',
   }));
-  const loaded = time('Çıxarışın yüklənməsi (5 000 sətir)', 10000, () =>
+  // An "auto" rule for bank fees: every seventh row is posted at import, one by one.
+  const fee = String(
+    db.get(
+      "SELECT id FROM items WHERE company_id=? AND kind='expenseItem' ORDER BY rowid LIMIT 1",
+      companyId,
+    )!.id,
+  );
+  ledger.execute(
+    {
+      key: `perf-rule-${stamp}`,
+      type: 'rule.save',
+      companyId,
+      name: 'Komissiya',
+      direction: 'out',
+      terms: ['komissiya'],
+      lines: [{ account: '721', sk: [fee] }],
+      mode: 'auto',
+    },
+    { actor: 'perf', correlationId: 'perf' },
+  );
+  const loaded = time('Çıxarışın yüklənməsi (5 000 sətir, ~700 avtomatik uçot)', 10000, () =>
     ledger.execute(
       {
         key: `perf-statement-${Date.now()}`,
@@ -165,8 +185,11 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       },
       { actor: 'perf', correlationId: 'perf' },
     ),
-  ) as { id: string; added: number };
+  ) as { id: string; added: number; posted: number; failed: unknown[] };
   assert.equal(loaded.added, 5000);
+  // Odd rows are payments; every seventh row a fee: rows 0, 7, 14… that are also odd.
+  assert.equal(loaded.posted, rows.filter((r, i) => r.direction === 'out' && i % 7 === 0).length);
+  assert.deepEqual(loaded.failed, []);
   const opened = time('Çıxarışın açılması (təkliflər, qalıqlar)', 3000, () =>
     q({ type: 'statement', id: loaded.id }),
   ) as { lines: unknown[] };

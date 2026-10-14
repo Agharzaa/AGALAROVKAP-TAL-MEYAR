@@ -110,6 +110,17 @@ export const statementLineInput = z.object({
 });
 export type StatementLineInput = z.infer<typeof statementLineInput>;
 
+/** A line of a learned rule: like a bank line, with an amount only when it is fixed. */
+export const ruleLineInput = z.object({
+  account: code,
+  sk: z.array(z.string().max(120)).max(3).default([]),
+  /** Fixed amount; empty for the one line that takes the rest of the row. */
+  amount: decimal.default(''),
+  cashFlowItem: z.string().max(80).default(''),
+  memo: text(300).default(''),
+});
+export type RuleLineInput = z.infer<typeof ruleLineInput>;
+
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('company.create'),
@@ -315,6 +326,37 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({ type: z.literal('statement.restore'), ...base, lineId: id }),
+  /** Books the waiting rows of a statement that an "auto" rule recognises. */
+  z.object({ type: z.literal('statement.apply'), ...base, importId: id }),
+  z.object({
+    type: z.literal('rule.save'),
+    ...base,
+    ...editable,
+    name: text(160),
+    direction: z.enum(['in', 'out']),
+    /** Only rows of this bank account; empty = any account. */
+    bankAccountId: z.string().max(80).default(''),
+    /** Only rows of this counterparty VÖEN; empty = any. */
+    counterpartyTaxId: text(20).default(''),
+    /** Words that must all appear in the purpose (or the counterparty name). */
+    terms: z.array(text(60)).max(10).default([]),
+    amountMin: decimal.default(''),
+    amountMax: decimal.default(''),
+    lines: z.array(ruleLineInput).min(1).max(20),
+    /** suggest: a proposal for the accountant; auto: posted by itself. */
+    mode: z.enum(['suggest', 'auto']).default('suggest'),
+  }),
+  z.object({
+    type: z.literal('budgetCode.save'),
+    ...base,
+    ...editable,
+    /** Büdcə təsnifat kodu, six digits. */
+    code: text(10),
+    name: text(160).default(''),
+    /** 521.xx or 522.xx sub-account the code pays. */
+    account: code,
+    paymentKindId: z.string().max(80).default(''),
+  }),
   z.object({
     type: z.literal('statement.link'),
     ...base,
@@ -358,6 +400,9 @@ export interface CommandResult {
   added?: number;
   duplicates?: number;
   rejected?: { row: number; message: string }[];
+  /** Rows an "auto" rule posted, and rows it recognised but could not post (with the reason). */
+  posted?: number;
+  failed?: { row: number; message: string }[];
 }
 
 export interface ErrorPayload {

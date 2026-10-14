@@ -361,7 +361,7 @@ Hər addım ayrıca commit-dir və testləri yaşıl saxlayır.
 3. **3c — Çıxarış idxalı.** ✅ Hazır (14.10.2026). Fərqlər: təklif oxunanda hesablanır (saxlanmır, köhnəlmir); sətrin forması ayrıca pəncərədə açılır, yan panel və "növbəti sətir" axını sonraya qaldı; pul hərəkəti maddəsi kitabçası 8 başlanğıc elementlə (sxem v8); hesabat mərhələ 5-də.
    - oxuyucunun genişlənməsi, `statement.import`, çıxarış pəncərəsi, tutuşdurma;
    - testlər B9, B12–B15, B17.
-4. **3d — Qaydalar.**
+4. **3d — Qaydalar.** ✅ Hazır (14.10.2026). Dəqiqləşmələr: qayda layihəsi mühasibin uçota aldığı bank sənədindən; söz təklifi 4+ hərfli, rəqəmsiz sözlər; eyni şərtli ikinci qayda rədd olunur; valyuta hesabında avtomatik uçot yoxdur; büdcə kodu cədvəli 3d-də (təklif kimi, avtomatik yalnız qayda ilə).
    - mühərrik, qaydanın yaranması, Qaydalar kitabçası, avtomatik rejim, geri qaytarma;
    - testlər B10, B11.
 5. **Audit, 0.5.0 buraxılışı, `PROJECT_STATE.md` və `QERARLAR.md`-nin yenilənməsi.**

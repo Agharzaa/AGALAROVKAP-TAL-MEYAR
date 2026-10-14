@@ -30,6 +30,7 @@ import {
 import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
 import { allocatePayment, openPart, splitProportionally } from '../../src/domain/bank.js';
 import { readStatementTable, statementAddsUp } from '../../src/domain/statement.js';
+import { findBudgetCode, matches, normalizeTerms, suggestTerms } from '../../src/domain/rules.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
   assert.equal(parseMoney('118'), 11800n);
@@ -423,4 +424,46 @@ test('statement reader: one signed amount column, Russian headers, no IBAN, over
     ],
   );
   assert.equal(statementAddsUp(r), true);
+});
+
+test('rules: word matching, suggested words, budget code in the purpose', () => {
+  const rule = {
+    id: 'r',
+    name: 'İcarə',
+    direction: 'out' as const,
+    bankAccountId: '',
+    counterpartyTaxId: '',
+    terms: normalizeTerms(['İCARƏ']),
+    amountMin: null,
+    amountMax: null,
+    lines: [],
+    mode: 'suggest' as const,
+    version: 1,
+  };
+  const row = (purpose: string) => ({
+    direction: 'out' as const,
+    bankAccountId: 'b',
+    amount: 100n,
+    counterparty: '',
+    counterpartyTaxId: '',
+    purpose,
+  });
+  assert.equal(
+    matches(rule, row('Ofis icarəsi, sentyabr')),
+    true,
+    'a word start matches, i/İ alike',
+  );
+  assert.equal(matches(rule, row('Avadanlıq')), false);
+  assert.equal(matches({ ...rule, direction: 'in' }, row('icarə')), false);
+  assert.deepEqual(suggestTerms('Ofis icarəsi üzrə 09/2026 ödəniş, ƏDV daxil', false), [
+    'ofis',
+    'icarəsi',
+  ]);
+  assert.deepEqual(suggestTerms('Ofis icarəsi', true), []);
+  assert.equal(
+    findBudgetCode('Mənfəət vergisi, Büdcə təsnifatı kodu: 141110', new Set()),
+    '141110',
+  );
+  assert.equal(findBudgetCode('ƏDV 131110 saylı', new Set(['131110'])), '131110');
+  assert.equal(findBudgetCode('Qaimə 131110', new Set()), undefined);
 });

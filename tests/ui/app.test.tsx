@@ -10,6 +10,7 @@ import type {
   BankDocumentSummary,
   Catalog,
   InvoiceSummary,
+  StatementView,
   TrialBalance,
 } from '../../src/contracts/queries';
 import { harness } from './harness';
@@ -555,6 +556,107 @@ test('bank statement: CSV preview, load, book a row from its prefilled form', as
       waiting: number;
     }[];
     assert.deepEqual([imports[0]!.posted, imports[0]!.waiting], [1, 1]);
+  } finally {
+    h.close();
+  }
+});
+
+test('rules: save a booking as a rule, switch it to auto, undo an automatic posting', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const fees = (h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog).items.find(
+    (i) => i.kind === 'expenseItem' && i.name === 'Bank xidmətləri',
+  )!.id;
+  let n = 0;
+  const load = (day: string) =>
+    h.run({
+      type: 'statement.import',
+      companyId: s.companyId,
+      iban: 'AZ12AIIB38060019441234567890',
+      fileName: `cixaris-${day}.csv`,
+      fileHash: String(++n).padStart(64, '0'),
+      lines: [
+        {
+          row: 5,
+          date: `${ym}-${day}`,
+          direction: 'out',
+          amount: '2.50',
+          reference: '',
+          counterparty: 'Kapital Bank',
+          counterpartyTaxId: '',
+          counterpartyIban: '',
+          purpose: 'SMS xidmətinə görə komissiya',
+        },
+      ],
+    });
+  const first = load('01');
+  const line = (
+    h.ledger.query({ type: 'statement', companyId: s.companyId, id: first.id }) as StatementView
+  ).lines[0]!;
+  h.run({
+    type: 'bank.save',
+    companyId: s.companyId,
+    direction: 'out',
+    number: '',
+    date: line.date,
+    bankAccountId: s.bankAccount,
+    rate: '',
+    bankReference: '',
+    counterpartyName: 'Kapital Bank',
+    counterpartyTaxId: '',
+    purpose: line.purpose,
+    statementLineId: line.id,
+    lines: [{ account: '721', sk: [fees], amount: '2.50', cashFlowItem: '', memo: '' }],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Bank çıxarışı' })[0]!);
+    const page = within(pane());
+    await user.click(await page.findByRole('tab', { name: /Uçota alınıb/ }));
+    await user.click(await page.findByRole('button', { name: 'BX-000001' }));
+    const editor = within(pane());
+    await user.click(await editor.findByRole('button', { name: 'Qayda kimi saxla' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Yeni qayda' }));
+    assert.equal(
+      (dialog.getByRole('textbox', { name: 'Sözlər' }) as HTMLInputElement).value,
+      'xidmətinə, komissiya',
+    );
+    await user.clear(dialog.getByRole('textbox', { name: 'Sözlər' }));
+    await user.type(dialog.getByRole('textbox', { name: 'Sözlər' }), 'sms');
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Rejim' }), 'auto');
+    await user.click(dialog.getByRole('button', { name: 'Saxla' }));
+    await editor.findByText(/Qayda saxlanıldı/);
+    // The next statement is posted by the rule at once; undoing it leaves the row to the accountant.
+    const second = load('02');
+    assert.equal(second.posted, 1);
+    // Back to the desk (all windows minimised), then the statement window again.
+    await user.click(
+      within(screen.getByRole('tablist', { name: 'Açıq pəncərələr' })).getByRole('tab', {
+        name: /Başlanğıc/,
+      }),
+    );
+    await user.click(screen.getAllByRole('button', { name: 'Bank çıxarışı' })[0]!);
+    const statements = within(pane());
+    // The statement was loaded behind the window's back (h.run): refresh its list.
+    await user.click(statements.getByRole('button', { name: 'Yenilə' }));
+    await statements.findByRole('option', { name: /cixaris-02/ });
+    await user.selectOptions(statements.getByRole('combobox', { name: 'Çıxarış' }), second.id);
+    await user.click(await statements.findByRole('tab', { name: /Uçota alınıb/ }));
+    await statements.findByText(/avtomatik, qayda: /);
+    await user.click(
+      statements.getByRole('button', { name: 'Sətir 5: avtomatik uçotu geri qaytar' }),
+    );
+    await statements.findByText(/Avtomatik uçot geri qaytarıldı: BX-000002 storno edildi/);
+    const after = h.ledger.query({
+      type: 'statement',
+      companyId: s.companyId,
+      id: second.id,
+    }) as StatementView;
+    assert.deepEqual([after.lines[0]!.state, after.lines[0]!.manualOnly], ['new', true]);
   } finally {
     h.close();
   }
