@@ -212,3 +212,20 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 3. **(Yeniləndi, 0.4.3) Dizayn sıfırdan, iş qaydası 1C kimi.** 0.4.2-dəki yaşıl görünüş köhnə Meyar ERP-nin surəti kimi rədd edildi. Yeni dizayn: solda bölmələr paneli, bölmənin funksiyaları (sənədlər, yarat, hesabatlar, kitabçalar), forma pəncərələrində 1C əmr paneli ("Uçota al və bağla" Ctrl+Enter, "Uçota al" Ctrl+S, "Dt/Kt yazılışlar", "Ləğv et"), sənəd başlığında etiketlər solda, cari sətir/sahə tunc (sarı) rənglə. Başlanğıc — "İş masası" (iş xəritəsi, diqqət, qalıqlar, son sənədlər).
 4. **(0.4.5) Windows 11 dizaynı.** İstifadəçi proqramın Windows şirkəti ilə birlikdə hazırlanmış kimi görünməsini istədi: Fluent 2 (başlıq zolağı, NavigationView, Fluent idarəetmə elementləri və ikonları, Segoe UI Variable), vurğu rəngi #107C41. 1C iş qaydası saxlanılır.
 5. **(Yeniləndi, 0.4.6) "Jurnal" dizaynı.** Fluent/Office görünüşü bəyənilmədi. İstifadəçi üç maketdən 2-cini seçdi ("dizayn 2-nin bir az daha yaxşısı"): mühasibat kitabı üslubu (kağız fon, mürəkkəb-göy yazı, göy xətli sətirlər, ikiqat xətlər, qırmızı haşiyə xətti), Inter + Lora şriftləri. Naviqasiya 1C kimi yuxarıda əsas menyudur (açılan menyular), sol panel yoxdur. 1C iş qaydası və pəncərələr saxlanılır.
+
+## 2026-10-14 — mərhələ 3: bank sənədi
+
+İcra planı və əsaslandırma: `docs/MERHELE-3-BANK.md`.
+
+### TƏSDİQLƏNDİ
+
+1. **Bank sənədi** — daxilolma (BD-000001) və məxaric (BX-000001). Bank hesabı kitabçadan seçilir; uçot hesabı (223.01 / 223.02 / 224.04) və valyuta ondan gəlir. Sənəd çoxsətirlidir, müxabir hesab bütün hesab planından sərbəst seçilir. Daxilolma: Dt bank / Kt sətir; məxaric: Dt sətir / Kt bank. Düzəliş və ləğv qırmızı storno ilə.
+2. **Qaimələrə avtomatik bölgü:** 211 / 531 sətrində hesablaşma sənədi seçilməyibsə, məbləğ həmin kontragent + müqavilənin açıq qaimələrinə ən köhnədən bölünür; qalan avans olur (543 / 243, hesablaşma sənədi — bu bank sənədi).
+3. **ƏDV hissəsi ayrıca sənəddir.** 224.04 sənədi qaimənin yalnız ƏDV payını, 223.xx sənədi yalnız qalan payını bağlayır. Cütləşdirmə və 18/118 yoxlaması (±0,01 AZN, bloklamır) — 3b.
+4. **İstifadə olunmuş avans geri götürülmür:** bank sənədinin avansı qaimədə əvəzləşdirilibsə, sənədin düzəlişi və ya ləğvi həmin avansı əks qalığa sala bilməz.
+5. **Öz hesabları arasında köçürmə 222.01 vasitəsilə**; 222.01-də qalan qalıq nəzarət siqnalıdır.
+6. **Pul vəsaitlərinin hərəkəti maddəsi** subkonto deyil, bank sənədi sətrinin atributudur (223.xx-də yazılış olduğu üçün subkontosu dəyişdirilmir).
+7. **Qaydalar:** yeni qayda "təklif" rejimində yaranır; "avtomatik" rejimini yalnız mühasib qoşur.
+8. **Bank xidmətləri** 721 (xərc maddəsi "Bank xidmətləri"); **kredit faizi** 751; **vergi ödənişlərinin subhesabı** büdcə təsnifat kodu → subhesab cədvəli ilə (cədvəli mühasib doldurur).
+9. **Əmək haqqı** hələlik bir sənəddə hər işçi bir sətir; avtomatik bölgü əməkhaqqı mərhələsində.
+10. **Valyuta alışı/satışı** (222.02 / 222.04) şablon kimi bu mərhələdə; məzənnə fərqinin avtomatik hesablanması mərhələ 5-də.
