@@ -87,6 +87,14 @@ Hesab planının qaydaları:
 - **Yazılışlar ekranda:** qaimə saxlanandan sonra onun yaratdığı bütün yazılışlar sənədin altında göstərilir; hesab kartından qaiməyə keçid var.
 - **Əl ilə düzəliş:** saxlanmış qaimənin yazılışları əl ilə dəyişdirilə bilər (1C kimi). Sənəd bunu yadda saxlayır (`invoices.manual`); belə qaimədə sətirlər yazılışları yenidən hesablamır. Əl ilə yazılışlar əl ilə əməliyyatın yoxlamalarından keçir və storno ilə düzəliş qaydası dəyişmir.
 
+## Bank sənədləri (mərhələ 3a)
+
+- **Sənəd:** daxilolma (BD-000001) və ya məxaric (BX-000001); bank hesabı (kitabçadan — uçot hesabını və valyutanı müəyyən edir), tarix, valyuta hesabında AMB məzənnəsi (4 onluq), bankdakı sənəd nömrəsi, ödəyici / alan və VÖEN (bankda yazıldığı kimi), təyinat.
+- **Sətir:** müxabir hesab (bütün yazıla bilən hesablardan, miqdar uçotu olan hesablar istisna — mal hərəkəti qaimə ilə), onun subkontoları, məbləğ (bank hesabının valyutasında), məzmun. Manat hesabından valyuta hesabına (məs. 222.04) yazılışda valyuta məbləği ayrıca yazılır.
+- **Yazılış:** daxilolma — Dt bank / Kt sətir; məxaric — Dt sətir / Kt bank. Valyuta hesabında manat məbləği sətir üzrə məzənnə ilə.
+- **Qaimələrə bölgü:** daxilolmanın 211 sətrində (məxaricin 531 sətrində) hesablaşma sənədi boş qalsa, məbləğ həmin kontragent + müqavilənin sənəd tarixinə qədərki açıq qaimələrinə ən köhnədən bölünür; qalanı bu sənədin avansıdır (543 / 243, hesablaşma sənədi — bank sənədi). Manat müqaviləsində 224.04 sənədi qaimənin yalnız ƏDV hissəsini, cari hesab qalan hissəsini bağlayır; valyuta müqaviləsi bütöv, valyuta məbləği ilə bölünür (müqavilə və bank hesabının valyutası eyni olmalıdır). Başqa hesablarda boş hesablaşma sənədi bu sənədin özüdür.
+- **Düzəliş və ləğv:** storno ilə; əvvəlki yazılış yeni bölgüdən əvvəl storno edilir. Bu sənədin avansı sonrakı qaimədə əvəzləşdirilibsə, həmin avansı mənfiyə salan düzəliş və ləğv rədd olunur — əvvəlcə qaimə düzəldilir.
+
 ## Qalıqlar, registrlər və hesabatlar
 
 - **Qalıq registri:** hesab × subkonto × ay üzrə yekunlardır. Hər yazılışla eyni tranzaksiyada bazanın trigger-ləri tərəfindən yenilənir.

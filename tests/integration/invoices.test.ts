@@ -1,44 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { InvoiceLineInput } from '../../src/contracts/commands.js';
 import type { InvoiceDetail, InvoiceSummary } from '../../src/contracts/queries.js';
 import { fixture, type Cmd } from './fixture.js';
 
 type F = ReturnType<typeof fixture>;
 type InvoiceCmd = Extract<Cmd, { type: 'invoice.save' }>;
 
-const invoice = (
-  f: F,
-  direction: 'sale' | 'purchase',
-  date: string,
-  partnerId: string,
-  contractId: string,
-  lines: Partial<InvoiceLineInput>[],
-  extra: Partial<InvoiceCmd> = {},
-) =>
-  f.exec({
-    type: 'invoice.save',
-    companyId: f.companyId,
-    direction,
-    number: '',
-    date,
-    partnerId,
-    contractId,
-    rate: '',
-    pricesIncludeVat: false,
-    eqSeries: '',
-    eqNumber: '',
-    memo: '',
-    lines: lines.map((l) => ({
-      productId: '',
-      quantity: '1',
-      price: '1',
-      vatRate: '18',
-      memo: '',
-      ...l,
-    })),
-    ...extra,
-  });
+const invoice = (f: F, ...args: Parameters<F['invoice']>) => f.invoice(...args);
 const detail = (f: F, id: string) =>
   f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id });
 const postings = (f: F, id: string) =>

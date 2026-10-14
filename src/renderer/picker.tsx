@@ -270,12 +270,14 @@ function DocumentPicker({
   onChange,
   ariaLabel,
   invalid,
+  emptyLabel = 'Bu sənəd',
 }: {
   companyId: string;
   value: string;
   onChange: (v: string) => void;
   ariaLabel: string;
   invalid?: boolean;
+  emptyLabel?: string;
 }) {
   const [options, setOptions] = useState<Option[]>([]);
   const [search, setSearch] = useState('');
@@ -298,7 +300,7 @@ function DocumentPicker({
       value={value}
       options={options}
       onChange={onChange}
-      emptyLabel="Bu sənəd"
+      emptyLabel={emptyLabel}
       onSearch={setSearch}
       {...(invalid !== undefined ? { invalid } : {})}
     />
@@ -314,6 +316,7 @@ export function SubkontoFields({
   onChange,
   side,
   errorIndex,
+  documentEmptyLabel,
 }: {
   catalog: Catalog;
   companyId: string;
@@ -322,6 +325,8 @@ export function SubkontoFields({
   onChange: (values: string[]) => void;
   side: string;
   errorIndex?: number;
+  /** What an empty settlement document means here (default "Bu sənəd"). */
+  documentEmptyLabel?: string;
 }) {
   const acc = catalog.accounts.find((a) => a.code === account);
   if (!acc || !acc.subkonto.length) return <span className="no-subkonto">—</span>;
@@ -345,6 +350,7 @@ export function SubkontoFields({
               onChange={set}
               ariaLabel={label}
               {...(errorIndex === i ? { invalid: true } : {})}
+              {...(documentEmptyLabel ? { emptyLabel: documentEmptyLabel } : {})}
             />
           );
         return (

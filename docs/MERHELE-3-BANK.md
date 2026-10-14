@@ -351,7 +351,7 @@ Fərq varsa, çıxarış pəncərəsində və Nəzarət bölməsində göstəril
 
 Hər addım ayrıca commit-dir və testləri yaşıl saxlayır.
 
-1. **3a — Bank sənədi (əl ilə).**
+1. **3a — Bank sənədi (əl ilə).** ✅ Hazır (14.10.2026). Qeyd: `pair_id`, `statement_line_id`, `rule_id` sütunları sxem v6-da 3b–3d üçün əvvəlcədən yaradılıb. "Pul vəsaitlərinin hərəkəti maddəsi" atributu 3c-yə qaldı (kitabça növü əlavə olunmalıdır).
    - sxem v6, `bank.save` / `bank.cancel`, şablonlar, qaimələrə bölgü, avans qoruması;
    - forma və jurnal;
    - testlər B1–B8, B16-nın birinci hissəsi.

@@ -18,6 +18,9 @@ import type {
   AccountCard,
   AuditView,
   BankAccountView,
+  BankDocumentDetail,
+  BankDocumentSummary,
+  BankLineView,
   Catalog,
   CardLine,
   CompanyView,
@@ -134,6 +137,12 @@ export class Names {
             .all('SELECT id,number,date,eq_number FROM invoices WHERE company_id=?', c)
             .map((r) => ({ ...r, id: `invoice:${r.id}` })),
           (r) => `${r.number}${r.eq_number ? ` (${str(r.eq_number)})` : ''} · ${dmy(str(r.date))}`,
+        );
+        put(
+          this.db
+            .all('SELECT id,number,date FROM bank_documents WHERE company_id=?', c)
+            .map((r) => ({ ...r, id: `bank:${r.id}` })),
+          (r) => `${r.number} · ${dmy(str(r.date))}`,
         );
         break;
       default:
@@ -570,10 +579,11 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
     const conds = sk.map((_, i) => ` AND p.${side}_s${i + 1}=?`).join('');
     db.all(
       `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq,
-         COALESCE(o.memo, i.memo) AS doc_memo, i.direction AS doc_direction
+         COALESCE(o.memo, i.memo, b.purpose) AS doc_memo, COALESCE(i.direction, b.direction) AS doc_direction
        FROM postings p JOIN entries e ON e.id=p.entry_id
        LEFT JOIN operations o ON e.source_type='operation' AND o.id=e.source_id
        LEFT JOIN invoices i ON e.source_type='invoice' AND i.id=e.source_id
+       LEFT JOIN bank_documents b ON e.source_type='bank' AND b.id=e.source_id
        WHERE p.company_id=? AND p.${side}_account IN (${codes.map(() => '?').join(',')}) AND p.date>=? AND p.date<=?${conds}
        ORDER BY p.date, e.rowid, p.line_no LIMIT ${LIMIT + 1}`,
       q.companyId,
@@ -790,6 +800,65 @@ function invoiceDetail(db: Db, companyId: string, id: string): InvoiceDetail {
   };
 }
 
+interface StoredBankLine {
+  account: string;
+  sk: string[];
+  amount: string;
+  curAmount: string;
+  memo: string;
+}
+
+function bankSummary(names: Names, r: Row): BankDocumentSummary {
+  const lines = JSON.parse(str(r.lines)) as StoredBankLine[];
+  return {
+    id: str(r.id),
+    version: Number(r.version),
+    direction: r.direction as BankDocumentSummary['direction'],
+    number: str(r.number),
+    date: str(r.date),
+    bankAccountId: str(r.bank_account_id),
+    bankAccount: names.name('bankAccount', str(r.bank_account_id)),
+    account: str(r.account),
+    currency: str(r.currency),
+    amount: money(r.amount as bigint),
+    amountAzn: money(r.amount_azn as bigint),
+    bankReference: str(r.bank_reference),
+    counterpartyName: str(r.counterparty_name),
+    counterpartyTaxId: str(r.counterparty_tax_id),
+    purpose: str(r.purpose),
+    accounts: [...new Set(lines.map((l) => l.account))].join(', '),
+    status: r.status as BankDocumentSummary['status'],
+  };
+}
+
+const bankSelect = `SELECT b.*, x.account AS account FROM bank_documents b
+  JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id`;
+
+function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
+  const r = db.get(`${bankSelect} WHERE b.company_id=? AND b.id=?`, companyId, id);
+  if (!r) throw new DomainError('Bank sənədi tapılmadı.', 'id', 'not-found');
+  const { postings, history, names } = documentEntry(db, companyId, 'bank', id);
+  const chart = loadChart(db, companyId);
+  const lines = (JSON.parse(str(r.lines)) as StoredBankLine[]).map((l): BankLineView => {
+    const kinds = chart.get(l.account)?.subkonto ?? [];
+    return {
+      account: l.account,
+      sk: l.sk,
+      skNames: kinds.map((k, i) => (l.sk[i] ? names.name(k, l.sk[i]!) : '')),
+      amount: l.amount,
+      curAmount: l.curAmount,
+      memo: l.memo,
+    };
+  });
+  return {
+    ...bankSummary(names, r),
+    rate: formatPrice(r.rate as bigint),
+    lines,
+    postings,
+    history,
+  };
+}
+
 function operationDetail(db: Db, companyId: string, id: string): OperationDetail {
   const r = db.get('SELECT * FROM operations WHERE company_id=? AND id=?', companyId, id);
   if (!r) throw new DomainError('Sənəd tapılmadı.', 'id', 'not-found');
@@ -915,6 +984,22 @@ function home(db: Db, companyId: string, today: string): HomeView {
         total: i.total,
         currency: i.currency,
         status: i.status,
+      })),
+    ...db
+      .all(
+        `${bankSelect} WHERE b.company_id=? ORDER BY b.date DESC, b.rowid DESC LIMIT 12`,
+        companyId,
+      )
+      .map((r) => bankSummary(names, r))
+      .map((b) => ({
+        kind: b.direction === 'in' ? ('bankIn' as const) : ('bankOut' as const),
+        id: b.id,
+        number: b.number,
+        date: b.date,
+        title: b.counterpartyName || b.purpose || b.bankAccount,
+        total: b.amount,
+        currency: b.currency,
+        status: b.status,
       })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number))
@@ -1097,6 +1182,22 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'invoice':
       return invoiceDetail(db, q.companyId, q.id);
+    case 'bankDocuments': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return db
+        .all(
+          `${bankSelect} WHERE b.company_id=? AND b.date>=? AND b.date<=?${q.bankAccountId ? ' AND b.bank_account_id=?' : ''}
+           ORDER BY b.date DESC, b.rowid DESC`,
+          q.companyId,
+          parseDate(q.from),
+          parseDate(q.to),
+          ...(q.bankAccountId ? [q.bankAccountId] : []),
+        )
+        .map((r) => bankSummary(names, r));
+    }
+    case 'bankDocument':
+      return bankDetail(db, q.companyId, q.id);
     case 'trialBalance':
       company(db, q.companyId);
       return trialBalance(db, q);
@@ -1115,11 +1216,19 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
            UNION ALL
            SELECT 'invoice', id, number, date, memo, eq_series||eq_number FROM invoices
              WHERE company_id=? AND (number LIKE ? OR memo LIKE ? OR eq_series||eq_number LIKE ?)
+           UNION ALL
+           SELECT 'bank', id, number, date, purpose, bank_reference FROM bank_documents
+             WHERE company_id=? AND (number LIKE ? OR purpose LIKE ? OR bank_reference LIKE ? OR counterparty_name LIKE ?)
            ORDER BY date DESC LIMIT 50`,
           q.companyId,
           like,
           like,
           q.companyId,
+          like,
+          like,
+          like,
+          q.companyId,
+          like,
           like,
           like,
           like,

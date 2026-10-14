@@ -19,6 +19,15 @@ export const querySchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('invoice'), companyId: id, id }),
   z.object({
+    type: z.literal('bankDocuments'),
+    companyId: id,
+    from: date,
+    to: date,
+    /** Only documents of this bank account; all when omitted. */
+    bankAccountId: id.optional(),
+  }),
+  z.object({ type: z.literal('bankDocument'), companyId: id, id }),
+  z.object({
     type: z.literal('trialBalance'),
     companyId: id,
     from: date,
@@ -234,6 +243,42 @@ export interface InvoiceDetail extends InvoiceSummary {
   history: { version: number; status: string; at: string; actor: string }[];
 }
 
+export interface BankLineView {
+  account: string;
+  sk: string[];
+  skNames: string[];
+  amount: string;
+  curAmount: string;
+  memo: string;
+}
+export interface BankDocumentSummary {
+  id: string;
+  version: number;
+  direction: 'in' | 'out';
+  number: string;
+  date: string;
+  bankAccountId: string;
+  bankAccount: string;
+  /** Ledger account of the bank account (223.01 / 223.02 / 224.04). */
+  account: string;
+  currency: string;
+  amount: string;
+  amountAzn: string;
+  bankReference: string;
+  counterpartyName: string;
+  counterpartyTaxId: string;
+  purpose: string;
+  /** Counter accounts of the lines, e.g. "211.01, 543.01". */
+  accounts: string;
+  status: 'posted' | 'cancelled';
+}
+export interface BankDocumentDetail extends BankDocumentSummary {
+  rate: string;
+  lines: BankLineView[];
+  postings: PostingView[];
+  history: { version: number; status: string; at: string; actor: string }[];
+}
+
 export interface TrialRow {
   key: string;
   level: number;
@@ -281,8 +326,8 @@ export interface CardLine {
   date: string;
   sourceType: string;
   sourceId: string;
-  /** Invoices: sale or purchase; empty for other documents. */
-  direction: 'sale' | 'purchase' | '';
+  /** Invoices: sale or purchase; bank documents: in or out; empty for other documents. */
+  direction: 'sale' | 'purchase' | 'in' | 'out' | '';
   number: string;
   storno: boolean;
   memo: string;
@@ -309,7 +354,7 @@ export interface AccountCard {
 
 /** A document of any kind on the start page ("Son sənədlər"). */
 export interface RecentDocument {
-  kind: 'operation' | 'sale' | 'purchase';
+  kind: 'operation' | 'sale' | 'purchase' | 'bankIn' | 'bankOut';
   id: string;
   number: string;
   date: string;

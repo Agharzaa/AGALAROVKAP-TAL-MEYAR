@@ -39,7 +39,11 @@ const flows: { name: string; steps: Step[] }[] = [
         posts: 'Dt 211 · Kt 601, 521',
         view: { type: 'invoice', direction: 'sale' },
       },
-      { title: 'Alıcıdan ödəniş', posts: 'Dt 223 · Kt 211', soon: '3-cü mərhələ' },
+      {
+        title: 'Alıcıdan ödəniş',
+        posts: 'Dt 223 · Kt 211',
+        view: { type: 'bank', direction: 'in' },
+      },
       { title: 'Alıcılar', posts: 'Hesab kartı 211', view: card('211') },
     ],
   },
@@ -52,7 +56,11 @@ const flows: { name: string; steps: Step[] }[] = [
         posts: 'Dt 205, 241 · Kt 531',
         view: { type: 'invoice', direction: 'purchase' },
       },
-      { title: 'Malsatana ödəniş', posts: 'Dt 531 · Kt 223', soon: '3-cü mərhələ' },
+      {
+        title: 'Malsatana ödəniş',
+        posts: 'Dt 531 · Kt 223',
+        view: { type: 'bank', direction: 'out' },
+      },
       { title: 'Malsatanlar', posts: 'Hesab kartı 531', view: card('531') },
     ],
   },
@@ -60,8 +68,8 @@ const flows: { name: string; steps: Step[] }[] = [
     name: 'Bank',
     steps: [
       { title: 'Bank hesabları', posts: 'IBAN, 223.01 / 223.02', view: page('bankAccounts') },
-      { title: 'Bank çıxarışı', posts: 'Excel-dən yükləmə', soon: '3-cü mərhələ' },
-      { title: 'Bank sənədləri', posts: 'Dt/Kt 223', soon: '3-cü mərhələ' },
+      { title: 'Bank sənədləri', posts: 'Dt/Kt 223, 224.04', view: page('bank') },
+      { title: 'Bank çıxarışı', posts: 'Excel-dən yükləmə', soon: '3c mərhələsi' },
       { title: 'Bank qalığı', posts: 'Hesab kartı 223', view: card('223') },
     ],
   },
@@ -83,11 +91,21 @@ const kindLabel: Record<RecentDocument['kind'], string> = {
   operation: 'Əməliyyat',
   sale: 'Satış qaiməsi',
   purchase: 'Alış qaiməsi',
+  bankIn: 'Bank daxilolması',
+  bankOut: 'Bank məxarici',
 };
-const viewOf = (d: RecentDocument): View =>
-  d.kind === 'operation'
-    ? { type: 'operation', id: d.id }
-    : { type: 'invoice', direction: d.kind, id: d.id };
+const viewOf = (d: RecentDocument): View => {
+  switch (d.kind) {
+    case 'operation':
+      return { type: 'operation', id: d.id };
+    case 'bankIn':
+      return { type: 'bank', direction: 'in', id: d.id };
+    case 'bankOut':
+      return { type: 'bank', direction: 'out', id: d.id };
+    default:
+      return { type: 'invoice', direction: d.kind, id: d.id };
+  }
+};
 
 /** The work area's background: "İş masası". */
 export function HomePage({

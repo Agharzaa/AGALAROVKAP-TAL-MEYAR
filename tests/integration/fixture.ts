@@ -1,7 +1,13 @@
 import type { TestContext } from 'node:test';
 import { Db } from '../../src/infrastructure/sqlite/db.js';
 import { Ledger } from '../../src/application/ledger.js';
-import type { Command, CommandResult, OperationLineInput } from '../../src/contracts/commands.js';
+import type {
+  BankLineInput,
+  Command,
+  CommandResult,
+  InvoiceLineInput,
+  OperationLineInput,
+} from '../../src/contracts/commands.js';
 import type {
   AccountCard,
   Catalog,
@@ -114,6 +120,65 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
     memo = '',
     extra: Partial<Extract<Cmd, { type: 'operation.save' }>> = {},
   ) => exec({ type: 'operation.save', companyId, number: '', date, memo, lines, ...extra });
+  const invoice = (
+    direction: 'sale' | 'purchase',
+    date: string,
+    partnerId: string,
+    contractId: string,
+    lines: Partial<InvoiceLineInput>[],
+    extra: Partial<Extract<Cmd, { type: 'invoice.save' }>> = {},
+  ) =>
+    exec({
+      type: 'invoice.save',
+      companyId,
+      direction,
+      number: '',
+      date,
+      partnerId,
+      contractId,
+      rate: '',
+      pricesIncludeVat: false,
+      eqSeries: '',
+      eqNumber: '',
+      memo: '',
+      lines: lines.map((l) => ({
+        productId: '',
+        quantity: '1',
+        price: '1',
+        vatRate: '18' as const,
+        memo: '',
+        ...l,
+      })),
+      ...extra,
+    });
+  const bankLine = (
+    account: string,
+    sk: string[],
+    amount: string,
+    extra: Partial<BankLineInput> = {},
+  ): BankLineInput => ({ account, sk, amount, memo: '', ...extra });
+  const bank = (
+    direction: 'in' | 'out',
+    date: string,
+    bankAccountId: string,
+    lines: BankLineInput[],
+    extra: Partial<Extract<Cmd, { type: 'bank.save' }>> = {},
+  ) =>
+    exec({
+      type: 'bank.save',
+      companyId,
+      direction,
+      number: '',
+      date,
+      bankAccountId,
+      rate: '',
+      bankReference: '',
+      counterpartyName: '',
+      counterpartyTaxId: '',
+      purpose: '',
+      lines,
+      ...extra,
+    });
   const trial = (from: string, to: string, expand: string[] = [], extra: object = {}) =>
     query<TrialBalance>({ type: 'trialBalance', companyId, from, to, expand, ...extra });
   const row = (tb: TrialBalance, key: string): TrialRow | undefined =>
@@ -135,6 +200,9 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
     product,
     line,
     operation,
+    invoice,
+    bankLine,
+    bank,
     trial,
     row,
     card,

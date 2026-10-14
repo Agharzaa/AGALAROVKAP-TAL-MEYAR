@@ -66,6 +66,8 @@ import { OperationsPage } from './pages/operations';
 import { OperationEditor } from './pages/operation-editor';
 import { InvoiceEditor } from './pages/invoice-editor';
 import { InvoicesPage } from './pages/invoices';
+import { BankDocumentsPage } from './pages/bank-documents';
+import { BankEditor } from './pages/bank-editor';
 import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
 import { AccountsPage } from './pages/accounts';
@@ -1023,6 +1025,8 @@ function Routed({ win }: { win: Win }) {
       return <OperationEditor {...(v.id ? { id: v.id } : {})} />;
     case 'invoice':
       return <InvoiceEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
+    case 'bank':
+      return <BankEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
@@ -1033,6 +1037,8 @@ function Routed({ win }: { win: Win }) {
           return <InvoicesPage direction="sale" />;
         case 'purchases':
           return <InvoicesPage direction="purchase" />;
+        case 'bank':
+          return <BankDocumentsPage />;
         case 'trial':
           return <TrialPage />;
         case 'card':

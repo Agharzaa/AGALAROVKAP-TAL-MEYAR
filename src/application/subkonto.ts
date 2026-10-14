@@ -38,6 +38,8 @@ export function documentExists(db: Db, companyId: string, value: string): boolea
     return !!db.get('SELECT 1 AS x FROM operations WHERE company_id=? AND id=?', companyId, id);
   if (type === 'invoice' && id)
     return !!db.get('SELECT 1 AS x FROM invoices WHERE company_id=? AND id=?', companyId, id);
+  if (type === 'bank' && id)
+    return !!db.get('SELECT 1 AS x FROM bank_documents WHERE company_id=? AND id=?', companyId, id);
   return false;
 }
 

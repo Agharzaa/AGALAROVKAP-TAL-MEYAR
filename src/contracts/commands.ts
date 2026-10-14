@@ -75,6 +75,25 @@ export const invoiceLineInput = z.object({
 });
 export type InvoiceLineInput = z.infer<typeof invoiceLineInput>;
 
+export const bankLineInput = z.object({
+  /** Counter account: any postable account of the chart. */
+  account: code,
+  /**
+   * Subkonto values of the counter account, in its order. An empty settlement document on 211 / 531
+   * (receipt / payment) means "match the open invoices"; elsewhere it means this bank document.
+   */
+  sk: z.array(z.string().max(120)).max(3).default([]),
+  /** In the bank account's currency. */
+  amount: decimal,
+  /**
+   * Currency amount of a currency counter account when the bank account is in AZN (currency
+   * exchange); otherwise it follows from the line amount.
+   */
+  curAmount: decimal.optional(),
+  memo: text(300).default(''),
+});
+export type BankLineInput = z.infer<typeof bankLineInput>;
+
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('company.create'),
@@ -231,6 +250,33 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('invoice.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
+  }),
+  z.object({
+    type: z.literal('bank.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    /** in: money received (Dt bank); out: money paid (Kt bank). */
+    direction: z.enum(['in', 'out']),
+    /** Internal number; generated when empty (BD-000001 / BX-000001). */
+    number: text(40).default(''),
+    date,
+    bankAccountId: id,
+    /** AMB rate for a currency bank account (4 decimals), empty for AZN. */
+    rate: decimal.default(''),
+    /** Payment order number, as printed by the bank. */
+    bankReference: text(80).default(''),
+    counterpartyName: text(240).default(''),
+    counterpartyTaxId: text(20).default(''),
+    purpose: text(500).default(''),
+    lines: z.array(bankLineInput).min(1).max(500),
+  }),
+  z.object({
+    type: z.literal('bank.cancel'),
     ...base,
     id,
     version,

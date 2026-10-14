@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 const v1 = `
 CREATE TABLE companies(
@@ -631,10 +631,61 @@ WHERE eq_series<>'' AND NOT EXISTS(
     AND o.eq_key=upper(replace(replace(replace(replace(invoices.eq_series||invoices.eq_number,' ',''),'i','I'),'ı','I'),'İ','I')));
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v6 — bank documents (stage 3a; docs/MERHELE-3-BANK.md). The bank account decides the ledger
+// account (223.01 / 223.02 / 224.04) and the currency; the lines are stored as the user entered
+// them (resolved and validated), the journal holds what they posted.
+
+const v6 = `
+CREATE TABLE bank_documents(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('in','out')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  bank_account_id TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate INTEGER NOT NULL CHECK(rate>0),
+  amount INTEGER NOT NULL CHECK(amount>0),
+  amount_azn INTEGER NOT NULL CHECK(amount_azn>0),
+  bank_reference TEXT NOT NULL DEFAULT '',
+  counterparty_name TEXT NOT NULL DEFAULT '',
+  counterparty_tax_id TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  pair_id TEXT,
+  origin TEXT NOT NULL DEFAULT 'manual' CHECK(origin IN('manual','statement')),
+  statement_line_id TEXT,
+  rule_id TEXT,
+  rule_version INTEGER,
+  lines TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,direction,number_key),
+  FOREIGN KEY(company_id,bank_account_id) REFERENCES bank_accounts(company_id,id)
+);
+CREATE INDEX bank_documents_date ON bank_documents(company_id,direction,date);
+CREATE INDEX bank_documents_account ON bank_documents(company_id,bank_account_id,date);
+CREATE TRIGGER bank_documents_no_delete BEFORE DELETE ON bank_documents BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER bank_documents_period BEFORE UPDATE ON bank_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+  OR NEW.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-6','Yeniləndi','Baza',id,
+  'Bank sənədləri üçün baza hazırlandı.'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
   { version: 3, sql: v3, foreignKeysOff: true },
   { version: 4, sql: v4 },
   { version: 5, sql: v5 },
+  { version: 6, sql: v6 },
 ];

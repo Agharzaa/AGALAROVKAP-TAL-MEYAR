@@ -112,6 +112,28 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     ),
   );
   assert.ok((sale as { id: string }).id);
+  // The customer pays more than the invoice: matched to it, the rest is an advance.
+  const receipt = time('Bank daxilolması (qaimələrə bölgü, avans)', 300, () =>
+    ledger.execute(
+      {
+        key: `perf-bank-${Date.now()}`,
+        type: 'bank.save',
+        companyId,
+        direction: 'in',
+        date: '2026-10-02',
+        bankAccountId: banks[0]!,
+        lines: [
+          {
+            account: '211.01',
+            sk: [String(contract.partner_id), String(contract.id)],
+            amount: '1000',
+          },
+        ],
+      },
+      { actor: 'perf', correlationId: 'perf' },
+    ),
+  );
+  assert.ok((receipt as { id: string }).id);
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

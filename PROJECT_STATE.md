@@ -1,13 +1,14 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 14.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** Windows 11 (Fluent 2) üslubu (10.10.2026, istifadəçi: "Windows şirkəti ilə birlikdə dizayn edilmiş kimi, tam peşəkar"): proqramın öz başlıq zolağı (Windows düymələri sağda, snap), solda NavigationView (bölmələr açılır: sənədlər, yarat, hesabatlar, kitabçalar), açıq məzmun qatı, Fluent düymə/sahə/cədvəl/dialoq/bildiriş, Fluent ikonları, Segoe UI Variable. Vurğu rəngi Microsoft-un mühasibat yaşılı (#107C41). İş qaydası 1C kimi: formalar pəncərədə, əmr panelində "Uçota al və bağla" (Ctrl+Enter), aşağıda pəncərələr paneli (Windows taskbar kimi).
+- **Dizayn:** "Jurnal" (0.4.6, istifadəçinin seçimi): mühasibat kitabı üslubu, yuxarıda 1C kimi əsas menyu, formalar pəncərədə, "Uçota al və bağla" (Ctrl+Enter). Ətraflı: aşağıda 0.4.6 bölməsi.
+- **İş yeri:** Windows kompüterdə klon `C:\Users\rxfet\Desktop\AGALAROVKAP-TAL-MEYAR` (Node 24.20, Git 2.55). Masaüstündəki `meyar-0.1.0-source` köhnə nüsxədir, istifadə olunmur.
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
 
@@ -90,6 +91,26 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 - Pəncərələr paneli aşağıda kitab vərəqləri kimi; status sətrində Excel kimi miqyas sürgüsü.
 - Sol naviqasiya paneli və lent menyusu çıxarıldı.
 
+## Mərhələ 3a — bank sənədi, əl ilə (14.10.2026)
+
+Plan və qərarlar: `docs/MERHELE-3-BANK.md` (təsdiqlənib), `docs/QERARLAR.md` (2026-10-14).
+
+| Sahə                                                                                                                     | Sübut                                      |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Sxem v6: `bank_documents`; 0.4.6 bazası (v5) Windows-da real Electron ilə v6-ya yeniləndi, bütövlük ok                   | `schema v1 → current` testi, `MEYAR_SMOKE` |
+| Bank daxilolması (BD-) və məxarici (BX-): istənilən müxabir hesab, çoxsətirli, manat və valyuta, storno ilə düzəliş/ləğv | `tests/integration/bank.test.ts`           |
+| 211 / 531 sətri hesablaşma sənədi olmadan: açıq qaimələrə ən köhnədən bölgü, qalanı avans (543 / 243)                    | `bank.test.ts`, `tests/domain`             |
+| ƏDV depoziti (224.04) qaimənin yalnız ƏDV hissəsini, cari hesab qalanını bağlayır; QERARLAR misalı qəpikbəqəpik          | `bank.test.ts` (B1/B2)                     |
+| Sentyabr misalı bank sənədləri ilə: 43 000 / 65 891,14 / 63 288,14; 223.01 Kapital 35 251,24                             | `bank.test.ts` (B1)                        |
+| Qaimədə istifadə olunmuş avansın bank sənədi düzəldilmir / ləğv edilmir                                                  | `bank.test.ts` (B7)                        |
+| Kredit + faiz bir sənəddə, öz hesabları arası 222.01, valyuta (USD) bölgüsü, valyuta mübadiləsi (222.04)                 | `bank.test.ts` (B4–B6)                     |
+| UI: bank sənədləri jurnalı, forma (şablonlar, klaviatura), hesab kartından və İş masasından keçid                        | `tests/ui` (8 test)                        |
+| Yük testi (100 000 yazılış): bank daxilolması ~4 ms (hədd 300 ms); digər həddlər dəyişməyib                              | `npm run test:perf`                        |
+
+Testlər Windows-da: `npm test` 57, `npm run test:ui` 8, `npm run test:perf` keçir.
+
+**Yoxlanmayıb:** yeni formanın görünüşü real Electron pəncərəsində ekran şəkli ilə yoxlanmayıb (yalnız jsdom testi). Mərhələ 3a üçün müstəqil audit hələ aparılmayıb.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -100,7 +121,7 @@ Yenilənib: 07.10.2026 (gecə). Növbəti sessiya buradan davam etməlidir.
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
-3. **Növbəti:** Bank sənədi: sərbəst müxabir hesab, çoxsətirli; 223.01/224.04 cütü; çıxarış idxalı və öyrənən qaydalar.
+3. **Bank (davam edir):** ~~3a bank sənədi~~ — hazır. **Növbəti: 3b** — 223.01 / 224.04 cütləşdirmə, 18/118 yoxlaması, İş masasında nəzarət siqnalları (yolda qalmış köçürmə 222.01, cütsüz ƏDV hissəsi). Sonra 3c çıxarış idxalı, 3d öyrənən qaydalar, audit, 0.5.0.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 

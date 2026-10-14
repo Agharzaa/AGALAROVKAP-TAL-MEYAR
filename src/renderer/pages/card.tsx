@@ -23,8 +23,10 @@ export function CardPage({
   const ws = useWorkspace();
   const openSource = (l: AccountCard['lines'][number]) => {
     if (l.sourceType === 'operation') ws.open({ type: 'operation', id: l.sourceId }, win.companyId);
-    if (l.sourceType === 'invoice' && l.direction)
+    if (l.sourceType === 'invoice' && (l.direction === 'sale' || l.direction === 'purchase'))
       ws.open({ type: 'invoice', direction: l.direction, id: l.sourceId }, win.companyId);
+    if (l.sourceType === 'bank' && (l.direction === 'in' || l.direction === 'out'))
+      ws.open({ type: 'bank', direction: l.direction, id: l.sourceId }, win.companyId);
   };
   const { catalog } = useCatalog(win.companyId);
   const range = useRange({
@@ -221,7 +223,7 @@ export function CardPage({
                 >
                   <td>{day(l.date)}</td>
                   <td>
-                    {l.sourceType === 'operation' || l.sourceType === 'invoice' ? (
+                    {['operation', 'invoice', 'bank'].includes(l.sourceType) ? (
                       <button type="button" className="link" onClick={() => openSource(l)}>
                         {l.number}
                       </button>

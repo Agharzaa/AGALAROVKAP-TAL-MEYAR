@@ -28,6 +28,7 @@ import {
   toAzn,
 } from '../../src/domain/invoice.js';
 import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
+import { allocatePayment, openPart, splitProportionally } from '../../src/domain/bank.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
   assert.equal(parseMoney('118'), 11800n);
@@ -303,4 +304,41 @@ test('advances: oldest first, up to the invoice; currency at the advance rate', 
     allocateAdvances([{ document: 'u', amount: 8000n, currency: 5000n }], 5100n, 3000n),
     [{ document: 'u', amount: 4800n, currency: 3000n }],
   );
+});
+
+test('bank: VAT and net parts of an invoice, payment spread oldest first', () => {
+  // Invoice 15 000 with VAT 2 288.14, nothing paid yet.
+  const inv = { document: 'invoice:a', open: 1_500_000n, vatOpen: 228_814n };
+  assert.equal(openPart(inv, 'vat'), 228_814n);
+  assert.equal(openPart(inv, 'net'), 1_271_186n);
+  assert.equal(openPart(inv, 'whole'), 1_500_000n);
+  // Only the VAT is left open: the current account has nothing to settle.
+  assert.equal(openPart({ ...inv, open: 228_814n }, 'net'), 0n);
+  // VAT paid to the current account by mistake: the deposit part cannot exceed what is owed.
+  assert.equal(openPart({ ...inv, open: 100_000n }, 'vat'), 100_000n);
+  const r = allocatePayment(
+    [inv, { document: 'invoice:b', open: 50_000n, vatOpen: 0n }],
+    1_525_424n,
+    'net',
+  );
+  assert.deepEqual(r, {
+    allocations: [
+      { document: 'invoice:a', amount: 1_271_186n },
+      { document: 'invoice:b', amount: 50_000n },
+    ],
+    left: 204_238n,
+  });
+  assert.deepEqual(allocatePayment([], 100n, 'vat'), { allocations: [], left: 100n });
+});
+
+test('bank: proportional split always adds up to the total', () => {
+  // 500 USD at 1.7 = 850 AZN: 400 + 100 → 680 + 170.
+  assert.deepEqual(splitProportionally([40_000n, 10_000n], 50_000n, 85_000n), [68_000n, 17_000n]);
+  // Three equal pieces of 1.00 AZN: rounding residue goes to one piece, never lost.
+  const pieces = splitProportionally([1n, 1n, 1n], 3n, 100n);
+  assert.equal(
+    pieces.reduce((s, p) => s + p, 0n),
+    100n,
+  );
+  assert.deepEqual(pieces, [33n, 34n, 33n]);
 });

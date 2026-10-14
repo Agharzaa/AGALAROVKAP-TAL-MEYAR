@@ -42,6 +42,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Mal, material, xidmət və əsas vəsait alışı, ƏDV',
     icon: ReceiptText,
   },
+  bank: {
+    title: 'Bank sənədləri',
+    hint: 'Daxilolma və məxaric, qaimələrə bölgü, ƏDV depoziti',
+    icon: Landmark,
+  },
   trial: { title: 'Dövriyyə balansı', hint: 'Hesablar və subkontolar üzrə', icon: Scale },
   card: { title: 'Hesab kartı', hint: 'Hesab və subkonto üzrə hərəkət', icon: FileSpreadsheet },
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
@@ -102,14 +107,33 @@ export const sections: Section[] = [
       {
         title: 'Sənədlər',
         items: [
-          { label: 'Bank sənədləri', icon: Landmark, action: soon('3-cü mərhələ') },
-          { label: 'Bank çıxarışının yüklənməsi', icon: Upload, action: soon('3-cü mərhələ') },
+          { label: 'Bank sənədləri', icon: Landmark, action: page('bank') },
+          { label: 'Bank çıxarışının yüklənməsi', icon: Upload, action: soon('3c mərhələsi') },
           { label: 'Kassa sənədləri', icon: Wallet, action: soon('5-ci mərhələ') },
         ],
       },
       {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'Bank daxilolması',
+            icon: ArrowDownLeft,
+            action: { kind: 'view', view: { type: 'bank', direction: 'in' } },
+          },
+          {
+            label: 'Bank məxarici',
+            icon: ArrowUpRight,
+            action: { kind: 'view', view: { type: 'bank', direction: 'out' } },
+          },
+        ],
+      },
+      {
         title: 'Hesabatlar',
-        items: [card('223', 'Hesab kartı 223'), card('221', 'Hesab kartı 221')],
+        items: [
+          card('223', 'Hesab kartı 223'),
+          card('224', 'ƏDV depoziti (224)'),
+          card('221', 'Hesab kartı 221'),
+        ],
       },
       {
         title: 'Kitabçalar',
@@ -307,6 +331,8 @@ export function sectionOfView(view: View): string {
       return view.direction === 'sale' ? 'sales' : 'purchases';
     case 'operation':
       return 'ledger';
+    case 'bank':
+      return 'bank';
     case 'accountCard': {
       const a = view.account;
       if (a.startsWith('211') || a.startsWith('543')) return 'sales';
@@ -330,6 +356,7 @@ export function sectionOfView(view: View): string {
         case 'card':
         case 'audit':
           return 'reports';
+        case 'bank':
         case 'bankAccounts':
           return 'bank';
         case 'settings':
@@ -357,7 +384,16 @@ export const createItems: NavItem[] = [
     icon: ArrowDownLeft,
     action: { kind: 'view', view: { type: 'invoice', direction: 'purchase' } },
   },
-  { label: 'Bank sənədi', icon: Landmark, action: soon('3-cü mərhələ') },
+  {
+    label: 'Bank daxilolması',
+    icon: Landmark,
+    action: { kind: 'view', view: { type: 'bank', direction: 'in' } },
+  },
+  {
+    label: 'Bank məxarici',
+    icon: Landmark,
+    action: { kind: 'view', view: { type: 'bank', direction: 'out' } },
+  },
 ];
 
 export function viewTitle(view: View, label?: string): string {
@@ -368,6 +404,10 @@ export function viewTitle(view: View, label?: string): string {
       return view.id ? `Əməliyyat${label ? ` ${label}` : ''}` : 'Yeni əməliyyat';
     case 'invoice': {
       const kind = view.direction === 'sale' ? 'Satış qaiməsi' : 'Alış qaiməsi';
+      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
+    }
+    case 'bank': {
+      const kind = view.direction === 'in' ? 'Bank daxilolması' : 'Bank məxarici';
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
     }
     case 'accountCard':

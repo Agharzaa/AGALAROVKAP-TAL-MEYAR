@@ -5,7 +5,13 @@ import { afterEach, test } from 'node:test';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../src/renderer/App';
-import type { Catalog, InvoiceSummary, TrialBalance } from '../../src/contracts/queries';
+import type {
+  BankDocumentDetail,
+  BankDocumentSummary,
+  Catalog,
+  InvoiceSummary,
+  TrialBalance,
+} from '../../src/contracts/queries';
 import { harness } from './harness';
 
 afterEach(() => cleanup());
@@ -350,6 +356,94 @@ test('windows: sections open as 1C-like child windows that minimize, maximize an
     assert.ok(windows().every((w) => w.hidden));
     await user.click(screen.getByRole('button', { name: 'Bütün pəncərələri bağla' }));
     await waitFor(() => assert.equal(windows().length, 0));
+  } finally {
+    h.close();
+  }
+});
+
+test('bank receipt: keyboard entry, matched to the open invoice, the rest is an advance', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  const service = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Konsaltinq',
+    unit: 'saat',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  const invoice = h.run({
+    type: 'invoice.save',
+    companyId: s.companyId,
+    direction: 'sale',
+    number: '',
+    date: iso,
+    partnerId: s.customer,
+    contractId: s.contract,
+    rate: '',
+    pricesIncludeVat: false,
+    eqSeries: '',
+    eqNumber: '',
+    memo: '',
+    lines: [{ productId: service, quantity: '1', price: '100', vatRate: '0', memo: '' }],
+  }).id;
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    // The work map opens a receipt (Satış → Alıcıdan ödəniş).
+    await user.click(screen.getAllByRole('button', { name: 'Alıcıdan ödəniş' })[0]!);
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    // The only bank account is chosen already.
+    assert.match(
+      (editor.getByRole('combobox', { name: 'Bank hesabı' }) as HTMLInputElement).value,
+      /223\.01 · Kapital Bank AZN/,
+    );
+    await pick('Sətir 1 hesab', '211.01');
+    await pick('Sətir 1 211.01 · Kontragent', 'Alıcı');
+    await pick('Sətir 1 211.01 · Müqavilə', '7');
+    assert.equal(
+      (
+        editor.getByRole('combobox', {
+          name: 'Sətir 1 211.01 · Hesablaşma sənədi',
+        }) as HTMLInputElement
+      ).value,
+      'Açıq qaimələrə avtomatik',
+    );
+    await user.type(editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }), '150');
+    await user.type(editor.getByRole('textbox', { name: 'Ödənişin təyinatı' }), 'SQ-000001 üzrə');
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Sənəd BD-000001 uçota alındı/);
+    const postings = await editor.findByRole('region', { name: 'Yazılışlar' });
+    await within(postings).findByText('543.01');
+    const list = h.ledger.query({
+      type: 'bankDocuments',
+      companyId: s.companyId,
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as BankDocumentSummary[];
+    const doc = h.ledger.query({
+      type: 'bankDocument',
+      companyId: s.companyId,
+      id: list[0]!.id,
+    }) as BankDocumentDetail;
+    assert.deepEqual(
+      doc.postings.map((p) => [p.dt.account, p.kt.account, p.amount, p.kt.sk[2]]),
+      [
+        ['223.01', '211.01', '100.00', `invoice:${invoice}`],
+        ['223.01', '543.01', '50.00', `bank:${doc.id}`],
+      ],
+    );
+    assert.equal(doc.purpose, 'SQ-000001 üzrə');
   } finally {
     h.close();
   }
