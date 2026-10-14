@@ -36,6 +36,7 @@ import { formatPrice, parsePrice } from '../domain/quantity.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { BankLineInput, CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
+import { refreshPair } from './bank-pair.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 
@@ -644,6 +645,7 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
     postings,
   );
   guardAdvances(tx, cmd.companyId, id, previous);
+  refreshPair(tx, cmd.companyId, id);
   tx.history(cmd.companyId, BANK, id, version, 'posted', data);
   tx.audit(
     cmd.companyId,
@@ -687,6 +689,7 @@ export function cancelBankDocument(tx: Tx, cmd: CommandOf<'bank.cancel'>): Comma
     cmd.id,
   );
   guardAdvances(tx, cmd.companyId, cmd.id, prev.postings);
+  refreshPair(tx, cmd.companyId, cmd.id);
   tx.history(cmd.companyId, BANK, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

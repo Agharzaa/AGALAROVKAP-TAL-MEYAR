@@ -5,6 +5,7 @@ import type {
   BankDocumentSummary,
   InvoiceDetail,
 } from '../../src/contracts/queries.js';
+import { displayMinor as d } from '../../src/domain/money.js';
 import { fixture, type Cmd } from './fixture.js';
 
 type F = ReturnType<typeof fixture>;
@@ -445,4 +446,143 @@ test('currency exchange: AZN account to a currency counter account needs the cur
   assert.throws(() => f.bank('in', '2026-09-01', azn, [line]), /USD məbləğini yazın/);
   const r = f.bank('in', '2026-09-01', azn, [{ ...line, curAmount: '1000' }]);
   assert.deepEqual(postings(f, r.id), [['223.01', '222.04', '1700.00', '|1000.00']]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Stage 3b: VAT deposit pairs and control signals
+
+const pairOf = (f: F, id: string) => detail(f, id).pair;
+const warnings = (f: F) => f.home().warnings.map((w) => `${w.kind}: ${w.text}`);
+
+test('B3: September — both payments pair by themselves and pass 18/118; no signals', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const receipt = pairOf(f, s.receiptMain.id)!;
+  assert.deepEqual(
+    [receipt.id, receipt.total, receipt.deposit, receipt.expected, receipt.difference, receipt.ok],
+    [s.receiptVat.id, '18000.00', '2745.76', '2745.76', '0.00', true],
+  );
+  assert.equal(pairOf(f, s.receiptVat.id)!.id, s.receiptMain.id);
+  const payment = pairOf(f, s.payVat.id)!;
+  assert.deepEqual([payment.id, payment.total, payment.ok], [s.payMain.id, '11800.00', true]);
+  // Capital paid into the deposit has no other half and raises no signal.
+  assert.deepEqual(warnings(f), []);
+  assert.match(
+    f
+      .query<{ action: string; detail: string }[]>({ type: 'audit', companyId: f.companyId })
+      .map((a) => `${a.action} ${a.detail}`)
+      .join('\n'),
+    /ƏDV cütü bağlandı \(avtomatik\) BD-000005 \+ BD-000004 · 18\/118 uyğundur/,
+  );
+});
+
+function customerSetup(f: F) {
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const main = f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.01', 'AZN', 'Cari');
+  const deposit = f.bankAccount(bank, 'AZ77AIIB38060019449999999999', '224.04', 'AZN', 'ƏDV');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const c = f.contract(customer, '7', 'sale');
+  const L = (amount: string) => [f.bankLine('211.01', [customer, c], amount)];
+  return { bank, main, deposit, customer, c, L };
+}
+
+test('B3: a deposit part that is not 18/118 of the payment is a signal, not a refusal', (t) => {
+  const f = fixture(t);
+  const x = customerSetup(f);
+  const main = f.bank('in', '2026-09-15', x.main, x.L('16000'), {
+    counterpartyTaxId: '1700000001',
+  });
+  const vat = f.bank('in', '2026-09-16', x.deposit, x.L('2000'));
+  const p = pairOf(f, vat.id)!;
+  assert.deepEqual(
+    [p.id, p.total, p.deposit, p.expected, p.difference, p.ok],
+    [main.id, '18000.00', '2000.00', '2745.76', '-745.76', false],
+  );
+  assert.deepEqual(warnings(f), [
+    `vatPair: BD-000002 · 16.09.2026 · ƏDV · …9999 + BD-000001: depozitə ${d(200_000n)}, 18/118 üzrə ${d(274_576n)} (fərq ${d(-74_576n)}).`,
+  ]);
+  assert.deepEqual(f.home().warnings[0]!.document, { id: vat.id, direction: 'in' });
+});
+
+test('B3: two candidates are never guessed; the accountant pairs, unpairs, cancelling unpairs', (t) => {
+  const f = fixture(t);
+  const x = customerSetup(f);
+  const a = f.bank('in', '2026-09-15', x.main, x.L('8474.58'));
+  const b = f.bank('in', '2026-09-15', x.main, x.L('8474.58'));
+  const vat = f.bank('in', '2026-09-15', x.deposit, x.L('1525.42'));
+  assert.equal(pairOf(f, vat.id), null, 'two current-account receipts: no automatic choice');
+  assert.deepEqual(
+    detail(f, vat.id).pairCandidates.map((c) => c.number),
+    ['BD-000001', 'BD-000002'],
+  );
+  assert.match(warnings(f).join('\n'), /^vatUnpaired: BD-000003 .* cütləşdirilməyib\.$/);
+  const pair = (id: string, pairId: string) =>
+    f.exec({ type: 'bank.pair', companyId: f.companyId, id, pairId });
+  pair(vat.id, b.id);
+  assert.deepEqual(
+    [pairOf(f, vat.id)!.number, pairOf(f, b.id)!.number],
+    ['BD-000002', 'BD-000003'],
+  );
+  assert.equal(pairOf(f, vat.id)!.ok, true, '8 474,58 + 1 525,42 = 10 000; 18/118 = 1 525,42');
+  assert.deepEqual(detail(f, a.id).pairCandidates, [], 'the deposit half is taken');
+  assert.deepEqual(warnings(f), []);
+  // Moving the pair to the other receipt.
+  pair(vat.id, a.id);
+  assert.equal(pairOf(f, a.id)!.id, vat.id);
+  assert.equal(pairOf(f, b.id), null);
+  // Rules of a pair.
+  assert.throws(
+    () => pair(a.id, b.id),
+    /bir sənədi ƏDV depozitində \(224\.04\), digəri cari hesabda/,
+  );
+  const out = f.bank('out', '2026-09-15', x.deposit, [
+    f.bankLine('543.01', [x.customer, x.c, ''], '5'),
+  ]);
+  assert.throws(() => pair(out.id, b.id), /Daxilolma məxaricdə cütləşdirilmir/);
+  // Unpair by hand, then pair again and cancel one half: the other half is free again.
+  pair(vat.id, '');
+  assert.equal(pairOf(f, a.id), null);
+  pair(vat.id, a.id);
+  cancel(f, a.id);
+  assert.equal(pairOf(f, vat.id), null);
+  assert.match(
+    f
+      .query<{ action: string; detail: string }[]>({ type: 'audit', companyId: f.companyId })
+      .map((r) => `${r.action} ${r.detail}`)
+      .join('\n'),
+    /ƏDV cütü ayrıldı BD-000001 \+ BD-000003 · sənəd ləğv edildi/,
+  );
+});
+
+test('B3: a pair across a closed period can still be undone when its open half is cancelled', (t) => {
+  const f = fixture(t);
+  const x = customerSetup(f);
+  const vat = f.bank('in', '2026-09-30', x.deposit, x.L('1525.42'));
+  const main = f.bank('in', '2026-10-02', x.main, x.L('8474.58'));
+  assert.equal(pairOf(f, vat.id)!.id, main.id);
+  f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-09-30', reason: '' });
+  cancel(f, main.id);
+  assert.equal(pairOf(f, vat.id), null);
+  // A document in the closed period is past correction: it is not listed as a signal.
+  assert.deepEqual(warnings(f), []);
+  assert.throws(
+    () => f.exec({ type: 'bank.pair', companyId: f.companyId, id: vat.id, pairId: '' }),
+    /bağlanıb/,
+  );
+});
+
+test('B5: money left in 222.01 between own accounts is a signal until it arrives', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const a = f.bankAccount(bank, 'AZ12AIIB38060019441234567890', '223.01', 'AZN', 'A');
+  const b = f.bankAccount(bank, 'AZ55PAHA40060AZNHC0101091203', '223.01', 'AZN', 'B');
+  const founder = f.partner('Təsisçi', '', 'individual');
+  const capital = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
+  f.bank('in', '2026-09-01', a, [f.bankLine('301', [founder, capital], '1000')]);
+  f.bank('out', '2026-09-10', a, [f.bankLine('222.01', [], '400')]);
+  assert.deepEqual(warnings(f), [
+    `transit: 222.01: ${d(40_000n)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
+  ]);
+  f.bank('in', '2026-09-11', b, [f.bankLine('222.01', [], '400')]);
+  assert.deepEqual(warnings(f), []);
 });

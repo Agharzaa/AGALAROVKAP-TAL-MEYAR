@@ -94,6 +94,14 @@ const kindLabel: Record<RecentDocument['kind'], string> = {
   bankIn: 'Bank daxilolması',
   bankOut: 'Bank məxarici',
 };
+const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
+  advance: 'Avans əvəzləşdirilməyib',
+  stock: 'Mənfi anbar qalığı',
+  cash: 'Mənfi pul qalığı',
+  transit: 'Köçürmə yolda qalıb',
+  vatPair: 'ƏDV hissəsi 18/118-ə uyğun deyil',
+  vatUnpaired: 'ƏDV hissəsinin cütü yoxdur',
+};
 const viewOf = (d: RecentDocument): View => {
   switch (d.kind) {
     case 'operation':
@@ -142,15 +150,17 @@ export function HomePage({
     for (const w of h.warnings)
       tasks.push({
         state: 'bad',
-        title:
-          w.kind === 'advance'
-            ? 'Avans əvəzləşdirilməyib'
-            : w.kind === 'stock'
-              ? 'Mənfi anbar qalığı'
-              : 'Mənfi pul qalığı',
+        title: warningTitle[w.kind],
         detail: w.text,
-        action: 'Hesab kartı',
-        view: { type: 'accountCard', account: w.account, sk: w.sk },
+        ...(w.document
+          ? {
+              action: 'Sənədi aç',
+              view: { type: 'bank', direction: w.document.direction, id: w.document.id },
+            }
+          : {
+              action: 'Hesab kartı',
+              view: { type: 'accountCard', account: w.account, sk: w.sk },
+            }),
       });
   }
   const amount = (v: string) => (v === '0.00' ? '' : money(v));

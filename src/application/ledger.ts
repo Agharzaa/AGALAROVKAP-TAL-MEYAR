@@ -17,6 +17,7 @@ import {
   updateCompany,
 } from './catalog.js';
 import { cancelBankDocument, saveBankDocument } from './bank.js';
+import { pairBankDocuments } from './bank-pair.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
 import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
@@ -110,6 +111,8 @@ export class Ledger {
         return saveBankDocument(tx, c);
       case 'bank.cancel':
         return cancelBankDocument(tx, c);
+      case 'bank.pair':
+        return pairBankDocuments(tx, c.companyId, c.id, c.pairId);
       case 'period.close':
         return closePeriod(tx, c);
     }

@@ -111,6 +111,22 @@ Testlər Windows-da: `npm test` 57, `npm run test:ui` 8, `npm run test:perf` ke�
 
 **Yoxlanmayıb:** yeni formanın görünüşü real Electron pəncərəsində ekran şəkli ilə yoxlanmayıb (yalnız jsdom testi). Mərhələ 3a üçün müstəqil audit hələ aparılmayıb.
 
+## Mərhələ 3b — ƏDV cütü və nəzarət siqnalları (14.10.2026)
+
+| Sahə                                                                                                                                                                           | Sübut                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| 223.xx və 224.04 sənədlərinin cütü: eyni ödəyici (bankdakı VÖEN, yoxdursa kontragentin VÖEN-i), eyni istiqamət, ±3 gün; avtomatik yalnız hər iki tərəfdə yeganə namizəd olanda | `bank.test.ts` (B3)                      |
+| Cüt yalnız alıcı/malsatan ilə hesablaşma sənədləri arasında (211/531/243/543 sətri); büdcəyə ƏDV ödənişi, kapital, öz köçürmələr cütləşmir və siqnal vermir                    | `bank.test.ts` (B3)                      |
+| 18/118 yoxlaması (±0,01 AZN): fərq siqnaldır, sənəd saxlanılır                                                                                                                 | `bank.test.ts` (B3)                      |
+| Əl ilə cütləşdirmə / ayırma (`bank.pair`), ləğvdə və uyğunsuz düzəlişdə cüt avtomatik ayrılır; audit jurnalında                                                                | `bank.test.ts` (B3)                      |
+| Sxem v7: bağlı dövr qoruyucusu cütə toxunmur — bağlı dövrdəki yarının cütü açıq dövrdəki ləğvlə ayrılır                                                                        | `bank.test.ts`, real Electron (v6 → v7)  |
+| İş masası: yolda qalmış köçürmə (222.01 / 222.03), cütsüz ƏDV hissəsi, 18/118 fərqi; siqnaldan sənədə keçid                                                                    | `bank.test.ts` (B5), `tests/ui` (9 test) |
+| Formada "ƏDV cütü" paneli: cüt sənəd, 18/118 nəticəsi, namizədlər, "Cütləşdir" / "Cütü ayır"                                                                                   | `tests/ui`                               |
+
+Testlər Windows-da: `npm test` 62, `npm run test:ui` 9, `npm run test:perf` keçir; real Electron təmiz və v6 bazasında ok.
+
+**Yoxlanmayıb:** formanın yeni panelinin görünüşü ekran şəkli ilə; müstəqil audit (mərhələ 3-ün sonunda).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -121,7 +137,7 @@ Testlər Windows-da: `npm test` 57, `npm run test:ui` 8, `npm run test:perf` ke�
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
-3. **Bank (davam edir):** ~~3a bank sənədi~~ — hazır. **Növbəti: 3b** — 223.01 / 224.04 cütləşdirmə, 18/118 yoxlaması, İş masasında nəzarət siqnalları (yolda qalmış köçürmə 222.01, cütsüz ƏDV hissəsi). Sonra 3c çıxarış idxalı, 3d öyrənən qaydalar, audit, 0.5.0.
+3. **Bank (davam edir):** ~~3a bank sənədi~~, ~~3b ƏDV cütü və siqnallar~~ — hazır. **Növbəti: 3c** — bank çıxarışının idxalı (XLSX/CSV, IBAN, dublikatsız, üç vəziyyət, çıxarış ↔ uçot qalığı), "Pul vəsaitlərinin hərəkəti maddəsi" atributu. Real bank çıxarışı nümunələri (anonimləşdirilmiş) istifadəçidən gözlənilir. Sonra 3d öyrənən qaydalar, audit, 0.5.0.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 

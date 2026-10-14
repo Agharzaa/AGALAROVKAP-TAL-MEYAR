@@ -95,6 +95,14 @@ Hesab planının qaydaları:
 - **Qaimələrə bölgü:** daxilolmanın 211 sətrində (məxaricin 531 sətrində) hesablaşma sənədi boş qalsa, məbləğ həmin kontragent + müqavilənin sənəd tarixinə qədərki açıq qaimələrinə ən köhnədən bölünür; qalanı bu sənədin avansıdır (543 / 243, hesablaşma sənədi — bank sənədi). Manat müqaviləsində 224.04 sənədi qaimənin yalnız ƏDV hissəsini, cari hesab qalan hissəsini bağlayır; valyuta müqaviləsi bütöv, valyuta məbləği ilə bölünür (müqavilə və bank hesabının valyutası eyni olmalıdır). Başqa hesablarda boş hesablaşma sənədi bu sənədin özüdür.
 - **Düzəliş və ləğv:** storno ilə; əvvəlki yazılış yeni bölgüdən əvvəl storno edilir. Bu sənədin avansı sonrakı qaimədə əvəzləşdirilibsə, həmin avansı mənfiyə salan düzəliş və ləğv rədd olunur — əvvəlcə qaimə düzəldilir.
 
+### ƏDV cütü (mərhələ 3b)
+
+- **Cüt:** bir ödənişin iki yarısı — cari hesabdakı (223.xx) və ƏDV depozitindəki (224.04) bank sənədləri. Jurnala toxunmur, yalnız əlaqədir.
+- **Avtomatik:** eyni ödəyici (bankdakı VÖEN, yoxdursa hesablaşma sətrindəki kontragentin VÖEN-i), eyni istiqamət, tarix fərqi ≤ 3 gün, hər iki sənəd manatla və hesablaşma sətri (211/531/243/543) ilə. Yalnız hər iki tərəfin yeganə namizədi bir-biri olanda bağlanır; qalan hallarda mühasib formada seçir.
+- **18/118:** depozitə gələn = round(cəmi × 18 / 118) ± 0,01 AZN; fərq siqnaldır, sənəd saxlanılır.
+- **Ayrılma:** sənəd ləğv ediləndə və ya cütə uyğun olmayan şəkildə düzəldiləndə cüt avtomatik ayrılır; əl ilə də ayrılır. Hər dəyişiklik audit jurnalındadır.
+- **İş masasında nəzarət:** yolda qalmış köçürmə (222.01 / 222.03 qalığı), cütsüz ƏDV depoziti sənədi, 18/118 fərqi (bağlı dövrdən sonrakı sənədlər üzrə; hər növdən 10-u ayrıca, qalanı bir sətirdə).
+
 ## Qalıqlar, registrlər və hesabatlar
 
 - **Qalıq registri:** hesab × subkonto × ay üzrə yekunlardır. Hər yazılışla eyni tranzaksiyada bazanın trigger-ləri tərəfindən yenilənir.

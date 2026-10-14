@@ -217,6 +217,14 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
       ws.retarget(win.id, { type: 'bank', direction, id: r.id });
     } else detail.reload();
   }
+  async function pair(pairId: string) {
+    if (!doc) return;
+    setMessage('');
+    const r = await m.run({ type: 'bank.pair', companyId: win.companyId, id: doc.id, pairId });
+    if (!r) return;
+    setMessage(pairId ? 'ƏDV cütü bağlandı.' : 'ƏDV cütü ayrıldı.');
+    detail.reload();
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (ws.activeId !== win.id) return;
@@ -597,6 +605,76 @@ export function BankEditor({ direction, id }: { direction: Direction; id?: strin
           depoziti (224.04) qaimənin yalnız ƏDV hissəsini, cari hesab qalan hissəsini bağlayır.
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
         </p>
+        {doc && doc.pairable && (
+          <section className="invoice-postings" aria-label="ƏDV cütü">
+            <div className="section-head">
+              <h2>ƏDV cütü</h2>
+            </div>
+            {doc.pair ? (
+              <>
+                <p>
+                  Cüt sənəd:{' '}
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() =>
+                      ws.open({ type: 'bank', direction, id: doc.pair!.id }, win.companyId)
+                    }
+                  >
+                    {doc.pair.number}
+                  </button>{' '}
+                  · {day(doc.pair.date)} · {doc.pair.account} · {money(doc.pair.amount)}
+                </p>
+                <p className={doc.pair.ok ? 'pair-ok' : 'pair-bad'} role="status">
+                  Ödənişin cəmi {money(doc.pair.total)}: depozitə {money(doc.pair.deposit)}, 18/118
+                  üzrə {money(doc.pair.expected)}
+                  {doc.pair.ok
+                    ? ' — uyğundur.'
+                    : ` — fərq ${money(doc.pair.difference)}. Alıcı ƏDV-ni səhv köçürüb və ya ödənişin bir hissəsi ƏDV-sizdir.`}
+                </p>
+                {!locked && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={m.busy}
+                    onClick={() => void pair('')}
+                  >
+                    Cütü ayır
+                  </button>
+                )}
+              </>
+            ) : doc.pairCandidates.length ? (
+              <>
+                <p>
+                  {doc.pairCandidates.length === 1
+                    ? 'Uyğun sənəd tapıldı, amma o başqa sənədlə də uyğun gəlir; seçimi siz edin:'
+                    : 'Bir neçə uyğun sənəd var (eyni ödəyici, ±3 gün); hansının cüt olduğunu seçin:'}
+                </p>
+                <ul className="pair-candidates">
+                  {doc.pairCandidates.map((c) => (
+                    <li key={c.id}>
+                      {c.number} · {day(c.date)} · {c.account} · {money(c.amount)}{' '}
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        disabled={m.busy || locked}
+                        aria-label={`${c.number} ilə cütləşdir`}
+                        onClick={() => void pair(c.id)}
+                      >
+                        Cütləşdir
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="doc-hint">
+                Cüt yoxdur. {doc.account.startsWith('224') ? 'Əsas hissənin' : 'ƏDV hissəsinin'}{' '}
+                sənədi uçota alınanda (eyni ödəyici, ±3 gün) cüt avtomatik bağlanır.
+              </p>
+            )}
+          </section>
+        )}
         {doc && (
           <section className="invoice-postings" aria-label="Yazılışlar" id={`postings-${win.id}`}>
             <div className="section-head">

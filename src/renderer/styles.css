@@ -2566,3 +2566,26 @@ button.step:active {
 .data-table tfoot td {
   word-spacing: -0.08em;
 }
+
+/* VAT deposit pair (bank document) */
+.pair-ok,
+.pair-bad {
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid;
+}
+.pair-ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+.pair-bad {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+.pair-candidates {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.pair-candidates li {
+  margin-bottom: 4px;
+}

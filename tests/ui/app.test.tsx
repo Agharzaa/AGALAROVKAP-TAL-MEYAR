@@ -448,3 +448,58 @@ test('bank receipt: keyboard entry, matched to the open invoice, the rest is an 
     h.close();
   }
 });
+
+test('VAT pair: a signal on İş masası opens the deposit document; unpair and pair again', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  const deposit = h.run({
+    type: 'bankAccount.save',
+    companyId: s.companyId,
+    bankId: s.bank,
+    iban: 'AZ77AIIB38060019449999999999',
+    currency: 'AZN',
+    account: '224.04',
+    name: 'ƏDV depoziti',
+    archived: false,
+  }).id;
+  const receipt = (bankAccountId: string, amount: string) =>
+    h.run({
+      type: 'bank.save',
+      companyId: s.companyId,
+      direction: 'in',
+      number: '',
+      date: iso,
+      bankAccountId,
+      rate: '',
+      bankReference: '',
+      counterpartyName: '',
+      counterpartyTaxId: '',
+      purpose: '',
+      lines: [{ account: '211.01', sk: [s.customer, s.contract], amount, memo: '' }],
+    }).id;
+  receipt(s.bankAccount, '16000');
+  const vat = receipt(deposit, '2000');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText('ƏDV hissəsi 18/118-ə uyğun deyil');
+    await user.click(screen.getByRole('button', { name: 'Sənədi aç' }));
+    const editor = within(pane());
+    const panel = await editor.findByRole('region', { name: 'ƏDV cütü' });
+    assert.match(within(panel).getByRole('status').textContent ?? '', /fərq/);
+    await user.click(within(panel).getByRole('button', { name: 'Cütü ayır' }));
+    await editor.findByText('ƏDV cütü ayrıldı.');
+    await user.click(await within(panel).findByRole('button', { name: 'BD-000001 ilə cütləşdir' }));
+    await editor.findByText('ƏDV cütü bağlandı.');
+    const doc = h.ledger.query({
+      type: 'bankDocument',
+      companyId: s.companyId,
+      id: vat,
+    }) as BankDocumentDetail;
+    assert.equal(doc.pair?.number, 'BD-000001');
+  } finally {
+    h.close();
+  }
+});

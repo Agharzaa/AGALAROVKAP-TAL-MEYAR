@@ -355,7 +355,7 @@ Hər addım ayrıca commit-dir və testləri yaşıl saxlayır.
    - sxem v6, `bank.save` / `bank.cancel`, şablonlar, qaimələrə bölgü, avans qoruması;
    - forma və jurnal;
    - testlər B1–B8, B16-nın birinci hissəsi.
-2. **3b — ƏDV cütü və nəzarətlər.**
+2. **3b — ƏDV cütü və nəzarətlər.** ✅ Hazır (14.10.2026). Dəqiqləşmə: cüt yalnız hesablaşma sətri (211/531/243/543) olan sənədlər arasındadır — depozitdən büdcəyə ödəniş cütləşmir; sxem v7 bağlı dövr qoruyucusunu cütdən ayırır.
    - `pair_id`, 18/118 yoxlaması, İş masasında siqnallar;
    - testlər B2–B5.
 3. **3c — Çıxarış idxalı.**

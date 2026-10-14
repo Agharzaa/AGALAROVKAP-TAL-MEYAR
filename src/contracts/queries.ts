@@ -272,7 +272,25 @@ export interface BankDocumentSummary {
   accounts: string;
   status: 'posted' | 'cancelled';
 }
+/** The other half of a VAT deposit pair and the 18/118 check of the whole payment. */
+export interface BankPairView {
+  id: string;
+  number: string;
+  date: string;
+  account: string;
+  amount: string;
+  total: string;
+  deposit: string;
+  expected: string;
+  difference: string;
+  ok: boolean;
+}
 export interface BankDocumentDetail extends BankDocumentSummary {
+  /** The document can take part in a VAT deposit pair (AZN, 223 / 224). */
+  pairable: boolean;
+  pair: BankPairView | null;
+  /** Unpaired documents that could complete this one (same payer, ±3 days). */
+  pairCandidates: BankDocumentSummary[];
   rate: string;
   lines: BankLineView[];
   postings: PostingView[];
@@ -369,7 +387,14 @@ export interface HomeView {
   recent: OperationSummary[];
   /** The latest documents of every kind, newest first. */
   documents: RecentDocument[];
-  warnings: { kind: string; text: string; account: string; sk: string[] }[];
+  warnings: {
+    kind: 'advance' | 'stock' | 'cash' | 'transit' | 'vatPair' | 'vatUnpaired';
+    text: string;
+    account: string;
+    sk: string[];
+    /** The bank document the signal is about, when there is one. */
+    document?: { id: string; direction: 'in' | 'out' };
+  }[];
   postings: number;
   closedThrough: string;
 }

@@ -11,7 +11,7 @@ import {
   type SubkontoKind,
 } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import { formatMinor } from '../domain/money.js';
+import { displayMinor, formatMinor } from '../domain/money.js';
 import { formatPrice, formatQty } from '../domain/quantity.js';
 import { parseDate } from '../domain/values.js';
 import type {
@@ -45,6 +45,7 @@ import type {
   TrialRow,
 } from '../contracts/queries.js';
 import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
+import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { loadChart, toAccount } from './tx.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
@@ -850,8 +851,27 @@ function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
       memo: l.memo,
     };
   });
+  const other = r.pair_id ? bankDocument(db, companyId, str(r.pair_id)) : undefined;
+  const check = other ? vatCheck(r, other) : undefined;
   return {
     ...bankSummary(names, r),
+    pairable: isPairable(r),
+    pair:
+      other && check
+        ? {
+            id: str(other.id),
+            number: str(other.number),
+            date: str(other.date),
+            account: str(other.account),
+            amount: money(other.amount as bigint),
+            total: money(check.total),
+            deposit: money(check.deposit),
+            expected: money(check.expected),
+            difference: money(check.difference),
+            ok: check.ok,
+          }
+        : null,
+    pairCandidates: pairCandidates(db, companyId, r).map((c) => bankSummary(names, c)),
     rate: formatPrice(r.rate as bigint),
     lines,
     postings,
@@ -952,6 +972,20 @@ function home(db: Db, companyId: string, today: string): HomeView {
         text: `${a.code} · ${names.name(a.subkonto[0] ?? 'bankAccount', r.key[1]!)}: mənfi pul qalığı (−${money(r.agg.closeKt)}).`,
       });
   }
+  // Transfers between own accounts pass through 222.01 / 222.03: a balance left there is money
+  // that left one account and has not arrived on another.
+  const transit = ['222.01', '222.03'].filter((c) => chart.get(c) && chart.postable(c));
+  for (const r of aggregate(db, companyId, today, today, ['account'], { accounts: transit })) {
+    const net = r.agg.closeDt - r.agg.closeKt;
+    if (net !== 0n)
+      warnings.push({
+        kind: 'transit',
+        account: r.key[0]!,
+        sk: [],
+        text: `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
+      });
+  }
+  warnings.push(...vatPairWarnings(db, companyId, names));
   const recent = db
     .all(
       'SELECT * FROM operations WHERE company_id=? ORDER BY date DESC, rowid DESC LIMIT 12',
@@ -1012,6 +1046,63 @@ function home(db: Db, companyId: string, today: string): HomeView {
     postings: Number(db.get('SELECT COUNT(*) AS n FROM postings WHERE company_id=?', companyId)!.n),
     closedThrough: co.closedThrough,
   };
+}
+
+/** Signals listed one by one before they are summed up in a single line. */
+const SIGNAL_LIMIT = 10;
+
+/**
+ * VAT deposit documents without their current-account half, and pairs whose deposit part is not
+ * 18/118 of the whole payment. Documents in a closed period are past correction and not listed.
+ */
+function vatPairWarnings(db: Db, companyId: string, names: Names): HomeView['warnings'] {
+  const rows = db.all(
+    `SELECT b.*, x.account AS account FROM bank_documents b
+       JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
+     WHERE b.company_id=? AND b.status='posted' AND b.currency='AZN'
+       AND (x.account='224' OR x.account LIKE '224.%')
+       AND b.date>(SELECT closed_through FROM companies WHERE id=b.company_id)
+     ORDER BY b.date, b.rowid`,
+    companyId,
+  );
+  const out: HomeView['warnings'] = [];
+  let unpaired = 0;
+  let mismatched = 0;
+  for (const r of rows) {
+    const doc = { id: str(r.id), direction: r.direction as 'in' | 'out' };
+    const label = `${str(r.number)} · ${dmy(str(r.date))} · ${names.name('bankAccount', str(r.bank_account_id))}`;
+    const other = r.pair_id ? bankDocument(db, companyId, str(r.pair_id)) : undefined;
+    if (!other) {
+      // Budget payments, capital and own transfers through the deposit have no other half.
+      if (!isPairable(r)) continue;
+      if (++unpaired <= SIGNAL_LIMIT)
+        out.push({
+          kind: 'vatUnpaired',
+          account: str(r.account),
+          sk: [str(r.bank_account_id)],
+          document: doc,
+          text: `${label}: ƏDV hissəsi ${displayMinor(r.amount as bigint)} — cari hesabdakı əsas hissə ilə cütləşdirilməyib.`,
+        });
+      continue;
+    }
+    if (isDeposit(str(other.account))) continue;
+    const c = vatCheck(r, other);
+    if (!c.ok && ++mismatched <= SIGNAL_LIMIT)
+      out.push({
+        kind: 'vatPair',
+        account: str(r.account),
+        sk: [str(r.bank_account_id)],
+        document: doc,
+        text: `${label} + ${str(other.number)}: depozitə ${displayMinor(c.deposit)}, 18/118 üzrə ${displayMinor(c.expected)} (fərq ${displayMinor(c.difference)}).`,
+      });
+  }
+  const more = (n: number, kind: 'vatUnpaired' | 'vatPair', what: string) => {
+    if (n > SIGNAL_LIMIT)
+      out.push({ kind, account: '224', sk: [], text: `Daha ${n - SIGNAL_LIMIT} ${what}.` });
+  };
+  more(unpaired, 'vatUnpaired', 'cütsüz ƏDV depoziti sənədi');
+  more(mismatched, 'vatPair', '18/118-ə uyğun olmayan cüt');
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

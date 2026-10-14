@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 const v1 = `
 CREATE TABLE companies(
@@ -681,6 +681,22 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v7 — the VAT deposit pair (stage 3b). Linking two bank documents is analytics, not a change of
+// the document: the closed-period guard now watches the document's own fields only, so a pair
+// can still be undone when its other half is cancelled in an open period.
+
+const v7 = `
+DROP TRIGGER bank_documents_period;
+CREATE TRIGGER bank_documents_period
+BEFORE UPDATE OF number,number_key,date,bank_account_id,currency,rate,amount,amount_azn,
+  bank_reference,counterparty_name,counterparty_tax_id,purpose,lines,status,version ON bank_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+  OR NEW.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+CREATE INDEX bank_documents_pair ON bank_documents(company_id,pair_id) WHERE pair_id IS NOT NULL;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -688,4 +704,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 4, sql: v4 },
   { version: 5, sql: v5 },
   { version: 6, sql: v6 },
+  { version: 7, sql: v7 },
 ];

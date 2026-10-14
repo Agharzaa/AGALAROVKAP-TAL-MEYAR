@@ -276,6 +276,13 @@ export const commandSchema = z.discriminatedUnion('type', [
     lines: z.array(bankLineInput).min(1).max(500),
   }),
   z.object({
+    type: z.literal('bank.pair'),
+    ...base,
+    id,
+    /** The other half of the VAT deposit pair; empty undoes the pair. */
+    pairId: z.string().max(80),
+  }),
+  z.object({
     type: z.literal('bank.cancel'),
     ...base,
     id,
