@@ -491,11 +491,21 @@ textarea:focus-visible {
   background: var(--ok);
 }
 .notice.info {
+  background: var(--select);
+  border-color: #cfd9e8;
+  border-left-color: var(--link);
+}
+.notice.info::before {
+  content: 'i';
+  background: var(--link);
+  font-style: italic;
+}
+.notice.warning {
   background: var(--wait-bg);
   border-color: #eadbb5;
   border-left-color: var(--wait);
 }
-.notice.info::before {
+.notice.warning::before {
   content: '!';
   background: var(--wait);
 }
@@ -2661,4 +2671,8 @@ button.step:active {
 .chip-wait {
   color: var(--ink-2);
   background: var(--frame);
+}
+.chip-bad {
+  color: var(--bad);
+  background: var(--bad-bg);
 }

@@ -955,7 +955,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
           kind: 'advance',
           account: advAcc,
           sk: [p, c],
-          text: `${names.name('partner', p)} · ${names.name('contract', c)}: ${debtAcc}-də ${money(debt * debtSign)} borc, ${advAcc}-də ${money(adv * -debtSign)} avans — ${text}`,
+          text: `${names.name('partner', p)} · ${names.name('contract', c)}: ${debtAcc}-də ${displayMinor(debt * debtSign)} borc, ${advAcc}-də ${displayMinor(adv * -debtSign)} avans — ${text}`,
         });
       }
     }
@@ -983,7 +983,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
         kind: 'cash',
         account: a.code,
         sk: [r.key[1]!],
-        text: `${a.code} · ${names.name(a.subkonto[0] ?? 'bankAccount', r.key[1]!)}: mənfi pul qalığı (−${money(r.agg.closeKt)}).`,
+        text: `${a.code} · ${names.name(a.subkonto[0] ?? 'bankAccount', r.key[1]!)}: mənfi pul qalığı (${displayMinor(-r.agg.closeKt)}).`,
       });
   }
   // Transfers between own accounts pass through 222.01 / 222.03: a balance left there is money

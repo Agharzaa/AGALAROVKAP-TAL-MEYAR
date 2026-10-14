@@ -12,7 +12,7 @@ import { ModuleFrame } from '../frame';
 import { day, money, toField } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
-import { accountOptions, Picker } from '../picker';
+import { accountOptions, Picker, subkontoOptions } from '../picker';
 import { DataTable, Empty, Field, Modal, Notice, type Column } from '../ui';
 import { useWindow } from '../workspace';
 
@@ -199,12 +199,17 @@ export function RuleDialog({
                   <b>{l.account}</b> {account(l.account)?.name}
                 </td>
                 <td>
-                  {(account(l.account)?.subkonto ?? []).map((k, j) =>
-                    k === 'document' && !l.sk[j] ? (
-                      <small key={j}>hesablaşma sənədi — avtomatik · </small>
-                    ) : null,
-                  )}
-                  {l.sk.filter(Boolean).length} element seçilib
+                  {(account(l.account)?.subkonto ?? [])
+                    .map((k, j) =>
+                      k === 'document' && !l.sk[j]
+                        ? 'hesablaşma sənədi avtomatik'
+                        : (subkontoOptions(catalog, k, l.account, l.sk[0] ?? '').find(
+                            (o) => o.value === l.sk[j],
+                          )?.label ??
+                          l.sk[j] ??
+                          '—'),
+                    )
+                    .join(' · ') || '—'}
                 </td>
                 <td className="num narrow">
                   <input

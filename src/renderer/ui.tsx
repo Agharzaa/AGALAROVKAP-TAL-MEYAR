@@ -44,7 +44,8 @@ export function Notice({
   children,
   onClose,
 }: {
-  kind?: 'error' | 'success' | 'info';
+  /** info: neutral explanation; warning: needs the user's attention but blocks nothing. */
+  kind?: 'error' | 'success' | 'info' | 'warning';
   children: ReactNode;
   onClose?: () => void;
 }) {

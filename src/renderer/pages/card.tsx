@@ -179,7 +179,7 @@ export function CardPage({
             </Notice>
           )}
           {c?.truncated && (
-            <Notice kind="info">
+            <Notice kind="warning">
               Siyahı 20 000 sətirlə məhdudlaşdırılıb; cəmlər tamdır. Dövrü daraldın.
             </Notice>
           )}

@@ -40,6 +40,21 @@ interface Preview {
   read: StatementReadResult;
 }
 
+/** A few words for the row's proposal cell: what the system recognised it by. */
+function summary(l: StatementLineView): string {
+  const p = l.proposal;
+  if (!p) return '';
+  if (p.matches.length) return `Əl ilə daxil edilib: ${p.matches.map((m) => m.number).join(', ')}`;
+  if (p.rule) return `Qayda: ${p.rule.name}${l.manualOnly ? ' (yalnız təklif)' : ''}`;
+  if (p.budgetCode && p.account) return `Büdcə kodu ${p.budgetCode}`;
+  if (p.newPartner) return `Yeni kontragent, VÖEN ${p.newPartner.taxId}`;
+  // "VÖEN üzrə tanındı: Gilan Tekstil MMC." → the partner's name says it all.
+  const known = /tanındı: ([^.]+)/.exec(p.reason)?.[1];
+  if (known) return known;
+  const first = p.reason.split(/(?<=[.:—])\s/)[0] ?? '';
+  return first.replace(/[.:—]$/, '');
+}
+
 async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice());
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -221,11 +236,17 @@ export function StatementsPage() {
         ) : l.state === 'ignored' ? (
           <span title={l.reason}>{l.reason}</span>
         ) : (
+          // The cell names what was recognised in a few words; the full reason is on hover and
+          // at the top of the form the row opens.
           <span title={l.proposal?.reason}>
-            <b className={`chip ${l.proposal?.state === 'proposal' ? 'chip-ok' : 'chip-wait'}`}>
-              {l.proposal?.state === 'proposal' ? 'Təklif' : 'Naməlum'}
-            </b>{' '}
-            {l.proposal?.account && <b>{l.proposal.account}</b>} {l.proposal?.reason}
+            {l.autoNote ? (
+              <b className="chip chip-bad">Alınmadı</b>
+            ) : (
+              <b className={`chip ${l.proposal?.state === 'proposal' ? 'chip-ok' : 'chip-wait'}`}>
+                {l.proposal?.state === 'proposal' ? 'Təklif' : 'Naməlum'}
+              </b>
+            )}{' '}
+            {l.proposal?.account && <b>{l.proposal.account}</b>} {summary(l)}
           </span>
         ),
     },
@@ -298,7 +319,11 @@ export function StatementsPage() {
       </span>
       {difference && (
         <b className={isZero(difference) ? 'pair-ok' : 'pair-bad'}>
-          {isZero(difference) ? 'uyğundur' : `fərq ${money(difference)}`}
+          {isZero(difference)
+            ? 'uyğundur'
+            : difference.startsWith('-')
+              ? `uçotda ${money(difference.slice(1))} çox`
+              : `bankda ${money(difference)} çox`}
         </b>
       )}
     </div>
@@ -502,7 +527,6 @@ export function StatementsPage() {
             onOpen={(l) =>
               l.state === 'new' ? book(l) : l.state === 'posted' ? openDoc(l) : undefined
             }
-            rowClass={(l) => (l.proposal?.state === 'unknown' ? 'muted' : '')}
             empty={
               <Empty
                 title={

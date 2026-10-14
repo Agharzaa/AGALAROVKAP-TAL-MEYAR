@@ -265,7 +265,7 @@ test('October: the next invoice and the advance offset; home warns until offset'
       .home()
       .warnings.map((w) => w.text)
       .join('\n'),
-    /Alıcı MMC · Müqavilə №7 · satış: 211-də 5000.00 borc, 543-də 3000.00 avans/,
+    /Alıcı MMC · Müqavilə №7 · satış: 211-də 5.000,00 borc, 543-də 3.000,00 avans/,
   );
   f.operation(
     '2026-10-06',

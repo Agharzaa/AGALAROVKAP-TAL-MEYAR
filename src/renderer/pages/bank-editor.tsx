@@ -422,6 +422,21 @@ export function BankEditor({
       }
       notices={
         <>
+          {/* The VAT pair matters before the lines: say it at the top, details further down. */}
+          {doc?.pair && !doc.pair.ok && (
+            <Notice kind="warning">
+              ƏDV cütü {doc.pair.number}: depozitə {money(doc.pair.deposit)}, 18/118 üzrə{' '}
+              {money(doc.pair.expected)} (fərq {money(doc.pair.difference)}). Ətraflı — aşağıda “ƏDV
+              cütü”.
+            </Notice>
+          )}
+          {doc && !doc.pair && doc.pairable && doc.pairCandidates.length > 0 && (
+            <Notice kind="info">
+              ƏDV cütü seçilməyib: {doc.pairCandidates.length} uyğun sənəd var (
+              {doc.pairCandidates.map((c) => c.number).join(', ')}) — aşağıda “ƏDV cütü” bölməsində
+              seçin.
+            </Notice>
+          )}
           {row && !doc && (
             <Notice kind="info">
               Çıxarış sətri {row.row}: {row.direction === 'in' ? 'daxilolma' : 'məxaric'}{' '}
@@ -739,7 +754,7 @@ export function BankEditor({
                   üzrə {money(doc.pair.expected)}
                   {doc.pair.ok
                     ? ' — uyğundur.'
-                    : ` — fərq ${money(doc.pair.difference)}. Alıcı ƏDV-ni səhv köçürüb və ya ödənişin bir hissəsi ƏDV-sizdir.`}
+                    : ` — fərq ${money(doc.pair.difference)}. ƏDV hissəsi səhv köçürülüb və ya ödənişin bir hissəsi ƏDV-sizdir.`}
                 </p>
                 {!locked && (
                   <button

@@ -309,7 +309,7 @@ function QuickSearch() {
       <input
         ref={input}
         aria-label="Axtarış və əmrlər"
-        placeholder="Nə etmək istəyirsiniz? Hesab, kontragent, bölmə…"
+        placeholder="Hesab, kontragent, sənəd, bölmə…"
         value={text}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}

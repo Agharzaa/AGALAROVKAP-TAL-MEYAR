@@ -536,7 +536,7 @@ test('bank statement: CSV preview, load, book a row from its prefilled form', as
     await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
     await page.findByText(/Yükləndi: yeni 2 sətir/);
     const head = await page.findByRole('region', { name: 'Çıxarış ilə uçotun tutuşdurulması' });
-    assert.match(head.textContent ?? '', /fərq/);
+    assert.match(head.textContent ?? '', /bankda 248,50 çox/);
     await user.click(page.getByRole('button', { name: /Sətir 5: uçota al/ }));
     const editor = within(pane());
     await editor.findByText(/Çıxarış sətri 5: daxilolma/);
