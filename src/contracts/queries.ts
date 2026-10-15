@@ -45,6 +45,14 @@ export const querySchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('eqDocument'), companyId: id, id }),
   z.object({ type: z.literal('eqMaps'), companyId: id }),
+  /** DVX ↔ books for a period: VAT by month, e-qaimələr not booked, invoices DVX does not show. */
+  z.object({
+    type: z.literal('eqReconcile'),
+    companyId: id,
+    direction: z.enum(['sale', 'purchase']),
+    from: date,
+    to: date,
+  }),
   z.object({ type: z.literal('rules'), companyId: id }),
   /** A rule prefilled from a bank document the accountant posted. */
   z.object({ type: z.literal('ruleDraft'), companyId: id, documentId: id }),
@@ -538,12 +546,24 @@ export interface HomeView {
   /** The latest documents of every kind, newest first. */
   documents: RecentDocument[];
   warnings: {
-    kind: 'advance' | 'stock' | 'cash' | 'transit' | 'vatPair' | 'vatUnpaired';
+    kind:
+      | 'advance'
+      | 'stock'
+      | 'cash'
+      | 'transit'
+      | 'vatPair'
+      | 'vatUnpaired'
+      | 'eqConflict'
+      | 'eqWaiting'
+      | 'eqVat'
+      | 'eqMissing';
     text: string;
     account: string;
     sk: string[];
     /** The bank document the signal is about, when there is one. */
     document?: { id: string; direction: 'in' | 'out' };
+    /** The e-qaimə box the signal is about (stage 4c). */
+    eq?: 'sale' | 'purchase';
   }[];
   postings: number;
   closedThrough: string;
@@ -628,6 +648,17 @@ export interface EqProposal {
   sameNumber?: { id: string; number: string; total: string };
   /** Numberless invoices of the same partner and total (±5 days): link by hand. */
   candidates: { id: string; number: string; date: string; total: string }[];
+  /**
+   * A correction e-qaimə: the e-qaimə it corrects and, when that one is booked, its invoice —
+   * the correction is applied to that invoice (never booked as a second one).
+   */
+  corrects?: {
+    documentId: string;
+    number: string;
+    invoiceId: string;
+    invoiceNumber: string;
+    invoiceDate: string;
+  };
 }
 
 export interface EqDocumentView {
@@ -707,4 +738,49 @@ export interface EqMapView {
   archived: boolean;
   uses: number;
   lastUsedAt: string;
+}
+
+/** DVX ↔ books for a period (stage 4c; docs/MERHELE-4-EQAIME.md §8.5). */
+export interface EqReconcileView {
+  /** Periods covered by loaded DVX files: only there can "not in DVX" be told. */
+  covered: { from: string; to: string }[];
+  months: {
+    month: string;
+    dvxCount: number;
+    dvxNet: string;
+    dvxVat: string;
+    bookedCount: number;
+    bookedVat: string;
+    /** DVX VAT minus the books' VAT. */
+    difference: string;
+  }[];
+  /** Accepted in DVX, not booked (nor set aside). */
+  notBooked: {
+    id: string;
+    number: string;
+    date: string;
+    name: string;
+    taxId: string;
+    vat: string;
+    total: string;
+  }[];
+  /** Invoices with an e-qaimə number that the loaded DVX files of their period do not hold. */
+  notInDvx: {
+    id: string;
+    number: string;
+    eqNumber: string;
+    date: string;
+    partner: string;
+    vat: string;
+    total: string;
+  }[];
+  /** Invoices without an e-qaimə number (a purchase's VAT is offset only on an e-qaimə). */
+  withoutEq: {
+    id: string;
+    number: string;
+    date: string;
+    partner: string;
+    vat: string;
+    total: string;
+  }[];
 }

@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { DomainError } from '../domain/errors.js';
 import { eqKind, eqStatus, type EqDirection, type EqStatus } from '../domain/eqaime.js';
-import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
+import { displayMinor, formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult, EqDocumentInputDto } from '../contracts/commands.js';
 import type {
@@ -22,6 +22,8 @@ import type {
   EqInboxView,
   EqLineView,
   EqProposal,
+  EqReconcileView,
+  HomeView,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import type { Tx } from './tx.js';
@@ -298,7 +300,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       if (cancel && state === 'waiting') {
         state = 'ignored';
         reason = cancel;
-      } else if (!cancel && state === 'ignored' && reason.startsWith('DVX:')) {
+      } else if (!cancel && state === 'ignored' && Object.values(dvxReason).includes(reason)) {
         state = 'waiting';
         reason = '';
       }
@@ -409,6 +411,9 @@ export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResu
     throw new DomainError('E-qaimə kənara qoyulmayıb.', undefined, 'conflict');
   const cancel = dvxReason[r.status as EqStatus];
   if (cancel) throw new DomainError(`${cancel}; uçota alına bilməz.`, undefined, 'conflict');
+  // Set aside by DVX itself (e.g. replaced by its correction), not by the accountant.
+  if (String(r.reason).startsWith('DVX:'))
+    throw new DomainError(`${String(r.reason)}; geri qaytarılmır.`, undefined, 'conflict');
   tx.db.run(
     "UPDATE eq_documents SET state='waiting', reason='', version=version+1, updated_at=? WHERE id=?",
     tx.clock.now(),
@@ -425,7 +430,11 @@ export function eqBucket(r: Row, proposal: EqProposal | null): EqBucket {
   const status = r.status as EqStatus;
   if (r.conflict !== '') return 'conflict';
   if (r.state === 'posted')
-    return dvxReason[status] ? 'conflict' : r.posted_by === 'auto' ? 'auto' : 'posted';
+    return dvxReason[status] || status === 'corrected'
+      ? 'conflict'
+      : r.posted_by === 'auto'
+        ? 'auto'
+        : 'posted';
   if (r.state === 'ignored') return 'ignored';
   if (status !== 'accepted') return 'dvx';
   return proposal?.state === 'unknown' ? 'unknown' : 'proposal';
@@ -557,4 +566,203 @@ export function eqDocument(db: Db, companyId: string, id: string): EqDocumentDet
       })),
     version: Number(r.version),
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// DVX ↔ books (stage 4c; docs/MERHELE-4-EQAIME.md §8.5)
+
+const nextDay = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Loaded DVX periods of a direction, merged where they touch or overlap. */
+function coverage(db: Db, companyId: string, direction: EqDirection) {
+  const out: { from: string; to: string }[] = [];
+  for (const r of db.all(
+    'SELECT period_from, period_to FROM eq_imports WHERE company_id=? AND direction=? ORDER BY period_from',
+    companyId,
+    direction,
+  )) {
+    const from = String(r.period_from);
+    const to = String(r.period_to);
+    const last = out[out.length - 1];
+    if (last && from <= nextDay(last.to)) {
+      if (to > last.to) last.to = to;
+    } else out.push({ from, to });
+  }
+  return out;
+}
+
+/** VAT of an invoice in AZN, as its stored lines carry it. */
+const invoiceVat = (lines: string) =>
+  (JSON.parse(lines) as { vatAzn?: string }[]).reduce((s, l) => {
+    const v = l.vatAzn ?? '';
+    return s + (v ? (v.startsWith('-') ? -parseMoney(v.slice(1)) : parseMoney(v)) : 0n);
+  }, 0n);
+
+export function eqReconcile(
+  db: Db,
+  companyId: string,
+  direction: EqDirection,
+  from: string,
+  to: string,
+): EqReconcileView {
+  const covered = coverage(db, companyId, direction);
+  const inCovered = (d: string) => covered.some((c) => d >= c.from && d <= c.to);
+  const months = new Map<string, { dc: number; dn: bigint; dv: bigint; bc: number; bv: bigint }>();
+  const month = (d: string) => {
+    const m = d.slice(0, 7);
+    let x = months.get(m);
+    if (!x) months.set(m, (x = { dc: 0, dn: 0n, dv: 0n, bc: 0, bv: 0n }));
+    return x;
+  };
+  const notBooked: EqReconcileView['notBooked'] = [];
+  // An e-qaimə replaced by its correction is no longer DVX's word (whatever its status says).
+  const replaced = new Set(
+    db
+      .all(
+        `SELECT tax_id, ref_key FROM eq_documents WHERE company_id=? AND direction=? AND kind='correction'
+           AND status='accepted' AND ref_key<>''`,
+        companyId,
+        direction,
+      )
+      .map((r) => `${String(r.tax_id)}|${String(r.ref_key)}`),
+  );
+  for (const d of db.all(
+    `SELECT id, eq_number, eq_key, date, name, tax_id, net, vat, total, status, kind, state FROM eq_documents
+     WHERE company_id=? AND direction=? AND date BETWEEN ? AND ? ORDER BY date, eq_key`,
+    companyId,
+    direction,
+    from,
+    to,
+  )) {
+    if (d.status !== 'accepted' || (d.kind !== 'main' && d.kind !== 'correction')) continue;
+    if (d.kind === 'main' && replaced.has(`${String(d.tax_id)}|${String(d.eq_key)}`)) continue;
+    const m = month(String(d.date));
+    m.dc++;
+    m.dn += d.net as bigint;
+    m.dv += d.vat as bigint;
+    if (d.state === 'waiting')
+      notBooked.push({
+        id: String(d.id),
+        number: String(d.eq_number),
+        date: String(d.date),
+        name: String(d.name),
+        taxId: String(d.tax_id),
+        vat: money(d.vat as bigint),
+        total: money(d.total as bigint),
+      });
+  }
+  const notInDvx: EqReconcileView['notInDvx'] = [];
+  const withoutEq: EqReconcileView['withoutEq'] = [];
+  for (const i of db.all(
+    `SELECT i.id, i.number, i.eq_number, i.eq_key, i.date, i.lines, i.total_azn, p.name AS partner,
+       EXISTS(SELECT 1 FROM eq_documents d WHERE d.company_id=i.company_id AND d.invoice_id=i.id) AS bound,
+       EXISTS(SELECT 1 FROM eq_documents d WHERE d.company_id=i.company_id AND d.direction=i.direction
+         AND d.tax_id=p.tax_id AND d.eq_key=i.eq_key AND i.eq_key<>'') AS known
+     FROM invoices i JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
+     WHERE i.company_id=? AND i.direction=? AND i.status='posted' AND i.date BETWEEN ? AND ?
+     ORDER BY i.date, i.number_key`,
+    companyId,
+    direction,
+    from,
+    to,
+  )) {
+    const vat = invoiceVat(String(i.lines));
+    const m = month(String(i.date));
+    m.bc++;
+    m.bv += vat;
+    if (i.bound === 1n) continue;
+    const row = {
+      id: String(i.id),
+      number: String(i.number),
+      date: String(i.date),
+      partner: String(i.partner),
+      vat: money(vat),
+      total: money(i.total_azn as bigint),
+    };
+    if (!i.eq_key) withoutEq.push(row);
+    else if (i.known !== 1n && inCovered(String(i.date)))
+      notInDvx.push({ ...row, eqNumber: String(i.eq_number) });
+  }
+  return {
+    covered,
+    months: [...months]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([m, x]) => ({
+        month: m,
+        dvxCount: x.dc,
+        dvxNet: money(x.dn),
+        dvxVat: money(x.dv),
+        bookedCount: x.bc,
+        bookedVat: money(x.bv),
+        difference: money(x.dv - x.bv),
+      })),
+    notBooked,
+    notInDvx,
+    withoutEq,
+  };
+}
+
+/** İş masası signals of the e-qaimə boxes (open period only; a closed period is past change). */
+export function eqWarnings(
+  db: Db,
+  companyId: string,
+  closed: string,
+  today: string,
+): HomeView['warnings'] {
+  const out: HomeView['warnings'] = [];
+  const from = closed ? nextDay(closed) : '2000-01-01';
+  for (const direction of ['purchase', 'sale'] as const) {
+    const box = direction === 'purchase' ? 'Alınan' : 'Göndərilən';
+    const push = (kind: HomeView['warnings'][number]['kind'], text: string) =>
+      out.push({ kind, text: `${box} e-qaimələr: ${text}`, account: '', sk: [], eq: direction });
+    const conflicts = db.get(
+      `SELECT COUNT(*) AS n FROM eq_documents WHERE company_id=? AND direction=? AND date>=?
+         AND (conflict<>'' OR (state='posted' AND status IN('cancelled','rejected','corrected')))`,
+      companyId,
+      direction,
+      from,
+    )!.n as bigint;
+    if (conflicts)
+      push(
+        'eqConflict',
+        `${conflicts} ziddiyyət — DVX-də ləğv və ya düzəliş edilib, amma uçotda var, ya da fərqli məbləğlə gəlib.`,
+      );
+    const waiting = db.get(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(vat),0) AS vat FROM eq_documents WHERE company_id=? AND direction=?
+         AND date>=? AND state='waiting' AND status='accepted'`,
+      companyId,
+      direction,
+      from,
+    )!;
+    if (waiting.n)
+      push(
+        'eqWaiting',
+        `${String(waiting.n)} e-qaimə DVX-də təsdiqlənib, uçota alınmayıb (ƏDV ${displayMinor(waiting.vat as bigint)}).`,
+      );
+    const r = eqReconcile(db, companyId, direction, from, today);
+    const show = (v: string) =>
+      displayMinor(v.startsWith('-') ? -parseMoney(v.slice(1)) : parseMoney(v));
+    for (const m of r.months)
+      if (
+        m.difference !== '0.00' &&
+        r.covered.some((c) => c.from.slice(0, 7) <= m.month && c.to.slice(0, 7) >= m.month)
+      )
+        push(
+          'eqVat',
+          `${m.month}: ƏDV DVX-də ${show(m.dvxVat)}, uçotdakı qaimələrdə ${show(m.bookedVat)} — fərq ${show(m.difference)}.`,
+        );
+    if (r.notInDvx.length)
+      push(
+        'eqMissing',
+        `${r.notInDvx.length} qaimənin e-qaimə nömrəsi yüklənmiş DVX fayllarında yoxdur (${r.notInDvx
+          .slice(0, 3)
+          .map((x) => `${x.number} · ${x.eqNumber}`)
+          .join(', ')}${r.notInDvx.length > 3 ? '…' : ''}).`,
+      );
+  }
+  return out;
 }

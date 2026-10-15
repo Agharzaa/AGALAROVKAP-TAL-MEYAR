@@ -101,6 +101,10 @@ const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
   transit: 'Köçürmə yolda qalıb',
   vatPair: 'ƏDV hissəsi 18/118-ə uyğun deyil',
   vatUnpaired: 'ƏDV hissəsinin cütü yoxdur',
+  eqConflict: 'DVX ilə ziddiyyət',
+  eqWaiting: 'E-qaimələr uçota alınmayıb',
+  eqVat: 'ƏDV: DVX ilə uçot fərqlidir',
+  eqMissing: 'E-qaimə DVX-də tapılmadı',
 };
 const viewOf = (d: RecentDocument): View => {
   switch (d.kind) {
@@ -152,15 +156,20 @@ export function HomePage({
         state: 'bad',
         title: warningTitle[w.kind],
         detail: w.text,
-        ...(w.document
+        ...(w.eq
           ? {
-              action: 'Sənədi aç',
-              view: { type: 'bank', direction: w.document.direction, id: w.document.id },
+              action: 'Qutunu aç',
+              view: { type: 'page', page: w.eq === 'purchase' ? 'eqPurchase' : 'eqSale' },
             }
-          : {
-              action: 'Hesab kartı',
-              view: { type: 'accountCard', account: w.account, sk: w.sk },
-            }),
+          : w.document
+            ? {
+                action: 'Sənədi aç',
+                view: { type: 'bank', direction: w.document.direction, id: w.document.id },
+              }
+            : {
+                action: 'Hesab kartı',
+                view: { type: 'accountCard', account: w.account, sk: w.sk },
+              }),
       });
   }
   const amount = (v: string) => (v === '0.00' ? '' : money(v));

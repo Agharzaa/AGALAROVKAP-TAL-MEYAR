@@ -99,13 +99,14 @@ function fromDetail(d: InvoiceDetail): Form {
 }
 
 /** A new invoice prefilled from a DVX e-qaimə: what the system recognised (docs §8.4). */
-function fromEq(e: EqDocumentDetail, base: Form): Form {
+function fromEq(e: EqDocumentDetail, base: Form, keepHeader = false): Form {
   const p = e.proposal;
   return {
     ...base,
-    date: e.date,
-    partnerId: p?.partnerId ?? '',
-    contractId: p?.contractId ?? '',
+    // A correction applied to a booked invoice keeps its date, partner and contract.
+    ...(keepHeader
+      ? {}
+      : { date: e.date, partnerId: p?.partnerId ?? '', contractId: p?.contractId ?? '' }),
     pricesIncludeVat: false,
     eqNumber: e.number,
     memo: e.note.slice(0, 500),
@@ -196,7 +197,7 @@ export function InvoiceEditor({
   const [reason, setReason] = useState('');
   const doc = detail.data;
   // The e-qaimə this invoice books: the one it was opened for, or the one it is bound to.
-  const eqRef = id ? (doc?.eqDocumentId ?? '') : (eqDocumentId ?? '');
+  const eqRef = eqDocumentId || doc?.eqDocumentId || '';
   const eqDoc = useQuery<EqDocumentDetail>(
     eqRef ? { type: 'eqDocument', companyId: win.companyId, id: eqRef } : null,
   );
@@ -212,7 +213,7 @@ export function InvoiceEditor({
   useEffect(() => {
     if (form || !catalog) return;
     if (id && !doc) return;
-    if (!id && eqDocumentId && !eq) return;
+    if (eqDocumentId && !eq) return;
     const vatPayer = catalog.company.vatPayer;
     const fresh: Form = doc
       ? fromDetail(doc)
@@ -230,7 +231,7 @@ export function InvoiceEditor({
           manual: false,
           postings: [],
         };
-    const initial = !id && eq ? fromEq(eq, fresh) : fresh;
+    const initial = eqDocumentId && eq ? fromEq(eq, fresh, !!id) : fresh;
     // An invoice opened from an e-qaimə is unsaved work from the start.
     baseline.current = snapshot(fresh);
     setForm(initial);
@@ -290,7 +291,7 @@ export function InvoiceEditor({
       lines: form.lines.map((l) => toInput(l, direction)),
       ...(form.manual ? { postings: form.postings.map(toEntryInput) } : {}),
       ...(id && doc ? { id, version: doc.version } : {}),
-      ...(!id && eqDocumentId ? { eqDocumentId } : {}),
+      ...(eqDocumentId ? { eqDocumentId } : {}),
     });
     if (!r) return;
     if (close) {
@@ -420,7 +421,7 @@ export function InvoiceEditor({
       }
       notices={
         <>
-          {eq && <EqBanner eq={eq} fresh={!id} />}
+          {eq && <EqBanner eq={eq} fresh={!!eqDocumentId && eq.state === 'waiting'} />}
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>

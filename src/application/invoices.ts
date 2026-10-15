@@ -302,7 +302,10 @@ function buildPostings(
   chart: Chart,
   id: string,
   n: Normalized,
+  /** A new invoice: no other document can refer to its id yet, so nothing is paid on it. */
+  fresh: boolean,
 ): Posting[] {
+  const unpaid = { amount: 0n, currency: 0n };
   const self = `${INVOICE}:${id}`;
   const { header, foreign, currency } = n;
   const partner = header.partnerId;
@@ -419,7 +422,9 @@ function buildPostings(
     const advance = settle('543');
     // Only what is still owed on this invoice is offset: payments already made against it
     // (credits on its own receivable key from other documents) reduce the amount.
-    const paid = settlementBalance(tx.db, companyId, receivable.code, partner, contract, self);
+    const paid = fresh
+      ? unpaid
+      : settlementBalance(tx.db, companyId, receivable.code, partner, contract, self);
     const owed = n.lines.reduce((s, l) => s + l.azn.gross, 0n) + paid.amount;
     const owedCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) + paid.currency : null;
     const open = openAdvances(
@@ -481,7 +486,9 @@ function buildPostings(
     });
     const advance = settle('243');
     // Payments already made against this invoice (debits on its payable key) reduce the offset.
-    const paid = settlementBalance(tx.db, companyId, payable.code, partner, contract, self);
+    const paid = fresh
+      ? unpaid
+      : settlementBalance(tx.db, companyId, payable.code, partner, contract, self);
     const owed = n.lines.reduce((s, l) => s + l.azn.gross, 0n) - paid.amount;
     const owedCur = foreign ? n.lines.reduce((s, l) => s + l.doc.gross, 0n) - paid.currency : null;
     const open = openAdvances(
@@ -594,6 +601,8 @@ function guardSettlement(
   previous: readonly Posting[],
   current: readonly Posting[],
 ) {
+  // Nothing refers to a new invoice yet: no payment on it can be left as an overpayment.
+  if (!previous.length) return;
   const self = `${INVOICE}:${id}`;
   const keys = new Map<
     string,
@@ -750,7 +759,7 @@ export function saveInvoice(
   const manual = cmd.postings
     ? buildManualPostings(tx, cmd.companyId, chart, `${INVOICE}:${id}`, cmd.postings, 'postings')
     : null;
-  const postings = manual ?? buildPostings(tx, cmd.companyId, chart, id, n);
+  const postings = manual ?? buildPostings(tx, cmd.companyId, chart, id, n, !existing);
   const stored = JSON.stringify(data.lines);
   const values = [
     number,

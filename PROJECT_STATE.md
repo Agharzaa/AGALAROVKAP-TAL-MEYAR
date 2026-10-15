@@ -223,7 +223,22 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 94, `npm run test:ui` 13, `
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 105, `npm run test:ui` 14, `npm run test:perf` keçir.
 
-**Sadələşdirmə / sonraya:** DVX sətirləri qaimə formasında başlıqdakı zolaqda göstərilir (hər sətrin yanında yox); Ctrl+Enter formanı bağlayır, qutu növbəti sətri özü açmır. Düzəliş e-qaiməsi, DVX ↔ uçot tutuşdurması və İş masası siqnalları — 4c; kabinet pəncərəsi — 4d. Yeni pəncərələrin görünüşü ekran şəkli ilə yoxlanmayıb.
+**Sadələşdirmə / sonraya:** DVX sətirləri qaimə formasında başlıqdakı zolaqda göstərilir (hər sətrin yanında yox); Ctrl+Enter formanı bağlayır, qutu növbəti sətri özü açmır. Kabinet pəncərəsi — 4d. Yeni pəncərələrin görünüşü ekran şəkli ilə yoxlanmayıb.
+
+### 4c — DVX statusları və tutuşdurma (15.10.2026)
+
+| Sahə                                                                                                                                                                                                                                                                                                                                                                                            | Sübut                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| DVX-də ləğv / imtina, uçotda var: "Ziddiyyət" tabı və İş masası siqnalı; səssiz storno yoxdur — "Qaiməni ləğv et" düyməsi (storno), sonra e-qaimə kənara qoyulur; ödənilmiş qaimə ləğv olunmur (mesaj ödəniş sənədini göstərir)                                                                                                                                                                 | `eqaime-book.test.ts` (E10), `tests/ui` |
+| Düzəliş e-qaiməsi heç vaxt avtomatik deyil. Əsas uçotda deyilsə — düzəliş onun yerinə uçota alınır, əsas "DVX: düzəliş … ilə əvəz olunub" səbəbi ilə kənara qoyulur (geri qaytarılmır); əsas uçotdadırsa — həmin qaimə (öz tarixi ilə) düzəlişin sətirləri ilə storno + yeni yazılışla dəyişir, qaimənin e-qaimə nömrəsi düzəlişin nömrəsi olur; ikinci qaimə qadağandır; bağlı dövrdə — əl ilə | E11 (3 hal), `tests/ui`                 |
+| Əsas e-qaimə DVX-də "düzəliş edilib" statusu alanda, uçotdakı qaiməsi düzəliş gələnədək "Ziddiyyət"dədir                                                                                                                                                                                                                                                                                        | E11                                     |
+| DVX ↔ uçot (qutuda, iş dövrü üzrə): ay-ay DVX-in ƏDV-si (təsdiqlənmiş, düzəlişlə əvəzlənmiş əsaslar sayılmır) və uçotdakı qaimələrin ƏDV-si, fərq; uçota alınmamış e-qaimələr; yüklənmiş DVX dövründə olub DVX-də olmayan e-qaimə nömrəli qaimələr; nömrəsiz qaimələr                                                                                                                           | `eqaime-book.test.ts`, `tests/ui`       |
+| İş masası (açıq dövr): ziddiyyətlər, uçota alınmamış e-qaimələr (ƏDV ilə), ay üzrə ƏDV fərqi, DVX-də tapılmayan nömrələr — "Qutunu aç" keçidi ilə                                                                                                                                                                                                                                               | `eqaime-book.test.ts`                   |
+| Yük (500 000 yazılış): 5 000 e-qaimə + 1 200 avtomatik qaimə ~7,9 s (hədd 10 s; yeni qaimədə mənasız ödəniş sorğuları da çıxarıldı), İş masası e-qaimə siqnalları ilə ~0,8 s (hədd 1,5 s), aylıq tutuşdurma ~0,06 s                                                                                                                                                                             | `npm run test:perf`                     |
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 110, `npm run test:ui` 15, `npm run test:perf` keçir.
+
+**Fərziyyə (real faylla yoxlanmalıdır):** DVX-in düzəliş e-qaiməsi əsasın tam yeni məzmunudur (fərq deyil) və "Düzəliş edilən qaimə" sütununda əsasın nömrəsini göstərir.
 
 ## Açıq məsələlər
 

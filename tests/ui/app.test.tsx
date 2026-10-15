@@ -915,3 +915,136 @@ test('DVX e-qaimə → invoice: book a proposal by hand, learn the map, switch i
     h.close();
   }
 });
+
+test('DVX statuses: cancel the invoice of a cancelled e-qaimə, apply a correction to its invoice, DVX ↔ uçot', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Kağız MMC',
+    taxId: '1700000005',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'A-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  });
+  const paper = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Kağız A4',
+    unit: 'qutu',
+    kind: 'goods',
+    groupId: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'eqMap.save',
+    companyId: s.companyId,
+    direction: 'purchase',
+    taxId: '1700000005',
+    dvxCode: '4802',
+    productId: paper,
+    mode: 'auto',
+  });
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-05`;
+  let n = 0;
+  const eq = (number: string, quantity: string, extra: object = {}) => {
+    const net = `${Number(quantity) * 5}.00`;
+    const vat = (Number(quantity) * 0.9).toFixed(2);
+    return h.run({
+      type: 'eqaime.import',
+      companyId: s.companyId,
+      direction: 'purchase',
+      report: 'goods',
+      source: 'file',
+      fileName: `mallar-${++n}.xlsx`,
+      fileHash: String(n).padStart(64, 'b'),
+      documents: [
+        {
+          row: 2,
+          number,
+          date: iso,
+          taxId: '1700000005',
+          name: 'Kağız MMC',
+          status: 'Təsdiqləndi',
+          net,
+          vat,
+          lines: [
+            {
+              code: '4802',
+              name: 'Kağız A4',
+              unit: 'qutu',
+              quantity,
+              price: '5',
+              net,
+              vat,
+              vatRate: '18',
+            },
+          ],
+          ...extra,
+        },
+      ],
+    });
+  };
+  eq('MT1', '10');
+  eq('MT5', '10');
+  eq('MT1', '10', { status: 'Ləğv edildi' });
+  eq('MT6', '8', { kind: 'Düzəliş qaiməsi', refNumber: 'MT5' });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const box = within(pane());
+    await user.click(await box.findByRole('tab', { name: /Ziddiyyət 1/ }));
+    await user.click(await box.findByRole('button', { name: 'MT1: qaiməni ləğv et' }));
+    await box.findByText(/AQ-000001 storno ilə ləğv edildi; MT1 kənara qoyuldu/);
+    await box.findByRole('tab', { name: /Kənar qoyulub 1/ });
+    // The correction of MT5 opens AQ-000002 itself, with the correction's quantity.
+    await user.click(box.getByRole('tab', { name: /Təklif 1/ }));
+    await user.click(await box.findByRole('button', { name: 'MT6: uçota al' }));
+    const editor = within(pane());
+    await editor.findByText(/Düzəliş: AQ-000002 qaiməsi \(e-qaimə MT5\)/);
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'Sətir 1 miqdar' }) as HTMLInputElement).value,
+      '8',
+    );
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Düzəliş uçota alındı/);
+    const invoices = h.ledger.query({
+      type: 'invoices',
+      companyId: s.companyId,
+      direction: 'purchase',
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as InvoiceSummary[];
+    assert.deepEqual(invoices.map((i) => [i.number, i.eqNumber, i.status, i.total]).sort(), [
+      ['AQ-000001', 'MT1', 'cancelled', '59.00'],
+      ['AQ-000002', 'MT6', 'posted', '47.20'],
+    ]);
+    // DVX ↔ books for the working month.
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const again = within(pane());
+    await user.click(await again.findByRole('button', { name: /DVX ↔ uçot/ }));
+    const panel = await again.findByRole('region', { name: 'DVX ilə uçotun tutuşdurulması' });
+    const vat = within(panel).getByRole('table', { name: 'Aylar üzrə ƏDV' });
+    assert.match(vat.textContent ?? '', /uyğundur/);
+  } finally {
+    h.close();
+  }
+});

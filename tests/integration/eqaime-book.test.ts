@@ -10,6 +10,7 @@ import type {
   EqDocumentDetail,
   EqInboxView,
   EqMapView,
+  EqReconcileView,
   InvoiceDetail,
 } from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
@@ -690,4 +691,286 @@ test('learning: the accountant’s booking becomes suggested entries; switched t
     id: three.id,
   });
   assert.equal(detail.bucket, 'auto');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Stage 4c — DVX statuses (E10, E11), DVX ↔ books, İş masası
+
+test('E10: DVX cancels a booked e-qaimə — a conflict, never a silent storno; a paid invoice is not cancelled', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  const e = (n: string, status = 'Təsdiqləndi') => ({
+    ...withGoods(n, '2026-09-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+    status,
+  });
+  load(f, 'purchase', [e('MT1'), e('MT2')]);
+  const paid = byNumber(f, 'MT2');
+  // MT2 is paid to the supplier.
+  f.bank('out', '2026-09-10', s.bankAccount, [
+    f.bankLine('531.01', [s.supplier, s.supplierContract, `invoice:${paid.invoiceId}`], '1180'),
+  ]);
+  load(f, 'purchase', [e('MT1', 'Ləğv edildi'), e('MT2', 'Ləğv edildi')]);
+  const one = byNumber(f, 'MT1');
+  assert.equal(one.bucket, 'conflict');
+  assert.equal(byNumber(f, 'MT2').bucket, 'conflict');
+  // Still in the books until the accountant cancels it.
+  assert.equal(f.db.get('SELECT status FROM invoices WHERE id=?', one.invoiceId)!.status, 'posted');
+  assert.ok(f.home().warnings.some((w) => w.kind === 'eqConflict' && w.eq === 'purchase'));
+  const cancel = (id: string) => {
+    const inv = f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id });
+    return f.exec({
+      type: 'invoice.cancel',
+      companyId: f.companyId,
+      id,
+      version: inv.version,
+      reason: 'DVX-də ləğv edilib',
+    });
+  };
+  cancel(one.invoiceId);
+  assert.deepEqual(
+    [byNumber(f, 'MT1').bucket, byNumber(f, 'MT1').reason],
+    ['ignored', 'DVX: e-qaimə ləğv edilib; uçotdakı qaimə ləğv edildi'],
+  );
+  assert.throws(() => cancel(paid.invoiceId), /ödəniş edilib.*Əvvəlcə ödəniş sənədini düzəldin/);
+});
+
+test('E11: a correction replaces an e-qaimə not yet booked, in its place', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper }, 'suggest');
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+  ]);
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT9', '2026-09-08', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const c = byNumber(f, 'MT9');
+  assert.equal(c.bucket, 'proposal');
+  assert.deepEqual([c.proposal!.corrects!.number, c.proposal!.corrects!.invoiceId], ['MT1', '']);
+  assert.match(
+    c.proposal!.reasons.join(' '),
+    /əsas e-qaimə MT1 uçotda deyil — düzəliş onun yerinə/,
+  );
+  f.invoice(
+    'purchase',
+    '2026-09-08',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '9', price: '100' }],
+    { eqNumber: 'MT9', eqDocumentId: c.id },
+  );
+  const original = byNumber(f, 'MT1');
+  assert.deepEqual(
+    [original.bucket, original.reason],
+    ['ignored', 'DVX: düzəliş e-qaiməsi MT9 ilə əvəz olunub'],
+  );
+  assert.throws(
+    () => f.exec({ type: 'eqaime.restore', companyId: f.companyId, documentId: original.id }),
+    /geri qaytarılmır/,
+  );
+});
+
+test('E11: a correction of a booked e-qaimə changes that invoice — never a second one', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+  ]);
+  const o = byNumber(f, 'MT1');
+  assert.equal(o.bucket, 'auto');
+  // DVX marks the original corrected and sends the correction; even with auto entries it waits.
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT1', '2026-09-05', SUPPLIER, [
+        good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+      ]),
+      status: 'Düzəliş edilib',
+    },
+    {
+      ...withGoods('MT9', '2026-09-08', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  assert.equal(byNumber(f, 'MT1').bucket, 'conflict');
+  const c = byNumber(f, 'MT9');
+  assert.equal(c.bucket, 'proposal');
+  assert.deepEqual(
+    [
+      c.proposal!.corrects!.invoiceId,
+      c.proposal!.corrects!.invoiceNumber,
+      c.proposal!.corrects!.invoiceDate,
+    ],
+    [o.invoiceId, 'AQ-000001', '2026-09-05'],
+  );
+  // Booking the correction as a new invoice is refused: MT1 is in the books already.
+  assert.throws(
+    () =>
+      f.invoice(
+        'purchase',
+        '2026-09-08',
+        s.supplier,
+        s.supplierContract,
+        [{ productId: s.paper, quantity: '9', price: '100' }],
+        { eqNumber: 'MT9', eqDocumentId: c.id },
+      ),
+    /Əsas e-qaimə MT1 başqa qaimədə uçotdadır/,
+  );
+  // Applied to AQ-000001 (its date stays): storno + new entry, the correction books it now.
+  const inv = f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id: o.invoiceId });
+  f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '9', price: '100' }],
+    { id: inv.id, version: inv.version, number: inv.number, eqNumber: 'MT9', eqDocumentId: c.id },
+  );
+  const after = f.query<InvoiceDetail>({
+    type: 'invoice',
+    companyId: f.companyId,
+    id: o.invoiceId,
+  });
+  assert.deepEqual(
+    [after.eqNumber, after.eqDocumentId, after.total, after.version],
+    ['MT9', c.id, '1062.00', 2],
+  );
+  assert.equal(byNumber(f, 'MT9').bucket, 'posted');
+  const was = byNumber(f, 'MT1');
+  assert.deepEqual(
+    [was.bucket, was.reason],
+    ['ignored', 'DVX: düzəliş e-qaiməsi MT9 ilə əvəz olunub'],
+  );
+  assert.equal(f.db.get('SELECT COUNT(*) AS n FROM invoices')!.n, 1n);
+  // DVX's VAT counts the correction, not the e-qaimə it replaced: the month agrees with the books.
+  const r = f.query<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-09-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(
+    r.months.map((m) => [m.dvxCount, m.dvxVat, m.bookedVat, m.difference]),
+    [[1, '162.00', '162.00', '0.00']],
+  );
+});
+
+test('E11: a correction of an e-qaimə booked in a closed period is left to the accountant', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-08-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+  ]);
+  f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-08-31', reason: '' });
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT9', '2026-09-08', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const c = byNumber(f, 'MT9');
+  assert.equal(c.bucket, 'unknown');
+  assert.match(
+    c.proposal!.reasons.join(' '),
+    /bağlı dövrdədir: düzəlişi açıq dövrdə əl ilə əks yazılışla/,
+  );
+});
+
+test('DVX ↔ books: VAT by month, e-qaimələr not booked, invoices DVX does not hold; İş masası', (t) => {
+  const f = fixture(t, ':memory:', '2026-09-30');
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+    withGoods('MT2', '2026-09-06', TELECOM, [good('1', 'Rabitə', '1', '50', '50.00', '9.00')]),
+  ]);
+  // Typed by hand: one with an e-qaimə number DVX does not have, one without any.
+  f.invoice(
+    'purchase',
+    '2026-09-10',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '1', price: '100' }],
+    { eqNumber: 'MT777' },
+  );
+  f.invoice('purchase', '2026-09-11', s.supplier, s.supplierContract, [
+    { productId: s.paper, quantity: '1', price: '200' },
+  ]);
+  const r = f.query<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-09-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(r.covered, [{ from: '2026-09-05', to: '2026-09-06' }]);
+  assert.deepEqual(r.months, [
+    {
+      month: '2026-09',
+      dvxCount: 2,
+      dvxNet: '1050.00',
+      dvxVat: '189.00',
+      bookedCount: 3,
+      bookedVat: '234.00',
+      difference: '-45.00',
+    },
+  ]);
+  assert.deepEqual(
+    r.notBooked.map((x) => x.number),
+    ['MT2'],
+  );
+  // MT777 (10.09) lies outside the loaded period 05–06.09: not claimed missing yet.
+  assert.deepEqual(r.notInDvx, []);
+  assert.deepEqual(
+    r.withoutEq.map((x) => x.total),
+    ['236.00'],
+  );
+  // A file covering the whole month: now MT777 is missing in DVX.
+  load(f, 'purchase', [
+    withGoods('MT3', '2026-09-01', TELECOM, [good('1', 'Rabitə', '1', '50', '50.00', '9.00')]),
+    withGoods('MT4', '2026-09-30', TELECOM, [good('1', 'Rabitə', '1', '50', '50.00', '9.00')]),
+  ]);
+  const again = f.query<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-09-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(again.covered, [{ from: '2026-09-01', to: '2026-09-30' }]);
+  assert.deepEqual(
+    again.notInDvx.map((x) => [x.number, x.eqNumber]),
+    [['AQ-000002', 'MT777']],
+  );
+  const signals = f.home().warnings.filter((w) => w.eq === 'purchase');
+  assert.deepEqual(
+    signals.map((w) => w.kind),
+    ['eqWaiting', 'eqVat', 'eqMissing'],
+  );
+  assert.match(signals[0]!.text, /3 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb/);
 });

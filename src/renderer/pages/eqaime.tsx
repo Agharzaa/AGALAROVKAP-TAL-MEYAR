@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Upload } from '../icons';
 import { readEqTable, type EqReadResult } from '../../domain/eqaime';
 import type {
+  EqReconcileView,
   InvoiceDetail,
   EqBucket,
   EqDocumentDetail,
@@ -73,6 +74,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     direction,
   });
   const [tab, setTab] = useState<EqBucket>('proposal');
+  const [reconcileOpen, setReconcileOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
@@ -136,8 +138,39 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     const r = await m.run({ type: 'eqaime.restore', companyId: win.companyId, documentId: d.id });
     if (r) setMessage(`${d.number} geri qaytarıldı.`);
   }
+  /** A correction of a booked e-qaimə opens that invoice, with the correction's lines. */
   const book = (d: EqDocumentView) =>
-    ws.open({ type: 'invoice', direction, eqDocumentId: d.id }, win.companyId);
+    ws.open(
+      d.proposal?.corrects?.invoiceId
+        ? { type: 'invoice', direction, id: d.proposal.corrects.invoiceId, eqDocumentId: d.id }
+        : { type: 'invoice', direction, eqDocumentId: d.id },
+      win.companyId,
+    );
+  /** DVX cancelled (or the buyer rejected) a booked e-qaimə: its invoice is cancelled by storno. */
+  async function cancelInvoice(d: EqDocumentView) {
+    setMessage('');
+    let version: number;
+    try {
+      version = (
+        await api.query<InvoiceDetail>({
+          type: 'invoice',
+          companyId: win.companyId,
+          id: d.invoiceId,
+        })
+      ).version;
+    } catch (e) {
+      setMessage((e as Error).message);
+      return;
+    }
+    const r = await m.run({
+      type: 'invoice.cancel',
+      companyId: win.companyId,
+      id: d.invoiceId,
+      version,
+      reason: `DVX-də ${statusLabel[d.status]} (e-qaimə ${d.number})`,
+    });
+    if (r) setMessage(`${d.invoiceNumber} storno ilə ləğv edildi; ${d.number} kənara qoyuldu.`);
+  }
   const openInvoice = (d: EqDocumentView) =>
     ws.open({ type: 'invoice', direction, id: d.invoiceId }, win.companyId);
   async function link(d: EqDocumentView, invoiceId: string, number: string) {
@@ -292,6 +325,20 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               Kənara qoy
             </button>
           </>
+        ) : d.bucket === 'conflict' &&
+          d.state === 'posted' &&
+          (d.status === 'cancelled' || d.status === 'rejected') ? (
+          <button
+            type="button"
+            className="button secondary small"
+            disabled={m.busy}
+            aria-label={`${d.number}: qaiməni ləğv et`}
+            onClick={() => void cancelInvoice(d)}
+          >
+            Qaiməni ləğv et
+          </button>
+        ) : d.bucket === 'conflict' && d.status === 'corrected' ? (
+          <small>düzəliş e-qaiməsini uçota alın</small>
         ) : d.bucket === 'auto' ? (
           <button
             type="button"
@@ -426,6 +473,17 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               {imports.data[0].updated}, dəyişməyən {imports.data[0].same}
             </p>
           )}
+          <p>
+            <button
+              type="button"
+              className="button secondary small"
+              aria-expanded={reconcileOpen}
+              onClick={() => setReconcileOpen(!reconcileOpen)}
+            >
+              DVX ↔ uçot ({day(ws.period.from)}–{day(ws.period.to)})
+            </button>
+          </p>
+          {reconcileOpen && <Reconcile direction={direction} />}
           {ready > 0 && (
             <p>
               <button
@@ -566,5 +624,91 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         </Confirm>
       )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * DVX ↔ books for the working period (§8.5): VAT by month, e-qaimələr not booked, invoices whose
+ * e-qaimə number the loaded DVX files do not hold, invoices without an e-qaimə number.
+ */
+function Reconcile({ direction }: { direction: Direction }) {
+  const win = useWindow();
+  const ws = useWorkspace();
+  const r = useQuery<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: win.companyId,
+    direction,
+    from: ws.period.from,
+    to: ws.period.to,
+  });
+  const v = r.data;
+  const open = (id: string) => ws.open({ type: 'invoice', direction, id }, win.companyId);
+  if (!v) return <p className="doc-hint">{r.error || 'Hesablanır…'}</p>;
+  return (
+    <section className="history" aria-label="DVX ilə uçotun tutuşdurulması">
+      <h2>DVX ↔ uçot</h2>
+      <p className="doc-hint">
+        Yüklənmiş DVX dövrləri:{' '}
+        {v.covered.length
+          ? v.covered.map((c) => `${day(c.from)}–${day(c.to)}`).join(', ')
+          : 'yoxdur'}
+        . “DVX-də yoxdur” yalnız bu dövrlər üçün deyilir.
+      </p>
+      <table className="grid" aria-label="Aylar üzrə ƏDV">
+        <thead>
+          <tr>
+            <th>Ay</th>
+            <th className="num">DVX: e-qaimə</th>
+            <th className="num">DVX: ƏDV</th>
+            <th className="num">Uçot: qaimə</th>
+            <th className="num">Uçot: ƏDV</th>
+            <th className="num">Fərq</th>
+          </tr>
+        </thead>
+        <tbody>
+          {v.months.map((m) => (
+            <tr key={m.month}>
+              <td>{m.month}</td>
+              <td className="num">{m.dvxCount}</td>
+              <td className="num">{money(m.dvxVat)}</td>
+              <td className="num">{m.bookedCount}</td>
+              <td className="num">{money(m.bookedVat)}</td>
+              <td className={`num ${m.difference === '0.00' ? 'pair-ok' : 'pair-bad'}`}>
+                {m.difference === '0.00' ? 'uyğundur' : money(m.difference)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul>
+        <li>
+          DVX-də təsdiqlənib, uçota alınmayıb: <b>{v.notBooked.length}</b> (bax “Təklif” və
+          “Naməlum”)
+        </li>
+        <li>
+          Uçotda var, yüklənmiş DVX fayllarında yoxdur: <b>{v.notInDvx.length}</b>
+          {v.notInDvx.slice(0, 10).map((x) => (
+            <span key={x.id}>
+              {' '}
+              <button type="button" className="link" onClick={() => open(x.id)}>
+                {x.number}
+              </button>{' '}
+              <small>({x.eqNumber})</small>
+            </span>
+          ))}
+        </li>
+        <li>
+          E-qaimə nömrəsi olmayan qaimələr: <b>{v.withoutEq.length}</b>
+          {v.withoutEq.slice(0, 10).map((x) => (
+            <span key={x.id}>
+              {' '}
+              <button type="button" className="link" onClick={() => open(x.id)}>
+                {x.number}
+              </button>
+            </span>
+          ))}
+        </li>
+      </ul>
+    </section>
   );
 }

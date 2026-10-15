@@ -276,6 +276,12 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     q({ type: 'eqInbox', direction: 'purchase', from: '', to: '' }),
   ) as { documents: unknown[] };
   assert.equal(eqBox.documents.length, 5000);
+  // İş masası now also reads the e-qaimə boxes (conflicts, waiting, VAT by month).
+  time('İş masası (e-qaimə siqnalları ilə)', 1500, () => q({ type: 'home' }));
+  const reconciled = time('DVX ↔ uçot, bir ay (5 000 e-qaimə)', 3000, () =>
+    q({ type: 'eqReconcile', direction: 'purchase', from: '2026-09-01', to: '2026-09-30' }),
+  ) as { months: unknown[] };
+  assert.equal(reconciled.months.length, 1);
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

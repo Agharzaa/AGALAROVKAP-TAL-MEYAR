@@ -48,7 +48,7 @@ import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
-import { eqDocument, eqImports, eqInbox } from './eqaime.js';
+import { eqDocument, eqImports, eqInbox, eqReconcile, eqWarnings } from './eqaime.js';
 import { eqMaps } from './eqaime-book.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
@@ -1033,6 +1033,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
       });
   }
   warnings.push(...vatPairWarnings(db, companyId, names));
+  warnings.push(...eqWarnings(db, companyId, co.closedThrough, today));
   const recent = db
     .all(
       'SELECT * FROM operations WHERE company_id=? ORDER BY date DESC, rowid DESC LIMIT 12',
@@ -1347,6 +1348,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'eqMaps':
       company(db, q.companyId);
       return eqMaps(db, q.companyId);
+    case 'eqReconcile':
+      company(db, q.companyId);
+      return eqReconcile(db, q.companyId, q.direction, parseDate(q.from), parseDate(q.to));
     case 'statementImports':
       company(db, q.companyId);
       return statementImports(db, q.companyId, q.bankAccountId);

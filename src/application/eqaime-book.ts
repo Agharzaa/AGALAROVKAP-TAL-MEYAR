@@ -71,6 +71,10 @@ export interface EqContext {
   byNumber: Map<string, Row[]>;
   /** Posted numberless invoices not linked to an e-qaimə, by partner. */
   numberless: Map<string, Row[]>;
+  /** Every e-qaimə of the direction by VÖEN|key (a correction finds the one it corrects). */
+  eqByKey: Map<string, Row>;
+  /** Invoices that book an e-qaimə, by id. */
+  bound: Map<string, Row>;
 }
 
 const group = <K, V>(rows: V[], key: (v: V) => K) => {
@@ -140,6 +144,26 @@ export function eqContext(db: Db, companyId: string, direction: Direction): EqCo
     numberless: group(
       invoices.filter((i) => i.eq_key === ''),
       (i) => String(i.partner_id),
+    ),
+    eqByKey: new Map(
+      db
+        .all(
+          'SELECT id, tax_id, eq_key, eq_number, state, invoice_id, date FROM eq_documents WHERE company_id=? AND direction=?',
+          companyId,
+          direction,
+        )
+        .map((d) => [`${String(d.tax_id)}|${String(d.eq_key)}`, d]),
+    ),
+    bound: new Map(
+      db
+        .all(
+          `SELECT i.id, i.number, i.date FROM invoices i JOIN eq_documents d
+             ON d.company_id=i.company_id AND d.invoice_id=i.id
+           WHERE d.company_id=? AND d.direction=?`,
+          companyId,
+          direction,
+        )
+        .map((i) => [String(i.id), i]),
     ),
   };
 }
@@ -228,11 +252,43 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     lines: [],
     candidates: [],
   };
-  if (doc.kind !== 'main') {
+  const correction = doc.kind === 'correction';
+  if (doc.kind !== 'main' && !correction) {
     reasons.push(
-      `${String(doc.kind_text) || 'Bu növ'} e-qaimə avtomatik uçota alınmır (düzəliş — mərhələ 4c; qaytarma, avans — əl ilə).`,
+      `${String(doc.kind_text) || 'Bu növ'} e-qaimə avtomatik uçota alınmır (qaytarma, avans — əl ilə).`,
     );
     return out;
+  }
+  // A correction (§5.2) is never booked by itself and never as a second invoice: it replaces
+  // the e-qaimə it corrects — in that one's invoice when it is booked, in its place when not.
+  let bookDate = String(doc.date);
+  if (correction) {
+    const ref = String(doc.ref_key);
+    const orig = ref ? ctx.eqByKey.get(`${taxId}|${ref}`) : undefined;
+    if (!ref) reasons.push('Düzəliş e-qaiməsində əsas e-qaimənin nömrəsi yoxdur: əl ilə.');
+    else if (!orig) reasons.push(`Əsas e-qaimə ${ref} qutuda yoxdur: əvvəlcə onu yükləyin.`);
+    else {
+      const inv = orig.invoice_id ? ctx.bound.get(String(orig.invoice_id)) : undefined;
+      out.corrects = {
+        documentId: String(orig.id),
+        number: String(orig.eq_number),
+        invoiceId: inv ? String(inv.id) : '',
+        invoiceNumber: inv ? String(inv.number) : '',
+        invoiceDate: inv ? String(inv.date) : '',
+      };
+      if (inv && String(inv.date) <= ctx.closed) {
+        reasons.push(
+          `Əsas e-qaimə ${String(orig.eq_number)} ${String(inv.number)} qaiməsində bağlı dövrdədir: düzəlişi açıq dövrdə əl ilə əks yazılışla aparın.`,
+        );
+        return out;
+      }
+      if (inv) bookDate = String(inv.date);
+      reasons.push(
+        inv
+          ? `Düzəliş: ${String(inv.number)} qaiməsi (e-qaimə ${String(orig.eq_number)}) düzəliş e-qaiməsinə görə dəyişdiriləcək.`
+          : `Düzəliş: əsas e-qaimə ${String(orig.eq_number)} uçotda deyil — düzəliş onun yerinə uçota alınır, əsas kənara qoyulur.`,
+      );
+    }
   }
   if (doc.excise !== 0n || doc.road_tax !== 0n) {
     reasons.push('E-qaimədə aksiz və ya yol vergisi var: əl ilə uçota alınır.');
@@ -256,7 +312,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     const same = (ctx.byNumber.get(String(doc.eq_key)) ?? []).find(
       (i) => i.partner_id === partner.id,
     );
-    if (same) {
+    if (same && !correction) {
       out.sameNumber = {
         id: String(same.id),
         number: String(same.number),
@@ -267,7 +323,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
       return out;
     }
     const days = (d: string) => Math.abs(Date.parse(d) - Date.parse(String(doc.date))) / 86_400_000;
-    out.candidates = (ctx.numberless.get(String(partner.id)) ?? [])
+    out.candidates = (correction ? [] : (ctx.numberless.get(String(partner.id)) ?? []))
       .filter((i) => i.total_azn === doc.total && days(String(i.date)) <= LINK_DAYS)
       .map((i) => ({
         id: String(i.id),
@@ -413,7 +469,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
       `Yekun məbləğ (${money(doc.total as bigint)}) ƏDV-siz məbləğ + ƏDV-yə bərabər deyil.`,
     );
   }
-  if (String(doc.date) <= ctx.closed) {
+  if (bookDate <= ctx.closed) {
     linesAuto = false;
     reasons.push(`Uçot dövrü ${ctx.closed} tarixinədək bağlanıb.`);
   }
@@ -423,7 +479,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
   }
   out.state = !known
     ? 'unknown'
-    : reasons.length === 0 && linesAuto && contractAuto && !!out.partnerId
+    : reasons.length === 0 && linesAuto && contractAuto && !!out.partnerId && !correction
       ? 'auto'
       : 'proposal';
   return out;
@@ -504,6 +560,8 @@ function check(
   doc: Row,
   inv: Row,
   days: number,
+  /** Another acceptable date: the corrected e-qaimə's, for a correction. */
+  alsoDate = '',
 ): { text: string; identity: boolean } {
   const other = (text: string) => ({ text, identity: true });
   const differs = (text: string) => ({ text, identity: false });
@@ -528,11 +586,24 @@ function check(
   if (inv.currency === 'AZN' && inv.vat !== doc.vat)
     return differs(`ƏDV ${money(inv.vat as bigint)}, DVX-də ${money(doc.vat as bigint)}`);
   const d = Math.abs(Date.parse(String(inv.date)) - Date.parse(String(doc.date))) / 86_400_000;
-  if (d > days) return differs(`tarix ${String(inv.date)}, DVX-də ${String(doc.date)}`);
+  if (d > days && inv.date !== alsoDate)
+    return differs(`tarix ${String(inv.date)}, DVX-də ${String(doc.date)}`);
   return differs('');
 }
-const mismatch = (tx: Tx, companyId: string, doc: Row, inv: Row, days: number) =>
-  check(tx, companyId, doc, inv, days).text;
+const mismatch = (tx: Tx, companyId: string, doc: Row, inv: Row, days: number, alsoDate = '') =>
+  check(tx, companyId, doc, inv, days, alsoDate).text;
+
+/** The e-qaimə a correction refers to (same direction and VÖEN). */
+function corrected(tx: Tx, companyId: string, doc: Row): Row | undefined {
+  if (doc.kind !== 'correction' || !doc.ref_key) return undefined;
+  return tx.db.get(
+    'SELECT * FROM eq_documents WHERE company_id=? AND direction=? AND tax_id=? AND eq_key=?',
+    companyId,
+    String(doc.direction),
+    String(doc.tax_id),
+    String(doc.ref_key),
+  );
+}
 
 /**
  * Called by invoice.save: an invoice saved for an e-qaimə (or already booking one) must stay
@@ -551,17 +622,46 @@ export function bindEq(
     companyId,
     invoiceId,
   );
-  if (requested && previous && previous.id !== requested)
-    throw new DomainError('Qaimə artıq başqa e-qaiməni uçota alır.', 'eqDocumentId', 'conflict');
   const docId = requested ?? (previous ? String(previous.id) : undefined);
   if (!docId) return;
   const doc = eqRow(tx, companyId, docId);
+  const orig = corrected(tx, companyId, doc);
+  // The invoice books another e-qaimə: allowed only for the correction of that very one.
+  let superseded: Row | undefined;
+  if (previous && previous.id !== docId) {
+    if (!orig || orig.id !== previous.id)
+      throw new DomainError('Qaimə artıq başqa e-qaiməni uçota alır.', 'eqDocumentId', 'conflict');
+    superseded = previous;
+  }
+  if (orig && orig.state === 'posted' && orig.invoice_id !== invoiceId)
+    throw new DomainError(
+      `Əsas e-qaimə ${String(orig.eq_number)} başqa qaimədə uçotdadır: düzəlişi həmin qaiməyə tətbiq edin.`,
+      'eqDocumentId',
+      'conflict',
+    );
+  if (doc.kind === 'main') {
+    const correction = tx.db.get(
+      `SELECT eq_number FROM eq_documents WHERE company_id=? AND direction=? AND tax_id=? AND ref_key=?
+         AND kind='correction' AND state='posted'`,
+      companyId,
+      String(doc.direction),
+      String(doc.tax_id),
+      String(doc.eq_key),
+    );
+    if (correction)
+      throw new DomainError(
+        `Bu e-qaimə düzəliş e-qaiməsi ${String(correction.eq_number)} ilə əvəz olunub.`,
+        'eqDocumentId',
+        'conflict',
+      );
+  }
+  const current = superseded ? undefined : previous;
   const inv = tx.db.get(
     'SELECT * FROM invoices WHERE company_id=? AND id=?',
     companyId,
     invoiceId,
   )!;
-  if (!previous) {
+  if (!current) {
     if (doc.state === 'ignored')
       throw new DomainError(
         'E-qaimə kənara qoyulub; əvvəlcə geri qaytarın.',
@@ -578,13 +678,29 @@ export function bindEq(
       );
   }
   // A linked hand-typed invoice may lie a few days apart; a booked one keeps DVX's date.
-  const why = mismatch(tx, companyId, doc, inv, previous?.posted_by === 'link' ? LINK_DAYS : 0);
+  const why = mismatch(
+    tx,
+    companyId,
+    doc,
+    inv,
+    current?.posted_by === 'link' ? LINK_DAYS : 0,
+    orig ? String(orig.date) : '',
+  );
   if (why)
     throw new DomainError(
       `Qaimə e-qaimə ${String(doc.eq_number)} ilə uyğun deyil: ${why}.`,
       'eqDocumentId',
     );
-  if (previous) return;
+  if (current) return;
+  // The corrected e-qaimə steps aside: its correction now books (or replaces) it.
+  if (orig && orig.state !== 'ignored')
+    tx.db.run(
+      `UPDATE eq_documents SET state='ignored', invoice_id=NULL, posted_by='', used_maps='', reason=?,
+         version=version+1, updated_at=? WHERE id=?`,
+      `DVX: düzəliş e-qaiməsi ${String(doc.eq_number)} ilə əvəz olunub`,
+      tx.clock.now(),
+      String(orig.id),
+    );
   tx.db.run(
     `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by=?, used_maps=?, auto_note='',
        version=version+1, updated_at=? WHERE id=?`,
