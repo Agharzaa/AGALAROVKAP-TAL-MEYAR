@@ -326,7 +326,7 @@ Ağır iş writer worker-də hissə-hissə, irəliləyiş göstəricisi və lə�
 Hər addım ayrıca commit-dir və `npm run typecheck && npm test && npm run test:ui` yaşıl saxlayır.
 
 1. **4a — İdxal və qutu.** ✅ Hazır (15.10.2026; real DVX faylı ilə hələ yoxlanmayıb — sintetik formatlar). Sxem v10 (`eq_imports`, `eq_documents`, `eq_status_history`, `eq_product_map`, `invoices.origin / eq_document_id`), oxuyucu, `eqaime.import`, istiqamət qoruması, dublikat və status yeniləməsi, qutu pəncərəsi (avtomatik uçotsuz). Testlər E1–E4, E12 (status hissəsi), E16, E19 (idxal), E20.
-2. **4b — Uçot.** E-qaimədən qaimə forması, kontragent / müqavilə həlli, məbləğ yoxlaması, əl ilə qaimə ilə uyğunlaşdırma və `invoice.setEq`, uyğunluq xəritəsi və kitabçası, avtomatik rejim, geri qaytarma. Testlər E5–E9, E13–E15, E18.
+2. **4b — Uçot.** ✅ Hazır (15.10.2026). Dəqiqləşmələr: `invoice.setEq` əvəzinə `eqaime.link` (nömrəsiz qaiməyə nömrə yazır, yazılışlara toxunmur); bərabər dəqiqlikdə iki uyğunluq ola bilmir (hər dəqiqlik xəritənin unikal açarıdır); "istənilən kontragent" uyğunluğu yalnız DVX kodu ilə (ad təkcə kifayət deyil); qaimə e-qaiməyə bağlananda tarix, VÖEN, nömrə, cəmi və ƏDV DVX ilə eyni olmalıdır. E-qaimədən qaimə forması, kontragent / müqavilə həlli, məbləğ yoxlaması, əl ilə qaimə ilə uyğunlaşdırma, uyğunluq xəritəsi və kitabçası, avtomatik rejim, geri qaytarma. Testlər E5–E9, E13–E15, E18.
 3. **4c — DVX statusları və tutuşdurma.** Ləğv / imtina / düzəliş, ziddiyyət tabı, İş masası siqnalları, DVX ↔ uçot (sayı və ƏDV). Testlər E10–E12.
 4. **4d — DVX kabineti.** Portal pəncərəsi, endirmənin tutulması, sessiyanın silinməsi. Test E17; real girişi istifadəçi yoxlayır.
 5. **Audit, 0.6.0 buraxılışı, `PROJECT_STATE.md` ("Mərhələ 4") və `QERARLAR.md`-nin yenilənməsi.**

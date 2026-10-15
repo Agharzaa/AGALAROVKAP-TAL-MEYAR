@@ -70,6 +70,7 @@ import { BankDocumentsPage } from './pages/bank-documents';
 import { BankEditor } from './pages/bank-editor';
 import { StatementsPage } from './pages/statements';
 import { EqaimePage } from './pages/eqaime';
+import { EqMapsPage } from './pages/eq-maps';
 import { BudgetCodesPage, RulesPage } from './pages/rules';
 import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
@@ -1027,7 +1028,13 @@ function Routed({ win }: { win: Win }) {
     case 'operation':
       return <OperationEditor {...(v.id ? { id: v.id } : {})} />;
     case 'invoice':
-      return <InvoiceEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
+      return (
+        <InvoiceEditor
+          direction={v.direction}
+          {...(v.id ? { id: v.id } : {})}
+          {...(v.eqDocumentId ? { eqDocumentId: v.eqDocumentId } : {})}
+        />
+      );
     case 'bank':
       return (
         <BankEditor
@@ -1054,6 +1061,8 @@ function Routed({ win }: { win: Win }) {
           return <EqaimePage direction="purchase" />;
         case 'eqSale':
           return <EqaimePage direction="sale" />;
+        case 'eqMaps':
+          return <EqMapsPage />;
         case 'rules':
           return <RulesPage />;
         case 'budgetCodes':

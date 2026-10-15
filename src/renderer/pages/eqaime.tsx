@@ -1,13 +1,15 @@
 /**
- * DVX e-qaimə box (stage 4a; docs/MERHELE-4-EQAIME.md §8). Load an e-taxes.gov.az export
+ * DVX e-qaimə box (stages 4a–4b; docs/MERHELE-4-EQAIME.md §8). Load an e-taxes.gov.az export
  * ("Qaimələr üzrə" or "Mallar üzrə"), see what was read and which direction the file is before
- * anything is stored, then go through the e-qaimələr by where they stand. Loading books nothing;
- * booking through invoices comes in stage 4b.
+ * anything is stored, then go through the e-qaimələr by where they stand: confirmed map entries
+ * book by themselves, the rest open as an invoice prefilled from the e-qaimə (Enter, then
+ * Ctrl+Enter), an invoice typed by hand is linked instead of booked twice.
  */
 import { useMemo, useRef, useState } from 'react';
 import { Upload } from '../icons';
 import { readEqTable, type EqReadResult } from '../../domain/eqaime';
 import type {
+  InvoiceDetail,
   EqBucket,
   EqDocumentDetail,
   EqDocumentView,
@@ -20,13 +22,16 @@ import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { readSheet, SheetError } from '../sheet-reader';
 import { Amount, Confirm, DataTable, Empty, Field, Modal, Notice, type Column } from '../ui';
-import { useWindow } from '../workspace';
+import { api } from '../api';
+import { useWindow, useWorkspace } from '../workspace';
 
 type Direction = 'sale' | 'purchase';
 const tabs: { id: EqBucket; label: string }[] = [
-  { id: 'waiting', label: 'Gözləyir' },
+  { id: 'proposal', label: 'Təklif' },
+  { id: 'unknown', label: 'Naməlum' },
   { id: 'dvx', label: 'DVX-də gözləyir' },
   { id: 'conflict', label: 'Ziddiyyət' },
+  { id: 'auto', label: 'Avtomatik' },
   { id: 'posted', label: 'Uçota alınıb' },
   { id: 'ignored', label: 'Kənar qoyulub' },
 ];
@@ -53,6 +58,7 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 
 export function EqaimePage({ direction }: { direction: Direction }) {
   const win = useWindow();
+  const ws = useWorkspace();
   const page = pages[direction === 'purchase' ? 'eqPurchase' : 'eqSale'];
   const box = useQuery<EqInboxView>({
     type: 'eqInbox',
@@ -66,7 +72,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     companyId: win.companyId,
     direction,
   });
-  const [tab, setTab] = useState<EqBucket>('waiting');
+  const [tab, setTab] = useState<EqBucket>('proposal');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
@@ -115,7 +121,11 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         (r.same ? `, ${r.same} dəyişməyib (təkrar yaradılmadı)` : '') +
         (r.conflicts ? `, ${r.conflicts} ziddiyyət (bax “Ziddiyyət”)` : '') +
         (r.rejected?.length ? `, ${r.rejected.length} sətir qəbul olunmadı` : '') +
-        '. Heç nə uçota alınmayıb.',
+        (r.posted
+          ? `. ${r.posted} e-qaimə təsdiqlənmiş uyğunluqlarla avtomatik uçota alındı və ya əl ilə yazılmış qaiməyə bağlandı`
+          : '. Heç nə avtomatik uçota alınmayıb') +
+        (r.failed?.length ? `; ${r.failed.length} alınmadı (səbəb sətirdə)` : '') +
+        '.',
     );
     imports.reload();
   }
@@ -126,6 +136,55 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     const r = await m.run({ type: 'eqaime.restore', companyId: win.companyId, documentId: d.id });
     if (r) setMessage(`${d.number} geri qaytarıldı.`);
   }
+  const book = (d: EqDocumentView) =>
+    ws.open({ type: 'invoice', direction, eqDocumentId: d.id }, win.companyId);
+  const openInvoice = (d: EqDocumentView) =>
+    ws.open({ type: 'invoice', direction, id: d.invoiceId }, win.companyId);
+  async function link(d: EqDocumentView, invoiceId: string, number: string) {
+    const r = await m.run({
+      type: 'eqaime.link',
+      companyId: win.companyId,
+      documentId: d.id,
+      invoiceId,
+    });
+    if (r)
+      setMessage(`${d.number} əl ilə yazılmış ${number} qaiməsinə bağlandı; yazılışlar dəyişmədi.`);
+  }
+  async function apply() {
+    const r = await m.run({ type: 'eqaime.apply', companyId: win.companyId, direction });
+    if (r)
+      setMessage(
+        r.posted || r.failed?.length
+          ? `Avtomatik uçota alındı / bağlandı: ${r.posted ?? 0}${r.failed?.length ? `; alınmadı: ${r.failed.length} (səbəb sətirdə)` : ''}.`
+          : 'Təsdiqlənmiş uyğunluqlarla uçota alına bilən e-qaimə yoxdur.',
+      );
+  }
+  /** Undoing an automatic booking: the invoice is cancelled (storno), the e-qaimə waits. */
+  async function undo(d: EqDocumentView) {
+    setMessage('');
+    let version: number;
+    try {
+      version = (
+        await api.query<InvoiceDetail>({
+          type: 'invoice',
+          companyId: win.companyId,
+          id: d.invoiceId,
+        })
+      ).version;
+    } catch (e) {
+      setMessage((e as Error).message);
+      return;
+    }
+    const r = await m.run({
+      type: 'invoice.cancel',
+      companyId: win.companyId,
+      id: d.invoiceId,
+      version,
+      reason: `Avtomatik uçot geri qaytarıldı (e-qaimə ${d.number})`,
+    });
+    if (r) setMessage(`${d.invoiceNumber} storno edildi; ${d.number} sizi gözləyir.`);
+  }
+  const ready = (docs ?? []).filter((d) => d.proposal?.state === 'auto').length;
 
   const columns: Column<EqDocumentView>[] = [
     { key: 'date', label: 'Tarix', render: (d) => day(d.date) },
@@ -156,11 +215,21 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     },
     {
       key: 'what',
-      label: tab === 'posted' ? 'Qaimə' : tab === 'waiting' ? 'Sətirlər' : 'Səbəb',
+      label:
+        tab === 'posted' || tab === 'auto'
+          ? 'Qaimə'
+          : tab === 'proposal' || tab === 'unknown'
+            ? 'Nə tanındı / nə lazımdır'
+            : 'Səbəb',
       className: 'clip',
       render: (d) =>
-        d.bucket === 'posted' ? (
-          d.invoiceNumber
+        d.bucket === 'posted' || d.bucket === 'auto' ? (
+          <span>
+            <button type="button" className="link" onClick={() => openInvoice(d)}>
+              {d.invoiceNumber}
+            </button>
+            {d.bucket === 'auto' && <small> · təsdiqlənmiş uyğunluqlarla</small>}
+          </span>
         ) : d.bucket === 'conflict' ? (
           <span title={d.conflict}>
             <b className="chip chip-bad">Ziddiyyət</b>{' '}
@@ -168,10 +237,19 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           </span>
         ) : d.bucket === 'ignored' ? (
           <span title={d.reason}>{d.reason}</span>
-        ) : d.lineCount ? (
-          `${d.lineCount} mal sətri`
+        ) : d.proposal ? (
+          <span title={[d.autoNote, ...d.proposal.reasons].filter(Boolean).join('\n')}>
+            {d.autoNote ? (
+              <b className="chip chip-bad">Alınmadı</b>
+            ) : d.proposal.state === 'auto' ? (
+              <b className="chip chip-ok">Hazır</b>
+            ) : null}{' '}
+            {d.proposal.reasons[0] ??
+              (d.proposal.state === 'auto' ? 'Avtomatik uçota hazırdır' : '')}
+            {d.proposal.reasons.length > 1 && <small> (+{d.proposal.reasons.length - 1})</small>}
+          </span>
         ) : (
-          <small>yalnız yekunlar (“Mallar üzrə” yüklənməyib)</small>
+          <small>{d.lineCount ? `${d.lineCount} mal sətri` : 'yalnız yekunlar'}</small>
         ),
     },
     {
@@ -180,13 +258,49 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       className: 'nowrap',
       render: (d) =>
         d.state === 'waiting' ? (
+          <>
+            {[
+              ...(d.proposal?.sameNumber ? [d.proposal.sameNumber] : []),
+              ...(d.proposal?.candidates ?? []),
+            ].map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="button secondary small"
+                disabled={m.busy}
+                onClick={() => void link(d, c.id, c.number)}
+              >
+                Bağla: {c.number}
+              </button>
+            ))}
+            {d.status === 'accepted' && (
+              <button
+                type="button"
+                className="button primary small"
+                aria-label={`${d.number}: uçota al`}
+                onClick={() => book(d)}
+              >
+                Uçota al
+              </button>
+            )}
+            <button
+              type="button"
+              className="button secondary small"
+              aria-label={`${d.number}: kənara qoy`}
+              onClick={() => (setReason(''), setIgnore(d))}
+            >
+              Kənara qoy
+            </button>
+          </>
+        ) : d.bucket === 'auto' ? (
           <button
             type="button"
             className="button secondary small"
-            aria-label={`${d.number}: kənara qoy`}
-            onClick={() => (setReason(''), setIgnore(d))}
+            disabled={m.busy}
+            aria-label={`${d.number}: avtomatik uçotu geri qaytar`}
+            onClick={() => void undo(d)}
           >
-            Kənara qoy
+            Geri qaytar
           </button>
         ) : d.state === 'ignored' && !d.reason.startsWith('DVX:') ? (
           <button
@@ -312,6 +426,18 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               {imports.data[0].updated}, dəyişməyən {imports.data[0].same}
             </p>
           )}
+          {ready > 0 && (
+            <p>
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={m.busy}
+                onClick={() => void apply()}
+              >
+                Avtomatik uyğunluqları tətbiq et ({ready} hazır)
+              </button>
+            </p>
+          )}
           <div className="tabs" role="tablist" aria-label="E-qaimələrin vəziyyəti">
             {tabs.map((t) => (
               <button
@@ -331,7 +457,13 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             rows={rows}
             columns={columns}
             rowKey={(x) => x.id}
-            onOpen={(x) => setOpen(x.id)}
+            onOpen={(x) =>
+              x.state === 'posted'
+                ? openInvoice(x)
+                : x.state === 'waiting' && x.status === 'accepted'
+                  ? book(x)
+                  : setOpen(x.id)
+            }
             empty={<Empty title="Bu vəziyyətdə e-qaimə yoxdur" />}
           />
         </>

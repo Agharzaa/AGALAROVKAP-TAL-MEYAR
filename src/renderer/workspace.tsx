@@ -19,6 +19,7 @@ export type Page =
   | 'statements'
   | 'eqPurchase'
   | 'eqSale'
+  | 'eqMaps'
   | 'rules'
   | 'budgetCodes'
   | 'trial'
@@ -34,7 +35,13 @@ export type Page =
 export type View =
   | { type: 'page'; page: Page }
   | { type: 'operation'; id?: string }
-  | { type: 'invoice'; direction: 'sale' | 'purchase'; id?: string }
+  | {
+      type: 'invoice';
+      direction: 'sale' | 'purchase';
+      id?: string;
+      /** A new invoice booking this DVX e-qaimə, prefilled from it. */
+      eqDocumentId?: string;
+    }
   | {
       type: 'bank';
       direction: 'in' | 'out';

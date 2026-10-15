@@ -62,6 +62,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'DVX-dən yüklənən göndərilən e-qaimələr: bir dəfə, statusu ilə',
     icon: Upload,
   },
+  eqMaps: {
+    title: 'E-qaimə uyğunluqları',
+    hint: 'DVX malı → nomenklatura və hesab: təklif və avtomatik',
+    icon: ListTree,
+  },
   rules: {
     title: 'Bank qaydaları',
     hint: 'Mühasibin qərarlarından öyrənilən uçot qaydaları: təklif və avtomatik',
@@ -201,6 +206,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
           { label: 'Nomenklatura', icon: Package, action: page('products') },
+          { label: 'E-qaimə uyğunluqları', icon: ListTree, action: page('eqMaps') },
         ],
       },
     ],
@@ -239,6 +245,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
           { label: 'Nomenklatura', icon: Package, action: page('products') },
+          { label: 'E-qaimə uyğunluqları', icon: ListTree, action: page('eqMaps') },
         ],
       },
     ],
@@ -385,6 +392,7 @@ export function sectionOfView(view: View): string {
           return 'sales';
         case 'purchases':
         case 'eqPurchase':
+        case 'eqMaps':
           return 'purchases';
         case 'operations':
         case 'accounts':
@@ -444,7 +452,10 @@ export function viewTitle(view: View, label?: string): string {
       return view.id ? `Əməliyyat${label ? ` ${label}` : ''}` : 'Yeni əməliyyat';
     case 'invoice': {
       const kind = view.direction === 'sale' ? 'Satış qaiməsi' : 'Alış qaiməsi';
-      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
+      if (view.id) return `${kind}${label ? ` ${label}` : ''}`;
+      return view.eqDocumentId
+        ? `Yeni ${kind.toLowerCase()} (DVX e-qaiməsindən)`
+        : `Yeni ${kind.toLowerCase()}`;
     }
     case 'bank': {
       const kind = view.direction === 'in' ? 'Bank daxilolması' : 'Bank məxarici';

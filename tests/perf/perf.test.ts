@@ -195,7 +195,42 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   ) as { lines: unknown[] };
   assert.equal(opened.lines.length, 5000);
 
-  // E19: 5 000 e-qaimələr with 50 000 goods lines ("Mallar üzrə"), then the box opens.
+  // E19: 5 000 e-qaimələr with 50 000 goods lines ("Mallar üzrə"), then the box opens. The
+  // first 400 partners get a purchase contract and the goods codes 0–9 confirmed (auto) map
+  // entries: their 1 200 e-qaimələr (i % 2000 < 400) are booked as invoices during the load.
+  const stamp2 = Date.now();
+  db.write(() => {
+    const partnerRows = db.all(
+      "SELECT id FROM partners WHERE company_id=? AND tax_id BETWEEN '2000000000' AND '2000000399'",
+      companyId,
+    );
+    for (const p of partnerRows)
+      db.run(
+        "INSERT INTO contracts(id,company_id,partner_id,number,number_key,date,kind) VALUES(?,?,?,?,?,'2021-01-01','purchase')",
+        randomUUID(),
+        companyId,
+        String(p.id),
+        `P-${stamp2}`,
+        `P-${stamp2}`,
+      );
+  });
+  const goodsProducts = db
+    .all('SELECT id FROM products WHERE company_id=? ORDER BY rowid LIMIT 10', companyId)
+    .map((r) => String(r.id));
+  goodsProducts.forEach((productId, j) =>
+    ledger.execute(
+      {
+        key: `perf-map-${stamp2}-${j}`,
+        type: 'eqMap.save',
+        companyId,
+        direction: 'purchase',
+        dvxCode: `${j}`,
+        productId,
+        mode: 'auto',
+      },
+      { actor: 'perf', correlationId: 'perf' },
+    ),
+  );
   const goods = () =>
     Array.from({ length: 10 }, (_, j) => ({
       code: `${j}`,
@@ -217,22 +252,26 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     vat: '18.00',
     lines: goods(),
   }));
-  const eqLoaded = time('E-qaimələrin yüklənməsi (5 000 e-qaimə, 50 000 mal sətri)', 10000, () =>
-    ledger.execute(
-      {
-        key: `perf-eq-${Date.now()}`,
-        type: 'eqaime.import',
-        companyId,
-        direction: 'purchase',
-        report: 'goods',
-        fileName: 'mallar.xlsx',
-        fileHash: 'c'.repeat(64),
-        documents: eqDocs,
-      },
-      { actor: 'perf', correlationId: 'perf' },
-    ),
-  ) as { added: number; rejected: unknown[] };
+  const eqLoaded = time(
+    'E-qaimələrin yüklənməsi (5 000 e-qaimə, 50 000 mal sətri, 1 200 avtomatik qaimə)',
+    10000,
+    () =>
+      ledger.execute(
+        {
+          key: `perf-eq-${Date.now()}`,
+          type: 'eqaime.import',
+          companyId,
+          direction: 'purchase',
+          report: 'goods',
+          fileName: 'mallar.xlsx',
+          fileHash: 'c'.repeat(64),
+          documents: eqDocs,
+        },
+        { actor: 'perf', correlationId: 'perf' },
+      ),
+  ) as { added: number; rejected: unknown[]; posted: number; failed: unknown[] };
   assert.deepEqual([eqLoaded.added, eqLoaded.rejected], [5000, []]);
+  assert.deepEqual([eqLoaded.posted, eqLoaded.failed], [1200, []]);
   const eqBox = time('E-qaimə qutusunun açılması (5 000)', 3000, () =>
     q({ type: 'eqInbox', direction: 'purchase', from: '', to: '' }),
   ) as { documents: unknown[] };

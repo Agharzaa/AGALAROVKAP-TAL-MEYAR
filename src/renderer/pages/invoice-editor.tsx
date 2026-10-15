@@ -10,7 +10,7 @@ import { aznAmounts, AZN_RATE, lineAmounts, type LineAmounts } from '../../domai
 import { formatMinor } from '../../domain/money';
 import { parsePrice, parseQty } from '../../domain/quantity';
 import type { InvoiceLineInput } from '../../contracts/commands';
-import type { Catalog, InvoiceDetail } from '../../contracts/queries';
+import type { Catalog, EqDocumentDetail, InvoiceDetail } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day, money, toField } from '../format';
@@ -98,6 +98,34 @@ function fromDetail(d: InvoiceDetail): Form {
   };
 }
 
+/** A new invoice prefilled from a DVX e-qaimə: what the system recognised (docs §8.4). */
+function fromEq(e: EqDocumentDetail, base: Form): Form {
+  const p = e.proposal;
+  return {
+    ...base,
+    date: e.date,
+    partnerId: p?.partnerId ?? '',
+    contractId: p?.contractId ?? '',
+    pricesIncludeVat: false,
+    eqNumber: e.number,
+    memo: e.note.slice(0, 500),
+    lines: p?.lines.length
+      ? p.lines.map((l) => ({
+          key: ++keys,
+          productId: l.productId,
+          quantity: toField(l.quantity || '1'),
+          price: toField(l.price),
+          vatRate: l.vatRate || base.lines[0]!.vatRate,
+          incomeTypeId: l.incomeTypeId,
+          account: l.account,
+          expenseItemId: l.expenseItemId,
+          vatTreatment: l.vatTreatment,
+          memo: l.dvx?.name.slice(0, 300) ?? '',
+        }))
+      : base.lines,
+  };
+}
+
 function toInput(l: LineForm, direction: Direction): InvoiceLineInput {
   return {
     productId: l.productId,
@@ -143,7 +171,16 @@ function errorAt(field: string | undefined) {
   return m ? { line: Number(m[1]), part: m[2]! } : null;
 }
 
-export function InvoiceEditor({ direction, id }: { direction: Direction; id?: string }) {
+export function InvoiceEditor({
+  direction,
+  id,
+  eqDocumentId,
+}: {
+  direction: Direction;
+  id?: string;
+  /** A new invoice booking this DVX e-qaimə, prefilled from it. */
+  eqDocumentId?: string;
+}) {
   const win = useWindow();
   const ws = useWorkspace();
   const { catalog } = useCatalog(win.companyId);
@@ -158,6 +195,12 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
   const doc = detail.data;
+  // The e-qaimə this invoice books: the one it was opened for, or the one it is bound to.
+  const eqRef = id ? (doc?.eqDocumentId ?? '') : (eqDocumentId ?? '');
+  const eqDoc = useQuery<EqDocumentDetail>(
+    eqRef ? { type: 'eqDocument', companyId: win.companyId, id: eqRef } : null,
+  );
+  const eq = eqDoc.data;
   const sale = direction === 'sale';
   const snapshot = (f: Form) =>
     JSON.stringify({
@@ -169,8 +212,9 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
   useEffect(() => {
     if (form || !catalog) return;
     if (id && !doc) return;
+    if (!id && eqDocumentId && !eq) return;
     const vatPayer = catalog.company.vatPayer;
-    const initial: Form = doc
+    const fresh: Form = doc
       ? fromDetail(doc)
       : {
           number: '',
@@ -186,9 +230,11 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
           manual: false,
           postings: [],
         };
-    baseline.current = snapshot(initial);
+    const initial = !id && eq ? fromEq(eq, fresh) : fresh;
+    // An invoice opened from an e-qaimə is unsaved work from the start.
+    baseline.current = snapshot(fresh);
     setForm(initial);
-  }, [doc, form, id, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doc, form, id, catalog, eq]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!doc || !resync.current) return;
     resync.current = false;
@@ -244,6 +290,7 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       lines: form.lines.map((l) => toInput(l, direction)),
       ...(form.manual ? { postings: form.postings.map(toEntryInput) } : {}),
       ...(id && doc ? { id, version: doc.version } : {}),
+      ...(!id && eqDocumentId ? { eqDocumentId } : {}),
     });
     if (!r) return;
     if (close) {
@@ -253,7 +300,7 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
     setMessage(
       id
         ? 'Düzəliş uçota alındı: köhnə yazılış storno edildi, yenisi yazıldı.'
-        : `Qaimə ${r.number} uçota alındı.`,
+        : `Qaimə ${r.number} uçota alındı${eq ? ` (DVX e-qaimə ${eq.number})` : ''}.`,
     );
     resync.current = true;
     if (!id) {
@@ -373,6 +420,7 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
       }
       notices={
         <>
+          {eq && <EqBanner eq={eq} fresh={!id} />}
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
@@ -824,5 +872,97 @@ export function InvoiceEditor({ direction, id }: { direction: Direction; id?: st
         </Confirm>
       )}
     </ModuleFrame>
+  );
+}
+
+/**
+ * The DVX e-qaimə above the invoice: what DVX wrote, why the system did not book it by itself,
+ * a new partner to create, and — once booked by hand — learning the map from this invoice.
+ */
+function EqBanner({ eq, fresh }: { eq: EqDocumentDetail; fresh: boolean }) {
+  const win = useWindow();
+  const { catalog } = useCatalog(win.companyId);
+  const m = useMutation();
+  const [done, setDone] = useState('');
+  const p = eq.proposal;
+  const missing =
+    p?.newPartner && !catalog?.partners.some((x) => x.taxId === p.newPartner!.taxId)
+      ? p.newPartner
+      : undefined;
+  return (
+    <Notice kind={fresh && p?.reasons.length ? 'warning' : 'info'}>
+      <b>
+        DVX e-qaimə {eq.number} · {day(eq.date)} · {eq.name} · VÖEN {eq.taxId}
+      </b>{' '}
+      — ƏDV-siz {money(eq.net)}, ƏDV {money(eq.vat)}, cəmi {money(eq.total)}
+      {eq.lines.length > 0 && (
+        <details>
+          <summary>DVX sətirləri ({eq.lines.length})</summary>
+          <ul>
+            {eq.lines.map((l, i) => (
+              <li key={i}>
+                {l.code && <>{l.code} · </>}
+                {l.name} · {l.quantity} {l.unit} × {l.price} = {money(l.net)}, ƏDV {money(l.vat)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {fresh && p && p.reasons.length > 0 && (
+        <ul aria-label="Təsdiq tələb edənlər">
+          {p.reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+      )}
+      {fresh && missing && (
+        <button
+          type="button"
+          className="button secondary small"
+          disabled={m.busy}
+          onClick={async () => {
+            const r = await m.run({
+              type: 'partner.save',
+              companyId: win.companyId,
+              name: missing.name,
+              taxId: missing.taxId,
+              kind: missing.kind,
+              note: 'DVX e-qaiməsindən',
+              archived: false,
+            });
+            if (r)
+              setDone(
+                `Kontragent yaradıldı: ${missing.name}. Müqaviləsini “Kontragentlər və müqavilələr”də əlavə edin, sonra seçin.`,
+              );
+          }}
+        >
+          Kontragenti yarat (VÖEN {missing.taxId})
+        </button>
+      )}
+      {!fresh && eq.bucket === 'posted' && (
+        <button
+          type="button"
+          className="button secondary small"
+          disabled={m.busy}
+          onClick={async () => {
+            const r = await m.run({
+              type: 'eqaime.learn',
+              companyId: win.companyId,
+              documentId: eq.id,
+            });
+            if (r)
+              setDone(
+                r.learned
+                  ? `${r.learned} uyğunluq “təklif” rejimində saxlandı (Kitabçalar → E-qaimə uyğunluqları).`
+                  : 'Bu e-qaimənin uyğunluqları artıq var.',
+              );
+          }}
+        >
+          Uyğunluq kimi saxla
+        </button>
+      )}
+      {done && <p>{done}</p>}
+      {m.error && <p className="pair-bad">{m.error.message}</p>}
+    </Notice>
   );
 }

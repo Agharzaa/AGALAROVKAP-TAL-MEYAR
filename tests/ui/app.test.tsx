@@ -769,8 +769,8 @@ test('DVX e-qaimələr: file preview, load, the box by state; a file of the othe
     assert.match(preview.textContent ?? '', /faylın başlığı ilə uyğundur/);
     assert.match(preview.textContent ?? '', /2 e-qaimə · cəmi 1\s?239,00/);
     await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
-    await page.findByText(/Yükləndi: yeni 2 e-qaimə\. Heç nə uçota alınmayıb\./);
-    const waiting = await page.findByRole('tab', { name: /Gözləyir 1/ });
+    await page.findByText(/Yükləndi: yeni 2 e-qaimə\. Heç nə avtomatik uçota alınmayıb\./);
+    const waiting = await page.findByRole('tab', { name: /Təklif 1/ });
     assert.equal(waiting.getAttribute('aria-selected'), 'true');
     await page.findByText('MT2609001');
     await user.click(page.getByRole('tab', { name: /DVX-də gözləyir 1/ }));
@@ -792,6 +792,125 @@ test('DVX e-qaimələr: file preview, load, the box by state; a file of the othe
       to: '2026-12-31',
     }) as InvoiceSummary[];
     assert.equal(invoices.length, 0);
+  } finally {
+    h.close();
+  }
+});
+
+test('DVX e-qaimə → invoice: book a proposal by hand, learn the map, switch it to auto', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Kağız MMC',
+    taxId: '1700000005',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'A-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  });
+  h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Kağız A4',
+    unit: 'qutu',
+    kind: 'goods',
+    groupId: '',
+    archived: false,
+  });
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-05`;
+  let n = 0;
+  const eq = (number: string) =>
+    h.run({
+      type: 'eqaime.import',
+      companyId: s.companyId,
+      direction: 'purchase',
+      report: 'goods',
+      source: 'file',
+      fileName: `mallar-${number}.xlsx`,
+      fileHash: String(++n).padStart(64, 'a'),
+      documents: [
+        {
+          row: 2,
+          number,
+          date: iso,
+          taxId: '1700000005',
+          name: 'Kağız MMC',
+          status: 'Təsdiqləndi',
+          net: '50.00',
+          vat: '9.00',
+          lines: [
+            {
+              code: '4802',
+              name: 'Kağız A4 80q',
+              unit: 'qutu',
+              quantity: '10',
+              price: '5',
+              net: '50.00',
+              vat: '9.00',
+              vatRate: '18',
+            },
+          ],
+        },
+      ],
+    });
+  eq('MT1');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const box = within(pane());
+    await box.findByRole('tab', { name: /Təklif 1/ });
+    await user.click(await box.findByRole('button', { name: 'MT1: uçota al' }));
+    const editor = within(pane());
+    await editor.findByText(/DVX e-qaimə MT1/);
+    await editor.findByText(/uyğunluq yoxdur — nomenklaturanı seçin/);
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'E-qaimə nömrəsi' }) as HTMLInputElement).value,
+      'MT1',
+    );
+    await user.click(await editor.findByRole('combobox', { name: 'Sətir 1 nomenklatura' }));
+    await user.keyboard('Kağız');
+    await user.keyboard('{Enter}');
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Qaimə AQ-000001 uçota alındı \(DVX e-qaimə MT1\)/);
+    await user.click(await editor.findByRole('button', { name: 'Uyğunluq kimi saxla' }));
+    await editor.findByText(/1 uyğunluq “təklif” rejimində saxlandı/);
+    // The map: the accountant switches the entry to auto.
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'E-qaimə uyğunluqları' }));
+    const maps = within(pane());
+    await user.click(await maps.findByRole('button', { name: 'Kağız A4 80q: avtomatik et' }));
+    await maps.findByText(/Uyğunluq avtomatik rejimdədir/);
+    // The next e-qaimə of these goods books by itself.
+    const r = eq('MT2');
+    assert.equal(r.posted, 1);
+    const invoices = h.ledger.query({
+      type: 'invoices',
+      companyId: s.companyId,
+      direction: 'purchase',
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as InvoiceSummary[];
+    assert.deepEqual(invoices.map((i) => [i.number, i.eqNumber, i.total]).sort(), [
+      ['AQ-000001', 'MT1', '59.00'],
+      ['AQ-000002', 'MT2', '59.00'],
+    ]);
   } finally {
     h.close();
   }

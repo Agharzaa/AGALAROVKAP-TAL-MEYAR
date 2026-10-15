@@ -557,7 +557,8 @@ function guardStock(
   add(previous, previousDate, -1n);
   add(current, currentDate, 1n);
   for (const [key, days] of delta) {
-    if (![...days.values()].some((q) => q !== 0n)) continue;
+    // A change that only adds stock (a new purchase) cannot push any day below zero.
+    if (![...days.values()].some((q) => q < 0n)) continue;
     const [account, product] = key.split('|') as [string, string];
     const after = dailyStock(tx.db, companyId, account, product);
     const byDate = new Map(after.map((d) => [d.date, d.quantity]));
@@ -692,10 +693,12 @@ export function saveInvoice(
     throw new DomainError('Bu nömrə ilə qaimə artıq var.', 'number', 'conflict');
   const eqKey = n.header.eqNumber ? numberKey(n.header.eqNumber) : '';
   if (eqKey) {
+    // "eq_key<>''" repeats the partial index's condition: without it SQLite cannot use the index
+    // (it does not look into the bound value) and scans every invoice.
     const dup = tx.db.get(
       cmd.direction === 'sale'
-        ? "SELECT number FROM invoices WHERE company_id=? AND direction='sale' AND eq_key=? AND status='posted' AND id<>?"
-        : "SELECT number FROM invoices WHERE company_id=? AND direction='purchase' AND eq_key=? AND status='posted' AND id<>? AND partner_id=?",
+        ? "SELECT number FROM invoices WHERE company_id=? AND direction='sale' AND eq_key=? AND eq_key<>'' AND status='posted' AND id<>?"
+        : "SELECT number FROM invoices WHERE company_id=? AND direction='purchase' AND eq_key=? AND eq_key<>'' AND status='posted' AND id<>? AND partner_id=?",
       cmd.companyId,
       eqKey,
       cmd.id ?? '',
