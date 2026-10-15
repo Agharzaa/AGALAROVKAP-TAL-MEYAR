@@ -17,6 +17,8 @@ export type Page =
   | 'purchases'
   | 'bank'
   | 'statements'
+  | 'eqPurchase'
+  | 'eqSale'
   | 'rules'
   | 'budgetCodes'
   | 'trial'

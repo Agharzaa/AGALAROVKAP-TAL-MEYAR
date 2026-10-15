@@ -52,6 +52,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Excel/CSV yükləmə, sətirlərin uçotu, bank ↔ uçot qalığı',
     icon: Upload,
   },
+  eqPurchase: {
+    title: 'Alınan e-qaimələr (DVX)',
+    hint: 'DVX-dən yüklənən gələn e-qaimələr: bir dəfə, statusu ilə',
+    icon: Upload,
+  },
+  eqSale: {
+    title: 'Göndərilən e-qaimələr (DVX)',
+    hint: 'DVX-dən yüklənən göndərilən e-qaimələr: bir dəfə, statusu ilə',
+    icon: Upload,
+  },
   rules: {
     title: 'Bank qaydaları',
     hint: 'Mühasibin qərarlarından öyrənilən uçot qaydaları: təklif və avtomatik',
@@ -167,7 +177,10 @@ export const sections: Section[] = [
     groups: [
       {
         title: 'Sənədlər',
-        items: [{ label: 'Satış qaimələri', icon: ReceiptText, action: page('sales') }],
+        items: [
+          { label: 'Satış qaimələri', icon: ReceiptText, action: page('sales') },
+          { label: 'Göndərilən e-qaimələr (DVX)', icon: Upload, action: page('eqSale') },
+        ],
       },
       {
         title: 'Yarat',
@@ -199,7 +212,10 @@ export const sections: Section[] = [
     groups: [
       {
         title: 'Sənədlər',
-        items: [{ label: 'Alış qaimələri', icon: ReceiptText, action: page('purchases') }],
+        items: [
+          { label: 'Alış qaimələri', icon: ReceiptText, action: page('purchases') },
+          { label: 'Alınan e-qaimələr (DVX)', icon: Upload, action: page('eqPurchase') },
+        ],
       },
       {
         title: 'Yarat',
@@ -365,8 +381,10 @@ export function sectionOfView(view: View): string {
         case 'home':
           return 'home';
         case 'sales':
+        case 'eqSale':
           return 'sales';
         case 'purchases':
+        case 'eqPurchase':
           return 'purchases';
         case 'operations':
         case 'accounts':

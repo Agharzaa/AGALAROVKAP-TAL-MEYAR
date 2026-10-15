@@ -186,6 +186,26 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur: 7e75bc1 (3a), 646fde0 (3b
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 83, `npm run test:ui` 12 (formadakı xəbərdarlıq daxil), `npm run test:perf` keçir (5 000 sətirlik çıxarış ~700 avtomatik uçotla ~0,5 s). Real Electron (Windows, təmiz baza, `MEYAR_SMOKE`): şirkət, 90 hesab, DBC, bütövlük — ok.
 
+## Mərhələ 4 — DVX e-qaimələri
+
+Plan və qərarlar: `docs/MERHELE-4-EQAIME.md` (təsdiqlənib 15.10.2026, §11 tövsiyələri qəbul), `docs/QERARLAR.md` (2026-10-15, mərhələ 4). Köhnə DVX qoşulmasına istinad: quraşdırılmış Meyar ERP v1.17.2 (`%LOCALAPPDATA%\Programs\Meyar ERP`); Masaüstündəki v1.12–v1.14 qovluqları və nümunə Excel faylı artıq yoxdur.
+
+### 4a — idxal və e-qaimə qutusu (15.10.2026)
+
+| Sahə                                                                                                                                                                                                           | Sübut                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Sxem v10: `eq_imports`, `eq_documents`, `eq_status_history`, `eq_product_map` (4b üçün), `invoices.origin / eq_document_id`; DVX sahələri dəyişdirilmir, silinmir; mal sətirləri və başlıq bir dəfə tamamlanır | `eqaime.test.ts` (E16), `schema v1 → current`    |
+| Oxuyucu: "Qaimələr üzrə" (ƏDV bazaları ayrı) və "Mallar üzrə" (sətirlər e-qaimə üzrə qruplaşır), başlıq blokundan istiqamət, Excel tarix nömrəsi, "Cəmi" sətri atlanır; statuslar sərt: tanınmayan — `unknown` | `tests/domain/eqaime.test.ts` (E1, **sintetik**) |
+| Bir dəfə: istiqamət + VÖEN + nömrə; eyni fayl ikinci dəfə — 0 yeni, heç nə dəyişmir; üst-üstə düşən dövr yalnız yenini əlavə edir; eyni nömrə iki malsatandan — iki e-qaimə                                    | `eqaime.test.ts` (E2, E4)                        |
+| İstiqamət qoruması: başlıqdakı "Gələnlər/Göndərilənlər" seçimə zidddirsə, şirkətin VÖEN-i səhv tərəfdədirsə və ya ümumiyyətlə yoxdursa — bütün fayl rədd; öz VÖEN-i kontragent yerində — sətir rədd            | `eqaime.test.ts` (E3), `tests/ui`                |
+| DVX statusu izlənir (tarixçə ilə): gözləyən → təsdiqlənib; ləğv / imtina — avtomatik kənara qoyulur, geri qaytarılmır; eyni e-qaimə fərqli məbləğlə — ziddiyyət, mövcud qeyd toxunulmaz                        | `eqaime.test.ts` (E12)                           |
+| Qutu pəncərəsi (Alış / Satış → "… e-qaimələr (DVX)"): ilkin baxış, tablar (Gözləyir · DVX-də gözləyir · Ziddiyyət · Uçota alınıb · Kənar qoyulub), e-qaimənin sətirləri və status tarixçəsi, kənara qoyma      | `tests/ui` (13 test)                             |
+| Yük: 5 000 e-qaimə / 50 000 mal sətri yüklənir ~0,3 s (hədd 10 s), qutu açılır ~0,05 s (hədd 3 s); 500 000 yazılışlı bazada digər həddlər dəyişməyib                                                           | `npm run test:perf`                              |
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 94, `npm run test:ui` 13, `npm run test:perf` keçir. Real Electron (Windows, `MEYAR_SMOKE`): təmiz baza və 0.5.0 kodu ilə yaradılmış v9 bazası (alış qaiməsi ilə) — v10-a yeniləndi, qaimə toxunulmaz, bütövlük ok. Yeni pəncərənin görünüşü ekran şəkli ilə yoxlanmayıb (yalnız jsdom testi).
+
+**Yükləmə heç nəyi uçota almır** — uçot 4b-də (`invoice.save` ilə). **Real DVX faylı ilə yoxlanmayıb:** oxuyucunun sütun sözləri v1.17-nin oxuduğu DVX ixracından götürülüb; istifadəçi anonimləşdirilmiş faylları göndərəcək (Gələnlər / Göndərilənlər × Qaimələr üzrə / Mallar üzrə).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.

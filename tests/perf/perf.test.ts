@@ -194,6 +194,49 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     q({ type: 'statement', id: loaded.id }),
   ) as { lines: unknown[] };
   assert.equal(opened.lines.length, 5000);
+
+  // E19: 5 000 e-qaimələr with 50 000 goods lines ("Mallar üzrə"), then the box opens.
+  const goods = () =>
+    Array.from({ length: 10 }, (_, j) => ({
+      code: `${j}`,
+      name: `Mal ${j}`,
+      unit: 'ədəd',
+      quantity: '2',
+      price: '5',
+      net: '10.00',
+      vat: '1.80',
+      vatRate: '18',
+    }));
+  const eqDocs = Array.from({ length: 5000 }, (_, i) => ({
+    row: i + 2,
+    number: `MT${String(2600000 + i)}`,
+    date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+    taxId: String(2000000000 + (i % 2000)),
+    status: 'Təsdiqləndi',
+    net: '100.00',
+    vat: '18.00',
+    lines: goods(),
+  }));
+  const eqLoaded = time('E-qaimələrin yüklənməsi (5 000 e-qaimə, 50 000 mal sətri)', 10000, () =>
+    ledger.execute(
+      {
+        key: `perf-eq-${Date.now()}`,
+        type: 'eqaime.import',
+        companyId,
+        direction: 'purchase',
+        report: 'goods',
+        fileName: 'mallar.xlsx',
+        fileHash: 'c'.repeat(64),
+        documents: eqDocs,
+      },
+      { actor: 'perf', correlationId: 'perf' },
+    ),
+  ) as { added: number; rejected: unknown[] };
+  assert.deepEqual([eqLoaded.added, eqLoaded.rejected], [5000, []]);
+  const eqBox = time('E-qaimə qutusunun açılması (5 000)', 3000, () =>
+    q({ type: 'eqInbox', direction: 'purchase', from: '', to: '' }),
+  ) as { documents: unknown[] };
+  assert.equal(eqBox.documents.length, 5000);
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

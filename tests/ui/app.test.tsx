@@ -730,3 +730,69 @@ test('bank receipt: an invoice already paid can be chosen by hand, the form warn
     h.close();
   }
 });
+
+test('DVX e-qaimələr: file preview, load, the box by state; a file of the other direction is held back', async () => {
+  const h = harness();
+  const s = seed(h);
+  const csv = (title: string) =>
+    [
+      title,
+      'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+      'MT;2609001;05.09.2026;1700000001;Malsatan MMC;1000,00;180,00;1180,00;1000,00;Təsdiqləndi',
+      'MT;2609002;06.09.2026;1700000002;Rabitə ASC;50,00;9,00;59,00;50,00;Təsdiq gözləyir',
+    ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await page.findByText('Hələ e-qaimə yüklənməyib');
+    // Göndərilənlər in the title: the preview says so and loading is not offered.
+    await user.upload(
+      page.getByLabelText('DVX faylı'),
+      new File([csv('Göndərilənlər')], 'gonderilenler.csv', { type: 'text/csv' }),
+    );
+    let preview = await page.findByRole('region', { name: 'İlkin baxış' });
+    assert.match(preview.textContent ?? '', /fayl yüklənməyəcək/);
+    assert.equal(
+      (within(preview).getByRole('button', { name: 'Yüklə' }) as HTMLButtonElement).disabled,
+      true,
+    );
+    await user.click(within(preview).getByRole('button', { name: 'İmtina' }));
+    await user.upload(
+      page.getByLabelText('DVX faylı'),
+      new File([csv('E-qaimələr — Gələnlər')], 'gelenler.csv', { type: 'text/csv' }),
+    );
+    preview = await page.findByRole('region', { name: 'İlkin baxış' });
+    assert.match(preview.textContent ?? '', /faylın başlığı ilə uyğundur/);
+    assert.match(preview.textContent ?? '', /2 e-qaimə · cəmi 1\s?239,00/);
+    await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
+    await page.findByText(/Yükləndi: yeni 2 e-qaimə\. Heç nə uçota alınmayıb\./);
+    const waiting = await page.findByRole('tab', { name: /Gözləyir 1/ });
+    assert.equal(waiting.getAttribute('aria-selected'), 'true');
+    await page.findByText('MT2609001');
+    await user.click(page.getByRole('tab', { name: /DVX-də gözləyir 1/ }));
+    await page.findByText('MT2609002');
+    // The same file again: nothing new.
+    await user.upload(
+      page.getByLabelText('DVX faylı'),
+      new File([csv('Gələnlər')], 'gelenler.csv', { type: 'text/csv' }),
+    );
+    preview = await page.findByRole('region', { name: 'İlkin baxış' });
+    await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
+    await page.findByText(/yeni 0 e-qaimə, 2 dəyişməyib/);
+    // Loading books nothing.
+    const invoices = h.ledger.query({
+      type: 'invoices',
+      companyId: s.companyId,
+      direction: 'purchase',
+      from: '2026-01-01',
+      to: '2026-12-31',
+    }) as InvoiceSummary[];
+    assert.equal(invoices.length, 0);
+  } finally {
+    h.close();
+  }
+});
