@@ -364,7 +364,7 @@ Hər addım ayrıca commit-dir və testləri yaşıl saxlayır.
 4. **3d — Qaydalar.** ✅ Hazır (14.10.2026). Dəqiqləşmələr: qayda layihəsi mühasibin uçota aldığı bank sənədindən; söz təklifi 4+ hərfli, rəqəmsiz sözlər; eyni şərtli ikinci qayda rədd olunur; valyuta hesabında avtomatik uçot yoxdur; büdcə kodu cədvəli 3d-də (təklif kimi, avtomatik yalnız qayda ilə).
    - mühərrik, qaydanın yaranması, Qaydalar kitabçası, avtomatik rejim, geri qaytarma;
    - testlər B10, B11.
-5. **Audit, 0.5.0 buraxılışı, `PROJECT_STATE.md` və `QERARLAR.md`-nin yenilənməsi.**
+5. **Audit, 0.5.0 buraxılışı, `PROJECT_STATE.md` və `QERARLAR.md`-nin yenilənməsi.** ✅ Hazır (15.10.2026): müstəqil audit 2 tur, 4 qüsur düzəldi, açıq suallar QERARLAR 2026-10-15-də.
 
 ## 10. Açıq suallar (istifadəçi və mühasib)
 

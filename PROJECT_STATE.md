@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 14.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 15.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -161,7 +161,7 @@ Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` ke
 
 Testlər Windows-da: `npm test` 75, `npm run test:ui` 11, `npm run test:perf` keçir; real Electron təmiz və v8 bazasında ok.
 
-**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
+**Mərhələ 3 tamamlandı (3a–3d), versiya 0.5.0.** Mərhələ 3 və audit `main`-də GitHub-a push edilib (15.10.2026). Qalan: real bank faylları ilə oxuyucunun yoxlanması (istifadəçidən anonimləşdirilmiş nümunələr).
 
 ## Mərhələ 3 auditi (15.10.2026)
 
@@ -196,7 +196,7 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 83, `npm run test:ui` 12 (f
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
-3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~ — hazır. **Növbəti:** müstəqil audit (mərhələ 2-dəki kimi, ayrıca yoxlayıcı), real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması, versiya 0.5.0, GitHub-a push və Windows CI.
+3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 
