@@ -307,6 +307,8 @@ export interface BankDocumentDetail extends BankDocumentSummary {
   pairCandidates: BankDocumentSummary[];
   rate: string;
   lines: BankLineView[];
+  /** Saved, but worth a look: an invoice chosen by hand that is already paid. */
+  warnings: string[];
   postings: PostingView[];
   history: { version: number; status: string; at: string; actor: string }[];
 }

@@ -29,7 +29,7 @@ import {
   type InvoiceDirection,
   type LineAmounts,
 } from '../domain/invoice.js';
-import { subkontoLabel } from '../domain/chart.js';
+import { inFamily, subkontoLabel } from '../domain/chart.js';
 import type { Account, Chart, CurrencyCode, SubkontoKind, VatRate } from '../domain/chart.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
@@ -578,6 +578,82 @@ function guardStock(
   }
 }
 
+/**
+ * Money already received or paid against this invoice is not left hanging on it: after a
+ * correction or cancellation the invoice's own settlement key may not become an overpayment
+ * (211 credit, 531 debit) it did not already have. The payment document is corrected first.
+ */
+function guardSettlement(
+  tx: Tx,
+  companyId: string,
+  chart: Chart,
+  id: string,
+  number: string,
+  previous: readonly Posting[],
+  current: readonly Posting[],
+) {
+  const self = `${INVOICE}:${id}`;
+  const keys = new Map<
+    string,
+    { account: string; partner: string; contract: string; sign: bigint; code: string }
+  >();
+  for (const p of [...previous, ...current])
+    for (const s of [p.dt, p.kt]) {
+      // What the partner still owes us (211) or we owe the partner (531).
+      const sign = inFamily(s.account, '211') ? 1n : inFamily(s.account, '531') ? -1n : 0n;
+      if (!sign || s.sk[2] !== self) continue;
+      keys.set(`${s.account}|${s.sk[0]}|${s.sk[1]}`, {
+        account: s.account,
+        partner: s.sk[0]!,
+        contract: s.sk[1]!,
+        sign,
+        code: s.currency ?? 'AZN',
+      });
+    }
+  for (const k of keys.values()) {
+    // A currency invoice is settled in its currency; AZN differences are exchange differences.
+    const currency = !!chart.get(k.account)?.currency;
+    const on = (s: Side) =>
+      s.account === k.account &&
+      s.sk[0] === k.partner &&
+      s.sk[1] === k.contract &&
+      s.sk[2] === self;
+    const own = (postings: readonly Posting[]) =>
+      postings.reduce((sum, p) => {
+        const value = (s: Side) => (currency ? (s.curAmount ?? 0n) : p.amount);
+        return sum + (on(p.dt) ? value(p.dt) : 0n) - (on(p.kt) ? value(p.kt) : 0n);
+      }, 0n);
+    const balance = settlementBalance(tx.db, companyId, k.account, k.partner, k.contract, self);
+    const after = (currency ? balance.currency : balance.amount) * k.sign;
+    const before = after - (own(current) - own(previous)) * k.sign;
+    if (after >= 0n || after >= before) continue;
+    const payers = tx.db
+      .all(
+        `SELECT DISTINCT e.source_number AS n FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND e.storno=0 AND NOT (e.source_type=? AND e.source_id=?)
+           AND ((p.dt_account=? AND p.dt_s1=? AND p.dt_s2=? AND p.dt_s3=?)
+             OR (p.kt_account=? AND p.kt_s1=? AND p.kt_s2=? AND p.kt_s3=?))`,
+        companyId,
+        INVOICE,
+        id,
+        k.account,
+        k.partner,
+        k.contract,
+        self,
+        k.account,
+        k.partner,
+        k.contract,
+        self,
+      )
+      .map((r) => String(r.n));
+    throw new DomainError(
+      `${number} qaiməsi üzrə ${payers.join(', ') || 'başqa sənəd'} ilə ödəniş ${k.sign > 0n ? 'alınıb' : 'edilib'}; dəyişiklikdən sonra qaimə ${money(-after)} ${currency ? k.code : 'AZN'} artıq ödənilmiş qalardı. Əvvəlcə ödəniş sənədini düzəldin.`,
+      undefined,
+      'conflict',
+    );
+  }
+}
+
 function payload(number: string, n: Normalized) {
   return { number, ...n.header, lines: n.lines.map((l) => l.stored) };
 }
@@ -715,6 +791,7 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     postings,
   );
   guardStock(tx, cmd.companyId, chart, previous, previousDate, postings, n.header.date);
+  guardSettlement(tx, cmd.companyId, chart, id, number, previous, postings);
   tx.history(cmd.companyId, INVOICE, id, version, 'posted', data);
   tx.audit(
     cmd.companyId,
@@ -758,6 +835,7 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
     cmd.id,
   );
   guardStock(tx, cmd.companyId, chart, prev.postings, prev.date, [], prev.date);
+  guardSettlement(tx, cmd.companyId, chart, cmd.id, String(row.number), prev.postings, []);
   tx.history(cmd.companyId, INVOICE, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

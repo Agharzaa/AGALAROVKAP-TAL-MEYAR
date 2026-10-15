@@ -433,11 +433,19 @@ function autoSettle(
       field,
     );
   // A deposit document pays VAT, a current account the rest; currency invoices as a whole.
+  // Individuals and foreign partners have no VAT deposit account: their VAT comes with the rest.
+  const kind = tx.db.get(
+    'SELECT kind FROM partners WHERE company_id=? AND id=?',
+    companyId,
+    partner,
+  )?.kind;
   const part: SettlementPart = n.foreign
     ? 'whole'
     : inFamily(n.bankAccount.code, '224')
       ? 'vat'
-      : 'net';
+      : kind === 'individual' || kind === 'foreign'
+        ? 'whole'
+        : 'net';
   const invoices = openInvoices(
     tx,
     companyId,

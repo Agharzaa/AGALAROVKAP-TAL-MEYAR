@@ -30,7 +30,13 @@ import {
 import { checkPostings, storno, type Posting } from '../../src/domain/posting.js';
 import { allocatePayment, openPart, splitProportionally } from '../../src/domain/bank.js';
 import { readStatementTable, statementAddsUp } from '../../src/domain/statement.js';
-import { findBudgetCode, matches, normalizeTerms, suggestTerms } from '../../src/domain/rules.js';
+import {
+  chooseRule,
+  findBudgetCode,
+  matches,
+  normalizeTerms,
+  suggestTerms,
+} from '../../src/domain/rules.js';
 
 test('money parses exact qəpik and never rounds silently', () => {
   assert.equal(parseMoney('118'), 11800n);
@@ -466,4 +472,35 @@ test('rules: word matching, suggested words, budget code in the purpose', () => 
   );
   assert.equal(findBudgetCode('ƏDV 131110 saylı', new Set(['131110'])), '131110');
   assert.equal(findBudgetCode('Qaimə 131110', new Set()), undefined);
+});
+
+test('rules: of two equal rules booking alike, "suggest" wins over "auto"', () => {
+  const base = {
+    name: 'İcarə',
+    direction: 'out' as const,
+    bankAccountId: '',
+    counterpartyTaxId: '1700000003',
+    amountMin: null,
+    amountMax: null,
+    lines: [{ account: '721', sk: ['x'], amount: '', cashFlowItem: '', memo: '' }],
+    version: 1,
+  };
+  const auto = { ...base, id: 'a', terms: ['ofis'], mode: 'auto' as const };
+  const suggest = { ...base, id: 's', terms: ['icarə'], mode: 'suggest' as const };
+  const row = {
+    direction: 'out' as const,
+    bankAccountId: 'b',
+    amount: 100n,
+    counterparty: '',
+    counterpartyTaxId: '1700000003',
+    purpose: 'Ofis icarəsi',
+  };
+  // The accountant has not confirmed automatic posting for every rule that recognises the row.
+  for (const rules of [
+    [auto, suggest],
+    [suggest, auto],
+  ]) {
+    const choice = chooseRule(rules, row);
+    assert.equal(choice.kind === 'rule' && choice.rule.id, 's');
+  }
 });

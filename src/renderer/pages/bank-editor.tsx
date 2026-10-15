@@ -422,6 +422,11 @@ export function BankEditor({
       }
       notices={
         <>
+          {doc?.warnings.map((w) => (
+            <Notice key={w} kind="warning">
+              {w}
+            </Notice>
+          ))}
           {/* The VAT pair matters before the lines: say it at the top, details further down. */}
           {doc?.pair && !doc.pair.ok && (
             <Notice kind="warning">

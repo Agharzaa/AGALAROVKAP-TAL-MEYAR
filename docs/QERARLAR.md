@@ -229,3 +229,15 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 8. **Bank xidmətləri** 721 (xərc maddəsi "Bank xidmətləri"); **kredit faizi** 751; **vergi ödənişlərinin subhesabı** büdcə təsnifat kodu → subhesab cədvəli ilə (cədvəli mühasib doldurur).
 9. **Əmək haqqı** hələlik bir sənəddə hər işçi bir sətir; avtomatik bölgü əməkhaqqı mərhələsində.
 10. **Valyuta alışı/satışı** (222.02 / 222.04) şablon kimi bu mərhələdə; məzənnə fərqinin avtomatik hesablanması mərhələ 5-də.
+
+## 2026-10-15 — mərhələ 3 auditinin açıq sualları
+
+İstifadəçi qərarı yoxlayıcıya həvalə etdi ("ən məntiqli və düzgün nədirsə, onu et"). Əsaslandırma: `PROJECT_STATE.md` → "Mərhələ 3 auditi".
+
+### TƏSDİQLƏNDİ
+
+1. **Ödənilmiş qaimə ləğv edilmir və ödənişdən aşağı azaldılmır.** Qaimənin öz hesablaşma açarı (211 / 531) artıq ödənişə düşərsə, sənəd saxlanmır: əvvəlcə ödəniş sənədi düzəldilir. 2026-10-14 §4 (istifadə olunmuş avans geri götürülmür) ilə eyni prinsip.
+2. **Fiziki şəxs və xarici kontragent** tam məbləği cari hesaba ödəyəndə qaimə ƏDV daxil tam bağlanır (onların ƏDV depozit hesabı yoxdur). 2026-10-14 §3 hüquqi şəxslər və dövlət təşkilatları üçün qüvvədədir; ƏDV ödəyicisi olmayan hüquqi şəxsin tam ödənişini mühasib qaiməni əl ilə seçib bağlayır.
+3. **Başqa sənədlər avtomatik yenidən keçirilmir.** Bir sənədin düzəlişi digər uçotda olan sənədləri səssiz dəyişmir; lazım olanda mühasib onları özü yenidən saxlayır.
+4. **Artıq ödənilmiş qaiməyə əl ilə bağlanma** bloklanmır, sənəddə xəbərdarlıq göstərilir.
+5. **Bərabər qaydalar:** sətri eyni dəqiqliklə tanıyan, eyni yazılışlı qaydalardan biri "təklif" rejimindədirsə, sətir avtomatik uçota alınmır.

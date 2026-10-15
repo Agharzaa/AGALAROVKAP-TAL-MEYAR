@@ -48,6 +48,7 @@ import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
+import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
@@ -863,6 +864,29 @@ function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
   });
   const other = r.pair_id ? bankDocument(db, companyId, str(r.pair_id)) : undefined;
   const check = other ? vatCheck(r, other) : undefined;
+  // An invoice chosen by hand and paid more than it asks (MERHELE-3-BANK §4.3): saved, shown.
+  const warnings =
+    r.status !== 'posted'
+      ? []
+      : lines.flatMap((l, i) => {
+          const sign = inFamily(l.account, '211') ? 1n : inFamily(l.account, '531') ? -1n : 0n;
+          const document = l.sk[2] ?? '';
+          if (!sign || !document.startsWith('invoice:')) return [];
+          const currency = !!chart.get(l.account)?.currency;
+          const b = settlementBalance(db, companyId, l.account, l.sk[0]!, l.sk[1]!, document);
+          const owed = (currency ? b.currency : b.amount) * sign;
+          if (owed >= 0n) return [];
+          const number = str(
+            db.get(
+              'SELECT number FROM invoices WHERE company_id=? AND id=?',
+              companyId,
+              document.slice('invoice:'.length),
+            )?.number,
+          );
+          return [
+            `Sətir ${i + 1}: ${number} qaiməsi artıq ödənilib — artıq ödəniş ${money(-owed)} ${currency ? str(r.currency) : 'AZN'}.`,
+          ];
+        });
   return {
     ...bankSummary(names, r),
     origin: r.origin as BankDocumentDetail['origin'],
@@ -888,6 +912,7 @@ function bankDetail(db: Db, companyId: string, id: string): BankDocumentDetail {
     pairCandidates: pairCandidates(db, companyId, r).map((c) => bankSummary(names, c)),
     rate: formatPrice(r.rate as bigint),
     lines,
+    warnings,
     postings,
     history,
   };

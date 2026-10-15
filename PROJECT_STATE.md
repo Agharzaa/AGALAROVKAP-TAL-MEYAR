@@ -161,7 +161,7 @@ Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` ke
 
 Testlər Windows-da: `npm test` 75, `npm run test:ui` 11, `npm run test:perf` keçir; real Electron təmiz və v8 bazasında ok.
 
-**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: auditin açıq sualları (aşağıda), real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
+**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
 
 ## Mərhələ 3 auditi (15.10.2026)
 
@@ -176,21 +176,21 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur: 7e75bc1 (3a), 646fde0 (3b
 
 **Qüsur tapılmayan yoxlamalar:** qaimələrə bölgü və ƏDV depozit/cari hesab payları (B2 misalı, depozit avansının sonrakı qaimədə əvəzləşməsi), valyutada kumulyativ yuvarlaqlaşdırma (`splitProportionally`), storno ilə düzəliş/ləğvdə sənədin özünü iki dəfə saymaması, bağlı dövr (sənəd, ləğv, cüt), dublikat qoruması (barmaq izi + təkrar sayı, üst-üstə düşən fayllar), cütün ayrılması, `manual_only`, savepoint-in geri qaytarılması (audit və sənəd birlikdə geri gedir), tenant izolyasiyası (bütün oxumalar `company_id` ilə; id-lər UUID), dinamik SQL-də yalnız daxili sabitlər (injection yoxdur), idempotentlik (`statement.import` təkrarı nəticəni qaytarır), sxem v6–v9 köhnə bazada (`schema v1 → current`).
 
-**Açıq suallar (mühasibat qərarı lazımdır, düzəldilməyib):**
+**Açıq suallar üzrə qərarlar (15.10.2026; istifadəçi: "ən məntiqli və düzgün nədirsə, onu et"; `docs/QERARLAR.md` 2026-10-15):**
 
-1. **Ödənilmiş qaimənin ləğvi və ya azaldılması.** Bank sənədi qaiməni bağlayıbsa, qaimə yenə ləğv olunur; ödəniş ləğv edilmiş qaimənin 211/531 açarında əks qalıq kimi qalır, 543/243-ə keçmir, siqnal yoxdur. Variantlar: (a) B7 kimi bloklamaq — "əvvəlcə bank sənədini düzəldin"; (b) icazə + nəzarət siqnalı; (c) qalığı avtomatik avansa keçirmək. Tövsiyə: (a).
-2. **ƏDV ödəyicisi olmayan alıcı tam məbləği cari hesaba ödəyəndə.** QERARLAR §3-ə görə 223 sənədi yalnız ƏDV-siz hissəni bağlayır: 118-lik qaimədə 100 bağlanır, 18 avans (543) olur, qaimə açıq qalır. Fiziki şəxslər və ƏDV ödəyicisi olmayanlar üçün bu tez-tez olacaq. Tövsiyə: sənəddə "qaiməni tam bağla" seçimi və ya cütsüz cari hesab sənədinin ƏDV payını da bağlaması — qərar mühasibindir.
-3. **Sonrakı sənədlər yenidən keçirilmir.** Köhnə bank sənədi düzəliş nəticəsində qaiməni yenidən açarsa, sonrakı sənədlərin avansı ona avtomatik bağlanmır (1C-dəki "ardıcıl yenidən keçirmə" yoxdur). Hələlik mühasib sonrakı sənədi yenidən saxlayır.
-4. **"Artıq ödənilmiş qaiməyə bağlanma xəbərdarlıq verir"** (MERHELE-3-BANK §4.3) həyata keçirilməyib: əl ilə seçilmiş, artıq bağlanmış qaiməyə ödəniş səssiz qəbul olunur. UI xəbərdarlığı dizayn tələb edir.
-5. **Eyni dəqiqlikli, eyni yazılışlı iki qayda, biri "avtomatik", digəri "təklif"** — ziddiyyət sayılmır, köhnə qayda seçilir; rejim faktiki olaraq qaydaların yaranma sırasından asılıdır. Tövsiyə: belə halda "təklif" üstün olsun.
+1. **Ödənilmiş qaimənin ləğvi və ya azaldılması bloklanır** (B7-dəki avans qoruması ilə eyni məntiq): qaimənin öz hesablaşma açarı (211 / 531, hesablaşma sənədi = bu qaimə) əvvəl olmayan artıq ödənişə düşə bilməz. Mesaj ödəniş sənədini göstərir: "əvvəlcə ödəniş sənədini düzəldin". Valyuta qaiməsi valyuta məbləği ilə yoxlanır. `invoices.ts → guardSettlement`; test `bank.test.ts`.
+2. **Fiziki şəxs və xarici kontragent tam məbləği cari hesaba ödəyəndə** qaimə ƏDV daxil tam bağlanır: onların ƏDV depozit hesabı yoxdur. Hüquqi şəxs və dövlət təşkilatı üçün QERARLAR §3 dəyişmir (ƏDV payını depozit bağlayır). ƏDV ödəyicisi olmayan hüquqi şəxsin tam ödənişini mühasib qaiməni sətirdə əl ilə seçərək tam bağlayır. ƏDV ödəyicisi olan fərdi sahibkarın iki hissəli ödənişi də düzgün gedir (cari hesab əvvəl ƏDV-siz hissəni, depozit ƏDV-ni bağlayır). `bank.ts → autoSettle`; test `bank.test.ts`.
+3. **Sonrakı sənədlər avtomatik yenidən keçirilmir** — bu, düzgün davranış kimi saxlanıldı: bir sənədin düzəlişi başqa, artıq uçotda olan sənədləri səssiz dəyişməməlidir (audit izi, bağlı dövr). Qaimə yenidən açılırsa, mühasib sonrakı ödənişi yenidən saxlayır və ya qaiməni əl ilə seçir.
+4. **Artıq ödənilmiş qaiməyə əl ilə bağlanma** saxlanılır, sənədin başlığında xəbərdarlıq çıxır ("SQ-… qaiməsi artıq ödənilib — artıq ödəniş … AZN"). `reports.ts → bankDetail.warnings`, `bank-editor.tsx`; test `bank.test.ts`.
+5. **Eyni dəqiqlikli, eyni yazılışlı qaydalarda "təklif" üstündür**: avtomatik uçot yalnız sətri tanıyan bütün bərabər qaydalar "avtomatik" olanda. `domain/rules.ts → chooseRule`; test `tests/domain`.
 
-Testlər Windows-da: `npm run typecheck`, `npm test` 79, `npm run test:ui` 11 keçir.
+Testlər Windows-da: `npm run typecheck`, `npm test` 83, `npm run test:ui` 11 keçir.
 
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.4.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.4.1.exe`). Köhnə baza (0.3.x, 0.4.0) quraşdırılanda avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
-- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual; yuxarıda).
+- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda).
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)

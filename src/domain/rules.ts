@@ -86,7 +86,8 @@ export function chooseRule(rules: readonly Rule[], row: RuleRow): RuleChoice {
   const top = hits.filter((r) => specificity(r) === best);
   if (top.length > 1 && top.some((r) => !sameBooking(r, top[0]!)))
     return { kind: 'conflict', rules: top };
-  return { kind: 'rule', rule: top[0]! };
+  // Equal rules booking alike: posting by itself needs every one of them switched to "auto".
+  return { kind: 'rule', rule: top.find((r) => r.mode === 'suggest') ?? top[0]! };
 }
 
 /** The lines of one row: fixed amounts as given, the rest to the line without an amount. */

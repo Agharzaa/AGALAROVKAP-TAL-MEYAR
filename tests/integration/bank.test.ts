@@ -619,3 +619,89 @@ test('audit: an advance used by an invoice cannot be moved past that invoice', (
   resave(f, receipt.id, { ...cmd, date: '2026-09-04' });
   assert.equal(detail(f, receipt.id).date, '2026-09-04');
 });
+
+test('audit: an invoice already paid is not cancelled or cut below what was paid', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const c = f.contract(customer, '1', 'sale');
+  const service = f.product('Xidmət', 'ay', 'service');
+  const line = (price: string) => [{ productId: service, price, vatRate: '0' as const }];
+  const inv = f.invoice('sale', '2026-09-01', customer, c, line('1000'));
+  const receipt = f.bank('in', '2026-09-05', acc, [f.bankLine('211.01', [customer, c], '1000')]);
+  assert.deepEqual(documents(f, receipt.id), [`invoice:${inv.id}`]);
+  const resaveInvoice = (version: number, price: string) =>
+    f.exec({
+      type: 'invoice.save',
+      companyId: f.companyId,
+      id: inv.id,
+      version,
+      direction: 'sale',
+      number: '',
+      date: '2026-09-01',
+      partnerId: customer,
+      contractId: c,
+      rate: '',
+      pricesIncludeVat: false,
+      eqSeries: '',
+      eqNumber: '',
+      memo: '',
+      lines: line(price).map((l) => ({ quantity: '1', memo: '', ...l })),
+    });
+  const cancelInvoice = (version: number) =>
+    f.exec({
+      type: 'invoice.cancel',
+      companyId: f.companyId,
+      id: inv.id,
+      version,
+      reason: 'səhv',
+    });
+  assert.throws(() => cancelInvoice(1), /BD-000001.*1000\.00 AZN artıq ödənilmiş/);
+  assert.throws(() => resaveInvoice(1, '600'), /BD-000001.*400\.00 AZN artıq ödənilmiş/);
+  // A larger invoice, or one the payment is first taken off, is fine.
+  resaveInvoice(1, '1200');
+  cancel(f, receipt.id);
+  cancelInvoice(2);
+});
+
+test('audit: an individual pays the whole invoice, VAT included, to the current account', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890');
+  const service = f.product('Xidmət', 'ay', 'service');
+  const pay = (kind: 'individual' | 'foreign' | 'legal', taxId: string) => {
+    const p = f.partner(`Alıcı ${kind}`, taxId, kind);
+    const c = f.contract(p, '1', 'sale');
+    f.invoice('sale', '2026-09-01', p, c, [{ productId: service, price: '100' }]);
+    return f.bank('in', '2026-09-05', acc, [f.bankLine('211.01', [p, c], '118')]);
+  };
+  // No VAT deposit account: the VAT reaches the seller through the current account.
+  assert.deepEqual(postings(f, pay('individual', '').id), [['223.01', '211.01', '118.00']]);
+  assert.deepEqual(postings(f, pay('foreign', '').id), [['223.01', '211.01', '118.00']]);
+  // A legal person pays the VAT to the deposit (QERARLAR 2026-10-14 §3): the rest waits there.
+  assert.deepEqual(postings(f, pay('legal', '1700000009').id), [
+    ['223.01', '211.01', '100.00'],
+    ['223.01', '543.01', '18.00'],
+  ]);
+});
+
+test('audit: settling an invoice that is already paid is saved with a warning', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const c = f.contract(customer, '1', 'sale');
+  const service = f.product('Xidmət', 'ay', 'service');
+  const inv = f.invoice('sale', '2026-09-01', customer, c, [
+    { productId: service, price: '1000', vatRate: '0' },
+  ]);
+  const first = f.bank('in', '2026-09-05', acc, [f.bankLine('211.01', [customer, c], '1000')]);
+  assert.deepEqual(detail(f, first.id).warnings, []);
+  const second = f.bank('in', '2026-09-06', acc, [
+    f.bankLine('211.01', [customer, c, `invoice:${inv.id}`], '250'),
+  ]);
+  assert.deepEqual(detail(f, second.id).warnings, [
+    'Sətir 1: SQ-000001 qaiməsi artıq ödənilib — artıq ödəniş 250.00 AZN.',
+  ]);
+});
