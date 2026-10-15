@@ -110,6 +110,45 @@ export const statementLineInput = z.object({
 });
 export type StatementLineInput = z.infer<typeof statementLineInput>;
 
+/** A goods line of a DVX "Mallar üzrə" report, as printed. */
+export const eqLineInput = z.object({
+  code: text(80).default(''),
+  name: text(500),
+  unit: text(40).default(''),
+  quantity: decimal.default(''),
+  price: decimal.default(''),
+  net: decimal,
+  vat: decimal.default('0.00'),
+  vatRate: text(20).default(''),
+});
+/** One e-qaimə read from a DVX report (domain/eqaime.ts → readEqTable). */
+export const eqDocumentInput = z.object({
+  row: z.number().int().nonnegative(),
+  number: text(60),
+  date,
+  taxId: text(20).default(''),
+  name: text(300).default(''),
+  sellerTaxId: text(20).default(''),
+  buyerTaxId: text(20).default(''),
+  sellerName: text(300).default(''),
+  buyerName: text(300).default(''),
+  kind: text(120).default(''),
+  status: text(120).default(''),
+  refNumber: text(60).default(''),
+  net: decimal,
+  vat: decimal.default(''),
+  total: decimal.default(''),
+  base18: decimal.default(''),
+  base0: decimal.default(''),
+  baseExempt: decimal.default(''),
+  baseNontaxable: decimal.default(''),
+  excise: decimal.default(''),
+  roadTax: decimal.default(''),
+  note: text(1000).default(''),
+  lines: z.array(eqLineInput).max(1000).optional(),
+});
+export type EqDocumentInputDto = z.infer<typeof eqDocumentInput>;
+
 /** A line of a learned rule: like a bank line, with an amount only when it is fixed. */
 export const ruleLineInput = z.object({
   account: code,
@@ -379,6 +418,26 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({
+    type: z.literal('eqaime.import'),
+    ...base,
+    /** purchase: Gələnlər; sale: Göndərilənlər — chosen by the user, checked against the file. */
+    direction: z.enum(['sale', 'purchase']),
+    /** The direction the file names in its title, when it names one. */
+    fileDirection: z.enum(['sale', 'purchase']).optional(),
+    report: z.enum(['invoices', 'goods']),
+    source: z.enum(['file', 'portal']).default('file'),
+    fileName: text(240),
+    fileHash: z.string().regex(/^[0-9a-f]{64}$/, 'Faylın həşi düzgün deyil.'),
+    documents: z.array(eqDocumentInput).min(1).max(20000),
+  }),
+  z.object({
+    type: z.literal('eqaime.ignore'),
+    ...base,
+    documentId: id,
+    reason: text(240),
+  }),
+  z.object({ type: z.literal('eqaime.restore'), ...base, documentId: id }),
+  z.object({
     type: z.literal('period.close'),
     ...base,
     /** Closing date; an earlier date than the current one reopens the period (with a reason). */
@@ -400,6 +459,10 @@ export interface CommandResult {
   added?: number;
   duplicates?: number;
   rejected?: { row: number; message: string }[];
+  /** E-qaimə import: e-qaimələr whose DVX status or goods lines changed, unchanged ones, conflicts. */
+  updated?: number;
+  same?: number;
+  conflicts?: number;
   /** Rows an "auto" rule posted, and rows it recognised but could not post (with the reason). */
   posted?: number;
   failed?: { row: number; message: string }[];

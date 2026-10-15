@@ -48,6 +48,7 @@ import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
+import { eqDocument, eqImports, eqInbox } from './eqaime.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -1328,6 +1329,14 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'bankDocument':
       return bankDetail(db, q.companyId, q.id);
+    case 'eqImports':
+      company(db, q.companyId);
+      return eqImports(db, q.companyId, q.direction);
+    case 'eqInbox':
+      company(db, q.companyId);
+      return eqInbox(db, q.companyId, q.direction, q.from, q.to);
+    case 'eqDocument':
+      return eqDocument(db, q.companyId, q.id);
     case 'statementImports':
       company(db, q.companyId);
       return statementImports(db, q.companyId, q.bankAccountId);

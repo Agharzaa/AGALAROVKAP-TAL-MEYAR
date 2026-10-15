@@ -30,6 +30,20 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
   z.object({ type: z.literal('statement'), companyId: id, id }),
   z.object({ type: z.literal('statementLine'), companyId: id, id }),
+  z.object({
+    type: z.literal('eqImports'),
+    companyId: id,
+    direction: z.enum(['sale', 'purchase']),
+  }),
+  /** The e-qaimə box of one direction; from/to filter by the e-qaimə date when given. */
+  z.object({
+    type: z.literal('eqInbox'),
+    companyId: id,
+    direction: z.enum(['sale', 'purchase']),
+    from: date.default(''),
+    to: date.default(''),
+  }),
+  z.object({ type: z.literal('eqDocument'), companyId: id, id }),
   z.object({ type: z.literal('rules'), companyId: id }),
   /** A rule prefilled from a bank document the accountant posted. */
   z.object({ type: z.literal('ruleDraft'), companyId: id, documentId: id }),
@@ -552,4 +566,83 @@ export interface IntegrityView {
   registers: number;
   problems: string[];
   ms: number;
+}
+
+/** An e-qaimə import (one DVX file). */
+export interface EqImportView {
+  id: string;
+  source: 'file' | 'portal';
+  direction: 'sale' | 'purchase';
+  report: 'invoices' | 'goods';
+  fileName: string;
+  from: string;
+  to: string;
+  importedAt: string;
+  rowsRead: number;
+  added: number;
+  updated: number;
+  same: number;
+  conflicts: number;
+}
+
+/**
+ * Where an e-qaimə stands in the box. waiting: accepted in DVX, not booked yet (stage 4b splits
+ * it into automatic / proposal / unknown); dvx: DVX has not accepted it (pending, corrected,
+ * unknown status); conflict: DVX and the books disagree (cancelled in DVX but booked, or the
+ * same e-qaimə came again with other amounts).
+ */
+export type EqBucket = 'waiting' | 'dvx' | 'conflict' | 'posted' | 'ignored';
+
+export interface EqDocumentView {
+  id: string;
+  direction: 'sale' | 'purchase';
+  number: string;
+  date: string;
+  taxId: string;
+  name: string;
+  kind: 'main' | 'correction' | 'return' | 'advance' | 'other';
+  kindText: string;
+  refNumber: string;
+  status: 'accepted' | 'pending' | 'cancelled' | 'corrected' | 'rejected' | 'unknown';
+  dvxStatus: string;
+  net: string;
+  vat: string;
+  total: string;
+  lineCount: number;
+  bucket: EqBucket;
+  state: 'waiting' | 'posted' | 'ignored';
+  invoiceId: string;
+  invoiceNumber: string;
+  conflict: string;
+  reason: string;
+  autoNote: string;
+}
+
+export interface EqInboxView {
+  documents: EqDocumentView[];
+  counts: Record<EqBucket, number>;
+}
+
+export interface EqLineView {
+  code: string;
+  name: string;
+  unit: string;
+  quantity: string;
+  price: string;
+  net: string;
+  vat: string;
+  vatRate: string;
+}
+
+export interface EqDocumentDetail extends EqDocumentView {
+  base18: string;
+  base0: string;
+  baseExempt: string;
+  baseNontaxable: string;
+  excise: string;
+  roadTax: string;
+  note: string;
+  lines: EqLineView[];
+  history: { at: string; fileName: string; from: string; to: string; dvxStatus: string }[];
+  version: number;
 }

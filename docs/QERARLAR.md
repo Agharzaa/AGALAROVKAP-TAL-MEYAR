@@ -241,3 +241,23 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 3. **Başqa sənədlər avtomatik yenidən keçirilmir.** Bir sənədin düzəlişi digər uçotda olan sənədləri səssiz dəyişmir; lazım olanda mühasib onları özü yenidən saxlayır.
 4. **Artıq ödənilmiş qaiməyə əl ilə bağlanma** bloklanmır, sənəddə xəbərdarlıq göstərilir.
 5. **Bərabər qaydalar:** sətri eyni dəqiqliklə tanıyan, eyni yazılışlı qaydalardan biri "təklif" rejimindədirsə, sətir avtomatik uçota alınmır.
+
+## 2026-10-15 — mərhələ 4: DVX e-qaimələri
+
+İcra planı və əsaslandırma: `docs/MERHELE-4-EQAIME.md`. İstifadəçi dizaynı və §11-dəki tövsiyələri təsdiqlədi.
+
+### TƏSDİQLƏNDİ
+
+1. **Mənbələr:** e-taxes-dən endirilən Excel ("Qaimələr üzrə", "Mallar üzrə"; Gələnlər / Göndərilənlər) və Meyar-ın içində açılan rəsmi DVX kabineti, kabinetin öz Excel ixracı ilə. Kabinetin səhifəsindən məlumat "oxunmur" (v1.17-nin üsulu götürülmür).
+2. **PIN və giriş:** istifadəçi rəsmi səhifədə özü daxil olur; Meyar PIN/parolu oxumur, saxlamır, səhifəyə skript yeritmir. Kabinet sessiyası yaddaşda saxlanılır, pəncərə və ya proqram bağlananda silinir.
+3. **E-qaimə bir dəfə:** açar istiqamət + kontragentin VÖEN-i + e-qaimə nömrəsi. Eyni faylın təkrar yüklənməsi heç nə dəyişmir; DVX-in yazdığı sahələr dəyişdirilmir, yalnız DVX statusu yenilənir (tarixçə ilə). Eyni e-qaimə fərqli məbləğlə gələrsə — ziddiyyət siqnalı, mövcud qeyd toxunulmaz.
+4. **İstiqamət qarışmır:** şirkətin öz VÖEN-i alışda alıcı, satışda satıcı yerində olmalıdır; fayl başlığı seçilən istiqamətə zidd olarsa və ya başqa şirkətin faylıdırsa, fayl rədd olunur.
+5. **Uçot yalnız qaimə ilə:** alınan e-qaimə → alış qaiməsi, göndərilən → satış qaiməsi, adi `invoice.save` ilə (yeni yazılış qaydası yoxdur). Üç vəziyyət (avtomatik / təklif / naməlum); kontragent avtomatik yaradılmır; bir neçə müqavilə — təklif; valyuta — təklif.
+6. **Uçota yalnız "Təsdiqləndi" və "Sistem tərəfindən təsdiqləndi"** statuslu e-qaimələr alınır; gözləyənlər qutuda gözləyir; tanınmayan status heç vaxt "təsdiqlənib" sayılmır.
+7. **DVX-də ləğv / imtina:** uçotda yoxdursa kənara qoyulur; uçotdadırsa — siqnal və bir düymə ilə ləğv təklifi, səssiz storno yoxdur; ödənilmiş qaimə ləğv olunmur.
+8. **Düzəliş e-qaiməsi:** əsas qaimə uçotda deyilsə, düzəliş əsas kimi alınır; uçotdadırsa və dövrü açıqdırsa — əsas qaimənin yenilənməsi təklif olunur; bağlı dövrdə — əl ilə. Heç vaxt avtomatik deyil.
+9. **Qaimənin tarixi** — e-qaimənin tarixi.
+10. **Qaytarma, avans e-qaiməsi, aksiz, yol vergisi** bu mərhələdə "naməlum"dur (əl ilə).
+11. **Məbləğ:** Meyar-ın hesabladığı qaimə DVX məbləğlərini qəpikbəqəpik təkrarlamalıdır; qiymət lazım olsa `məbləğ / miqdar` ilə; yenə fərq varsa — təklif.
+12. **Uyğunluq xəritəsi** (DVX mal kodu / adı → nomenklatura + hesab): "təklif" rejimində yaranır, standart olaraq "yalnız bu kontragent"; "avtomatik" rejimini yalnız mühasib qoşur. Xidmət / xərc üçün "bütün qaimə bir sətir" uyğunluğu icazəlidir (mal, material, əsas vəsait üçün yox).
+13. **Əl ilə yazılmış qaimə:** eyni e-qaimə nömrəlisi varsa ona bağlanır; nömrəsiz uyğun qaimə (eyni kontragent, cəmi, ±5 gün) yalnız təklif kimi — nömrə yazılır, yazılışlar dəyişmir.

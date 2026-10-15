@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 const v1 = `
 CREATE TABLE companies(
@@ -851,6 +851,146 @@ ALTER TABLE statement_lines ADD COLUMN manual_only INTEGER NOT NULL DEFAULT 0 CH
 ALTER TABLE statement_lines ADD COLUMN auto_note TEXT NOT NULL DEFAULT '';
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v10 — DVX e-qaimələri (stage 4a; docs/MERHELE-4-EQAIME.md §3). An e-qaimə is kept once, as
+// DVX wrote it: number, VÖEN, date and amounts never change; only its DVX status (with history),
+// its goods lines (filled once, when the "Mallar üzrə" report arrives) and its booking do. The
+// product map learns how DVX goods lines are booked; invoices remember the e-qaimə they came from.
+
+const v10 = `
+CREATE TABLE eq_imports(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  source TEXT NOT NULL CHECK(source IN('file','portal')),
+  direction TEXT NOT NULL CHECK(direction IN('sale','purchase')),
+  report TEXT NOT NULL CHECK(report IN('invoices','goods')),
+  file_name TEXT NOT NULL,
+  file_hash TEXT NOT NULL,
+  period_from TEXT NOT NULL,
+  period_to TEXT NOT NULL,
+  rows_read INTEGER NOT NULL,
+  added INTEGER NOT NULL DEFAULT 0,
+  updated INTEGER NOT NULL DEFAULT 0,
+  same INTEGER NOT NULL DEFAULT 0,
+  conflicts INTEGER NOT NULL DEFAULT 0,
+  imported_at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  UNIQUE(company_id,id)
+);
+CREATE INDEX eq_imports_time ON eq_imports(company_id,direction,imported_at);
+CREATE TRIGGER eq_imports_no_delete BEFORE DELETE ON eq_imports BEGIN SELECT RAISE(ABORT,'guard: Yüklənmə silinmir.'); END;
+
+CREATE TABLE eq_documents(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('sale','purchase')),
+  eq_number TEXT NOT NULL,
+  eq_key TEXT NOT NULL CHECK(eq_key<>''),
+  tax_id TEXT NOT NULL CHECK(length(tax_id)=10),
+  name TEXT NOT NULL DEFAULT '',
+  date TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN('main','correction','return','advance','other')),
+  kind_text TEXT NOT NULL DEFAULT '',
+  ref_key TEXT NOT NULL DEFAULT '',
+  dvx_status TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('accepted','pending','cancelled','corrected','rejected','unknown')),
+  net INTEGER NOT NULL,
+  vat INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  base_18 INTEGER NOT NULL DEFAULT 0,
+  base_0 INTEGER NOT NULL DEFAULT 0,
+  base_exempt INTEGER NOT NULL DEFAULT 0,
+  base_nontaxable INTEGER NOT NULL DEFAULT 0,
+  excise INTEGER NOT NULL DEFAULT 0,
+  road_tax INTEGER NOT NULL DEFAULT 0,
+  note TEXT NOT NULL DEFAULT '',
+  header_full INTEGER NOT NULL CHECK(header_full IN(0,1)),
+  lines TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  conflict TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT 'waiting' CHECK(state IN('waiting','posted','ignored')),
+  invoice_id TEXT,
+  manual_only INTEGER NOT NULL DEFAULT 0 CHECK(manual_only IN(0,1)),
+  auto_note TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  first_import_id TEXT NOT NULL,
+  last_import_id TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,direction,tax_id,eq_key),
+  FOREIGN KEY(company_id,first_import_id) REFERENCES eq_imports(company_id,id),
+  FOREIGN KEY(company_id,last_import_id) REFERENCES eq_imports(company_id,id),
+  FOREIGN KEY(company_id,invoice_id) REFERENCES invoices(company_id,id),
+  CHECK((state='posted')=(invoice_id IS NOT NULL)),
+  CHECK(state<>'ignored' OR reason<>'')
+);
+CREATE INDEX eq_documents_date ON eq_documents(company_id,direction,date);
+CREATE INDEX eq_documents_state ON eq_documents(company_id,direction,state);
+CREATE INDEX eq_documents_invoice ON eq_documents(company_id,invoice_id) WHERE invoice_id IS NOT NULL;
+CREATE TRIGGER eq_documents_no_delete BEFORE DELETE ON eq_documents BEGIN SELECT RAISE(ABORT,'guard: E-qaimə silinmir; kənara qoyulur.'); END;
+CREATE TRIGGER eq_documents_fixed BEFORE UPDATE OF company_id,direction,eq_number,eq_key,tax_id,name,date,
+  net,vat,content_hash,first_import_id,created_at ON eq_documents
+BEGIN SELECT RAISE(ABORT,'guard: E-qaimə DVX-in yazdığı kimi qalır.'); END;
+-- A goods report prints no kind or VAT bases: they are completed once, by the e-qaimə report.
+CREATE TRIGGER eq_documents_header_once BEFORE UPDATE OF kind,kind_text,ref_key,total,base_18,base_0,
+  base_exempt,base_nontaxable,excise,road_tax,note,header_full ON eq_documents WHEN OLD.header_full=1
+BEGIN SELECT RAISE(ABORT,'guard: E-qaimə DVX-in yazdığı kimi qalır.'); END;
+CREATE TRIGGER eq_documents_lines_once BEFORE UPDATE OF lines ON eq_documents WHEN OLD.lines<>''
+BEGIN SELECT RAISE(ABORT,'guard: E-qaimənin mal sətirləri artıq yazılıb.'); END;
+
+CREATE TABLE eq_status_history(
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  document_id TEXT NOT NULL,
+  import_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  old_status TEXT NOT NULL,
+  new_status TEXT NOT NULL,
+  dvx_status TEXT NOT NULL,
+  FOREIGN KEY(company_id,document_id) REFERENCES eq_documents(company_id,id),
+  FOREIGN KEY(company_id,import_id) REFERENCES eq_imports(company_id,id)
+);
+CREATE INDEX eq_status_history_doc ON eq_status_history(company_id,document_id);
+CREATE TRIGGER eq_status_history_no_delete BEFORE DELETE ON eq_status_history BEGIN SELECT RAISE(ABORT,'guard: Status tarixçəsi silinmir.'); END;
+CREATE TRIGGER eq_status_history_no_update BEFORE UPDATE ON eq_status_history BEGIN SELECT RAISE(ABORT,'guard: Status tarixçəsi dəyişdirilmir.'); END;
+
+CREATE TABLE eq_product_map(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('sale','purchase')),
+  tax_id TEXT NOT NULL DEFAULT '',
+  dvx_code TEXT NOT NULL DEFAULT '',
+  name_key TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  unit TEXT NOT NULL DEFAULT '',
+  product_id TEXT NOT NULL DEFAULT '',
+  account TEXT NOT NULL DEFAULT '',
+  expense_item_id TEXT NOT NULL DEFAULT '',
+  income_type_id TEXT NOT NULL DEFAULT '',
+  vat_treatment TEXT NOT NULL DEFAULT '' CHECK(vat_treatment IN('','offset','cost')),
+  contract_id TEXT NOT NULL DEFAULT '',
+  mode TEXT NOT NULL DEFAULT 'suggest' CHECK(mode IN('suggest','auto')),
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  uses INTEGER NOT NULL DEFAULT 0,
+  last_used_at TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id)
+);
+CREATE UNIQUE INDEX eq_product_map_key ON eq_product_map(company_id,direction,tax_id,dvx_code,name_key) WHERE archived=0;
+CREATE TRIGGER eq_product_map_no_delete BEFORE DELETE ON eq_product_map BEGIN SELECT RAISE(ABORT,'guard: Uyğunluq silinmir; arxivləşdirilir.'); END;
+
+ALTER TABLE invoices ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual' CHECK(origin IN('manual','eqaime'));
+ALTER TABLE invoices ADD COLUMN eq_document_id TEXT;
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-10','Yeniləndi','Baza',id,
+  'DVX e-qaimələri üçün baza hazırlandı: yüklənmələr, e-qaimə qutusu, status tarixçəsi, uyğunluq xəritəsi.'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -861,4 +1001,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 7, sql: v7 },
   { version: 8, sql: v8, foreignKeysOff: true },
   { version: 9, sql: v9 },
+  { version: 10, sql: v10 },
 ];

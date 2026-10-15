@@ -1,6 +1,6 @@
 # Mərhələ 4 — DVX e-qaimələrinin gətirilməsi və uçotu (dizayn)
 
-Status: **layihə — istifadəçinin təsdiqini gözləyir** (15.10.2026). Kod təsdiqdən sonra yazılır. Açıq suallar §11-dədir; hər birində mühəndis tövsiyəsi var.
+Status: **təsdiqlənib** (15.10.2026). Açıq suallarda (§11) tövsiyələr qəbul olunub. Qərarlar `docs/QERARLAR.md`-dədir (2026-10-15, mərhələ 4); bu sənəd icra planı kimi qalır. Real DVX faylları istifadəçidən gözlənilir (§11 sual 1).
 
 Əsas: `docs/QERARLAR.md` — "Avtomatik idxalın əsas prinsipi (DVX e-qaimələri və bank)", "Satış və ƏDV", "Alış", "Alış ƏDV-sinin taleyi", "mərhələ 2: qaimələr" (e-qaimə nömrəsi bir dəfə), 2026-10-14 §7 (qayda "təklif" rejimində yaranır), 2026-10-15 §1 (ödənilmiş qaimə ləğv edilmir).
 
