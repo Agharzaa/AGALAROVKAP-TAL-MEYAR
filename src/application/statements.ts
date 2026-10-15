@@ -342,19 +342,26 @@ export function linkStatementLine(tx: Tx, cmd: CommandOf<'statement.link'>): Com
 }
 
 /** Posted bank documents of the account not booking any statement row (typed by hand). */
-function unlinkedDocuments(db: Db, companyId: string, bankId: string): Row[] {
+function unlinkedDocuments(db: Db, companyId: string, bankId: string, near?: Row): Row[] {
+  // For one row only the documents that can match it are read (one row per automatic posting).
+  const around = near
+    ? ` AND b.direction=? AND b.amount=? AND b.date BETWEEN date(?,'-${MATCH_DAYS} days') AND date(?,'+${MATCH_DAYS} days')`
+    : '';
   return db.all(
-    `SELECT b.* FROM bank_documents b WHERE b.company_id=? AND b.bank_account_id=? AND b.status='posted'
+    `SELECT b.* FROM bank_documents b WHERE b.company_id=? AND b.bank_account_id=? AND b.status='posted'${around}
        AND (b.statement_line_id IS NULL OR NOT EXISTS(
          SELECT 1 FROM statement_lines s WHERE s.id=b.statement_line_id AND s.state='posted'))`,
     companyId,
     bankId,
+    ...(near
+      ? [String(near.direction), near.amount as bigint, String(near.date), String(near.date)]
+      : []),
   );
 }
 
 /** Documents typed by hand that already book the payment of statement row `r`. */
 export function handTypedMatches(db: Db, companyId: string, r: Row): Row[] {
-  return unlinkedDocuments(db, companyId, String(r.bank_account_id)).filter(
+  return unlinkedDocuments(db, companyId, String(r.bank_account_id), r).filter(
     (d) => !mismatch(r, d, MATCH_DAYS),
   );
 }

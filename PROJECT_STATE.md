@@ -184,7 +184,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur: 7e75bc1 (3a), 646fde0 (3b
 4. **Artıq ödənilmiş qaiməyə əl ilə bağlanma** saxlanılır, sənədin başlığında xəbərdarlıq çıxır ("SQ-… qaiməsi artıq ödənilib — artıq ödəniş … AZN"). `reports.ts → bankDetail.warnings`, `bank-editor.tsx`; test `bank.test.ts`.
 5. **Eyni dəqiqlikli, eyni yazılışlı qaydalarda "təklif" üstündür**: avtomatik uçot yalnız sətri tanıyan bütün bərabər qaydalar "avtomatik" olanda. `domain/rules.ts → chooseRule`; test `tests/domain`.
 
-Testlər Windows-da: `npm run typecheck`, `npm test` 83, `npm run test:ui` 11 keçir.
+Testlər Windows-da: `npm run typecheck`, `npm test` 83, `npm run test:ui` 12 (formadakı xəbərdarlıq daxil), `npm run test:perf` keçir (5 000 sətirlik çıxarış ~700 avtomatik uçotla ~0,5 s). Real Electron (Windows, təmiz baza, `MEYAR_SMOKE`): şirkət, 90 hesab, DBC, bütövlük — ok.
 
 ## Açıq məsələlər
 

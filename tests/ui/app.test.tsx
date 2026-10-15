@@ -661,3 +661,72 @@ test('rules: save a booking as a rule, switch it to auto, undo an automatic post
     h.close();
   }
 });
+
+test('bank receipt: an invoice already paid can be chosen by hand, the form warns', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  const service = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Konsaltinq',
+    unit: 'saat',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'invoice.save',
+    companyId: s.companyId,
+    direction: 'sale',
+    number: '',
+    date: iso,
+    partnerId: s.customer,
+    contractId: s.contract,
+    rate: '',
+    pricesIncludeVat: false,
+    eqSeries: '',
+    eqNumber: '',
+    memo: '',
+    lines: [{ productId: service, quantity: '1', price: '100', vatRate: '0', memo: '' }],
+  });
+  // Paid in full already.
+  h.run({
+    type: 'bank.save',
+    companyId: s.companyId,
+    direction: 'in',
+    number: '',
+    date: iso,
+    bankAccountId: s.bankAccount,
+    rate: '',
+    bankReference: '',
+    counterpartyName: '',
+    counterpartyTaxId: '',
+    purpose: '',
+    lines: [{ account: '211.01', sk: [s.customer, s.contract], amount: '100', memo: '' }],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Alıcıdan ödəniş' })[0]!);
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    await pick('Sətir 1 hesab', '211.01');
+    await pick('Sətir 1 211.01 · Kontragent', 'Alıcı');
+    await pick('Sətir 1 211.01 · Müqavilə', '7');
+    await pick('Sətir 1 211.01 · Hesablaşma sənədi', 'SQ-000001');
+    await user.type(editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }), '30');
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Sənəd BD-000002 uçota alındı/);
+    await editor.findByText('Sətir 1: SQ-000001 qaiməsi artıq ödənilib — artıq ödəniş 30.00 AZN.');
+  } finally {
+    h.close();
+  }
+});
