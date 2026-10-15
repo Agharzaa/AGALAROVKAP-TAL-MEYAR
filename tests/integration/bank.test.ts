@@ -586,3 +586,36 @@ test('B5: money left in 222.01 between own accounts is a signal until it arrives
   f.bank('in', '2026-09-11', b, [f.bankLine('222.01', [], '400')]);
   assert.deepEqual(warnings(f), []);
 });
+
+test('audit: an advance used by an invoice cannot be moved past that invoice', (t) => {
+  const f = fixture(t);
+  const bank = f.partner('Kapital Bank ASC', '9900003611');
+  const acc = f.bankAccount(bank, 'AZ12AIIB38060019441234567890');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const c = f.contract(customer, '1', 'sale');
+  const service = f.product('Xidmət', 'ay', 'service');
+  const B = [f.bankLine('211.01', [customer, c], '1000')];
+  const receipt = f.bank('in', '2026-09-01', acc, B);
+  f.invoice('sale', '2026-09-05', customer, c, [
+    { productId: service, price: '1000', vatRate: '0' },
+  ]);
+  const cmd = {
+    direction: 'in' as const,
+    number: '',
+    bankAccountId: acc,
+    rate: '',
+    bankReference: '',
+    counterpartyName: '',
+    counterpartyTaxId: '',
+    purpose: '',
+    lines: B,
+  };
+  // Moved to 20.09, the advance the invoice offset on 05.09 would not have existed yet.
+  assert.throws(
+    () => resave(f, receipt.id, { ...cmd, date: '2026-09-20' }),
+    /SQ-000001 əvəzləşdirilib/,
+  );
+  // Moving it earlier, or within the days before the invoice, is fine.
+  resave(f, receipt.id, { ...cmd, date: '2026-09-04' });
+  assert.equal(detail(f, receipt.id).date, '2026-09-04');
+});

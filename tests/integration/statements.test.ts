@@ -341,3 +341,34 @@ test('cash-flow item: an attribute of the line, checked against its own catalog'
     'a new company starts with the standard list',
   );
 });
+
+test('audit: a document made from a statement row keeps the row’s date', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const imp = load(f, september());
+  const fee = view(f, imp.id).lines[1]!;
+  const doc = f.bank('out', '2026-09-30', s.account, [f.bankLine('721', [s.fees], '3')], {
+    statementLineId: fee.id,
+  });
+  // Only a document typed by hand and linked later may differ from the row by a day or two.
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'bank.save',
+        companyId: f.companyId,
+        id: doc.id,
+        version: 1,
+        direction: 'out',
+        number: '',
+        date: '2026-09-29',
+        bankAccountId: s.account,
+        rate: '',
+        bankReference: '',
+        counterpartyName: '',
+        counterpartyTaxId: '',
+        purpose: '',
+        lines: [f.bankLine('721', [s.fees], '3')],
+      }),
+    /tarix 2026-09-29, çıxarışda 2026-09-30/,
+  );
+});

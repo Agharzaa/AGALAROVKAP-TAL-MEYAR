@@ -27,6 +27,7 @@ import type { BudgetCodeView, RuleDraft, RuleView } from '../contracts/queries.j
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import { saveBankDocument } from './bank.js';
 import { activeRules, ruleRow, toRule } from './rule-store.js';
+import { handTypedMatches } from './statements.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, loadChart, type Tx } from './tx.js';
 
@@ -50,7 +51,15 @@ function checkLine(
       `${account.code} miqdar uçotu olan hesabdır; qaydada istifadə olunmur.`,
       `${field}.account`,
     );
-  // An empty settlement document is resolved when the rule posts (open invoices or the document).
+  // An empty settlement document is resolved when the rule posts (open invoices or the document);
+  // a fixed one would settle every later payment against the same invoice.
+  account.subkonto.forEach((kind, i) => {
+    if (kind === 'document' && sk[i])
+      throw new DomainError(
+        `${account.code}: hesablaşma sənədi qaydada seçilmir — hər ödəniş açıq qaimələrə və ya avansa özü bölünür.`,
+        `${field}.sk.${i}`,
+      );
+  });
   const values = account.subkonto.map((kind, i) =>
     kind === 'document' && !sk[i] ? SELF : (sk[i] ?? ''),
   );
@@ -235,9 +244,11 @@ export function ruleDraft(db: Db, companyId: string, documentId: string): RuleDr
     (m, l, i) => (parseMoney(l.amount) > parseMoney(stored[m]!.amount) ? i : m),
     0,
   );
+  const chart = loadChart(db, companyId);
   const lines = stored.map((l, i) => ({
     account: l.account,
-    sk: l.sk,
+    // The settlement document belongs to this payment only; the rule resolves it each time.
+    sk: l.sk.map((v, j) => (chart.get(l.account)?.subkonto[j] === 'document' ? '' : v)),
     amount: stored.length > 1 && i !== largest ? l.amount : '',
     cashFlowItem: l.cashFlowItem ?? '',
     memo: l.memo,
@@ -306,6 +317,12 @@ export function applyRules(
     try {
       if (banks.get(bankId)!.currency !== 'AZN')
         throw new DomainError('Valyuta hesabıdır: AMB məzənnəsini mühasib yazmalıdır.');
+      // A payment typed by hand is linked to its row, never booked a second time (B13).
+      const typed = handTypedMatches(tx.db, companyId, row);
+      if (typed.length)
+        throw new DomainError(
+          `Əl ilə daxil edilmiş ${typed.map((d) => String(d.number)).join(', ')} bu ödənişə uyğundur — yeni sənəd yaradılmadı, sətri həmin sənədlə bağlayın.`,
+        );
       const amounts = ruleAmounts(rule, row.amount as bigint, (v) => parseMoney(v));
       if (!amounts)
         throw new DomainError(

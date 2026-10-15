@@ -339,3 +339,72 @@ test('budget classification code → 521 sub-account and payment kind', (t) => {
   assert.equal(unknown!.proposal!.account, '');
   assert.match(unknown!.proposal!.reason, /Büdcə təsnifat kodu 999999 cədvəldə yoxdur/);
 });
+
+test('audit: an auto rule never books a row a hand-typed document already covers (B13)', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  rule(f, {
+    name: 'İcarə',
+    counterpartyTaxId: '1700000003',
+    lines: [R('531.01', [s.landlord, s.lease])],
+    mode: 'auto',
+  });
+  // The rent was typed by hand a day before the statement arrived.
+  const manual = f.bank('out', '2026-10-04', s.account, [
+    f.bankLine('531.01', [s.landlord, s.lease], '1180'),
+  ]);
+  const r = load(f, [rentRow('2026-10-05')]);
+  assert.equal(r.posted, 0, 'the payment is already in the ledger');
+  const waiting = view(f, r.id).lines[0]!;
+  assert.equal(waiting.state, 'new');
+  assert.deepEqual(
+    waiting.proposal!.matches.map((m) => m.id),
+    [manual.id],
+  );
+  assert.match(waiting.autoNote, /BX-000001/);
+  assert.equal(
+    f.query<unknown[]>({
+      type: 'bankDocuments',
+      companyId: f.companyId,
+      from: '2026-01-01',
+      to: '2026-12-31',
+    }).length,
+    1,
+    'no second document',
+  );
+});
+
+test('audit: a rule never carries one payment’s settlement document to the next', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const service = f.product('Ofis icarəsi', 'ay');
+  const inv = f.invoice('purchase', '2026-09-01', s.landlord, s.lease, [
+    { productId: service, quantity: '1', price: '1000' },
+  ]);
+  const sep = load(f, [rentRow('2026-09-05')]);
+  const doc = f.bank(
+    'out',
+    '2026-09-05',
+    s.account,
+    [f.bankLine('531.01', [s.landlord, s.lease, `invoice:${inv.id}`], '1180')],
+    { statementLineId: view(f, sep.id).lines[0]!.id, counterpartyTaxId: '1700000003' },
+  );
+  const draft = f.query<RuleDraft>({
+    type: 'ruleDraft',
+    companyId: f.companyId,
+    documentId: doc.id,
+  });
+  assert.deepEqual(
+    draft.lines[0]!.sk,
+    [s.landlord, s.lease, ''],
+    'open invoices, not SQ of September',
+  );
+  assert.throws(
+    () =>
+      rule(f, {
+        counterpartyTaxId: '1700000003',
+        lines: [R('531.01', [s.landlord, s.lease, `invoice:${inv.id}`])],
+      }),
+    /hesablaşma sənədi qaydada seçilmir/i,
+  );
+});

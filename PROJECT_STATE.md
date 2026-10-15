@@ -161,13 +161,36 @@ Testlər Windows-da: `npm test` 70, `npm run test:ui` 10, `npm run test:perf` ke
 
 Testlər Windows-da: `npm test` 75, `npm run test:ui` 11, `npm run test:perf` keçir; real Electron təmiz və v8 bazasında ok.
 
-**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: müstəqil audit (işi yazmayan yoxlayıcı, ən azı 2 tur), real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
+**Mərhələ 3 tamamlandı (3a–3d).** Qalanlar: auditin açıq sualları (aşağıda), real bank faylları ilə yoxlama, 0.5.0 buraxılışı və GitHub-a push.
+
+## Mərhələ 3 auditi (15.10.2026)
+
+Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur: 7e75bc1 (3a), 646fde0 (3b), 8a33381 (3c), 561a144 (3d). Hər qüsur üçün əvvəl uğursuz reqressiya testi yazıldı (`audit:` adlı testlər), sonra minimal düzəliş.
+
+| #   | Ağırlıq | Qüsur                                                                                                                                                                                                                  | Düzəliş                                                                                                     | Test                 |
+| --- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------- |
+| 1   | Yüksək  | "Avtomatik" qayda əl ilə daxil edilmiş ödənişi (eyni hesab, istiqamət, məbləğ, ±2 gün) görmürdü və ikinci bank sənədi yaradırdı — pul hərəkəti ikiqat uçota düşürdü. B13 yalnız təklif rejimində qorunurdu.            | `applyRules` əvvəlcə `handTypedMatches` yoxlayır; uyğun sənəd varsa sətir gözləyir, səbəb `auto_note`-dadır | `rules.test.ts`      |
+| 2   | Orta    | Qayda layihəsi bank sənədinin konkret hesablaşma sənədini (qaiməni) qaydaya köçürürdü; avtomatik qayda sonrakı hər ödənişi həmin köhnə qaiməyə bağlayardı (211/531-də əks qalıq, açıq qaimələr bağlanmır).             | `ruleDraft` hesablaşma sənədini boşaldır; `rule.save` sabit hesablaşma sənədini rədd edir                   | `rules.test.ts`      |
+| 3   | Orta    | Avans qoruması (QERARLAR 2026-10-14 §4) yalnız yekun qalığı yoxlayırdı: bank sənədinin tarixi avansı əvəzləşdirən qaimədən sonraya köçürüləndə aradakı günlərdə 543/243 əks qalığa düşürdü, dəyişiklik qəbul olunurdu. | `guardAdvances` qalığı gün-gün yoxlayır (qaimə yalnız öz tarixindəki avansı əvəzləşdirir)                   | `bank.test.ts`       |
+| 4   | Aşağı   | Çıxarış sətrindən yaradılmış sənədin tarixi düzəlişdə ±2 gün dəyişə bilirdi, halbuki tarix bankın yazdığıdır (±2 gün yalnız sonradan əl ilə bağlanmış sənəd üçündür).                                                  | `bindStatementLine`: `origin = 'statement'` olan sənəddə tarix dəqiq                                        | `statements.test.ts` |
+
+**Qüsur tapılmayan yoxlamalar:** qaimələrə bölgü və ƏDV depozit/cari hesab payları (B2 misalı, depozit avansının sonrakı qaimədə əvəzləşməsi), valyutada kumulyativ yuvarlaqlaşdırma (`splitProportionally`), storno ilə düzəliş/ləğvdə sənədin özünü iki dəfə saymaması, bağlı dövr (sənəd, ləğv, cüt), dublikat qoruması (barmaq izi + təkrar sayı, üst-üstə düşən fayllar), cütün ayrılması, `manual_only`, savepoint-in geri qaytarılması (audit və sənəd birlikdə geri gedir), tenant izolyasiyası (bütün oxumalar `company_id` ilə; id-lər UUID), dinamik SQL-də yalnız daxili sabitlər (injection yoxdur), idempotentlik (`statement.import` təkrarı nəticəni qaytarır), sxem v6–v9 köhnə bazada (`schema v1 → current`).
+
+**Açıq suallar (mühasibat qərarı lazımdır, düzəldilməyib):**
+
+1. **Ödənilmiş qaimənin ləğvi və ya azaldılması.** Bank sənədi qaiməni bağlayıbsa, qaimə yenə ləğv olunur; ödəniş ləğv edilmiş qaimənin 211/531 açarında əks qalıq kimi qalır, 543/243-ə keçmir, siqnal yoxdur. Variantlar: (a) B7 kimi bloklamaq — "əvvəlcə bank sənədini düzəldin"; (b) icazə + nəzarət siqnalı; (c) qalığı avtomatik avansa keçirmək. Tövsiyə: (a).
+2. **ƏDV ödəyicisi olmayan alıcı tam məbləği cari hesaba ödəyəndə.** QERARLAR §3-ə görə 223 sənədi yalnız ƏDV-siz hissəni bağlayır: 118-lik qaimədə 100 bağlanır, 18 avans (543) olur, qaimə açıq qalır. Fiziki şəxslər və ƏDV ödəyicisi olmayanlar üçün bu tez-tez olacaq. Tövsiyə: sənəddə "qaiməni tam bağla" seçimi və ya cütsüz cari hesab sənədinin ƏDV payını da bağlaması — qərar mühasibindir.
+3. **Sonrakı sənədlər yenidən keçirilmir.** Köhnə bank sənədi düzəliş nəticəsində qaiməni yenidən açarsa, sonrakı sənədlərin avansı ona avtomatik bağlanmır (1C-dəki "ardıcıl yenidən keçirmə" yoxdur). Hələlik mühasib sonrakı sənədi yenidən saxlayır.
+4. **"Artıq ödənilmiş qaiməyə bağlanma xəbərdarlıq verir"** (MERHELE-3-BANK §4.3) həyata keçirilməyib: əl ilə seçilmiş, artıq bağlanmış qaiməyə ödəniş səssiz qəbul olunur. UI xəbərdarlığı dizayn tələb edir.
+5. **Eyni dəqiqlikli, eyni yazılışlı iki qayda, biri "avtomatik", digəri "təklif"** — ziddiyyət sayılmır, köhnə qayda seçilir; rejim faktiki olaraq qaydaların yaranma sırasından asılıdır. Tövsiyə: belə halda "təklif" üstün olsun.
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 79, `npm run test:ui` 11 keçir.
 
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.4.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.4.1.exe`). Köhnə baza (0.3.x, 0.4.0) quraşdırılanda avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
-- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib.
+- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual; yuxarıda).
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)

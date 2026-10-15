@@ -274,8 +274,9 @@ export function bindStatementLine(
       'statementLineId',
       'conflict',
     );
-  // A row booked by this very document may have been linked by hand (a day or two apart).
-  const why = mismatch(r, doc, r.state === 'posted' ? MATCH_DAYS : 0);
+  // A row booked by this very document may have been linked by hand (a day or two apart); a
+  // document made from the row keeps the row's date.
+  const why = mismatch(r, doc, r.state === 'posted' && doc.origin !== 'statement' ? MATCH_DAYS : 0);
   if (why) throw new DomainError(`Sənəd çıxarış sətrinə uyğun deyil: ${why}.`, 'statementLineId');
   if (r.state === 'new') {
     tx.db.run(
@@ -338,6 +339,24 @@ export function linkStatementLine(tx: Tx, cmd: CommandOf<'statement.link'>): Com
     `${describeLine(r)} → ${String(doc.number)}`,
   );
   return { id: cmd.lineId };
+}
+
+/** Posted bank documents of the account not booking any statement row (typed by hand). */
+function unlinkedDocuments(db: Db, companyId: string, bankId: string): Row[] {
+  return db.all(
+    `SELECT b.* FROM bank_documents b WHERE b.company_id=? AND b.bank_account_id=? AND b.status='posted'
+       AND (b.statement_line_id IS NULL OR NOT EXISTS(
+         SELECT 1 FROM statement_lines s WHERE s.id=b.statement_line_id AND s.state='posted'))`,
+    companyId,
+    bankId,
+  );
+}
+
+/** Documents typed by hand that already book the payment of statement row `r`. */
+export function handTypedMatches(db: Db, companyId: string, r: Row): Row[] {
+  return unlinkedDocuments(db, companyId, String(r.bank_account_id)).filter(
+    (d) => !mismatch(r, d, MATCH_DAYS),
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -407,13 +426,7 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
         ]),
     ),
     chart: loadChart(db, companyId),
-    manual: db.all(
-      `SELECT b.* FROM bank_documents b WHERE b.company_id=? AND b.bank_account_id=? AND b.status='posted'
-         AND (b.statement_line_id IS NULL OR NOT EXISTS(
-           SELECT 1 FROM statement_lines s WHERE s.id=b.statement_line_id AND s.state='posted'))`,
-      companyId,
-      String(bank.id),
-    ),
+    manual: unlinkedDocuments(db, companyId, String(bank.id)),
   };
 }
 

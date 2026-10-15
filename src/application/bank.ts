@@ -511,14 +511,16 @@ function guardAdvances(tx: Tx, companyId: string, id: string, previous: readonly
       });
     }
   for (const k of keys.values()) {
-    const r = tx.db.get(
-      `SELECT COALESCE(SUM(a),0) AS a, COALESCE(SUM(c),0) AS c FROM (
-         SELECT amount AS a, kt_cur AS c FROM postings
+    // Day by day, as an invoice offsets only what the advance held on its own date: a document
+    // moved past the invoice that used its advance takes it back as surely as a smaller amount.
+    const days = tx.db.all(
+      `SELECT date, COALESCE(SUM(a),0) AS a, COALESCE(SUM(c),0) AS c FROM (
+         SELECT date, amount AS a, kt_cur AS c FROM postings
            WHERE company_id=? AND kt_account=? AND kt_s1=? AND kt_s2=? AND kt_s3=?
          UNION ALL
-         SELECT -amount, -dt_cur FROM postings
+         SELECT date, -amount, -dt_cur FROM postings
            WHERE company_id=? AND dt_account=? AND dt_s1=? AND dt_s2=? AND dt_s3=?
-       )`,
+       ) GROUP BY date ORDER BY date`,
       companyId,
       k.account,
       k.partner,
@@ -529,10 +531,18 @@ function guardAdvances(tx: Tx, companyId: string, id: string, previous: readonly
       k.partner,
       k.contract,
       self,
-    )!;
-    const amount = (r.a as bigint) * k.sign;
-    const cur = (r.c as bigint) * k.sign;
-    if (amount >= 0n && cur >= 0n) continue;
+    );
+    let amount = 0n;
+    let cur = 0n;
+    let lowest = 0n;
+    let negative = false;
+    for (const d of days) {
+      amount += (d.a as bigint) * k.sign;
+      cur += (d.c as bigint) * k.sign;
+      if (amount < lowest) lowest = amount;
+      if (amount < 0n || cur < 0n) negative = true;
+    }
+    if (!negative) continue;
     const users = tx.db
       .all(
         `SELECT DISTINCT e.source_number AS n FROM postings p JOIN entries e ON e.id=p.entry_id
@@ -553,7 +563,7 @@ function guardAdvances(tx: Tx, companyId: string, id: string, previous: readonly
       )
       .map((u) => String(u.n));
     throw new DomainError(
-      `Bu sənədin avansı (${k.account}) ${users.join(', ') || 'başqa sənəddə'} əvəzləşdirilib; dəyişiklik avansı ${money(-(amount < 0n ? amount : 0n))} AZN mənfiyə salardı. Əvvəlcə həmin sənədi düzəldin.`,
+      `Bu sənədin avansı (${k.account}) ${users.join(', ') || 'başqa sənəddə'} əvəzləşdirilib; dəyişiklik avansı ${money(-lowest)} AZN mənfiyə salardı. Əvvəlcə həmin sənədi düzəldin.`,
       undefined,
       'conflict',
     );
