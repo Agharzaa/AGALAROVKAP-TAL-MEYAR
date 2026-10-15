@@ -96,14 +96,22 @@ test('E2: a second load changes nothing; an overlapping file adds only the new e
   const third = load(f, 'purchase', wider);
   assert.deepEqual([third.added, third.same], [1, 1]);
   const box = inbox(f);
-  assert.deepEqual(box.counts, { waiting: 3, dvx: 1, conflict: 0, posted: 0, ignored: 0 });
+  assert.deepEqual(box.counts, {
+    proposal: 0,
+    unknown: 3,
+    dvx: 1,
+    conflict: 0,
+    auto: 0,
+    posted: 0,
+    ignored: 0,
+  });
   assert.deepEqual(
     box.documents.map((d) => [d.number, d.bucket, d.net, d.vat, d.total]),
     [
-      ['MT2609001', 'waiting', '1000.00', '180.00', '1180.00'],
-      ['MT2609002', 'waiting', '500.00', '0.00', '500.00'],
+      ['MT2609001', 'unknown', '1000.00', '180.00', '1180.00'],
+      ['MT2609002', 'unknown', '500.00', '0.00', '500.00'],
       ['MT2609003', 'dvx', '10.00', '1.80', '11.80'],
-      ['MT2609004', 'waiting', '20.00', '3.60', '23.60'],
+      ['MT2609004', 'unknown', '20.00', '3.60', '23.60'],
     ],
   );
   const imports = f.query<EqImportView[]>({
@@ -213,8 +221,8 @@ test('E12: DVX status changes are followed, with history; cancelled e-qaimələr
     box.documents.map((d) => [d.number, d.status, d.bucket, d.reason]),
     [
       ['MT2609001', 'cancelled', 'ignored', 'DVX: e-qaimə ləğv edilib'],
-      ['MT2609002', 'accepted', 'waiting', ''],
-      ['MT2609003', 'accepted', 'waiting', ''],
+      ['MT2609002', 'accepted', 'unknown', ''],
+      ['MT2609003', 'accepted', 'unknown', ''],
     ],
   );
   const id = box.documents[2]!.id;
@@ -237,7 +245,7 @@ test('E12: DVX status changes are followed, with history; cancelled e-qaimələr
   f.exec({ type: 'eqaime.ignore', companyId: f.companyId, documentId: other, reason: 'Sınaq' });
   assert.equal(inbox(f).counts.ignored, 2);
   f.exec({ type: 'eqaime.restore', companyId: f.companyId, documentId: other });
-  assert.equal(inbox(f).counts.waiting, 2);
+  assert.equal(inbox(f).counts.unknown, 2);
 });
 
 test('goods lines arrive once; other amounts for a known e-qaimə are a conflict, never applied', (t) => {

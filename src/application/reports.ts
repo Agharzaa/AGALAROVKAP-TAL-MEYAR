@@ -49,6 +49,7 @@ import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from '.
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
 import { eqDocument, eqImports, eqInbox } from './eqaime.js';
+import { eqMaps } from './eqaime-book.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -793,8 +794,14 @@ function invoiceDetail(db: Db, companyId: string, id: string): InvoiceDetail {
       unit: products.get(l.productId)?.unit ?? '',
     }),
   );
+  const eq = db.get(
+    'SELECT id FROM eq_documents WHERE company_id=? AND invoice_id=?',
+    companyId,
+    id,
+  );
   return {
     ...invoiceSummary(names, r),
+    eqDocumentId: eq ? str(eq.id) : '',
     rate: formatPrice(r.rate as bigint),
     pricesIncludeVat: r.prices_include_vat === 1n,
     manual: r.manual === 1n,
@@ -1337,6 +1344,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       return eqInbox(db, q.companyId, q.direction, q.from, q.to);
     case 'eqDocument':
       return eqDocument(db, q.companyId, q.id);
+    case 'eqMaps':
+      company(db, q.companyId);
+      return eqMaps(db, q.companyId);
     case 'statementImports':
       company(db, q.companyId);
       return statementImports(db, q.companyId, q.bankAccountId);

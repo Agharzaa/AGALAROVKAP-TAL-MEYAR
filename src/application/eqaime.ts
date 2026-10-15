@@ -21,9 +21,11 @@ import type {
   EqImportView,
   EqInboxView,
   EqLineView,
+  EqProposal,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import type { Tx } from './tx.js';
+import { eqContext, propose, type EqContext } from './eqaime-book.js';
 
 const label = { purchase: 'Gələnlər (alış)', sale: 'Göndərilənlər (satış)' } as const;
 const money = (m: Minor) => formatMinor(m);
@@ -419,16 +421,19 @@ export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResu
 // ---------------------------------------------------------------------------------------------
 // Queries
 
-export function eqBucket(r: Row): EqBucket {
+export function eqBucket(r: Row, proposal: EqProposal | null): EqBucket {
   const status = r.status as EqStatus;
   if (r.conflict !== '') return 'conflict';
-  if (r.state === 'posted') return dvxReason[status] ? 'conflict' : 'posted';
+  if (r.state === 'posted')
+    return dvxReason[status] ? 'conflict' : r.posted_by === 'auto' ? 'auto' : 'posted';
   if (r.state === 'ignored') return 'ignored';
-  return status === 'accepted' ? 'waiting' : 'dvx';
+  if (status !== 'accepted') return 'dvx';
+  return proposal?.state === 'unknown' ? 'unknown' : 'proposal';
 }
 
-function view(r: Row, invoiceNumber: string): EqDocumentView {
+function view(r: Row, invoiceNumber: string, ctx: EqContext | null): EqDocumentView {
   const lines = String(r.lines);
+  const proposal = ctx && r.state === 'waiting' && r.status === 'accepted' ? propose(ctx, r) : null;
   return {
     id: String(r.id),
     direction: r.direction as EqDirection,
@@ -445,13 +450,14 @@ function view(r: Row, invoiceNumber: string): EqDocumentView {
     vat: money(r.vat as bigint),
     total: money(r.total as bigint),
     lineCount: lines ? (JSON.parse(lines) as unknown[]).length : 0,
-    bucket: eqBucket(r),
+    bucket: eqBucket(r, proposal),
     state: r.state as EqDocumentView['state'],
     invoiceId: r.invoice_id ? String(r.invoice_id) : '',
     invoiceNumber,
     conflict: String(r.conflict),
     reason: String(r.reason),
     autoNote: String(r.auto_note),
+    proposal,
   };
 }
 
@@ -496,15 +502,18 @@ export function eqInbox(
     ...(from ? [from] : []),
     ...(to ? [to] : []),
   );
+  const ctx = eqContext(db, companyId, direction);
   const counts: Record<EqBucket, number> = {
-    waiting: 0,
+    proposal: 0,
+    unknown: 0,
     dvx: 0,
     conflict: 0,
+    auto: 0,
     posted: 0,
     ignored: 0,
   };
   const documents = rows.map((r) => {
-    const v = view(r, String(r.invoice_number));
+    const v = view(r, String(r.invoice_number), ctx);
     counts[v.bucket]++;
     return v;
   });
@@ -522,7 +531,7 @@ export function eqDocument(db: Db, companyId: string, id: string): EqDocumentDet
   if (!r) throw new DomainError('E-qaimə tapılmadı.', 'id', 'not-found');
   const lines = String(r.lines);
   return {
-    ...view(r, String(r.invoice_number)),
+    ...view(r, String(r.invoice_number), eqContext(db, companyId, r.direction as EqDirection)),
     base18: money(r.base_18 as bigint),
     base0: money(r.base_0 as bigint),
     baseExempt: money(r.base_exempt as bigint),

@@ -27,6 +27,7 @@ import {
 } from './statements.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
 import { ignoreEq, importEq, restoreEq } from './eqaime.js';
+import { applyEq, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
 import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
@@ -139,8 +140,23 @@ export class Ledger {
         return restoreStatementLine(tx, c);
       case 'statement.link':
         return linkStatementLine(tx, c);
-      case 'eqaime.import':
-        return importEq(tx, c);
+      case 'eqaime.import': {
+        // E-qaimələr that confirmed map entries cover are booked right away (each on its own).
+        const loaded = importEq(tx, c);
+        const auto = applyEq(tx, c.companyId, c.direction);
+        return { ...loaded, posted: auto.posted + auto.linked, failed: auto.failed };
+      }
+      case 'eqaime.apply': {
+        tx.company(c.companyId);
+        const auto = applyEq(tx, c.companyId, c.direction);
+        return { id: c.companyId, posted: auto.posted + auto.linked, failed: auto.failed };
+      }
+      case 'eqaime.link':
+        return linkEq(tx, c);
+      case 'eqaime.learn':
+        return learnEq(tx, c);
+      case 'eqMap.save':
+        return saveEqMap(tx, c);
       case 'eqaime.ignore':
         return ignoreEq(tx, c);
       case 'eqaime.restore':

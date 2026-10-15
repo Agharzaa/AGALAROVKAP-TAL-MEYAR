@@ -37,6 +37,7 @@ import { dailyStock, openAdvances, quantityAt, settlementBalance, stockState } f
 import { buildPostings as buildManualPostings } from './operations.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
+import { bindEq, releaseEq } from './eqaime-book.js';
 
 export const INVOICE = 'invoice';
 type SaveInvoice = CommandOf<'invoice.save'>;
@@ -658,7 +659,12 @@ function payload(number: string, n: Normalized) {
   return { number, ...n.header, lines: n.lines.map((l) => l.stored) };
 }
 
-export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
+export function saveInvoice(
+  tx: Tx,
+  cmd: SaveInvoice,
+  /** How the e-qaimə of eqDocumentId is booked: by the accountant or by confirmed map entries. */
+  eq: { postedBy: 'auto' | 'hand'; usedMaps: string } = { postedBy: 'hand', usedMaps: '' },
+): CommandResult {
   const chart = tx.chart(cmd.companyId);
   const n = normalize(tx, cmd, chart);
   const existing = cmd.id
@@ -712,8 +718,10 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
       id,
       existing.version as bigint,
     );
-    if (last && String(last.payload) === JSON.stringify(data))
+    if (last && String(last.payload) === JSON.stringify(data)) {
+      bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
       return { id, version: Number(existing.version), number };
+    }
     tx.open(cmd.companyId, String(existing.date));
   }
   tx.open(cmd.companyId, n.header.date);
@@ -800,6 +808,8 @@ export function saveInvoice(tx: Tx, cmd: SaveInvoice): CommandResult {
     id,
     `${number} · ${n.header.date} · ${String(n.partner.name)} · ${money(n.totals.total)} ${n.currency}`,
   );
+  // A DVX e-qaimə booked by this invoice must match it (also on every later correction).
+  bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
   return { id, version, number };
 }
 
@@ -836,6 +846,7 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
   );
   guardStock(tx, cmd.companyId, chart, prev.postings, prev.date, [], prev.date);
   guardSettlement(tx, cmd.companyId, chart, cmd.id, String(row.number), prev.postings, []);
+  releaseEq(tx, cmd.companyId, cmd.id);
   tx.history(cmd.companyId, INVOICE, cmd.id, version, 'cancelled', { reason });
   tx.audit(
     cmd.companyId,

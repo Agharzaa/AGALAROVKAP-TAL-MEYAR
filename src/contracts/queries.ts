@@ -44,6 +44,7 @@ export const querySchema = z.discriminatedUnion('type', [
     to: date.default(''),
   }),
   z.object({ type: z.literal('eqDocument'), companyId: id, id }),
+  z.object({ type: z.literal('eqMaps'), companyId: id }),
   z.object({ type: z.literal('rules'), companyId: id }),
   /** A rule prefilled from a bank document the accountant posted. */
   z.object({ type: z.literal('ruleDraft'), companyId: id, documentId: id }),
@@ -255,6 +256,8 @@ export interface InvoiceSummary {
   totalAzn: string;
 }
 export interface InvoiceDetail extends InvoiceSummary {
+  /** The DVX e-qaimə booked by this invoice, if any. */
+  eqDocumentId: string;
   rate: string;
   pricesIncludeVat: boolean;
   /** Postings were entered by hand (1C "Əl ilə düzəliş"). */
@@ -586,12 +589,46 @@ export interface EqImportView {
 }
 
 /**
- * Where an e-qaimə stands in the box. waiting: accepted in DVX, not booked yet (stage 4b splits
- * it into automatic / proposal / unknown); dvx: DVX has not accepted it (pending, corrected,
- * unknown status); conflict: DVX and the books disagree (cancelled in DVX but booked, or the
- * same e-qaimə came again with other amounts).
+ * Where an e-qaimə stands in the box. proposal / unknown: accepted in DVX, waiting for the
+ * accountant (something is known / nothing is); dvx: DVX has not accepted it (pending,
+ * corrected, unknown status); conflict: DVX and the books disagree (cancelled in DVX but booked,
+ * or the same e-qaimə came again with other amounts); auto: booked by confirmed map entries;
+ * posted: booked or linked by the accountant.
  */
-export type EqBucket = 'waiting' | 'dvx' | 'conflict' | 'posted' | 'ignored';
+export type EqBucket = 'proposal' | 'unknown' | 'dvx' | 'conflict' | 'auto' | 'posted' | 'ignored';
+
+/** One invoice line as the e-qaimə proposes it (InvoiceLineInput fields + where they came from). */
+export interface EqProposalLine {
+  /** The DVX goods line; null when built from the e-qaimə's VAT bases (header entry). */
+  dvx: EqLineView | null;
+  productId: string;
+  quantity: string;
+  price: string;
+  vatRate: VatRate | '';
+  account: string;
+  expenseItemId: string;
+  incomeTypeId: string;
+  vatTreatment: 'offset' | 'cost' | '';
+  mapId: string;
+  mapMode: 'suggest' | 'auto' | '';
+  /** Why this line needs the accountant; empty when it is fully known. */
+  problem: string;
+}
+
+/** How a waiting e-qaimə would be booked (never posted without confirmed map entries). */
+export interface EqProposal {
+  /** auto: every part is known by confirmed (auto) entries and checks out. */
+  state: 'auto' | 'proposal' | 'unknown';
+  reasons: string[];
+  partnerId: string;
+  contractId: string;
+  newPartner?: { name: string; taxId: string; kind: 'legal' | 'individual' };
+  lines: EqProposalLine[];
+  /** A posted invoice with this very e-qaimə number: the e-qaimə is linked to it, not booked again. */
+  sameNumber?: { id: string; number: string; total: string };
+  /** Numberless invoices of the same partner and total (±5 days): link by hand. */
+  candidates: { id: string; number: string; date: string; total: string }[];
+}
 
 export interface EqDocumentView {
   id: string;
@@ -616,6 +653,8 @@ export interface EqDocumentView {
   conflict: string;
   reason: string;
   autoNote: string;
+  /** Waiting e-qaimələr only. */
+  proposal: EqProposal | null;
 }
 
 export interface EqInboxView {
@@ -645,4 +684,27 @@ export interface EqDocumentDetail extends EqDocumentView {
   lines: EqLineView[];
   history: { at: string; fileName: string; from: string; to: string; dvxStatus: string }[];
   version: number;
+}
+
+/** A learned e-qaimə map entry (DVX goods line or a VÖEN's whole e-qaimə → booking). */
+export interface EqMapView {
+  id: string;
+  version: number;
+  direction: 'sale' | 'purchase';
+  taxId: string;
+  partner: string;
+  dvxCode: string;
+  name: string;
+  unit: string;
+  productId: string;
+  product: string;
+  account: string;
+  expenseItemId: string;
+  incomeTypeId: string;
+  vatTreatment: '' | 'offset' | 'cost';
+  contractId: string;
+  mode: 'suggest' | 'auto';
+  archived: boolean;
+  uses: number;
+  lastUsedAt: string;
 }

@@ -314,6 +314,8 @@ export const commandSchema = z.discriminatedUnion('type', [
      * invoice lines stay as the document's content. Omitted = postings by the rules.
      */
     postings: z.array(operationLineInput).min(1).max(2000).optional(),
+    /** The DVX e-qaimə this invoice books (from the e-qaimə box); checked against it. */
+    eqDocumentId: id.optional(),
   }),
   z.object({
     type: z.literal('invoice.cancel'),
@@ -437,6 +439,35 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({ type: z.literal('eqaime.restore'), ...base, documentId: id }),
+  /** Books the waiting e-qaimələr of a direction that the confirmed (auto) map entries cover. */
+  z.object({ type: z.literal('eqaime.apply'), ...base, direction: z.enum(['sale', 'purchase']) }),
+  /**
+   * Links an e-qaimə to an invoice typed by hand: the same e-qaimə number, or a numberless invoice
+   * of the same partner and total (its number is then written in; the postings do not change).
+   */
+  z.object({ type: z.literal('eqaime.link'), ...base, documentId: id, invoiceId: id }),
+  /** Map entries (suggest) from how the accountant booked this e-qaimə. */
+  z.object({ type: z.literal('eqaime.learn'), ...base, documentId: id }),
+  z.object({
+    type: z.literal('eqMap.save'),
+    ...base,
+    ...editable,
+    direction: z.enum(['sale', 'purchase']),
+    /** Only e-qaimələr of this VÖEN; empty = any partner (then a DVX code is required). */
+    taxId: text(20).default(''),
+    /** DVX goods code and name; both empty = the whole e-qaimə of this VÖEN (header entry). */
+    dvxCode: text(80).default(''),
+    name: text(500).default(''),
+    unit: text(40).default(''),
+    productId: z.string().max(80).default(''),
+    account: code.default(''),
+    expenseItemId: z.string().max(80).default(''),
+    incomeTypeId: z.string().max(80).default(''),
+    vatTreatment: z.enum(['', 'offset', 'cost']).default(''),
+    /** Header entry: the contract of this VÖEN's e-qaimələr when it has several. */
+    contractId: z.string().max(80).default(''),
+    mode: z.enum(['suggest', 'auto']).default('suggest'),
+  }),
   z.object({
     type: z.literal('period.close'),
     ...base,
@@ -463,6 +494,8 @@ export interface CommandResult {
   updated?: number;
   same?: number;
   conflicts?: number;
+  /** E-qaimə map entries created by eqaime.learn. */
+  learned?: number;
   /** Rows an "auto" rule posted, and rows it recognised but could not post (with the reason). */
   posted?: number;
   failed?: { row: number; message: string }[];

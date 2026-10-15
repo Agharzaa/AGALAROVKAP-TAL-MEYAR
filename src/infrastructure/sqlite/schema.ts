@@ -910,6 +910,8 @@ CREATE TABLE eq_documents(
   conflict TEXT NOT NULL DEFAULT '',
   state TEXT NOT NULL DEFAULT 'waiting' CHECK(state IN('waiting','posted','ignored')),
   invoice_id TEXT,
+  posted_by TEXT NOT NULL DEFAULT '' CHECK(posted_by IN('','auto','hand','link')),
+  used_maps TEXT NOT NULL DEFAULT '',
   manual_only INTEGER NOT NULL DEFAULT 0 CHECK(manual_only IN(0,1)),
   auto_note TEXT NOT NULL DEFAULT '',
   reason TEXT NOT NULL DEFAULT '',
@@ -924,6 +926,7 @@ CREATE TABLE eq_documents(
   FOREIGN KEY(company_id,last_import_id) REFERENCES eq_imports(company_id,id),
   FOREIGN KEY(company_id,invoice_id) REFERENCES invoices(company_id,id),
   CHECK((state='posted')=(invoice_id IS NOT NULL)),
+  CHECK((state='posted')=(posted_by<>'')),
   CHECK(state<>'ignored' OR reason<>'')
 );
 CREATE INDEX eq_documents_date ON eq_documents(company_id,direction,date);
