@@ -23,9 +23,11 @@ export class Db {
         return;
       }
       // A 64 MB page cache (SQLite's default is 2 MB): a large import (thousands of invoices in
-      // one transaction) keeps its pages in memory instead of spilling them to disk mid-way.
+      // one transaction) keeps its pages in memory instead of spilling them to disk mid-way; the
+      // statement journals of its savepoints (one per imported row) stay in memory too, not in
+      // temporary files (slow where an antivirus scans every new file).
       this.raw.exec(
-        'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536;',
+        'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536; PRAGMA temp_store=MEMORY;',
       );
       this.migrate();
     } catch (error) {
