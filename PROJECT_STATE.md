@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 15.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 16.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -286,18 +286,20 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur, `53623fc..50bd7cd` (4a–
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 124, `npm run test:ui` 17, `npm run test:perf` keçir (500 000 yazılışlı baza: 5 000 e-qaimə + 1 200 avtomatik qaimə ~5,0 s, qutu ~0,24 s, İş masası e-qaimə siqnalları ilə ~0,63 s, aylıq tutuşdurma ~0,04 s). Real Electron (`MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`): ok.
 
+**Mərhələ 4 tamamlandı (4a–4d, müstəqil audit, açıq suallar 16.10-da qərarlaşdırılıb), versiya 0.6.0** (16.10.2026). Testlər Windows-da: `npm run typecheck`, `npm test` 128, `npm run test:ui` 17, `npm run test:perf` keçir (500 000 yazılışlı baza: 5 000 e-qaimə + 1 200 avtomatik qaimə ~5,1 s / 10 s; İş masası e-qaimə siqnalları ilə ~0,65 s / 1,5 s). Real Electron (Windows, `MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`): təmiz baza və 0.5.0 kodu ilə yaradılmış v9 bazası (alış qaiməsi ilə) — v10-a yeniləndi, qaimə toxunulmaz, bütövlük ok; kabinet pəncərəsi: ixrac gəldi, .exe / 52 MB / kənar ünvanlar rədd, müvəqqəti fayl yox, bağlandıqdan sonra 0 kuki. Push edilməyib.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.4.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.4.1.exe`). Köhnə baza (0.3.x, 0.4.0) quraşdırılanda avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
-- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 4 — müstəqil audit (2 tur, 12 qüsur düzəldi, 5 açıq sual qərar gözləyir; yuxarıda).
+- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 4 — müstəqil audit (2 tur, 12 qüsur düzəldi, 5 açıq sual 16.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda).
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
-4. DVX e-qaimələri: Excel idxalı və kabinetə PIN ilə giriş (köhnə meyar-erp-desktop v1.12–v1.14 kodundan). PIN açıq mətn kimi saxlanılmır.
+4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~ — hazır (0.6.0). **Qalan:** real DVX faylları ilə oxuyucunun yoxlanması (anonimləşdirilmiş nümunələr istifadəçidən), real ASAN İmza / SİMA girişi ilə kabinetin yoxlanması (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır).
 5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 
 ## Əmrlər
