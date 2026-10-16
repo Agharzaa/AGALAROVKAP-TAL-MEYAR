@@ -260,7 +260,9 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   }));
   const eqLoaded = time(
     'E-qaimələrin yüklənməsi (5 000 e-qaimə, 50 000 mal sətri, 1 200 avtomatik qaimə)',
-    10000,
+    // The GitHub Windows runner writes ~6× slower than a desk PC (measured 14.7 s there, 2.3 s on a
+    // PC): 20 s on CI only, 10 s everywhere else (decision of 16.10.2026).
+    process.env.GITHUB_ACTIONS ? 20000 : 10000,
     () =>
       ledger.execute(
         {
