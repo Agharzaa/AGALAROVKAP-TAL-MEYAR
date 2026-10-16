@@ -1182,3 +1182,48 @@ test('audit: an e-qaimə DVX sent with two different amounts is never booked by 
   assert.equal(d.state, 'waiting');
   assert.match(d.proposal!.reasons.join(' '), /fərqli məbləğlə/);
 });
+
+test('audit: an e-qaimə booked before its kind was known, that turns out a correction, is a conflict', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const kağız = (quantity: string) => [
+    { productId: s.paper, quantity, price: '100' } as Record<string, string>,
+  ];
+  // MT1 is booked; MT9 comes from the goods report alone (no kind) and is booked by hand too.
+  load(f, 'purchase', [withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()])]);
+  f.invoice('purchase', '2026-09-05', s.supplier, s.supplierContract, kağız('10'), {
+    eqNumber: 'MT1',
+    eqDocumentId: byNumber(f, 'MT1').id,
+  });
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT9', '2026-09-08', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: '',
+    },
+  ]);
+  f.invoice('purchase', '2026-09-08', s.supplier, s.supplierContract, kağız('9'), {
+    eqNumber: 'MT9',
+    eqDocumentId: byNumber(f, 'MT9').id,
+  });
+  // The e-qaimə report: MT9 corrects MT1 — the goods are now in the books twice.
+  load(
+    f,
+    'purchase',
+    [
+      doc('MT9', '2026-09-08', SUPPLIER, {
+        kind: 'Düzəliş qaiməsi',
+        refNumber: 'MT1',
+        net: '900.00',
+        vat: '162.00',
+        base18: '900.00',
+      }),
+    ],
+    'invoices',
+  );
+  const nine = byNumber(f, 'MT9');
+  assert.equal(nine.bucket, 'conflict');
+  assert.match(nine.conflict, /Düzəliş qaiməsi/);
+  assert.ok(f.home().warnings.some((w) => w.kind === 'eqConflict' && w.eq === 'purchase'));
+});
