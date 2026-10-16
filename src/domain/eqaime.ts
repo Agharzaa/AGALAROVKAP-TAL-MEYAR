@@ -348,6 +348,9 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
   const byKey = new Map<string, EqDocumentInput>();
   const order: EqDocumentInput[] = [];
   const get = (row: readonly string[], c: Column) => cell(row, map.get(c));
+  // Goods report: an e-qaimə with a line that cannot be read is not loaded at all — without that
+  // line it would be a smaller e-qaimə than DVX's, and could be booked so.
+  const broken = new Set<string>();
 
   for (let r = index + 1; r < rows.length; r++) {
     const row = rows[r]!;
@@ -430,12 +433,21 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
       order.push(doc);
     } catch (e) {
       problems.push({ row: sheetRow, message: (e as Error).message });
+      if (report === 'goods') broken.add(numberKey(number));
     }
   }
-  const dates = order.map((d) => d.date).sort();
+  const documents = order.filter((d) => {
+    if (!broken.has(numberKey(d.number))) return true;
+    problems.push({
+      row: d.row,
+      message: `e-qaimə ${d.number}: mal sətri oxunmadı — e-qaimə yüklənmir (bütün sətirləri ilə gəlməlidir)`,
+    });
+    return false;
+  });
+  const dates = documents.map((d) => d.date).sort();
   return {
     report,
-    documents: order,
+    documents,
     problems,
     columns,
     ...(directionHint ? { directionHint } : {}),

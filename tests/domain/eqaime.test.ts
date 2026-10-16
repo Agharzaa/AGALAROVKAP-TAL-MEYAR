@@ -136,6 +136,37 @@ test('E1: "Mallar üzrə" — rows grouped by e-qaimə, both VÖEN columns kept'
   assert.equal(b!.lines!.length, 1);
 });
 
+test('audit: a goods line that cannot be read keeps its whole e-qaimə out, never a part of it', () => {
+  const rows = [
+    ['Gələnlər'],
+    [
+      'Nömrə',
+      'Tarix',
+      'Satıcının VÖEN-i',
+      'Alıcının VÖEN-i',
+      'Malın adı',
+      'Miqdarı',
+      'Malın ƏDV-siz ümumi dəyəri',
+      'Malın ƏDV məbləği',
+      'Vəziyyəti',
+    ],
+    ['MT1', '2026-09-10', '4444444444', '1234567890', 'Kağız', '2', '20', '3,6', 'Təsdiqləndi'],
+    ['MT1', '2026-09-10', '4444444444', '1234567890', 'Toner', 'iki', '80', '14,4', 'Təsdiqləndi'],
+    ['MT2', '2026-09-11', '4444444444', '1234567890', 'Kağız', '1', '10', '1,8', 'Təsdiqləndi'],
+  ];
+  const r = readEqTable(rows);
+  // MT1 with only its first line would be a smaller e-qaimə than DVX's: it is not loaded at all.
+  assert.deepEqual(
+    r.documents.map((d) => d.number),
+    ['MT2'],
+  );
+  assert.deepEqual(
+    r.problems.map((p) => p.row),
+    [4, 3],
+  );
+  assert.match(r.problems[1]!.message, /MT1.*yüklənmir/);
+});
+
 test('E1: no header → a clear problem, nothing guessed', () => {
   const r = readEqTable([
     ['Tarix', 'Məbləğ'],
