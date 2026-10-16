@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { Outcome } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { openDvxPortal } from './dvx-portal.js';
+import { startUpdates } from './updater.js';
 
 export interface WindowOptions {
   ledger: LedgerClient;
@@ -241,5 +242,9 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     window.show();
   });
   await window.loadFile(options.rendererFile);
+  // Updates from GitHub releases: checked at start and every 4 hours, installed on close.
+  const updates = startUpdates(window);
+  handle('meyar:update-state', () => updates.current());
+  handle('meyar:update-install', () => updates.install());
   return window;
 }

@@ -40,6 +40,11 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     const result = fn();
     const ms = Math.round(performance.now() - s);
     console.log(`  ${label}: ${ms} ms (hədd ${budget} ms)`);
+    // On CI the numbers are also annotations: readable on the run page without signing in.
+    if (process.env.GITHUB_ACTIONS)
+      console.log(
+        `::${ms <= budget ? 'notice' : 'error'} title=Yük testi::${label}: ${ms} ms (hədd ${budget} ms)`,
+      );
     assert.ok(ms <= budget, `${label}: ${ms} ms > ${budget} ms`);
     return result;
   };

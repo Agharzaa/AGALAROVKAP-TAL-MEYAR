@@ -1,4 +1,4 @@
-import type { MeyarBridge, Outcome } from '../contracts/bridge';
+import type { MeyarBridge, Outcome, UpdateState } from '../contracts/bridge';
 import type { Command, CommandResult, ErrorPayload } from '../contracts/commands';
 import type { Query } from '../contracts/queries';
 
@@ -67,6 +67,19 @@ export const api = {
   },
   onChanged(listener: (companyId: string) => void): () => void {
     return bridge().onChanged(listener);
+  },
+  /** Automatic updates (desktop app only; previews and tests have none). */
+  async updateState(): Promise<UpdateState | null> {
+    const b = override ?? window.meyar;
+    return b?.updateState ? b.updateState() : null;
+  },
+  async updateInstall(): Promise<void> {
+    const b = override ?? window.meyar;
+    if (b?.updateInstall) await b.updateInstall();
+  },
+  onUpdate(listener: (state: UpdateState) => void): () => void {
+    const b = override ?? window.meyar;
+    return b?.onUpdate ? b.onUpdate(listener) : () => {};
   },
   /** The DVX cabinet window exists only in the desktop app. */
   get hasDvx(): boolean {

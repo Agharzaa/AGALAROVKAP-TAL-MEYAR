@@ -72,7 +72,10 @@ jobs:
           if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; skipping."; exit 0 }
           $notes = "İmzalanmamış sınaq versiyası. Windows 'Windows protected your PC' yazsa: More info -> Run anyway. Məlumat %APPDATA%\Meyar qovluğunda saxlanılır; proqramı silmək məlumatı silmir. Real uçotdan əvvəl mühasib qəbulu lazımdır."
           $setup = (Get-ChildItem release -Filter 'Meyar-Setup-*.exe' | Select-Object -First 1).FullName
-          gh release create $tag $setup --target $env:GITHUB_SHA --prerelease --title "Meyar $tag (imzalanmamış sınaq versiyası)" --notes $notes
+          # latest.yml and the block map let installed copies update themselves (electron-updater).
+          $feed = @((Join-Path release 'latest.yml'), "$setup.blockmap")
+          foreach ($f in $feed) { if (!(Test-Path $f)) { throw "Update file missing: $f" } }
+          gh release create $tag $setup @feed --target $env:GITHUB_SHA --prerelease --title "Meyar $tag (imzalanmamış sınaq versiyası)" --notes $notes
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -87,5 +90,6 @@ jobs:
           path: |
             release/*.exe
             release/*.blockmap
+            release/latest.yml
           if-no-files-found: error
           retention-days: 14

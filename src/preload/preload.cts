@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld('meyar', {
     ipcRenderer.on('meyar:dvx-refused', handler);
     return () => ipcRenderer.removeListener('meyar:dvx-refused', handler);
   },
+  updateState: () => ipcRenderer.invoke('meyar:update-state'),
+  updateInstall: () => ipcRenderer.invoke('meyar:update-install'),
+  onUpdate: (listener: (state: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, state: unknown) => {
+      if (state && typeof state === 'object') listener(state);
+    };
+    ipcRenderer.on('meyar:update', handler);
+    return () => ipcRenderer.removeListener('meyar:update', handler);
+  },
   onChanged: (listener: (companyId: string) => void) => {
     const handler = (_event: IpcRendererEvent, companyId: unknown) => {
       if (typeof companyId === 'string') listener(companyId);

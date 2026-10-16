@@ -273,3 +273,11 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 3. **İstiqaməti sübut olunmayan fayl** (başlığında "Gələnlər / Göndərilənlər" yoxdur, satıcı və alıcı VÖEN-ləri yoxdur) yalnız ilkin baxışda istifadəçinin açıq təsdiqi ilə yüklənir.
 4. **DVX ilə ay üzrə ƏDV müqayisəsinə yalnız e-qaimə nömrəli (və ya e-qaiməyə bağlı) qaimələr düşür.** Nömrəsiz qaimələr (məs. fiziki şəxslərə satış) ayrıca siyahıdadır.
 5. **Kabinet endirməsi 50 MB-ı keçən an dayandırılır** — ölçü əvvəlcədən bilinməsə də.
+
+## 2026-10-16 — proqramın avtomatik yenilənməsi
+
+### TƏSDİQLƏNDİ
+
+1. **Proqram özü yenilənir.** Quraşdırılmış Meyar hər açılanda və açıq qaldıqca hər 4 saatdan bir GitHub-dakı layihə release-lərində yeni versiyanı yoxlayır, arxa planda endirir, proqram bağlananda quraşdırır; status sətrində "İndi yenidən başlat" da var. Saxlanmamış sənəd varsa, bağlanma əvvəlcə soruşur.
+2. Yeniləmə məlumat bazasına toxunmur: baza istifadəçi qovluğunda qalır, miqrasiyadan əvvəl açılış nüsxəsi alınır, köhnə proqram daha yeni bazanı açmır.
+3. İlk dəfə 0.6.1 əl ilə quraşdırılır (0.6.0 və əvvəlkilərdə yeniləyici yoxdur); sonrakı versiyalar özü gəlir. Versiyalar hələ imzalanmamış sınaq versiyalarıdır.

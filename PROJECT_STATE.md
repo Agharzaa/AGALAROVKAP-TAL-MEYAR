@@ -288,6 +288,13 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 124, `npm run test:ui` 17, 
 
 **Mərhələ 4 tamamlandı (4a–4d, müstəqil audit, açıq suallar 16.10-da qərarlaşdırılıb), versiya 0.6.0** (16.10.2026). Testlər Windows-da: `npm run typecheck`, `npm test` 128, `npm run test:ui` 17, `npm run test:perf` keçir (500 000 yazılışlı baza: 5 000 e-qaimə + 1 200 avtomatik qaimə ~5,1 s / 10 s; İş masası e-qaimə siqnalları ilə ~0,65 s / 1,5 s). Real Electron (Windows, `MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`): təmiz baza və 0.5.0 kodu ilə yaradılmış v9 bazası (alış qaiməsi ilə) — v10-a yeniləndi, qaimə toxunulmaz, bütövlük ok; kabinet pəncərəsi: ixrac gəldi, .exe / 52 MB / kənar ünvanlar rədd, müvəqqəti fayl yox, bağlandıqdan sonra 0 kuki. Push edilməyib.
 
+## 0.6.1 — avtomatik yenilənmə (16.10.2026)
+
+- `electron-updater` 6.8.9 (`src/main/updater.ts`): quraşdırılmış proqram açılanda və hər 4 saatdan bir GitHub release-lərini yoxlayır (sınaq pre-release-ləri daxil), arxa planda endirir, bağlananda quraşdırır; status sətrində "Yeni versiya … hazırdır — İndi yenidən başlat". İnkişafda, smoke testində və `MEYAR_NO_UPDATE=1` ilə söndürülür. Qərar: `docs/QERARLAR.md` 2026-10-16.
+- CI release-ə `latest.yml` və blockmap da yüklənir (yoxdursa release yaradılmır). Yük testinin rəqəmləri CI-də annotasiya kimi də çıxır.
+- 0.6.0-ın CI-si yük testində yıxıldı (lokal 100 000 yazılışla keçir; ehtimal: CI maşınında e-qaimə yükləməsi 10 s həddini keçib) — v0.6.0 release-i yaranmayıb. 0.6.1-in CI rəqəmləri annotasiyada görünəcək.
+- **Yoxlanmayıb:** real yenilənmə (0.6.1 → növbəti versiya) — ilk dəfə növbəti release çıxanda.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.

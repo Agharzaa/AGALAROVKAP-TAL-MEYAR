@@ -1,6 +1,14 @@
 /** The only surface the renderer sees. Every call is validated again in the main process. */
 import type { CommandResult, ErrorPayload } from './commands.js';
 
+/** Where the automatic update stands; see src/main/updater.ts. */
+export interface UpdateState {
+  state: 'idle' | 'checking' | 'downloading' | 'ready' | 'error';
+  version: string;
+  percent: number;
+  message: string;
+}
+
 export type Outcome<T> = { ok: true; value: T } | { ok: false; error: ErrorPayload };
 
 export interface MeyarBridge {
@@ -24,6 +32,11 @@ export interface MeyarBridge {
   ): () => void;
   /** A download or address the cabinet window refused. */
   onDvxRefused?(listener: (message: string) => void): () => void;
+  /** Automatic update state (desktop app only). */
+  updateState?(): Promise<UpdateState>;
+  /** Restarts into the downloaded version (the close guard still asks about unsaved work). */
+  updateInstall?(): Promise<void>;
+  onUpdate?(listener: (state: UpdateState) => void): () => void;
   /** Called after any successful change, with the affected company. */
   onChanged(listener: (companyId: string) => void): () => void;
 }

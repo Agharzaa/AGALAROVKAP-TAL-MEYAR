@@ -35,6 +35,7 @@ import {
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
 import { api } from './api';
+import type { UpdateState } from '../contracts/bridge';
 import { useCatalog } from './catalog';
 import { useMutation, useQuery } from './hooks';
 import {
@@ -440,6 +441,31 @@ function NavMenu({
   );
 }
 
+/**
+ * Automatic update in the status bar: a newer version downloading, then ready — installed when
+ * Meyar closes, or now with "İndi yenidən başlat". Silent while there is nothing to say.
+ */
+function UpdateStatus() {
+  const [u, setU] = useState<UpdateState | null>(null);
+  useEffect(() => {
+    void api.updateState().then(setU);
+    return api.onUpdate(setU);
+  }, []);
+  if (!u || (u.state !== 'downloading' && u.state !== 'ready')) return null;
+  return u.state === 'downloading' ? (
+    <span>
+      Yeni versiya {u.version} endirilir… {u.percent}%
+    </span>
+  ) : (
+    <span className="statusbar-update">
+      Yeni versiya {u.version} hazırdır — proqram bağlananda quraşdırılacaq{' '}
+      <button type="button" className="link" onClick={() => void api.updateInstall()}>
+        İndi yenidən başlat
+      </button>
+    </span>
+  );
+}
+
 /** Excel-style zoom in the status bar: − slider + and the percentage (Ctrl +/−/0, Ctrl+wheel). */
 const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 function ZoomControl() {
@@ -717,6 +743,7 @@ function Shell({
         <span className="statusbar-keys">
           Ctrl+Enter uçota al və bağla · Ctrl+Tab növbəti pəncərə · Ctrl+K axtarış
         </span>
+        <UpdateStatus />
         <ZoomControl />
       </footer>
       {ws.pendingClose && (
