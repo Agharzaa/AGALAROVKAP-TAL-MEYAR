@@ -1030,3 +1030,52 @@ test('audit: linking writes an e-qaimə number only where no other invoice carri
   );
   assert.equal(f.db.get('SELECT eq_key FROM invoices WHERE id=?', numberless.id)!.eq_key, '');
 });
+
+test('audit: a correction applies to a linked invoice dated a few days from DVX, and it stays editable', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const typed = f.invoice(
+    'purchase',
+    '2026-09-03',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '100' }],
+    { eqNumber: 'MT1' },
+  );
+  load(f, 'purchase', [withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()])]);
+  assert.equal(byNumber(f, 'MT1').invoiceId, typed.id);
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT9', '2026-09-20', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const c = byNumber(f, 'MT9');
+  assert.equal(c.proposal!.corrects!.invoiceDate, '2026-09-03');
+  const apply = (memo: string) => {
+    const inv = f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id: typed.id });
+    return f.invoice(
+      'purchase',
+      '2026-09-03',
+      s.supplier,
+      s.supplierContract,
+      [{ productId: s.paper, quantity: '9', price: '100' }],
+      {
+        id: inv.id,
+        version: inv.version,
+        number: inv.number,
+        eqNumber: 'MT9',
+        memo,
+        ...(memo ? {} : { eqDocumentId: c.id }),
+      },
+    );
+  };
+  // The form keeps the invoice's own date (03.09), as the proposal says.
+  apply('');
+  assert.deepEqual([byNumber(f, 'MT9').bucket, byNumber(f, 'MT9').invoiceId], ['posted', typed.id]);
+  // A later correction of the same invoice (its memo) is not refused for the date.
+  assert.equal(apply('Kağız, düzəlişdən sonra').version, 3);
+});

@@ -593,8 +593,9 @@ function check(
     return differs(`cəmi ${money(inv.total_azn as bigint)}, DVX-də ${money(gross)}`);
   if (inv.currency === 'AZN' && inv.vat !== doc.vat)
     return differs(`ƏDV ${money(inv.vat as bigint)}, DVX-də ${money(doc.vat as bigint)}`);
-  const d = Math.abs(Date.parse(String(inv.date)) - Date.parse(String(doc.date))) / 86_400_000;
-  if (d > days && inv.date !== alsoDate)
+  const near = (date: string) =>
+    Math.abs(Date.parse(String(inv.date)) - Date.parse(date)) / 86_400_000 <= days;
+  if (!near(String(doc.date)) && !(alsoDate && near(alsoDate)))
     return differs(`tarix ${String(inv.date)}, DVX-də ${String(doc.date)}`);
   return differs('');
 }
@@ -685,13 +686,15 @@ export function bindEq(
         'conflict',
       );
   }
-  // A linked hand-typed invoice may lie a few days apart; a booked one keeps DVX's date.
+  // A linked hand-typed invoice may lie a few days apart; a booked one keeps DVX's date. A
+  // correction applied to a linked invoice keeps that leeway around the corrected e-qaimə's date.
+  const linked = (current ?? superseded)?.posted_by === 'link';
   const why = mismatch(
     tx,
     companyId,
     doc,
     inv,
-    current?.posted_by === 'link' ? LINK_DAYS : 0,
+    linked ? LINK_DAYS : 0,
     orig ? String(orig.date) : '',
   );
   if (why)
@@ -713,7 +716,7 @@ export function bindEq(
     `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by=?, used_maps=?, auto_note='',
        version=version+1, updated_at=? WHERE id=?`,
     invoiceId,
-    postedBy,
+    linked ? 'link' : postedBy,
     usedMaps,
     tx.clock.now(),
     docId,
