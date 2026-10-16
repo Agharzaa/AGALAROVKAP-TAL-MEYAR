@@ -1133,3 +1133,31 @@ test('audit: two suppliers’ e-qaimələr with one number, both typed by hand, 
     ],
   );
 });
+
+test('audit: İş masası counts an e-qaimə and the correction replacing it once, as DVX ↔ uçot does', (t) => {
+  const f = fixture(t);
+  setup(f);
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()]),
+    {
+      ...withGoods('MT9', '2026-09-08', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const r = f.query<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-09-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(
+    r.notBooked.map((x) => x.number),
+    ['MT9'],
+  );
+  const waiting = f.home().warnings.find((w) => w.kind === 'eqWaiting' && w.eq === 'purchase');
+  assert.match(waiting!.text, /: 1 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb \(ƏDV 162/);
+});

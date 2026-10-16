@@ -730,7 +730,11 @@ export function eqWarnings(
       );
     const waiting = db.get(
       `SELECT COUNT(*) AS n, COALESCE(SUM(vat),0) AS vat FROM eq_documents WHERE company_id=? AND direction=?
-         AND date>=? AND state='waiting' AND status='accepted'`,
+         AND date>=? AND state='waiting' AND status='accepted'
+         -- An e-qaimə replaced by its correction is not DVX's word any more (as in eqReconcile).
+         AND NOT (kind='main' AND EXISTS(SELECT 1 FROM eq_documents c WHERE c.company_id=eq_documents.company_id
+           AND c.direction=eq_documents.direction AND c.tax_id=eq_documents.tax_id
+           AND c.ref_key=eq_documents.eq_key AND c.kind='correction' AND c.status='accepted'))`,
       companyId,
       direction,
       from,
