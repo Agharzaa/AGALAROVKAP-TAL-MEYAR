@@ -1161,3 +1161,24 @@ test('audit: İş masası counts an e-qaimə and the correction replacing it onc
   const waiting = f.home().warnings.find((w) => w.kind === 'eqWaiting' && w.eq === 'purchase');
   assert.match(waiting!.text, /: 1 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb \(ƏDV 162/);
 });
+
+test('audit: an e-qaimə DVX sent with two different amounts is never booked by itself', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  load(f, 'purchase', [withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()])]);
+  // The same e-qaimə again, with other amounts: the stored one stays, a conflict.
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [
+      good('4802', 'Kağız', '10', '90', '900.00', '162.00'),
+    ]),
+  ]);
+  assert.equal(byNumber(f, 'MT1').bucket, 'conflict');
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  assert.equal(
+    f.exec({ type: 'eqaime.apply', companyId: f.companyId, direction: 'purchase' }).posted,
+    0,
+  );
+  const d = byNumber(f, 'MT1');
+  assert.equal(d.state, 'waiting');
+  assert.match(d.proposal!.reasons.join(' '), /fərqli məbləğlə/);
+});

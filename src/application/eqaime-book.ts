@@ -477,6 +477,11 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     linesAuto = false;
     reasons.push('Avtomatik uçot geri qaytarılıb: bu e-qaimə yalnız təklif olunur.');
   }
+  // DVX sent this e-qaimə again with other amounts or date: which one is right is the accountant's.
+  if (String(doc.conflict)) {
+    linesAuto = false;
+    reasons.push(`DVX bu e-qaiməni fərqli məbləğlə də göndərib: ${String(doc.conflict)}.`);
+  }
   // Only the goods report is loaded and it printed no kind: a return or an advance e-qaimə
   // would pass for an ordinary one.
   if (doc.header_full === 0n && !String(doc.kind_text)) {
