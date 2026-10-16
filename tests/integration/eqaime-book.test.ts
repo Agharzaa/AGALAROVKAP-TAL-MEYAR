@@ -1266,3 +1266,23 @@ test('audit: a conflict of a booking goes with the booking; a conflict of DVX’
   assert.deepEqual([one.state, one.bucket, one.conflict], ['waiting', 'proposal', '']);
   assert.equal(byNumber(f, 'MT2').bucket, 'conflict');
 });
+
+test('audit: a linked invoice corrected to DVX’s amounts is no longer a conflict', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const save = (price: string, extra = {}) =>
+    f.invoice(
+      'purchase',
+      '2026-09-05',
+      s.supplier,
+      s.supplierContract,
+      [{ productId: s.paper, quantity: '10', price }],
+      { eqNumber: 'MT1', ...extra },
+    );
+  const typed = save('99');
+  load(f, 'purchase', [withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()])]);
+  assert.equal(byNumber(f, 'MT1').bucket, 'conflict');
+  save('100', { id: typed.id, version: typed.version });
+  const d = byNumber(f, 'MT1');
+  assert.deepEqual([d.bucket, d.conflict], ['posted', '']);
+});

@@ -712,7 +712,18 @@ export function bindEq(
       `Qaimə e-qaimə ${String(doc.eq_number)} ilə uyğun deyil: ${why}.`,
       'eqDocumentId',
     );
-  if (current) return;
+  if (current) {
+    // The invoice now is what DVX wrote: an amount conflict of the link is settled. (An ordinary
+    // invoice for what DVX calls a correction, return, advance or excise e-qaimə still is not.)
+    const ordinary = doc.kind === 'main' && doc.excise === 0n && doc.road_tax === 0n;
+    if (ordinary && String(current.conflict).startsWith(BOOKING_CONFLICT))
+      tx.db.run(
+        "UPDATE eq_documents SET conflict='', version=version+1, updated_at=? WHERE id=?",
+        tx.clock.now(),
+        docId,
+      );
+    return;
+  }
   // The corrected e-qaimə steps aside: its correction now books (or replaces) it.
   if (orig && orig.state !== 'ignored')
     tx.db.run(
