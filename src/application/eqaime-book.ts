@@ -477,6 +477,14 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     linesAuto = false;
     reasons.push('Avtomatik uçot geri qaytarılıb: bu e-qaimə yalnız təklif olunur.');
   }
+  // Only the goods report is loaded and it printed no kind: a return or an advance e-qaimə
+  // would pass for an ordinary one.
+  if (doc.header_full === 0n && !String(doc.kind_text)) {
+    linesAuto = false;
+    reasons.push(
+      'E-qaimənin növü “Mallar üzrə” hesabatında yoxdur: “Qaimələr üzrə” hesabatını da yükləyin.',
+    );
+  }
   out.state = !known
     ? 'unknown'
     : reasons.length === 0 && linesAuto && contractAuto && !!out.partnerId && !correction

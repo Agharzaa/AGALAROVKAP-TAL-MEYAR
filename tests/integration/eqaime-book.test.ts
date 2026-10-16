@@ -974,3 +974,31 @@ test('DVX ↔ books: VAT by month, e-qaimələr not booked, invoices DVX does no
   );
   assert.match(signals[0]!.text, /3 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb/);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Stage 4 audit (independent reviewer)
+
+const paper10 = () => good('4802', 'Kağız', '10', '100', '1000.00', '180.00');
+
+test('audit: an e-qaimə whose kind the goods report does not print is never booked by itself', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  // "Mallar üzrə" prints no kind: a return or an advance e-qaimə would look like an ordinary one.
+  const goodsOnly = (n: string) => ({
+    ...withGoods(n, '2026-09-05', SUPPLIER, [paper10()]),
+    kind: '',
+  });
+  assert.equal(load(f, 'purchase', [goodsOnly('MT1'), goodsOnly('MT2')]).posted, 0);
+  const one = byNumber(f, 'MT1');
+  assert.equal(one.bucket, 'proposal');
+  assert.match(one.proposal!.reasons.join(' '), /“Qaimələr üzrə” hesabatını/);
+  // The e-qaimə report says MT1 is a return: not booked as a purchase.
+  const header = (n: string, kind: string) =>
+    doc(n, '2026-09-05', SUPPLIER, { kind, net: '1000.00', vat: '180.00', base18: '1000.00' });
+  load(f, 'purchase', [header('MT1', 'Qaytarma qaiməsi')], 'invoices');
+  assert.equal(byNumber(f, 'MT1').bucket, 'unknown');
+  // MT2 is an ordinary one: once the e-qaimə report says so, the confirmed entries book it.
+  assert.equal(load(f, 'purchase', [header('MT2', 'Əsas')], 'invoices').posted, 1);
+  assert.equal(byNumber(f, 'MT2').bucket, 'auto');
+});
