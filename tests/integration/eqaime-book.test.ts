@@ -1098,3 +1098,38 @@ test('audit: a booked e-qaimə that DVX no longer shows as accepted is a conflic
   const signal = f.home().warnings.find((w) => w.kind === 'eqConflict' && w.eq === 'purchase');
   assert.match(signal!.text, /^Alınan e-qaimələr: 2 ziddiyyət/);
 });
+
+test('audit: two suppliers’ e-qaimələr with one number, both typed by hand, are both linked at once', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const a = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '100' }],
+    { eqNumber: 'MT1' },
+  );
+  const b = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.telecom,
+    s.telecomContract,
+    [{ productId: s.service, quantity: '1', price: '50', expenseItemId: s.rabite }],
+    { eqNumber: 'MT1' },
+  );
+  const r = load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()]),
+    withGoods('MT1', '2026-09-05', TELECOM, [good('1', 'Rabitə', '1', '50', '50.00', '9.00')]),
+  ]);
+  assert.equal(r.posted, 2);
+  assert.deepEqual(
+    inbox(f)
+      .documents.map((d) => [d.taxId, d.bucket, d.invoiceId])
+      .sort(),
+    [
+      [SUPPLIER, 'posted', a.id],
+      [TELECOM, 'posted', b.id],
+    ],
+  );
+});

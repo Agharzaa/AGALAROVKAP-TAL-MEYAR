@@ -920,8 +920,13 @@ export function applyEq(
         );
         posted++;
       });
-      // A linked invoice is taken: no later e-qaimə links to it.
-      if (p.sameNumber) ctx.byNumber.delete(String(doc.eq_key));
+      // A linked invoice is taken: no later e-qaimə links to it (another partner's may still).
+      if (p.sameNumber) {
+        const key = String(doc.eq_key);
+        const left = ctx.byNumber.get(key)!.filter((i) => i.id !== p.sameNumber!.id);
+        if (left.length) ctx.byNumber.set(key, left);
+        else ctx.byNumber.delete(key);
+      }
     } catch (e) {
       if (!(e instanceof DomainError)) throw e;
       tx.db.run(
