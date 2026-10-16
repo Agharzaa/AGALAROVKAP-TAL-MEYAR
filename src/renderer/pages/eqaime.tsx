@@ -54,6 +54,9 @@ interface Preview {
   read: EqReadResult;
 }
 
+/** The box (window) that last opened the DVX cabinet: the cabinet's exports go there only. */
+let cabinetBox = '';
+
 async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice());
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -106,17 +109,26 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
-  // Exports made in the DVX cabinet window come to the box of their direction, as a preview.
+  // Exports made in the DVX cabinet window come, as a preview, only to the box that opened it:
+  // boxes of other companies (or the other direction) may be open at the same time.
   useEffect(
     () =>
       api.onDvxFile((f) => {
-        if (f.direction === direction) void read(f.name, f.bytes, 'portal');
+        if (cabinetBox === win.id && f.direction === direction)
+          void read(f.name, f.bytes, 'portal');
       }),
-    [direction], // eslint-disable-line react-hooks/exhaustive-deps
+    [direction, win.id], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  useEffect(() => api.onDvxRefused((message) => setReadError(message)), []);
+  useEffect(
+    () =>
+      api.onDvxRefused((message) => {
+        if (cabinetBox === win.id) setReadError(message);
+      }),
+    [win.id],
+  );
   async function openCabinet() {
     setReadError('');
+    cabinetBox = win.id;
     try {
       await api.dvxOpen(direction);
       setMessage(

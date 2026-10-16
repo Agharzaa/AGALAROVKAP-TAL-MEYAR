@@ -1093,3 +1093,42 @@ test('DVX cabinet: the box opens it; an export made there arrives as a preview a
     h.close();
   }
 });
+
+test('audit: a cabinet export goes only to the box that opened the cabinet, not another company’s', async () => {
+  const h = harness();
+  seed(h);
+  const other = h.run({
+    type: 'company.create',
+    name: 'İkinci MMC',
+    taxId: '1234567891',
+    vatPayer: true,
+  }).id;
+  const csv = [
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Vəziyyəti',
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;Təsdiqləndi',
+  ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    const openBox = async () => {
+      await user.click(screen.getByRole('button', { name: 'Alış' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+      return within(pane());
+    };
+    const first = await openBox();
+    await user.click(await first.findByRole('button', { name: 'DVX kabinetini aç' }));
+    await first.findByText(/DVX kabineti ayrıca pəncərədə açıldı/);
+    // The other company's box is open too, without the cabinet.
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Şirkət' }), other);
+    const second = await openBox();
+    await second.findByText('Hələ e-qaimə yüklənməyib');
+    h.dvxExport({ direction: 'purchase', name: 'ixrac.csv', bytes: new TextEncoder().encode(csv) });
+    await waitFor(() =>
+      assert.equal(document.querySelectorAll('[aria-label="İlkin baxış"]').length, 1),
+    );
+    assert.equal(second.queryByRole('region', { name: 'İlkin baxış' }), null);
+  } finally {
+    h.close();
+  }
+});
