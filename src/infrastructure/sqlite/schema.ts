@@ -908,6 +908,7 @@ CREATE TABLE eq_documents(
   lines TEXT NOT NULL DEFAULT '',
   content_hash TEXT NOT NULL,
   conflict TEXT NOT NULL DEFAULT '',
+  resolved TEXT NOT NULL DEFAULT '',
   state TEXT NOT NULL DEFAULT 'waiting' CHECK(state IN('waiting','posted','ignored')),
   invoice_id TEXT,
   posted_by TEXT NOT NULL DEFAULT '' CHECK(posted_by IN('','auto','hand','link')),

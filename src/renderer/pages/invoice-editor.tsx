@@ -106,7 +106,12 @@ function fromEq(e: EqDocumentDetail, base: Form, keepHeader = false): Form {
     // A correction applied to a booked invoice keeps its date, partner and contract.
     ...(keepHeader
       ? {}
-      : { date: e.date, partnerId: p?.partnerId ?? '', contractId: p?.contractId ?? '' }),
+      : {
+          // A correction booked in place of its original keeps the original's date (QERARLAR 2026-10-16 §1).
+          date: p?.corrects?.date || e.date,
+          partnerId: p?.partnerId ?? '',
+          contractId: p?.contractId ?? '',
+        }),
     pricesIncludeVat: false,
     eqNumber: e.number,
     memo: e.note.slice(0, 500),

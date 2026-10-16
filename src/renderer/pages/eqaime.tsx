@@ -81,10 +81,13 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   const [tab, setTab] = useState<EqBucket>('proposal');
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  useEffect(() => setConfirmed(false), [preview]);
   const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
   const [open, setOpen] = useState<string>('');
   const [ignore, setIgnore] = useState<EqDocumentView | null>(null);
+  const [settle, setSettle] = useState<EqDocumentView | null>(null);
   const [reason, setReason] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const m = useMutation();
@@ -148,6 +151,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       companyId: win.companyId,
       direction,
       ...(preview.read.directionHint ? { fileDirection: preview.read.directionHint } : {}),
+      directionConfirmed: confirmed,
       report: preview.read.report,
       source: preview.source,
       fileName: preview.fileName,
@@ -301,6 +305,9 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               {d.invoiceNumber}
             </button>
             {d.bucket === 'auto' && <small> · təsdiqlənmiş uyğunluqlarla</small>}
+            {d.resolved && (
+              <small title={d.resolved}> · ziddiyyət qəbul edilib: {d.resolved}</small>
+            )}
           </span>
         ) : d.bucket === 'conflict' ? (
           <span title={d.conflict}>
@@ -364,20 +371,32 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               Kənara qoy
             </button>
           </>
-        ) : d.bucket === 'conflict' &&
-          d.state === 'posted' &&
-          (d.status === 'cancelled' || d.status === 'rejected') ? (
-          <button
-            type="button"
-            className="button secondary small"
-            disabled={m.busy}
-            aria-label={`${d.number}: qaiməni ləğv et`}
-            onClick={() => void cancelInvoice(d)}
-          >
-            Qaiməni ləğv et
-          </button>
-        ) : d.bucket === 'conflict' && d.status === 'corrected' ? (
-          <small>düzəliş e-qaiməsini uçota alın</small>
+        ) : d.bucket === 'conflict' ? (
+          <>
+            {d.state === 'posted' && (d.status === 'cancelled' || d.status === 'rejected') && (
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={m.busy}
+                aria-label={`${d.number}: qaiməni ləğv et`}
+                onClick={() => void cancelInvoice(d)}
+              >
+                Qaiməni ləğv et
+              </button>
+            )}
+            {d.state === 'posted' && d.status === 'corrected' && (
+              <small>düzəliş e-qaiməsini uçota alın </small>
+            )}
+            {/* A closed period (reversed by hand in the open one) or amounts the accountant reviewed. */}
+            <button
+              type="button"
+              className="button secondary small"
+              aria-label={`${d.number}: ziddiyyəti qəbul et`}
+              onClick={() => (setReason(''), setSettle(d))}
+            >
+              Qəbul et
+            </button>
+          </>
         ) : d.bucket === 'auto' ? (
           <button
             type="button"
@@ -404,6 +423,9 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   const p = preview?.read;
   const d = detail.data;
   const wrongDirection = p?.directionHint && p.directionHint !== direction;
+  // Neither a title nor seller/buyer VÖEN columns: only the user can say which box it is for.
+  const unproven =
+    !!p && !p.directionHint && !p.documents.some((d) => d.sellerTaxId || d.buyerTaxId);
   return (
     <ModuleFrame
       title={page.title}
@@ -466,6 +488,18 @@ export function EqaimePage({ direction }: { direction: Direction }) {
                   — faylın başlığında {directionLabel[p.directionHint!]} yazılıb; fayl yüklənməyəcək
                 </b>
               )}
+              {unproven && (
+                <label className="pair-bad">
+                  {' '}
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(e) => setConfirmed(e.target.checked)}
+                  />{' '}
+                  Faylda istiqamət görünmür — bunun {directionLabel[direction]} faylı olduğunu
+                  təsdiq edirəm
+                </label>
+              )}
             </li>
             <li>
               Dövr: {day(p.from ?? '')} – {day(p.to ?? '')} · {p.documents.length} e-qaimə · cəmi{' '}
@@ -492,7 +526,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             <button
               type="button"
               className="button primary"
-              disabled={m.busy || !!wrongDirection}
+              disabled={m.busy || !!wrongDirection || (unproven && !confirmed)}
               onClick={() => void load()}
             >
               {m.busy ? 'Yüklənir…' : 'Yüklə'}
@@ -635,6 +669,41 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             </ul>
           </div>
         </Modal>
+      )}
+      {settle && (
+        <Confirm
+          title={`Ziddiyyəti qəbul et · ${settle.number}`}
+          confirmLabel="Qəbul et"
+          onCancel={() => setSettle(null)}
+          onConfirm={async () => {
+            const r = await m.run({
+              type: 'eqaime.resolve',
+              companyId: win.companyId,
+              documentId: settle.id,
+              note: reason,
+            });
+            if (r) {
+              setSettle(null);
+              setMessage(`${settle.number}: ziddiyyət qeydlə qəbul edildi.`);
+            }
+          }}
+        >
+          <p>
+            Bağlı dövrdə qaimə dəyişdirilmir: əks yazılışı açıq dövrdə aparın və burada nə
+            etdiyinizi yazın. Qeyd audit jurnalına düşür; DVX-də yeni dəyişiklik olsa, ziddiyyət
+            yenidən açılır.
+          </p>
+          <Field label="Qeyd">
+            <input
+              autoFocus
+              required
+              maxLength={240}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
+          {m.error && <Notice>{m.error.message}</Notice>}
+        </Confirm>
       )}
       {ignore && (
         <Confirm

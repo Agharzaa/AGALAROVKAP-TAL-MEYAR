@@ -59,6 +59,7 @@ function load(f: F, direction: 'sale' | 'purchase', rows: string[][], fileName =
   const r = readEqTable(rows, fileName);
   return f.exec({
     type: 'eqaime.import',
+    directionConfirmed: true,
     companyId: f.companyId,
     direction,
     ...(r.directionHint ? { fileDirection: r.directionHint } : {}),
@@ -192,6 +193,7 @@ test('E4: the same number from two suppliers is two e-qaimələr; twice in one f
   // …and the command refuses it on its own, whatever sends it.
   const r = f.exec({
     type: 'eqaime.import',
+    directionConfirmed: true,
     companyId: f.companyId,
     direction: 'purchase',
     report: 'invoices',

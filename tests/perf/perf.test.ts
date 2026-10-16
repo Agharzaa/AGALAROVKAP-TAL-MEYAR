@@ -261,6 +261,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
         {
           key: `perf-eq-${Date.now()}`,
           type: 'eqaime.import',
+          directionConfirmed: true,
           companyId,
           direction: 'purchase',
           report: 'goods',

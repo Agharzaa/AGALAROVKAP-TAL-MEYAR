@@ -426,6 +426,11 @@ export const commandSchema = z.discriminatedUnion('type', [
     direction: z.enum(['sale', 'purchase']),
     /** The direction the file names in its title, when it names one. */
     fileDirection: z.enum(['sale', 'purchase']).optional(),
+    /**
+     * The user confirmed the direction of a file that proves none (no Gələnlər / Göndərilənlər
+     * title, no seller and buyer VÖEN columns).
+     */
+    directionConfirmed: z.boolean().default(false),
     report: z.enum(['invoices', 'goods']),
     source: z.enum(['file', 'portal']).default('file'),
     fileName: text(240),
@@ -439,6 +444,11 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({ type: z.literal('eqaime.restore'), ...base, documentId: id }),
+  /**
+   * The accountant takes note of a conflict the books cannot follow any more (a closed period:
+   * the reversal was made by hand in the open one) or has reviewed (other amounts from DVX).
+   */
+  z.object({ type: z.literal('eqaime.resolve'), ...base, documentId: id, note: text(240) }),
   /** Books the waiting e-qaimələr of a direction that the confirmed (auto) map entries cover. */
   z.object({ type: z.literal('eqaime.apply'), ...base, direction: z.enum(['sale', 'purchase']) }),
   /**

@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { allowedUrl, refuseDownload, startUrl } from './dvx-policy.js';
+import { allowedUrl, MAX_DOWNLOAD, refuseDownload, startUrl } from './dvx-policy.js';
 
 export type DvxDirection = 'sale' | 'purchase';
 export interface DvxFile {
@@ -98,6 +98,13 @@ export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxE
     }
     const temp = path.join(tmpdir(), `meyar-dvx-${randomUUID()}${path.extname(name)}`);
     item.setSavePath(temp);
+    // A size the server did not announce is watched while it arrives (QERARLAR 2026-10-16 §5).
+    item.on('updated', () => {
+      if (item.getReceivedBytes() > MAX_DOWNLOAD && item.getState() === 'progressing') {
+        item.cancel();
+        events.onRefused(`“${name}” 50 MB-dan böyükdür; endirmə dayandırıldı.`);
+      }
+    });
     item.once('done', (_e, outcome) => {
       void (async () => {
         try {

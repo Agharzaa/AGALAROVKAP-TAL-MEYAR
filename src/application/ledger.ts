@@ -26,7 +26,7 @@ import {
   restoreStatementLine,
 } from './statements.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
-import { ignoreEq, importEq, restoreEq } from './eqaime.js';
+import { ignoreEq, importEq, resolveEq, restoreEq } from './eqaime.js';
 import { applyEq, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
 import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
@@ -161,6 +161,8 @@ export class Ledger {
         return ignoreEq(tx, c);
       case 'eqaime.restore':
         return restoreEq(tx, c);
+      case 'eqaime.resolve':
+        return resolveEq(tx, c);
       case 'period.close':
         return closePeriod(tx, c);
     }

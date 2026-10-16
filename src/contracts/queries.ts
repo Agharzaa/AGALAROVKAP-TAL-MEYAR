@@ -658,6 +658,8 @@ export interface EqProposal {
     invoiceId: string;
     invoiceNumber: string;
     invoiceDate: string;
+    /** The corrected e-qaimə's date: the VAT period the correction belongs to. */
+    date: string;
   };
 }
 
@@ -682,6 +684,8 @@ export interface EqDocumentView {
   invoiceId: string;
   invoiceNumber: string;
   conflict: string;
+  /** How the accountant settled a conflict (date · who: note); empty while open. */
+  resolved: string;
   reason: string;
   autoNote: string;
   /** Waiting e-qaimələr only. */

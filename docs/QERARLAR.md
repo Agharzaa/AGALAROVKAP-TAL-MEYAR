@@ -261,3 +261,15 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 11. **Məbləğ:** Meyar-ın hesabladığı qaimə DVX məbləğlərini qəpikbəqəpik təkrarlamalıdır; qiymət lazım olsa `məbləğ / miqdar` ilə; yenə fərq varsa — təklif.
 12. **Uyğunluq xəritəsi** (DVX mal kodu / adı → nomenklatura + hesab): "təklif" rejimində yaranır, standart olaraq "yalnız bu kontragent"; "avtomatik" rejimini yalnız mühasib qoşur. Xidmət / xərc üçün "bütün qaimə bir sətir" uyğunluğu icazəlidir (mal, material, əsas vəsait üçün yox).
 13. **Əl ilə yazılmış qaimə:** eyni e-qaimə nömrəlisi varsa ona bağlanır; nömrəsiz uyğun qaimə (eyni kontragent, cəmi, ±5 gün) yalnız təklif kimi — nömrə yazılır, yazılışlar dəyişmir.
+
+## 2026-10-16 — mərhələ 4 auditinin açıq sualları
+
+İstifadəçi auditin (`PROJECT_STATE.md` → "Mərhələ 4 auditi") 5 açıq sualında tövsiyələrin tətbiqini təsdiqlədi.
+
+### TƏSDİQLƏNDİ
+
+1. **Düzəliş e-qaiməsinin ƏDV dövrü — əsas e-qaimənin dövrü.** Düzəliş uçotda əsasın qaiməsini onun öz tarixində dəyişir; DVX ↔ uçot tutuşdurması da düzəlişi əsasın ayında sayır. Əsas uçotda deyilsə, düzəliş onun yerinə əsasın tarixi ilə uçota alınır. (Mühasib başqa qayda istəsə — "düzəliş öz tarixində" — qaimənin tarixi də düzəlişin tarixi olmalıdır; onda bu bənd dəyişdirilir.)
+2. **Bağlı dövrün ziddiyyətləri İş masasında görünür.** Bağlı dövrdə qaimə dəyişdirilmir: mühasib əks yazılışı açıq dövrdə aparır və qutuda "Qəbul et" ilə qeyd yazır (kim, nə vaxt, nə edildi — audit jurnalında). Açıq dövrdə DVX-də ləğv edilmiş qaimə qeydlə yox, ləğvlə bağlanır; fərqli məbləğlə gəlmiş e-qaimə yoxlanıldıqdan sonra qeydlə qəbul edilə bilər. DVX-də yeni dəyişiklik olsa, qəbul ləğv olunur, ziddiyyət yenidən açılır.
+3. **İstiqaməti sübut olunmayan fayl** (başlığında "Gələnlər / Göndərilənlər" yoxdur, satıcı və alıcı VÖEN-ləri yoxdur) yalnız ilkin baxışda istifadəçinin açıq təsdiqi ilə yüklənir.
+4. **DVX ilə ay üzrə ƏDV müqayisəsinə yalnız e-qaimə nömrəli (və ya e-qaiməyə bağlı) qaimələr düşür.** Nömrəsiz qaimələr (məs. fiziki şəxslərə satış) ayrıca siyahıdadır.
+5. **Kabinet endirməsi 50 MB-ı keçən an dayandırılır** — ölçü əvvəlcədən bilinməsə də.

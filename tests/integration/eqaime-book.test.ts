@@ -90,6 +90,7 @@ function load(
 ) {
   return f.exec({
     type: 'eqaime.import',
+    directionConfirmed: true,
     companyId: f.companyId,
     direction,
     report,
@@ -932,12 +933,13 @@ test('DVX ↔ books: VAT by month, e-qaimələr not booked, invoices DVX does no
   assert.deepEqual(r.months, [
     {
       month: '2026-09',
+      // The numberless AQ-000003 is listed apart (withoutEq), not compared with DVX.
       dvxCount: 2,
       dvxNet: '1050.00',
       dvxVat: '189.00',
-      bookedCount: 3,
-      bookedVat: '234.00',
-      difference: '-45.00',
+      bookedCount: 2,
+      bookedVat: '198.00',
+      difference: '-9.00',
     },
   ]);
   assert.deepEqual(
@@ -1285,4 +1287,143 @@ test('audit: a linked invoice corrected to DVX’s amounts is no longer a confli
   save('100', { id: typed.id, version: typed.version });
   const d = byNumber(f, 'MT1');
   assert.deepEqual([d.bucket, d.conflict], ['posted', '']);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Audit open questions decided (QERARLAR 2026-10-16)
+
+test('2026-10-16 §1: a correction counts in the period of the e-qaimə it corrects, as the books', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-08-28', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+  ]);
+  const o = byNumber(f, 'MT1');
+  load(f, 'purchase', [
+    {
+      ...withGoods('MT9', '2026-09-03', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const c = byNumber(f, 'MT9');
+  assert.equal(c.proposal!.corrects!.date, '2026-08-28');
+  const inv = f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id: o.invoiceId });
+  f.invoice(
+    'purchase',
+    '2026-08-28',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '9', price: '100' }],
+    { id: inv.id, version: inv.version, number: inv.number, eqNumber: 'MT9', eqDocumentId: c.id },
+  );
+  const r = f.query<EqReconcileView>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-08-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(
+    r.months.map((m) => [m.month, m.dvxCount, m.dvxVat, m.bookedVat, m.difference]),
+    [['2026-08', 1, '162.00', '162.00', '0.00']],
+  );
+});
+
+test('2026-10-16 §1: a correction booked in place of an unbooked original takes its date', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-08-28', SUPPLIER, [
+      good('4802', 'Kağız', '10', '100', '1000.00', '180.00'),
+    ]),
+    {
+      ...withGoods('MT9', '2026-09-03', SUPPLIER, [
+        good('4802', 'Kağız', '9', '100', '900.00', '162.00'),
+      ]),
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+    },
+  ]);
+  const c = byNumber(f, 'MT9');
+  f.invoice(
+    'purchase',
+    c.proposal!.corrects!.date,
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '9', price: '100' }],
+    { eqNumber: 'MT9', eqDocumentId: c.id },
+  );
+  assert.equal(byNumber(f, 'MT9').bucket, 'posted');
+  assert.equal(
+    f.query<EqReconcileView>({
+      type: 'eqReconcile',
+      companyId: f.companyId,
+      direction: 'purchase',
+      from: '2026-08-01',
+      to: '2026-08-31',
+    }).months[0]!.difference,
+    '0.00',
+  );
+});
+
+test('2026-10-16 §2: conflicts of a closed period show on İş masası and are settled with a note', (t) => {
+  const f = fixture(t, ':memory:', '2026-09-30');
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  const e = (n: string, date: string, status = 'Təsdiqləndi') => ({
+    ...withGoods(n, date, SUPPLIER, [good('4802', 'Kağız', '1', '100', '100.00', '18.00')]),
+    status,
+  });
+  load(f, 'purchase', [e('MT1', '2026-08-10'), e('MT2', '2026-09-10')]);
+  f.exec({ type: 'period.close', companyId: f.companyId, through: '2026-08-31', reason: '' });
+  load(f, 'purchase', [
+    e('MT1', '2026-08-10', 'Ləğv edildi'),
+    e('MT2', '2026-09-10', 'Ləğv edildi'),
+  ]);
+  const warning = () => f.home().warnings.find((w) => w.kind === 'eqConflict')?.text ?? '';
+  assert.match(warning(), /2 ziddiyyət.*\(1 bağlı dövrdə/);
+  const resolve = (n: string) =>
+    f.exec({
+      type: 'eqaime.resolve',
+      companyId: f.companyId,
+      documentId: byNumber(f, n).id,
+      note: 'Sentyabrda əks yazılışla düzəldildi',
+    });
+  // In an open period the invoice is cancelled, not noted away.
+  assert.throws(() => resolve('MT2'), /açıq dövrdədir: əvvəlcə qaiməni ləğv edin/);
+  resolve('MT1');
+  const one = byNumber(f, 'MT1');
+  assert.equal(one.bucket, 'auto');
+  assert.match(one.resolved, /^2026-10-07 · test: Sentyabrda əks yazılışla düzəldildi$/);
+  assert.match(warning(), /^Alınan e-qaimələr: 1 ziddiyyət/);
+  assert.throws(() => resolve('MT1'), /açıq ziddiyyət yoxdur/);
+  // DVX changes again: the settlement no longer holds.
+  load(f, 'purchase', [e('MT1', '2026-08-10', 'İmtina edilib')]);
+  assert.equal(byNumber(f, 'MT1').bucket, 'conflict');
+});
+
+test('2026-10-16 §3: a file that proves no direction loads only on the user’s word', (t) => {
+  const f = fixture(t);
+  const cmd = (confirmed: boolean) =>
+    f.exec({
+      type: 'eqaime.import',
+      companyId: f.companyId,
+      direction: 'purchase',
+      directionConfirmed: confirmed,
+      report: 'goods',
+      source: 'file',
+      fileName: 'adsiz.xlsx',
+      fileHash: (confirmed ? 'e' : 'f').repeat(64),
+      documents: [
+        withGoods('MT1', '2026-09-05', SUPPLIER, [good('1', 'x', '1', '10', '10.00', '1.80')]),
+      ],
+    });
+  assert.throws(() => cmd(false), /Faylda istiqamət görünmür.*təsdiq edin/);
+  assert.equal(cmd(true).added, 1);
 });

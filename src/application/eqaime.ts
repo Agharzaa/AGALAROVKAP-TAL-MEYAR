@@ -174,6 +174,15 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       'documents',
     );
   }
+  // A file that proves nothing about its direction is loaded only on the user's word
+  // (QERARLAR 2026-10-16 §3).
+  const proven =
+    !!cmd.fileDirection || cmd.documents.some((d) => d.sellerTaxId.trim() || d.buyerTaxId.trim());
+  if (!proven && !cmd.directionConfirmed)
+    throw new DomainError(
+      `Faylda istiqamət görünmür (başlıqda “Gələnlər / Göndərilənlər” yoxdur, satıcı və alıcı VÖEN-ləri yoxdur). İlkin baxışda bunun ${label[cmd.direction]} faylı olduğunu təsdiq edin.`,
+      'directionConfirmed',
+    );
 
   const rejected: { row: number; message: string }[] = [];
   const staged: Staged[] = [];
@@ -283,7 +292,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       // one untouched and say what came.
       const note = `${now.slice(0, 10)} · ${fileName}: tarix ${s.date}, ƏDV-siz ${money(s.net)}, ƏDV ${money(s.vat)} — uçotdakı: tarix ${String(old.date)}, ƏDV-siz ${money(old.net as bigint)}, ƏDV ${money(old.vat as bigint)}`;
       tx.db.run(
-        'UPDATE eq_documents SET conflict=?, updated_at=?, version=version+1 WHERE id=?',
+        "UPDATE eq_documents SET conflict=?, resolved='', updated_at=?, version=version+1 WHERE id=?",
         note,
         now,
         id,
@@ -305,7 +314,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
         reason = '';
       }
       tx.db.run(
-        'UPDATE eq_documents SET status=?, dvx_status=?, state=?, reason=? WHERE id=?',
+        "UPDATE eq_documents SET status=?, dvx_status=?, state=?, reason=?, resolved='' WHERE id=?",
         s.status,
         s.dvxStatus,
         state,
@@ -345,7 +354,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       if (old.state === 'posted' && (s.kind !== 'main' || s.excise || s.roadTax)) {
         const note = `${BOOKING_CONFLICT}${now.slice(0, 10)} · ${fileName}: adi e-qaimə kimi uçota alınıb, DVX-də isə ${s.kindText || s.kind}${s.excise || s.roadTax ? ' (aksiz / yol vergisi ilə)' : ''}`;
         tx.db.run(
-          "UPDATE eq_documents SET conflict=CASE WHEN conflict='' THEN ? ELSE conflict END WHERE id=?",
+          "UPDATE eq_documents SET conflict=CASE WHEN conflict='' THEN ? ELSE conflict END, resolved='' WHERE id=?",
           note,
           id,
         );
@@ -416,6 +425,50 @@ export function ignoreEq(tx: Tx, cmd: CommandOf<'eqaime.ignore'>): CommandResult
   return { id: cmd.documentId };
 }
 
+/**
+ * Settles a conflict the books cannot follow (QERARLAR 2026-10-16 §2): a booking in a closed
+ * period whose reversal the accountant made in the open one, or other amounts from DVX the
+ * accountant reviewed. A booked e-qaimə DVX cancelled in an open period is settled by cancelling
+ * its invoice, not by a note.
+ */
+export function resolveEq(tx: Tx, cmd: CommandOf<'eqaime.resolve'>): CommandResult {
+  const company = tx.company(cmd.companyId);
+  const r = document(tx, cmd.companyId, cmd.documentId);
+  const note = parseText(cmd.note, 'Qeyd');
+  if (!flagged(r) || r.resolved !== '')
+    throw new DomainError('E-qaimədə açıq ziddiyyət yoxdur.', undefined, 'conflict');
+  const closed = String(company.closed_through);
+  const invoice = r.invoice_id
+    ? tx.db.get(
+        'SELECT date FROM invoices WHERE company_id=? AND id=?',
+        cmd.companyId,
+        String(r.invoice_id),
+      )
+    : undefined;
+  const inClosed = String(invoice?.date ?? r.date) <= closed;
+  if (r.conflict === '' && !inClosed)
+    throw new DomainError(
+      'Qaimə açıq dövrdədir: əvvəlcə qaiməni ləğv edin və ya düzəldin.',
+      undefined,
+      'conflict',
+    );
+  const resolved = `${tx.clock.now().slice(0, 10)} · ${tx.ctx.actor}: ${note}`;
+  tx.db.run(
+    'UPDATE eq_documents SET resolved=?, version=version+1, updated_at=? WHERE id=?',
+    resolved,
+    tx.clock.now(),
+    cmd.documentId,
+  );
+  tx.audit(
+    cmd.companyId,
+    'Ziddiyyət qəbul edildi',
+    'E-qaimə',
+    cmd.documentId,
+    `${String(r.eq_number)} · ${note}`,
+  );
+  return { id: cmd.documentId };
+}
+
 export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResult {
   tx.company(cmd.companyId);
   const r = document(tx, cmd.companyId, cmd.documentId);
@@ -438,12 +491,18 @@ export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResu
 // ---------------------------------------------------------------------------------------------
 // Queries
 
+/**
+ * A conflict: other amounts came for a known e-qaimə, or it is in the books while DVX no longer
+ * shows it accepted (cancelled, corrected, waiting, unknown).
+ */
+const flagged = (r: Row) =>
+  r.conflict !== '' || (r.state === 'posted' && (r.status as EqStatus) !== 'accepted');
+
 export function eqBucket(r: Row, proposal: EqProposal | null): EqBucket {
   const status = r.status as EqStatus;
-  if (r.conflict !== '') return 'conflict';
-  // In the books, but DVX no longer shows it accepted (cancelled, corrected, waiting, unknown).
-  if (r.state === 'posted')
-    return status !== 'accepted' ? 'conflict' : r.posted_by === 'auto' ? 'auto' : 'posted';
+  // Until the accountant settles it (QERARLAR 2026-10-16 §2).
+  if (flagged(r) && r.resolved === '') return 'conflict';
+  if (r.state === 'posted') return r.posted_by === 'auto' ? 'auto' : 'posted';
   if (r.state === 'ignored') return 'ignored';
   if (status !== 'accepted') return 'dvx';
   return proposal?.state === 'unknown' ? 'unknown' : 'proposal';
@@ -473,6 +532,7 @@ function view(r: Row, invoiceNumber: string, ctx: EqContext | null): EqDocumentV
     invoiceId: r.invoice_id ? String(r.invoice_id) : '',
     invoiceNumber,
     conflict: String(r.conflict),
+    resolved: String(r.resolved),
     reason: String(r.reason),
     autoNote: String(r.auto_note),
     proposal,
@@ -639,9 +699,16 @@ export function eqReconcile(
       )
       .map((r) => `${String(r.tax_id)}|${String(r.ref_key)}`),
   );
+  // A correction belongs to the period of the e-qaimə it corrects (QERARLAR 2026-10-16 §1): the
+  // books change that invoice on its own date, so DVX's side is counted there too.
   for (const d of db.all(
-    `SELECT id, eq_number, eq_key, date, name, tax_id, net, vat, total, status, kind, state FROM eq_documents
-     WHERE company_id=? AND direction=? AND date BETWEEN ? AND ? ORDER BY date, eq_key`,
+    `SELECT d.id, d.eq_number, d.eq_key, d.date, d.name, d.tax_id, d.net, d.vat, d.total, d.status, d.kind,
+       d.state, COALESCE(o.date, d.date) AS period
+     FROM eq_documents d
+       LEFT JOIN eq_documents o ON d.kind='correction' AND d.ref_key<>'' AND o.company_id=d.company_id
+         AND o.direction=d.direction AND o.tax_id=d.tax_id AND o.eq_key=d.ref_key
+     WHERE d.company_id=? AND d.direction=? AND COALESCE(o.date, d.date) BETWEEN ? AND ?
+     ORDER BY d.date, d.eq_key`,
     companyId,
     direction,
     from,
@@ -649,7 +716,7 @@ export function eqReconcile(
   )) {
     if (d.status !== 'accepted' || (d.kind !== 'main' && d.kind !== 'correction')) continue;
     if (d.kind === 'main' && replaced.has(`${String(d.tax_id)}|${String(d.eq_key)}`)) continue;
-    const m = month(String(d.date));
+    const m = month(String(d.period));
     m.dc++;
     m.dn += d.net as bigint;
     m.dv += d.vat as bigint;
@@ -680,9 +747,13 @@ export function eqReconcile(
     to,
   )) {
     const vat = invoiceVat(String(i.lines));
-    const m = month(String(i.date));
-    m.bc++;
-    m.bv += vat;
+    // Only invoices that carry an e-qaimə are compared with DVX (QERARLAR 2026-10-16 §4): sales to
+    // individuals have none; numberless invoices are listed apart.
+    if (i.bound === 1n || i.eq_key) {
+      const m = month(String(i.date));
+      m.bc++;
+      m.bv += vat;
+    }
     if (i.bound === 1n) continue;
     const row = {
       id: String(i.id),
@@ -728,17 +799,19 @@ export function eqWarnings(
     const box = direction === 'purchase' ? 'Alınan' : 'Göndərilən';
     const push = (kind: HomeView['warnings'][number]['kind'], text: string) =>
       out.push({ kind, text: `${box} e-qaimələr: ${text}`, account: '', sk: [], eq: direction });
+    // Every open conflict, also in a closed period (QERARLAR 2026-10-16 §2): there it is settled
+    // by a reversal in the open period and "Qəbul et" in the box.
     const conflicts = db.get(
-      `SELECT COUNT(*) AS n FROM eq_documents WHERE company_id=? AND direction=? AND date>=?
-         AND (conflict<>'' OR (state='posted' AND status<>'accepted'))`,
+      `SELECT COUNT(*) AS n, COALESCE(SUM(date<=?),0) AS closed FROM eq_documents WHERE company_id=? AND direction=?
+         AND resolved='' AND (conflict<>'' OR (state='posted' AND status<>'accepted'))`,
+      closed,
       companyId,
       direction,
-      from,
-    )!.n as bigint;
-    if (conflicts)
+    )!;
+    if (conflicts.n)
       push(
         'eqConflict',
-        `${conflicts} ziddiyyət — uçotda var, amma DVX-də ləğv, düzəliş edilib və ya təsdiqlənmiş görünmür, ya da fərqli məbləğlə gəlib.`,
+        `${String(conflicts.n)} ziddiyyət — uçotda var, amma DVX-də ləğv, düzəliş edilib və ya təsdiqlənmiş görünmür, ya da fərqli məbləğlə gəlib${conflicts.closed ? ` (${String(conflicts.closed)} bağlı dövrdə: açıq dövrdə əks yazılışla düzəldib qutuda “Qəbul et”)` : ''}.`,
       );
     const waiting = db.get(
       `SELECT COUNT(*) AS n, COALESCE(SUM(vat),0) AS vat FROM eq_documents WHERE company_id=? AND direction=?

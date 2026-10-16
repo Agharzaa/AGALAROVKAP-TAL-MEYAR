@@ -836,6 +836,7 @@ test('DVX e-qaimə → invoice: book a proposal by hand, learn the map, switch i
   const eq = (number: string) =>
     h.run({
       type: 'eqaime.import',
+      directionConfirmed: true,
       companyId: s.companyId,
       direction: 'purchase',
       report: 'goods',
@@ -967,6 +968,7 @@ test('DVX statuses: cancel the invoice of a cancelled e-qaimə, apply a correcti
     const vat = (Number(quantity) * 0.9).toFixed(2);
     return h.run({
       type: 'eqaime.import',
+      directionConfirmed: true,
       companyId: s.companyId,
       direction: 'purchase',
       report: 'goods',

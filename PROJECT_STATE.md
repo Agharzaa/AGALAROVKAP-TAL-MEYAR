@@ -276,7 +276,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur, `53623fc..50bd7cd` (4a–
 
 **Davranış dəyişikliyi (2-ci qüsur):** növü çap etməyən "Mallar üzrə" faylı ilə avtomatik uçot artıq yoxdur — mal e-qaimələrinin avtomatik keçməsi üçün həmin dövrün "Qaimələr üzrə" faylı da yüklənməlidir (dizaynın §3.2-si növü məhz oradan götürür). Real "Mallar üzrə" faylı növ sütunu çap edirsə, bu öz-özünə aradan qalxır.
 
-**Açıq suallar (istifadəçi / mühasib qərarı):**
+**Açıq suallar — qərarlaşdırılıb (16.10.2026, istifadəçi tövsiyələri təsdiqlədi; `docs/QERARLAR.md` 2026-10-16) və tətbiq olunub:** testlər `eqaime-book.test.ts` ("2026-10-16 §…"), Electron smoke (50 MB). Aşağıda auditin ilkin mətni:
 
 1. **Düzəlişin ƏDV dövrü tutuşdurmada.** Düzəliş əsas qaiməni onun öz tarixində dəyişir (§5.2), DVX ↔ uçot isə düzəliş e-qaiməsini öz tarixinin ayında sayır, əsası çıxarır. Düzəliş başqa aya düşəndə hər iki ayda ƏDV fərqi və İş masası siqnalı həmişəlik qalır. Tövsiyə: mühasib dizaynın §11 sual 2-sinə cavab verənədək tutuşdurma düzəlişi əsasın ayında saysın (uçotdakı kimi); qərar "düzəliş öz tarixində" olarsa, qaimə tarixi də düzəlişin tarixi olmalıdır.
 2. **Bağlı dövrdəki ziddiyyətlər İş masasında görünmür.** Siqnallar yalnız açıq dövr üçündür; bağlı dövrdə uçotda olan e-qaimə DVX-də ləğv edilsə, bunu yalnız qutunun "Ziddiyyət" tabı göstərir. Səbəb: orada qaimə ləğv olunmur və siqnal həmişəlik qalardı. Tövsiyə: İş masasında bağlı dövr ziddiyyətləri də göstərilsin, qutuda "əks yazılış açıq dövrdə aparıldı — qəbul et" qeydi ilə bağlansın (yeni əmr, audit izi ilə).

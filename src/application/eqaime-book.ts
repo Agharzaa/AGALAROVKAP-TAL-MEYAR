@@ -280,6 +280,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
         invoiceId: inv ? String(inv.id) : '',
         invoiceNumber: inv ? String(inv.number) : '',
         invoiceDate: inv ? String(inv.date) : '',
+        date: String(orig.date),
       };
       if (inv && String(inv.date) <= ctx.closed) {
         reasons.push(
@@ -833,7 +834,7 @@ export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
   }
   tx.db.run(
     `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by='link', auto_note='',
-       conflict=CASE WHEN ?<>'' THEN ? ELSE conflict END, version=version+1, updated_at=? WHERE id=?`,
+       conflict=CASE WHEN ?<>'' THEN ? ELSE conflict END, resolved='', version=version+1, updated_at=? WHERE id=?`,
     cmd.invoiceId,
     conflict,
     conflict,
