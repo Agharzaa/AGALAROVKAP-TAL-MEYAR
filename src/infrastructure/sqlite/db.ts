@@ -22,8 +22,10 @@ export class Db {
         this.raw.exec('PRAGMA busy_timeout=5000; PRAGMA query_only=1;');
         return;
       }
+      // A 64 MB page cache (SQLite's default is 2 MB): a large import (thousands of invoices in
+      // one transaction) keeps its pages in memory instead of spilling them to disk mid-way.
       this.raw.exec(
-        'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;',
+        'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536;',
       );
       this.migrate();
     } catch (error) {
