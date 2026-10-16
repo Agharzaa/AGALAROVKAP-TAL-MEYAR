@@ -1227,3 +1227,42 @@ test('audit: an e-qaimə booked before its kind was known, that turns out a corr
   assert.match(nine.conflict, /Düzəliş qaiməsi/);
   assert.ok(f.home().warnings.some((w) => w.kind === 'eqConflict' && w.eq === 'purchase'));
 });
+
+test('audit: a conflict of a booking goes with the booking; a conflict of DVX’s data stays', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const cancel = (id: string) => {
+    const inv = f.query<InvoiceDetail>({ type: 'invoice', companyId: f.companyId, id });
+    f.exec({
+      type: 'invoice.cancel',
+      companyId: f.companyId,
+      id,
+      version: inv.version,
+      reason: 'Səhv',
+    });
+  };
+  // Linked to an invoice typed by hand with other amounts: a conflict of that booking.
+  const typed = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '99' }],
+    { eqNumber: 'MT1' },
+  );
+  // MT2 came twice from DVX with different amounts: a conflict of DVX's data.
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()]),
+    withGoods('MT2', '2026-09-06', SUPPLIER, [paper10()]),
+  ]);
+  load(f, 'purchase', [
+    withGoods('MT2', '2026-09-06', SUPPLIER, [
+      good('4802', 'Kağız', '10', '90', '900.00', '162.00'),
+    ]),
+  ]);
+  assert.equal(byNumber(f, 'MT1').bucket, 'conflict');
+  cancel(typed.id);
+  const one = byNumber(f, 'MT1');
+  assert.deepEqual([one.state, one.bucket, one.conflict], ['waiting', 'proposal', '']);
+  assert.equal(byNumber(f, 'MT2').bucket, 'conflict');
+});

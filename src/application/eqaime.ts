@@ -27,7 +27,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import type { Tx } from './tx.js';
-import { eqContext, propose, type EqContext } from './eqaime-book.js';
+import { BOOKING_CONFLICT, eqContext, propose, type EqContext } from './eqaime-book.js';
 
 const label = { purchase: 'Gələnlər (alış)', sale: 'Göndərilənlər (satış)' } as const;
 const money = (m: Minor) => formatMinor(m);
@@ -343,7 +343,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       // Booked from the goods report alone, as an ordinary e-qaimə: DVX now says it is not one
       // (a correction booked beside its original, a return, an advance, excise or road tax).
       if (old.state === 'posted' && (s.kind !== 'main' || s.excise || s.roadTax)) {
-        const note = `${now.slice(0, 10)} · ${fileName}: adi e-qaimə kimi uçota alınıb, DVX-də isə ${s.kindText || s.kind}${s.excise || s.roadTax ? ' (aksiz / yol vergisi ilə)' : ''}`;
+        const note = `${BOOKING_CONFLICT}${now.slice(0, 10)} · ${fileName}: adi e-qaimə kimi uçota alınıb, DVX-də isə ${s.kindText || s.kind}${s.excise || s.roadTax ? ' (aksiz / yol vergisi ilə)' : ''}`;
         tx.db.run(
           "UPDATE eq_documents SET conflict=CASE WHEN conflict='' THEN ? ELSE conflict END WHERE id=?",
           note,

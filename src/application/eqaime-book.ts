@@ -31,6 +31,11 @@ import { loadChart, type Tx } from './tx.js';
 
 /** Days between an e-qaimə and a numberless invoice typed by hand for it. */
 export const LINK_DAYS = 5;
+/**
+ * A conflict of the booking (not of DVX's data) starts so: it goes when that invoice is cancelled,
+ * while a conflict between two DVX files stays.
+ */
+export const BOOKING_CONFLICT = 'Uçot: ';
 
 type Direction = 'sale' | 'purchase';
 const money = (m: Minor) => formatMinor(m);
@@ -746,9 +751,12 @@ export function releaseEq(tx: Tx, companyId: string, invoiceId: string): void {
   tx.db.run(
     `UPDATE eq_documents SET state=?, reason=?, invoice_id=NULL, posted_by='', used_maps='',
        manual_only=CASE WHEN posted_by='auto' THEN 1 ELSE manual_only END,
+       conflict=CASE WHEN substr(conflict,1,?)=? THEN '' ELSE conflict END,
        version=version+1, updated_at=? WHERE id=?`,
     cancelled ? 'ignored' : 'waiting',
     cancelled ? 'DVX: e-qaimə ləğv edilib; uçotdakı qaimə ləğv edildi' : '',
+    BOOKING_CONFLICT.length,
+    BOOKING_CONFLICT,
     tx.clock.now(),
     String(doc.id),
   );
@@ -809,7 +817,8 @@ export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
     if (why.identity)
       throw new DomainError(`Qaimə e-qaiməyə uyğun deyil: ${why.text}.`, 'invoiceId');
     // The same number with other amounts: linked (the e-qaimə is in the books), flagged.
-    if (why.text) conflict = `${String(inv.number)} qaiməsi ilə fərq: ${why.text}`;
+    if (why.text)
+      conflict = `${BOOKING_CONFLICT}${String(inv.number)} qaiməsi ilə fərq: ${why.text}`;
   }
   tx.db.run(
     `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by='link', auto_note='',
