@@ -429,12 +429,9 @@ export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResu
 export function eqBucket(r: Row, proposal: EqProposal | null): EqBucket {
   const status = r.status as EqStatus;
   if (r.conflict !== '') return 'conflict';
+  // In the books, but DVX no longer shows it accepted (cancelled, corrected, waiting, unknown).
   if (r.state === 'posted')
-    return dvxReason[status] || status === 'corrected'
-      ? 'conflict'
-      : r.posted_by === 'auto'
-        ? 'auto'
-        : 'posted';
+    return status !== 'accepted' ? 'conflict' : r.posted_by === 'auto' ? 'auto' : 'posted';
   if (r.state === 'ignored') return 'ignored';
   if (status !== 'accepted') return 'dvx';
   return proposal?.state === 'unknown' ? 'unknown' : 'proposal';
@@ -721,7 +718,7 @@ export function eqWarnings(
       out.push({ kind, text: `${box} e-qaimələr: ${text}`, account: '', sk: [], eq: direction });
     const conflicts = db.get(
       `SELECT COUNT(*) AS n FROM eq_documents WHERE company_id=? AND direction=? AND date>=?
-         AND (conflict<>'' OR (state='posted' AND status IN('cancelled','rejected','corrected')))`,
+         AND (conflict<>'' OR (state='posted' AND status<>'accepted'))`,
       companyId,
       direction,
       from,
@@ -729,7 +726,7 @@ export function eqWarnings(
     if (conflicts)
       push(
         'eqConflict',
-        `${conflicts} ziddiyyət — DVX-də ləğv və ya düzəliş edilib, amma uçotda var, ya da fərqli məbləğlə gəlib.`,
+        `${conflicts} ziddiyyət — uçotda var, amma DVX-də ləğv, düzəliş edilib və ya təsdiqlənmiş görünmür, ya da fərqli məbləğlə gəlib.`,
       );
     const waiting = db.get(
       `SELECT COUNT(*) AS n, COALESCE(SUM(vat),0) AS vat FROM eq_documents WHERE company_id=? AND direction=?

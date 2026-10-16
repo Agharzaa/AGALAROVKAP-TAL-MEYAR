@@ -1079,3 +1079,22 @@ test('audit: a correction applies to a linked invoice dated a few days from DVX,
   // A later correction of the same invoice (its memo) is not refused for the date.
   assert.equal(apply('Kağız, düzəlişdən sonra').version, 3);
 });
+
+test('audit: a booked e-qaimə that DVX no longer shows as accepted is a conflict', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: SUPPLIER, dvxCode: '4802', productId: s.paper });
+  const e = (n: string, status: string) => ({
+    ...withGoods(n, '2026-09-05', SUPPLIER, [paper10()]),
+    status,
+  });
+  assert.equal(load(f, 'purchase', [e('MT1', 'Təsdiqləndi'), e('MT2', 'Təsdiqləndi')]).posted, 2);
+  // §5.1: in the books, but DVX shows it waiting again, or in a status Meyar does not know.
+  load(f, 'purchase', [e('MT1', 'Təsdiq gözləyir'), e('MT2', 'Arxivdə')]);
+  assert.deepEqual(
+    [byNumber(f, 'MT1').bucket, byNumber(f, 'MT2').bucket],
+    ['conflict', 'conflict'],
+  );
+  const signal = f.home().warnings.find((w) => w.kind === 'eqConflict' && w.eq === 'purchase');
+  assert.match(signal!.text, /^Alınan e-qaimələr: 2 ziddiyyət/);
+});
