@@ -17,6 +17,13 @@ export interface MeyarBridge {
   zoom?(step?: 'in' | 'out' | 'reset'): Promise<number>;
   /** Called when the zoom changes (keyboard, mouse wheel or the status bar). */
   onZoom?(listener: (factor: number) => void): () => void;
+  /** Opens the official DVX cabinet (stage 4d); its Excel exports come back via onDvxFile. */
+  dvxOpen?(direction: 'sale' | 'purchase'): Promise<Outcome<null>>;
+  onDvxFile?(
+    listener: (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void,
+  ): () => void;
+  /** A download or address the cabinet window refused. */
+  onDvxRefused?(listener: (message: string) => void): () => void;
   /** Called after any successful change, with the affected company. */
   onChanged(listener: (companyId: string) => void): () => void;
 }

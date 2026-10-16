@@ -5,7 +5,7 @@
  * book by themselves, the rest open as an invoice prefilled from the e-qaimə (Enter, then
  * Ctrl+Enter), an invoice typed by hand is linked instead of booked twice.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload } from '../icons';
 import { readEqTable, type EqReadResult } from '../../domain/eqaime';
 import type {
@@ -49,6 +49,8 @@ const statusLabel: Record<EqDocumentView['status'], string> = {
 interface Preview {
   fileName: string;
   hash: string;
+  /** file: chosen on disk; portal: exported in the DVX cabinet window. */
+  source: 'file' | 'portal';
   read: EqReadResult;
 }
 
@@ -88,17 +90,42 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   );
 
   async function choose(f: File) {
+    await read(f.name, new Uint8Array(await f.arrayBuffer()), 'file');
+  }
+  async function read(name: string, bytes: Uint8Array, source: Preview['source']) {
     setReadError('');
     setMessage('');
     m.clear();
     try {
-      const bytes = new Uint8Array(await f.arrayBuffer());
-      const read = readEqTable(await readSheet(f.name, bytes), f.name);
+      const read = readEqTable(await readSheet(name, bytes), name);
       if (!read.documents.length)
         setReadError(read.problems[0]?.message ?? 'Faylda e-qaimə tapılmadı.');
-      else setPreview({ fileName: f.name, hash: await sha256(bytes), read });
+      else setPreview({ fileName: name, hash: await sha256(bytes), read, source });
     } catch (e) {
       setReadError(e instanceof SheetError ? e.message : `Fayl oxunmadı: ${(e as Error).message}`);
+    }
+  }
+
+  // Exports made in the DVX cabinet window come to the box of their direction, as a preview.
+  useEffect(
+    () =>
+      api.onDvxFile((f) => {
+        if (f.direction === direction) void read(f.name, f.bytes, 'portal');
+      }),
+    [direction], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  useEffect(() => api.onDvxRefused((message) => setReadError(message)), []);
+  async function openCabinet() {
+    setReadError('');
+    try {
+      await api.dvxOpen(direction);
+      setMessage(
+        'DVX kabineti ayrıca pəncərədə açıldı. Daxil olun (ASAN İmza, SİMA və ya PIN — Meyar onları görmür), e-qaimələr → ' +
+          (direction === 'purchase' ? 'Gələnlər' : 'Göndərilənlər') +
+          ' → dövr → Excel-ə ixrac. Fayl burada ilkin baxışda görünəcək. Pəncərəni bağlayanda sessiya silinir.',
+      );
+    } catch (e) {
+      setReadError((e as Error).message);
     }
   }
 
@@ -110,7 +137,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       direction,
       ...(preview.read.directionHint ? { fileDirection: preview.read.directionHint } : {}),
       report: preview.read.report,
-      source: 'file',
+      source: preview.source,
       fileName: preview.fileName,
       fileHash: preview.hash,
       documents: preview.read.documents,
@@ -387,6 +414,11 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           <button type="button" className="button primary" onClick={() => file.current?.click()}>
             <Upload size={15} /> DVX faylını yüklə
           </button>
+          {api.hasDvx && (
+            <button type="button" className="button secondary" onClick={() => void openCabinet()}>
+              DVX kabinetini aç
+            </button>
+          )}
         </>
       }
       notices={
@@ -404,7 +436,10 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     >
       {preview && p && (
         <section className="history statement-preview" aria-label="İlkin baxış">
-          <h2>İlkin baxış · {preview.fileName}</h2>
+          <h2>
+            İlkin baxış · {preview.fileName}
+            {preview.source === 'portal' && ' (DVX kabinetindən)'}
+          </h2>
           <ul>
             <li>
               Hesabat:{' '}

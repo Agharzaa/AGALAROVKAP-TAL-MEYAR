@@ -68,4 +68,22 @@ export const api = {
   onChanged(listener: (companyId: string) => void): () => void {
     return bridge().onChanged(listener);
   },
+  /** The DVX cabinet window exists only in the desktop app. */
+  get hasDvx(): boolean {
+    return !!(override ?? window.meyar)?.dvxOpen;
+  },
+  async dvxOpen(direction: 'sale' | 'purchase'): Promise<void> {
+    const b = bridge();
+    if (b.dvxOpen) unwrap(await b.dvxOpen(direction));
+  },
+  onDvxFile(
+    listener: (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void,
+  ): () => void {
+    const b = override ?? window.meyar;
+    return b?.onDvxFile ? b.onDvxFile(listener) : () => {};
+  },
+  onDvxRefused(listener: (message: string) => void): () => void {
+    const b = override ?? window.meyar;
+    return b?.onDvxRefused ? b.onDvxRefused(listener) : () => {};
+  },
 };

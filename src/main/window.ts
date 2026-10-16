@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Outcome } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
+import { openDvxPortal } from './dvx-portal.js';
 
 export interface WindowOptions {
   ledger: LedgerClient;
@@ -164,6 +165,15 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
         error: { message: (error as Error).message, code: 'save' },
       } satisfies Outcome<string | null>;
     }
+  });
+  // The DVX cabinet (stage 4d): the user signs in there; exports come back to the e-qaimə box.
+  handle('meyar:dvx-open', (_e, arg) => {
+    const direction = arg === 'sale' ? 'sale' : 'purchase';
+    openDvxPortal(window, direction, {
+      onFile: (file) => !window.isDestroyed() && contents.send('meyar:dvx-file', file),
+      onRefused: (message) => !window.isDestroyed() && contents.send('meyar:dvx-refused', message),
+    });
+    return { ok: true, value: null } satisfies Outcome<null>;
   });
   let dirty = false;
   const onDirty = (event: Electron.IpcMainEvent, value: unknown) => {

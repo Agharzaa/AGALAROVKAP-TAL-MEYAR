@@ -15,6 +15,11 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
   const saved: { name: string; bytes: Uint8Array }[] = [];
   let release: (() => void) | undefined;
   let dirty = false;
+  // The DVX cabinet window: what the app asked to open, and a way to hand back an export.
+  const dvxOpened: string[] = [];
+  const dvxListeners = new Set<
+    (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void
+  >();
   const wrap = <T,>(fn: () => T): Outcome<T> => {
     try {
       return { ok: true, value: fn() };
@@ -53,6 +58,14 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     setDirty(value) {
       dirty = value;
     },
+    async dvxOpen(direction) {
+      dvxOpened.push(direction);
+      return { ok: true, value: null };
+    },
+    onDvxFile(listener) {
+      dvxListeners.add(listener);
+      return () => dvxListeners.delete(listener);
+    },
     onChanged(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -74,6 +87,11 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     saved,
     release: () => release?.(),
     dirty: () => dirty,
+    dvxOpened,
+    /** As if the user exported e-qaimələr in the cabinet window. */
+    dvxExport(file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) {
+      for (const l of dvxListeners) l(file);
+    },
     close() {
       setBridge(undefined);
       resetCatalogs();

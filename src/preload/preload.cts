@@ -23,6 +23,28 @@ contextBridge.exposeInMainWorld('meyar', {
     ipcRenderer.on('meyar:zoom', handler);
     return () => ipcRenderer.removeListener('meyar:zoom', handler);
   },
+  dvxOpen: (direction: string) =>
+    ipcRenderer.invoke('meyar:dvx-open', direction === 'sale' ? 'sale' : 'purchase'),
+  onDvxFile: (listener: (file: { direction: string; name: string; bytes: Uint8Array }) => void) => {
+    const handler = (_event: IpcRendererEvent, file: unknown) => {
+      const f = file as { direction?: unknown; name?: unknown; bytes?: unknown };
+      if (
+        (f?.direction === 'sale' || f?.direction === 'purchase') &&
+        typeof f.name === 'string' &&
+        f.bytes instanceof Uint8Array
+      )
+        listener({ direction: f.direction, name: f.name, bytes: f.bytes });
+    };
+    ipcRenderer.on('meyar:dvx-file', handler);
+    return () => ipcRenderer.removeListener('meyar:dvx-file', handler);
+  },
+  onDvxRefused: (listener: (message: string) => void) => {
+    const handler = (_event: IpcRendererEvent, message: unknown) => {
+      if (typeof message === 'string') listener(message);
+    };
+    ipcRenderer.on('meyar:dvx-refused', handler);
+    return () => ipcRenderer.removeListener('meyar:dvx-refused', handler);
+  },
   onChanged: (listener: (companyId: string) => void) => {
     const handler = (_event: IpcRendererEvent, companyId: unknown) => {
       if (typeof companyId === 'string') listener(companyId);

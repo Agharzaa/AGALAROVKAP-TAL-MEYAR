@@ -1048,3 +1048,46 @@ test('DVX statuses: cancel the invoice of a cancelled e-qaimə, apply a correcti
     h.close();
   }
 });
+
+test('DVX cabinet: the box opens it; an export made there arrives as a preview and loads as from a file', async () => {
+  const h = harness();
+  seed(h);
+  const csv = [
+    'E-qaimələr — Gələnlər',
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;118,00;100,00;Təsdiqləndi',
+  ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(await page.findByRole('button', { name: 'DVX kabinetini aç' }));
+    await page.findByText(/DVX kabineti ayrıca pəncərədə açıldı/);
+    assert.deepEqual(h.dvxOpened, ['purchase']);
+    // A sales export does not land in the purchases box.
+    h.dvxExport({ direction: 'sale', name: 'x.csv', bytes: new TextEncoder().encode(csv) });
+    h.dvxExport({
+      direction: 'purchase',
+      name: 'gelenler.csv',
+      bytes: new TextEncoder().encode(csv),
+    });
+    const preview = await page.findByRole('region', { name: 'İlkin baxış' });
+    assert.match(preview.textContent ?? '', /gelenler\.csv/);
+    await user.click(within(preview).getByRole('button', { name: 'Yüklə' }));
+    await page.findByText(/Yükləndi: yeni 1 e-qaimə/);
+    const imports = h.ledger.query({
+      type: 'eqImports',
+      companyId: (h.ledger.query({ type: 'companies' }) as { id: string }[])[0]!.id,
+      direction: 'purchase',
+    }) as { source: string; fileName: string }[];
+    assert.deepEqual(
+      imports.map((i) => [i.source, i.fileName]),
+      [['portal', 'gelenler.csv']],
+    );
+  } finally {
+    h.close();
+  }
+});

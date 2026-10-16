@@ -117,6 +117,8 @@ async function smoke(window: import('electron').BrowserWindow, out: string) {
     result.integrity = await js(
       `window.meyar.query({ type: 'integrity', companyId: ${JSON.stringify(id)} }).then(r => r.value?.ok)`,
     );
+    if (process.env.MEYAR_SMOKE_DVX)
+      result.dvx = await (await import('./dvx-smoke.js')).dvxSmoke(window);
     window.webContents.reload();
     await new Promise((r) => setTimeout(r, 2500));
     await writeFile(

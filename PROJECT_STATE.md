@@ -240,6 +240,19 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 110, `npm run test:ui` 15, 
 
 **Fərziyyə (real faylla yoxlanmalıdır):** DVX-in düzəliş e-qaiməsi əsasın tam yeni məzmunudur (fərq deyil) və "Düzəliş edilən qaimə" sütununda əsasın nömrəsini göstərir.
 
+### 4d — DVX kabineti (16.10.2026)
+
+| Sahə                                                                                                                                                                                                                                              | Sübut                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Qutuda "DVX kabinetini aç": rəsmi `https://new.e-taxes.gov.az/etaxes/` ayrıca pəncərədə; istifadəçi özü daxil olur (ASAN İmza, SİMA, istifadəçi kodu + parol + PIN). Pəncərədə preload və Meyar skripti yoxdur, sahələr oxunmur, heç nə saxlanmır | `src/main/dvx-portal.ts`                                                   |
+| Yalnız HTTPS e-taxes.gov.az, asanimza.az, asan.az, sima.az (və alt domenləri); oxşar adlar, http, istifadəçi:parol@ ünvanlar rədd; `window.open` eyni pəncərədə; kənar keçid bloklanır, qutuda mesaj                                              | `tests/domain/dvx-policy.test.ts`, Electron smoke                          |
+| Sessiya yaddaşda (partition `persist:`-siz, hər pəncərəyə yeni); pəncərə bağlananda kukilər, saxlanc və keş silinir                                                                                                                               | Electron smoke: bağlandıqdan sonra 0 kuki                                  |
+| Kabinetin öz "Excel-ə ixrac" endirməsi tutulur: yalnız .xlsx/.xls/.csv, 50 MB-a qədər, kabinetin özündən (blob/data daxil); fayl müvəqqəti fayldan oxunub dərhal silinir və həmin istiqamətin qutusunda adi ilkin baxışa düşür (mənbə "portal")   | Electron smoke (fayl gəldi, .exe rədd, müvəqqəti fayl qalmadı), `tests/ui` |
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 113, `npm run test:ui` 16. Real Electron (`MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`, yerli sınaq serveri e-taxes.gov.az əvəzinə): ok.
+
+**Yoxlanmayıb (yalnız istifadəçi edə bilər):** real e-taxes.gov.az girişi ASAN İmza / SİMA ilə — giriş domenlərinin siyahısı (asanimza.az, asan.az, sima.az) real girişdə dəqiqləşməlidir; kabinetin ixracı köhnə .xls formatındadırsa, oxuyucu onu hələ açmır (istifadəçi .xlsx kimi saxlamalı olacaq) — real faylla yoxlanacaq.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.

@@ -236,7 +236,7 @@ Mühasib təklif və ya naməlum e-qaiməni uçota alanda, yeni seçilən hər s
   → ayrıca pəncərə: https://new.e-taxes.gov.az/etaxes/ (rəsmi səhifə, Meyar heç nə dəyişmir)
   → istifadəçi özü daxil olur: ASAN İmza / SİMA / istifadəçi kodu + parol + PIN
   → e-qaimələr → Gələnlər / Göndərilənlər → dövr → kabinetin "Excel-ə ixrac" düyməsi
-  → Meyar endirməni tutur: fayl diskə yazılmır, yaddaşda §8-in idxal pəncərəsinə verilir
+  → Meyar endirməni tutur: fayl müvəqqəti fayldan oxunub dərhal silinir (Electron yaddaşda endirmə vermir), §8-in idxal pəncərəsinə verilir
       (istiqamət açılışda seçilib və faylla tutuşdurulur, §5.4)
   → "Çıxış" və ya pəncərənin bağlanması sessiyanı tam silir
 ```
@@ -296,28 +296,28 @@ Ağır iş writer worker-də hissə-hissə, irəliləyiş göstəricisi və lə�
 
 ## 9. Qəbul testləri (mərhələ bunlarsız bitmiş sayılmır)
 
-| #   | Ssenari                                                                                                                                                                                | Test                               |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| E1  | Oxuyucu: real (anonimləşdirilmiş) "Qaimələr üzrə" və "Mallar üzrə", Gələnlər və Göndərilənlər; Excel tarix nömrəsi, mətn tarix, vergüllü məbləğ, birləşmiş başlıq hüceyrələri          | `tests/domain`                     |
-| E2  | Eyni faylın ikinci yüklənməsi: 0 yeni, 0 yenilənən, uçotda heç nə dəyişmir; üst-üstə düşən dövr yalnız yeniləri əlavə edir                                                             | `tests/integration/eqaime.test.ts` |
-| E3  | Səhv istiqamət (Gələnlər faylı "Göndərilənlər" kimi), başqa şirkətin faylı — fayl rədd olunur                                                                                          | integration                        |
-| E4  | Eyni nömrə iki fərqli malsatandan — iki ayrı e-qaimə; eyni nömrə eyni malsatandan — bir                                                                                                | integration                        |
-| E5  | Avtomatik: bütün şərtlər ödənir → AQ- yaranır, yazılışlar əl ilə daxil edilən eyni qaimə ilə **qəpikbəqəpik** eynidir (Dt 205 + Dt 241 / Kt 531.01; avans əvəzləşməsi daxil)           | integration                        |
-| E6  | Satış: SQ- yaranır, Dt 211.01 / Kt 601, Dt 604.1 / Kt 521.01, FIFO maya dəyəri — əl ilə versiya ilə eyni                                                                               | integration                        |
-| E7  | Yeni VÖEN → kontragent yaranmır, təklif; bir neçə müqavilə → təklif; "təklif" uyğunluğu → təklif; bərabər iki uyğunluq → təklif                                                        | integration                        |
-| E8  | Məbləğ: sətirlər ≠ yekun, 18% ≠ ƏDV, Meyar qəpik fərqi verir — avtomatik yoxdur, fərq göstərilir                                                                                       | integration, `tests/domain`        |
-| E9  | Yalnız başlıq: xidmət üçün "bütün qaimə" uyğunluğu ilə 18% + azad bazalar iki sətirlə; mal üçün — təklif "mal sətirləri yoxdur"; sonra "Mallar üzrə" faylı sətirləri doldurur          | integration                        |
-| E10 | DVX-də ləğv: uçotda yoxdursa kənara qoyulur; uçotdadırsa ziddiyyət + ləğv təklifi; ödənilmiş qaimə ləğv olunmur                                                                        | integration                        |
-| E11 | Düzəliş e-qaiməsi: əsas uçotda deyil / açıq dövrdə / bağlı dövrdə — §5.2-nin üç halı                                                                                                   | integration                        |
-| E12 | `pending` uçota alınmır; sonrakı faylda `accepted` olanda avtomatik keçir                                                                                                              | integration                        |
-| E13 | Əl ilə daxil edilmiş qaimə: eyni e-qaimə nömrəsi → bağlanır, ikinci qaimə yox; nömrəsiz uyğun qaimə → "nömrəni yaz" təklifi, yazılışlar dəyişmir                                       | integration                        |
-| E14 | Geri qaytarma: avtomatik qaimənin ləğvi sətri təklifə qaytarır, `manual_only`; növbəti "tətbiq et" onu yenidən keçirmir                                                                | integration                        |
-| E15 | Bir pis e-qaimə (bağlı dövr, anbar qalığı çatmır) digərlərini dayandırmır; səbəb sətirdə                                                                                               | integration                        |
-| E16 | Bağlı dövrə yazılmır; DVX sahələri dəyişdirilmir, sətir silinmir (trigger)                                                                                                             | integration                        |
-| E17 | Portal pəncərəsi: e-taxes.gov.az xaricində naviqasiya bloklanır, `window.open` eyni pəncərədə, endirmə idxala düşür və diskə yazılmır, bağlananda sessiya silinir (saxta yerli server) | `tests/main`                       |
-| E18 | UI: fayl yüklənməsi → təklifin Ctrl+Enter ilə uçotu → növbəti sətir; uyğunluğun saxlanması; ziddiyyət siqnalından qaiməyə keçid                                                        | `tests/ui`                         |
-| E19 | Yük: 5 000 e-qaimə / 50 000 mal sətri yüklənir < 10 s (avtomatik uçotla); qutu açılışı < 3 s; DBC/iş masası həddləri dəyişmir                                                          | `tests/perf`                       |
-| E20 | Sxem v10: 0.5.0 bazası yenilənir, bütövlük ok; real Electron smoke                                                                                                                     | `schema` testi, `MEYAR_SMOKE`      |
+| #   | Ssenari                                                                                                                                                                                     | Test                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| E1  | Oxuyucu: real (anonimləşdirilmiş) "Qaimələr üzrə" və "Mallar üzrə", Gələnlər və Göndərilənlər; Excel tarix nömrəsi, mətn tarix, vergüllü məbləğ, birləşmiş başlıq hüceyrələri               | `tests/domain`                            |
+| E2  | Eyni faylın ikinci yüklənməsi: 0 yeni, 0 yenilənən, uçotda heç nə dəyişmir; üst-üstə düşən dövr yalnız yeniləri əlavə edir                                                                  | `tests/integration/eqaime.test.ts`        |
+| E3  | Səhv istiqamət (Gələnlər faylı "Göndərilənlər" kimi), başqa şirkətin faylı — fayl rədd olunur                                                                                               | integration                               |
+| E4  | Eyni nömrə iki fərqli malsatandan — iki ayrı e-qaimə; eyni nömrə eyni malsatandan — bir                                                                                                     | integration                               |
+| E5  | Avtomatik: bütün şərtlər ödənir → AQ- yaranır, yazılışlar əl ilə daxil edilən eyni qaimə ilə **qəpikbəqəpik** eynidir (Dt 205 + Dt 241 / Kt 531.01; avans əvəzləşməsi daxil)                | integration                               |
+| E6  | Satış: SQ- yaranır, Dt 211.01 / Kt 601, Dt 604.1 / Kt 521.01, FIFO maya dəyəri — əl ilə versiya ilə eyni                                                                                    | integration                               |
+| E7  | Yeni VÖEN → kontragent yaranmır, təklif; bir neçə müqavilə → təklif; "təklif" uyğunluğu → təklif; bərabər iki uyğunluq → təklif                                                             | integration                               |
+| E8  | Məbləğ: sətirlər ≠ yekun, 18% ≠ ƏDV, Meyar qəpik fərqi verir — avtomatik yoxdur, fərq göstərilir                                                                                            | integration, `tests/domain`               |
+| E9  | Yalnız başlıq: xidmət üçün "bütün qaimə" uyğunluğu ilə 18% + azad bazalar iki sətirlə; mal üçün — təklif "mal sətirləri yoxdur"; sonra "Mallar üzrə" faylı sətirləri doldurur               | integration                               |
+| E10 | DVX-də ləğv: uçotda yoxdursa kənara qoyulur; uçotdadırsa ziddiyyət + ləğv təklifi; ödənilmiş qaimə ləğv olunmur                                                                             | integration                               |
+| E11 | Düzəliş e-qaiməsi: əsas uçotda deyil / açıq dövrdə / bağlı dövrdə — §5.2-nin üç halı                                                                                                        | integration                               |
+| E12 | `pending` uçota alınmır; sonrakı faylda `accepted` olanda avtomatik keçir                                                                                                                   | integration                               |
+| E13 | Əl ilə daxil edilmiş qaimə: eyni e-qaimə nömrəsi → bağlanır, ikinci qaimə yox; nömrəsiz uyğun qaimə → "nömrəni yaz" təklifi, yazılışlar dəyişmir                                            | integration                               |
+| E14 | Geri qaytarma: avtomatik qaimənin ləğvi sətri təklifə qaytarır, `manual_only`; növbəti "tətbiq et" onu yenidən keçirmir                                                                     | integration                               |
+| E15 | Bir pis e-qaimə (bağlı dövr, anbar qalığı çatmır) digərlərini dayandırmır; səbəb sətirdə                                                                                                    | integration                               |
+| E16 | Bağlı dövrə yazılmır; DVX sahələri dəyişdirilmir, sətir silinmir (trigger)                                                                                                                  | integration                               |
+| E17 | Portal pəncərəsi: e-taxes.gov.az xaricində naviqasiya bloklanır, `window.open` eyni pəncərədə, endirmə idxala düşür, müvəqqəti fayl qalmır, bağlananda sessiya silinir (saxta yerli server) | `tests/domain/dvx-policy`, Electron smoke |
+| E18 | UI: fayl yüklənməsi → təklifin Ctrl+Enter ilə uçotu → növbəti sətir; uyğunluğun saxlanması; ziddiyyət siqnalından qaiməyə keçid                                                             | `tests/ui`                                |
+| E19 | Yük: 5 000 e-qaimə / 50 000 mal sətri yüklənir < 10 s (avtomatik uçotla); qutu açılışı < 3 s; DBC/iş masası həddləri dəyişmir                                                               | `tests/perf`                              |
+| E20 | Sxem v10: 0.5.0 bazası yenilənir, bütövlük ok; real Electron smoke                                                                                                                          | `schema` testi, `MEYAR_SMOKE`             |
 
 **Audit:** işi yazmayan ayrıca yoxlayıcı ən azı 2 tur keçir; hər qüsur əvvəl uğursuz reqressiya testi (`audit:`), sonra düzəliş.
 
@@ -328,7 +328,7 @@ Hər addım ayrıca commit-dir və `npm run typecheck && npm test && npm run tes
 1. **4a — İdxal və qutu.** ✅ Hazır (15.10.2026; real DVX faylı ilə hələ yoxlanmayıb — sintetik formatlar). Sxem v10 (`eq_imports`, `eq_documents`, `eq_status_history`, `eq_product_map`, `invoices.origin / eq_document_id`), oxuyucu, `eqaime.import`, istiqamət qoruması, dublikat və status yeniləməsi, qutu pəncərəsi (avtomatik uçotsuz). Testlər E1–E4, E12 (status hissəsi), E16, E19 (idxal), E20.
 2. **4b — Uçot.** ✅ Hazır (15.10.2026). Dəqiqləşmələr: `invoice.setEq` əvəzinə `eqaime.link` (nömrəsiz qaiməyə nömrə yazır, yazılışlara toxunmur); bərabər dəqiqlikdə iki uyğunluq ola bilmir (hər dəqiqlik xəritənin unikal açarıdır); "istənilən kontragent" uyğunluğu yalnız DVX kodu ilə (ad təkcə kifayət deyil); qaimə e-qaiməyə bağlananda tarix, VÖEN, nömrə, cəmi və ƏDV DVX ilə eyni olmalıdır. E-qaimədən qaimə forması, kontragent / müqavilə həlli, məbləğ yoxlaması, əl ilə qaimə ilə uyğunlaşdırma, uyğunluq xəritəsi və kitabçası, avtomatik rejim, geri qaytarma. Testlər E5–E9, E13–E15, E18.
 3. **4c — DVX statusları və tutuşdurma.** ✅ Hazır (15.10.2026). Dəqiqləşmələr: düzəliş tətbiq olunan qaimənin e-qaimə nömrəsi düzəlişin nömrəsi olur (qaimə həmişə bir "hakim" e-qaiməyə bağlıdır; əsas e-qaimə "əvəz olunub" səbəbi ilə kənardadır); tutuşdurmada düzəlişlə əvəzlənmiş əsas e-qaimə DVX tərəfində sayılmır; "DVX-də yoxdur" yalnız yüklənmiş DVX dövrləri üçün deyilir. Ləğv / imtina / düzəliş, ziddiyyət tabı, İş masası siqnalları, DVX ↔ uçot (sayı və ƏDV). Testlər E10–E12.
-4. **4d — DVX kabineti.** Portal pəncərəsi, endirmənin tutulması, sessiyanın silinməsi. Test E17; real girişi istifadəçi yoxlayır.
+4. **4d — DVX kabineti.** ✅ Hazır (16.10.2026; real ASAN İmza girişi ilə hələ yoxlanmayıb). Dəqiqləşmə: endirilən fayl yaddaşda deyil, dərhal silinən müvəqqəti fayldan keçir. Portal pəncərəsi, endirmənin tutulması, sessiyanın silinməsi. Test E17; real girişi istifadəçi yoxlayır.
 5. **Audit, 0.6.0 buraxılışı, `PROJECT_STATE.md` ("Mərhələ 4") və `QERARLAR.md`-nin yenilənməsi.**
 
 ## 11. Açıq suallar (istifadəçi və mühasib)
