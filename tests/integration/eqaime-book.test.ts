@@ -1002,3 +1002,31 @@ test('audit: an e-qaimə whose kind the goods report does not print is never boo
   assert.equal(load(f, 'purchase', [header('MT2', 'Əsas')], 'invoices').posted, 1);
   assert.equal(byNumber(f, 'MT2').bucket, 'auto');
 });
+
+test('audit: linking writes an e-qaimə number only where no other invoice carries it', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  load(f, 'purchase', [withGoods('MT1', '2026-09-05', SUPPLIER, [paper10()])]);
+  const numberless = f.invoice('purchase', '2026-09-05', s.supplier, s.supplierContract, [
+    { productId: s.paper, quantity: '10', price: '100' },
+  ]);
+  f.invoice(
+    'purchase',
+    '2026-09-06',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '1', price: '5' }],
+    { eqNumber: 'MT1' },
+  );
+  assert.throws(
+    () =>
+      f.exec({
+        type: 'eqaime.link',
+        companyId: f.companyId,
+        documentId: byNumber(f, 'MT1').id,
+        invoiceId: numberless.id,
+      }),
+    /MT1.*AQ-000002/,
+  );
+  assert.equal(f.db.get('SELECT eq_key FROM invoices WHERE id=?', numberless.id)!.eq_key, '');
+});

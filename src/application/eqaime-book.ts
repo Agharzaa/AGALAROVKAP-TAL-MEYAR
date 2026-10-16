@@ -774,6 +774,22 @@ export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
     const probe: Row = { ...inv, eq_key: String(doc.eq_key), eq_number: String(doc.eq_number) };
     const why = mismatch(tx, cmd.companyId, doc, probe, LINK_DAYS);
     if (why) throw new DomainError(`Qaimə e-qaiməyə uyğun deyil: ${why}.`, 'invoiceId');
+    // The number is booked once (as in invoice.save): not when another invoice carries it.
+    const sale = inv.direction === 'sale';
+    const dup = tx.db.get(
+      `SELECT number FROM invoices WHERE company_id=? AND direction=? AND eq_key=? AND eq_key<>''
+         AND status='posted'${sale ? '' : ' AND partner_id=?'}`,
+      cmd.companyId,
+      String(inv.direction),
+      String(doc.eq_key),
+      ...(sale ? [] : [String(inv.partner_id)]),
+    );
+    if (dup)
+      throw new DomainError(
+        `E-qaimə ${String(doc.eq_number)} artıq ${String(dup.number)} qaiməsində yazılıb: həmin qaiməni bağlayın.`,
+        'invoiceId',
+        'conflict',
+      );
     tx.db.run(
       'UPDATE invoices SET eq_number=?, eq_key=? WHERE id=?',
       String(doc.eq_number),
