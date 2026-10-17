@@ -44,7 +44,6 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       ['Satılmış malların maya dəyəri', 'cogs'],
     ],
   ],
-  ['cashbox', ['Əsas kassa']],
   ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],
   ['cashFlowItem', CASH_FLOW_ITEMS],
 ];
@@ -88,6 +87,11 @@ export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): Command
         role,
       );
     }
+  tx.db.run(
+    "INSERT INTO cashboxes(id,company_id,name,account,currency) VALUES(?,?,'Əsas kassa','221.01','AZN')",
+    tx.id(),
+    id,
+  );
   tx.audit(id, 'Yaradıldı', 'Şirkət', id, `${name} · VÖEN ${taxId}`);
   return { id };
 }
@@ -389,6 +393,53 @@ export function saveBankAccount(tx: Tx, cmd: CommandOf<'bankAccount.save'>): Com
   );
 }
 
+/** A cashbox is bound to one 221 account and its currency (221.04: a currency cashbox). */
+export function saveCashbox(tx: Tx, cmd: CommandOf<'cashbox.save'>): CommandResult {
+  tx.company(cmd.companyId);
+  const name = parseText(cmd.name, 'Ad', 160);
+  const same = tx.db.get(
+    'SELECT id FROM cashboxes WHERE company_id=? AND name=?',
+    cmd.companyId,
+    name,
+  );
+  if (same && same.id !== cmd.id)
+    throw new DomainError('Bu adla kassa artıq var.', 'name', 'conflict');
+  const currency = currencyCode(cmd.currency, 'currency');
+  const account = tx.chart(cmd.companyId).require(cmd.account, 'account');
+  if (!account.subkonto.includes('cashbox'))
+    throw new DomainError(`${account.code} hesabında "Kassa" subkontosu yoxdur.`, 'account');
+  if (account.currency !== (currency !== 'AZN'))
+    throw new DomainError(
+      currency === 'AZN'
+        ? `${account.code} valyuta kassasıdır; manat kassası üçün 221.01 seçin.`
+        : `${currency} kassası valyuta kassasına (221.04) bağlanmalıdır.`,
+      'account',
+    );
+  if (cmd.id) {
+    const used = tx.db.get(
+      'SELECT 1 AS x FROM registers WHERE company_id=? AND s1=? AND (debit<>0 OR credit<>0) LIMIT 1',
+      cmd.companyId,
+      cmd.id,
+    );
+    const row = tx.db.get(
+      'SELECT account,currency FROM cashboxes WHERE company_id=? AND id=?',
+      cmd.companyId,
+      cmd.id,
+    );
+    if (used && row && (row.account !== account.code || row.currency !== currency))
+      throw new DomainError('Hərəkəti olan kassanın hesabı və valyutası dəyişdirilmir.', 'account');
+  }
+  return saveRow(
+    tx,
+    'cashboxes',
+    'Kassa',
+    cmd.companyId,
+    cmd,
+    { name, account: account.code, currency, archived: cmd.archived ? 1 : 0 },
+    `${name} · ${account.code} · ${currency}${cmd.archived ? ' · arxiv' : ''}`,
+  );
+}
+
 export function saveProduct(tx: Tx, cmd: CommandOf<'product.save'>): CommandResult {
   tx.company(cmd.companyId);
   const name = parseText(cmd.name, 'Adı', 240);
@@ -474,7 +525,6 @@ const itemLabels = {
   paymentKind: 'Ödəniş növü',
   fund: 'Fond',
   capitalChange: 'Kapitalda dəyişiklik növü',
-  cashbox: 'Kassa',
   productGroup: 'Nomenklatura qrupu',
   cashFlowItem: 'Pul vəsaitlərinin hərəkəti maddəsi',
 } as const;

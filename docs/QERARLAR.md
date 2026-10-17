@@ -308,3 +308,9 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 10. **Kassa orderləri** standart forma ilə, PDF-ə çap.
 11. **İdarə paneli** göstəriciləri: gəlir, mənfəət, pul (bank + kassa), debitor, kreditor, ödənilməli ƏDV, gözləyən e-qaimələr; 12 ayın dinamikası.
 12. **Valyuta kassası** (221.04) daxildir.
+
+### İCRADA DƏQİQLƏŞDİ (5a, 0.6.5)
+
+- Kassa orderi qaiməni **bütöv** bağlayır: kassada ƏDV depoziti yoxdur, ona görə ƏDV / əsas hissə bölgüsü (bank sənədindəki kimi) tətbiq olunmur.
+- Köçürülən kassanın hesabı onun ən çox işləndiyi 221 hesabıdır (işlənməyibsə 221.01); valyutası 221.04-dəki yazılışlardan götürülür. Kassa, bank hesabı kimi, bir hesaba bağlıdır: başqa 221 hesabında bu kassa ilə yazılış saxlanmır.
+- Mənfi qalıq yoxlaması yalnız kassa orderlərinə tətbiq olunur; əl ilə əməliyyatla 221-də yaranan mənfi qalıq İş masasında "Mənfi pul qalığı" kimi göstərilir (ay bağlanışında bloklayır — §8).

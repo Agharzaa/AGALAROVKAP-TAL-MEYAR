@@ -27,6 +27,17 @@ export const querySchema = z.discriminatedUnion('type', [
     bankAccountId: id.optional(),
   }),
   z.object({ type: z.literal('bankDocument'), companyId: id, id }),
+  z.object({
+    type: z.literal('cashDocuments'),
+    companyId: id,
+    from: date,
+    to: date,
+    /** Only orders of this cashbox; all when omitted. */
+    cashboxId: id.optional(),
+  }),
+  z.object({ type: z.literal('cashDocument'), companyId: id, id }),
+  /** Kassa kitabı: one cashbox, day by day. */
+  z.object({ type: z.literal('cashBook'), companyId: id, cashboxId: id, from: date, to: date }),
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
   z.object({ type: z.literal('statement'), companyId: id, id }),
   z.object({ type: z.literal('statementLine'), companyId: id, id }),
@@ -143,6 +154,15 @@ export interface BankAccountView {
   name: string;
   archived: boolean;
 }
+export interface CashboxView {
+  id: string;
+  version: number;
+  name: string;
+  /** 221.01 / 221.02 / 221.04 */
+  account: string;
+  currency: string;
+  archived: boolean;
+}
 export interface ProductView {
   id: string;
   version: number;
@@ -168,7 +188,6 @@ export type ItemKind =
   | 'paymentKind'
   | 'fund'
   | 'capitalChange'
-  | 'cashbox'
   | 'productGroup'
   | 'cashFlowItem';
 export interface ItemView {
@@ -186,6 +205,7 @@ export interface Catalog {
   partners: PartnerView[];
   contracts: ContractView[];
   bankAccounts: BankAccountView[];
+  cashboxes: CashboxView[];
   products: ProductView[];
   employees: EmployeeView[];
   items: ItemView[];
@@ -306,6 +326,77 @@ export interface BankDocumentSummary {
   /** Counter accounts of the lines, e.g. "211.01, 543.01". */
   accounts: string;
   status: 'posted' | 'cancelled';
+}
+export interface CashDocumentSummary {
+  id: string;
+  version: number;
+  direction: 'in' | 'out';
+  number: string;
+  date: string;
+  cashboxId: string;
+  cashbox: string;
+  /** Ledger account of the cashbox (221.01 / 221.02 / 221.04). */
+  account: string;
+  currency: string;
+  amount: string;
+  amountAzn: string;
+  counterpartyName: string;
+  basis: string;
+  attachment: string;
+  /** Counter accounts of the lines, e.g. "211.01, 543.01". */
+  accounts: string;
+  status: 'posted' | 'cancelled';
+}
+export interface CashDocumentDetail extends CashDocumentSummary {
+  rate: string;
+  lines: BankLineView[];
+  /** The sum in words for the printed order ("Yüz iyirmi manat 50 qəpik"). */
+  amountWords: string;
+  postings: PostingView[];
+  history: { version: number; status: string; at: string; actor: string }[];
+}
+/** One movement of a cashbox in the cash book. */
+export interface CashBookLine {
+  date: string;
+  number: string;
+  /** cash: an order (opens it); other journal sources are shown as they are. */
+  sourceType: string;
+  sourceId: string;
+  direction: 'in' | 'out' | '';
+  counterparty: string;
+  /** Counter account(s) of the movement. */
+  account: string;
+  memo: string;
+  income: string;
+  expense: string;
+  /** In the cashbox currency for a currency cashbox, else empty. */
+  incomeCur: string;
+  expenseCur: string;
+}
+export interface CashBookDay {
+  date: string;
+  opening: string;
+  lines: CashBookLine[];
+  income: string;
+  expense: string;
+  closing: string;
+  openingCur: string;
+  closingCur: string;
+}
+export interface CashBookView {
+  cashboxId: string;
+  cashbox: string;
+  account: string;
+  currency: string;
+  opening: string;
+  openingCur: string;
+  income: string;
+  expense: string;
+  closing: string;
+  closingCur: string;
+  days: CashBookDay[];
+  /** More than the book shows: narrow the period. */
+  truncated: boolean;
 }
 /** The other half of a VAT deposit pair and the 18/118 check of the whole payment. */
 export interface BankPairView {
@@ -530,7 +621,7 @@ export interface AccountCard {
 
 /** A document of any kind on the start page ("Son sənədlər"). */
 export interface RecentDocument {
-  kind: 'operation' | 'sale' | 'purchase' | 'bankIn' | 'bankOut';
+  kind: 'operation' | 'sale' | 'purchase' | 'bankIn' | 'bankOut' | 'cashIn' | 'cashOut';
   id: string;
   number: string;
   date: string;

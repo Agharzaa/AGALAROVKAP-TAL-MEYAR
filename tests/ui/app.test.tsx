@@ -8,6 +8,9 @@ import App from '../../src/renderer/App';
 import type {
   BankDocumentDetail,
   BankDocumentSummary,
+  CashBookView,
+  CashDocumentDetail,
+  CashDocumentSummary,
   Catalog,
   InvoiceSummary,
   StatementView,
@@ -445,6 +448,122 @@ test('bank receipt: keyboard entry, matched to the open invoice, the rest is an 
       ],
     );
     assert.equal(doc.purpose, 'SQ-000001 üzrə');
+  } finally {
+    h.close();
+  }
+});
+
+test('cash order: template, keyboard entry, posting, cash book, a payment beyond the cash refused', async () => {
+  const h = harness();
+  const s = seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Kassa mədaxili' })[0]!);
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    // The company's only cashbox is chosen already.
+    assert.match(
+      (editor.getByRole('combobox', { name: 'Kassa' }) as HTMLInputElement).value,
+      /221.01 · Əsas kassa/,
+    );
+    await user.selectOptions(
+      editor.getByRole('combobox', { name: 'Əməliyyat növü' }),
+      'Nizamnamə kapitalına qoyuluş',
+    );
+    assert.equal(
+      (editor.getByRole('combobox', { name: 'Sətir 1 hesab' }) as HTMLInputElement).value.split(
+        ' ',
+      )[0],
+      '301',
+    );
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'Əsas' }) as HTMLInputElement).value,
+      'Nizamnamə kapitalına qoyuluş',
+    );
+    await pick('Sətir 1 301 · Kontragent', 'Ağarza');
+    await pick('Sətir 1 301 · Kapitalda dəyişiklik növü', 'qoyuluş');
+    await user.type(editor.getByRole('textbox', { name: 'Sətir 1 məbləğ' }), '250');
+    await user.type(
+      editor.getByRole('textbox', { name: 'Kimdən qəbul edilib' }),
+      'Ağarza Ağalarov',
+    );
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Order KMO-000001 uçota alındı/);
+    const postings = await editor.findByRole('region', { name: 'Yazılışlar' });
+    await within(postings).findByText('221.01');
+    assert.ok(editor.getByRole('button', { name: 'Çap et' }));
+    const list = h.ledger.query({
+      type: 'cashDocuments',
+      companyId: s.companyId,
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as CashDocumentSummary[];
+    const doc = h.ledger.query({
+      type: 'cashDocument',
+      companyId: s.companyId,
+      id: list[0]!.id,
+    }) as CashDocumentDetail;
+    assert.deepEqual(
+      doc.postings.map((p) => [p.dt.account, p.kt.account, p.amount]),
+      [['221.01', '301', '250.00']],
+    );
+    assert.equal(doc.amountWords, 'İki yüz əlli manat 00 qəpik');
+    // A payment of more than the cash holds is refused with the day it would go negative.
+    const out = h.run({
+      type: 'cash.save',
+      companyId: s.companyId,
+      direction: 'out',
+      number: '',
+      date: doc.date,
+      cashboxId: doc.cashboxId,
+      rate: '',
+      counterpartyName: '',
+      basis: '',
+      attachment: '',
+      lines: [
+        { account: '301', sk: [s.founder, s.capitalIn], amount: '50', cashFlowItem: '', memo: '' },
+      ],
+    });
+    assert.ok(out.id);
+    await assert.rejects(
+      async () =>
+        h.run({
+          type: 'cash.save',
+          companyId: s.companyId,
+          direction: 'out',
+          number: '',
+          date: doc.date,
+          cashboxId: doc.cashboxId,
+          rate: '',
+          counterpartyName: '',
+          basis: '',
+          attachment: '',
+          lines: [
+            {
+              account: '301',
+              sk: [s.founder, s.capitalIn],
+              amount: '500',
+              cashFlowItem: '',
+              memo: '',
+            },
+          ],
+        }),
+      /Kassa qalığı .* mənfi olur/,
+    );
+    const book = h.ledger.query({
+      type: 'cashBook',
+      companyId: s.companyId,
+      cashboxId: doc.cashboxId,
+      from: '2000-01-01',
+      to: '2099-12-31',
+    }) as CashBookView;
+    assert.equal(book.closing, '200.00');
   } finally {
     h.close();
   }

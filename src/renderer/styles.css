@@ -2676,3 +2676,80 @@ button.step:active {
   color: var(--bad);
   background: var(--bad-bg);
 }
+
+/* Cash book (stage 5a): a heading and a total row per day. */
+.cash-book .day-head td {
+  background: var(--desk-2);
+}
+.cash-book .day-foot td {
+  border-bottom: 2px solid var(--line-2);
+  font-weight: 500;
+}
+
+/* Printed forms (cash order, cash book): only the sheet goes to paper / PDF. */
+.print-sheet {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  body > *:not(.print-sheet) {
+    display: none !important;
+  }
+  .print-sheet {
+    display: block;
+    color: #000;
+    background: #fff;
+    font:
+      10.5pt/1.45 'Segoe UI',
+      Arial,
+      sans-serif;
+  }
+  .print-sheet h1 {
+    font-size: 13pt;
+    margin: 6mm 0 2mm;
+  }
+  .print-sheet h2 {
+    font-size: 11pt;
+  }
+  .print-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3mm 0;
+  }
+  .print-sheet th,
+  .print-sheet td {
+    border: 1px solid #000;
+    padding: 1mm 2mm;
+    text-align: left;
+  }
+  .print-sheet .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .print-sheet .link {
+    all: unset;
+  }
+  .print-sheet dl {
+    display: grid;
+    grid-template-columns: 45mm 1fr;
+    gap: 1.5mm 3mm;
+  }
+  .print-sheet dt {
+    font-weight: 600;
+  }
+  .print-sheet dd {
+    margin: 0;
+  }
+  .print-sheet .signatures {
+    margin-top: 8mm;
+    line-height: 2.2;
+  }
+  .print-sheet .receipt {
+    margin-top: 10mm;
+    padding-top: 6mm;
+    border-top: 1px dashed #000;
+  }
+}

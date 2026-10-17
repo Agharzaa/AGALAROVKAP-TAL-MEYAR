@@ -69,6 +69,7 @@ import { InvoiceEditor } from './pages/invoice-editor';
 import { InvoicesPage } from './pages/invoices';
 import { BankDocumentsPage } from './pages/bank-documents';
 import { BankEditor } from './pages/bank-editor';
+import { CashBookPage, CashDocumentsPage, CashEditor } from './pages/cash';
 import { StatementsPage } from './pages/statements';
 import { EqaimePage } from './pages/eqaime';
 import { EqMapsPage } from './pages/eq-maps';
@@ -77,7 +78,13 @@ import { TrialPage } from './pages/trial';
 import { CardPage } from './pages/card';
 import { AccountsPage } from './pages/accounts';
 import { PartnersPage } from './pages/partners';
-import { BankAccountsPage, EmployeesPage, ListsPage, ProductsPage } from './pages/catalogs';
+import {
+  BankAccountsPage,
+  CashboxesPage,
+  EmployeesPage,
+  ListsPage,
+  ProductsPage,
+} from './pages/catalogs';
 import { AuditPage, SettingsPage } from './pages/settings';
 
 export default function App() {
@@ -1070,6 +1077,8 @@ function Routed({ win }: { win: Win }) {
           {...(v.statementLineId ? { statementLineId: v.statementLineId } : {})}
         />
       );
+    case 'cash':
+      return <CashEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
@@ -1082,6 +1091,10 @@ function Routed({ win }: { win: Win }) {
           return <InvoicesPage direction="purchase" />;
         case 'bank':
           return <BankDocumentsPage />;
+        case 'cash':
+          return <CashDocumentsPage />;
+        case 'cashBook':
+          return <CashBookPage />;
         case 'statements':
           return <StatementsPage />;
         case 'eqPurchase':
@@ -1104,6 +1117,8 @@ function Routed({ win }: { win: Win }) {
           return <PartnersPage />;
         case 'bankAccounts':
           return <BankAccountsPage />;
+        case 'cashboxes':
+          return <CashboxesPage />;
         case 'products':
           return <ProductsPage />;
         case 'employees':

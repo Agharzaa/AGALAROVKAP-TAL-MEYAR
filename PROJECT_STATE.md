@@ -317,6 +317,22 @@ Real fayllarda: 0 oxunmayan sətir, tarix "dd-mm-yyyy", məbləğlər 4 onluqla 
 
 **Hələ yoxlanmayıb:** "Mallar üzrə" real ixracı (sətirlər) — istifadəçidən gözlənilir.
 
+## Mərhələ 5 — kassa, məzənnələr, ay bağlanışı, idarə paneli
+
+Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tövsiyələr qəbul olunub; qərarlar `docs/QERARLAR.md` 2026-10-17 mərhələ 5).
+
+### 5a — kassa (17.10.2026, 0.6.5)
+
+- **Sxem v11:** `cashboxes` (kassa ayrıca kitabçadır: ad, hesab 221.01 / 221.02 / 221.04, valyuta; bank hesabı kimi bir hesaba bağlıdır) və `cash_documents`. Köhnə "Kassa" siyahı elementləri eyni id ilə köçürülür — köhnə yazılışlar etibarlı qalır; hesab — kassanın ən çox işləndiyi 221 hesabı (işlənməyibsə 221.01), valyuta — 221.04-dəki yazılışdan. 0.6.4 bazası ilə yoxlanılıb (manat və dollar kassası düzgün köçdü, bütövlük yoxlaması keçdi).
+- **Ortaq pul sənədi nüvəsi** `src/application/money.ts`: sətirlər, açıq qaimələrə bölgü, avans və avans qoruması bank və kassa üçün bir koddur (bank.ts yalnız bank hesabını, ƏDV depozitini, çıxarışı və cütü saxlayır). Renderer-də sətir cədvəli də ortaqdır (`money-lines.tsx`).
+- **Kassa mədaxil / məxaric orderi** (KMO-000001 / KXO-000001): Dt 221 / Kt sətir, Dt sətir / Kt 221; 211 / 531 sətri açıq qaimələrə bölünür, qalanı avans (543 / 243, "cash:<id>"); kassa qaiməni bütöv bağlayır (kassada ƏDV depoziti yoxdur). Şablonlar: alıcıdan / malsatana nağd, təhtəlhesab (244), əmək haqqı (533), bankdan / banka nağd pul (222.01), qaytarmalar, kapital. Storno ilə düzəliş və ləğv.
+- **Kassa qalığı heç bir gündə mənfi olmur** (QERARLAR §2): yeni sənədin (və köhnə versiyasının) ən erkən tarixindən başlayaraq gün-gün yoxlanır — geriyə tarixli məxaric, mədaxilin ləğvi, azaldılması və ya sonraya keçirilməsi də. Valyuta kassasında həm manat, həm valyuta qalığı.
+- **Kassa kitabı** (gün üzrə: günün əvvəlinə qalıq, sənədlər, gün cəmi, günün sonuna qalıq) jurnaldan oxunur — düzəldilmiş order bir dəfə, ləğv edilmiş heç görünmür; başqa mənbəli 221 yazılışları (əl ilə əməliyyat) da görünür. Çap edilir.
+- **Çap forması** (QERARLAR §10): KMO (qəbzi ilə) və KXO standart formada, məbləğ yazı ilə ("Beş min manat 00 qəpik"); Windows çap pəncərəsində "Microsoft Print to PDF" ilə PDF.
+- **Menyu:** Bank və kassa → Kassa sənədləri, Kassa mədaxili / məxarici, Kassa kitabı, Kassalar; İş masasında "Kassa" sırası; son sənədlərdə və hesab kartında orderlər açılır.
+- **Testlər:** K1–K3 və valyuta kassası (`tests/integration/cash.test.ts`), sxem v1 → v11 köçürməsi, UI (şablon, klaviatura, uçot, mənfi qalığın rəddi), yük testi (500 order hər biri ayrıca — order adi əməliyyat qədər, ~2 ms; kassa kitabı, il), Electron smoke (IPC ilə order və kassa kitabı). `npm test` 138, `npm run test:ui` 20.
+- **Yoxlanmayıb:** çap formasının kağızda / PDF-də görünüşü (Windows çap pəncərəsi testdə açılmır).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -329,7 +345,7 @@ Real fayllarda: 0 oxunmayan sətir, tarix "dd-mm-yyyy", məbləğlər 4 onluqla 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
-5. **Növbəti — dizayn yazılıb, təsdiq gözləyir:** `docs/MERHELE-5-AY-BAGLANISI.md` (17.10.2026). Mövzular: idarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
+5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ — hazır (0.6.5). **Növbəti:** 5b — valyuta məzənnələri kitabçası (AMB) və yenidən qiymətləndirmə; sonra 5c ay bağlanışı, 5d hesabatlar və idarə paneli, müstəqil audit, 0.7.0.
 
 ## Əmrlər
 

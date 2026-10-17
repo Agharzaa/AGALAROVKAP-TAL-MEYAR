@@ -789,7 +789,19 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
     );
   }
   assert.equal(db.all('PRAGMA foreign_key_check').length, 0);
-  assert.throws(() => db.run("DELETE FROM items WHERE kind='cashbox'"), /silinmir/);
+  // v11: the cashbox items moved to their own catalog with the same ids.
+  assert.deepEqual(
+    db
+      .all('SELECT id,name,account,currency FROM cashboxes ORDER BY id')
+      .map((r) => [r.id, r.name, r.account, r.currency]),
+    [
+      ['fresh-cash', 'Əsas kassa', '221.01', 'AZN'],
+      ['used-cash', 'Əsas kassa', '221', 'AZN'],
+    ],
+  );
+  assert.equal(db.all("SELECT 1 FROM items WHERE kind='cashbox'").length, 0);
+  assert.throws(() => db.run('DELETE FROM cashboxes'), /silinmir/);
+  assert.throws(() => db.run("DELETE FROM items WHERE kind='paymentKind'"), /silinmir/);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });

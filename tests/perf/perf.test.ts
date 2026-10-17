@@ -291,6 +291,54 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     q({ type: 'eqReconcile', direction: 'purchase', from: '2026-09-01', to: '2026-09-30' }),
   ) as { months: unknown[] };
   assert.equal(reconciled.months.length, 1);
+  // K5: 500 cash orders, one command each (the negative-cash guard runs on every save), then the
+  // cash book of the year and the order journal. An order costs what a manual operation costs
+  // on this base (~2 ms on a PC); the budget is 20 ms an order, on the CI runner too.
+  const box = String(db.get('SELECT id FROM cashboxes WHERE company_id=?', companyId)!.id);
+  const founder = String(
+    db.get('SELECT id FROM partners WHERE company_id=? LIMIT 1', companyId)!.id,
+  );
+  const item = (kind: string) =>
+    String(
+      db.get('SELECT id FROM items WHERE company_id=? AND kind=? LIMIT 1', companyId, kind)!.id,
+    );
+  const capitalIn = item('capitalChange');
+  const expense = item('expenseItem');
+  const stamp3 = Date.now();
+  time('Kassa orderləri (500, hər biri ayrıca, mənfi qalıq yoxlaması ilə)', 10000, () => {
+    for (let i = 0; i < 500; i++) {
+      const incoming = i % 2 === 0;
+      ledger.execute(
+        {
+          key: `perf-cash-${stamp3}-${i}`,
+          type: 'cash.save',
+          companyId,
+          direction: incoming ? 'in' : 'out',
+          date: `2026-${String((Math.floor(i / 2) % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+          cashboxId: box,
+          lines: [
+            incoming
+              ? {
+                  account: '301',
+                  sk: [founder, capitalIn],
+                  amount: '100',
+                  cashFlowItem: '',
+                  memo: '',
+                }
+              : { account: '721', sk: [expense], amount: '40', cashFlowItem: '', memo: '' },
+          ],
+        },
+        { actor: 'perf', correlationId: 'perf' },
+      );
+    }
+  });
+  const cashYear = time('Kassa kitabı, il (500 order)', 1500, () =>
+    q({ type: 'cashBook', cashboxId: box, from: '2026-01-01', to: '2026-12-31' }),
+  ) as { closing: string };
+  assert.equal(cashYear.closing, '15000.00');
+  time('Kassa sənədləri jurnalı, il', 1500, () =>
+    q({ type: 'cashDocuments', from: '2026-01-01', to: '2026-12-31' }),
+  );
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

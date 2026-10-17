@@ -4,6 +4,7 @@ import { currencies } from '../../domain/chart';
 import type { CommandInput } from '../api';
 import type {
   BankAccountView,
+  CashboxView,
   EmployeeView,
   ItemKind,
   ItemView,
@@ -65,7 +66,7 @@ function ListFrame<T extends { id: string; archived: boolean }>({
   extraFilters,
   children,
 }: {
-  page: 'bankAccounts' | 'products' | 'employees' | 'lists';
+  page: 'bankAccounts' | 'cashboxes' | 'products' | 'employees' | 'lists';
   rows: T[];
   search: string;
   setSearch: (s: string) => void;
@@ -276,6 +277,97 @@ export function BankAccountsPage() {
   );
 }
 
+/** Kassalar: each bound to one 221 account and its currency (221.04: a currency cashbox). */
+export function CashboxesPage() {
+  const win = useWindow();
+  const { catalog } = useCatalog(win.companyId);
+  const [search, setSearch] = useState('');
+  const [edit, setEdit] = useState<CashboxView | 'new' | null>(null);
+  const rows = (catalog?.cashboxes ?? []).filter((b) => matches(search, b.name, b.account));
+  const allowed = (catalog?.accounts ?? []).filter(
+    (a) => a.postable && !a.archived && a.subkonto.includes('cashbox'),
+  );
+  const [name, setName] = useState('');
+  const [currency, setCurrency] = useState('AZN');
+  const [account, setAccount] = useState('221.01');
+  const [archived, setArchived] = useState(false);
+  const open = (b: CashboxView | 'new') => {
+    setEdit(b);
+    const x = b === 'new' ? null : b;
+    setName(x?.name ?? '');
+    setCurrency(x?.currency ?? 'AZN');
+    setAccount(x?.account ?? '221.01');
+    setArchived(x?.archived ?? false);
+  };
+  const current = edit && edit !== 'new' ? edit : null;
+  return (
+    <ListFrame
+      page="cashboxes"
+      rows={rows}
+      search={search}
+      setSearch={setSearch}
+      placeholder="Ad, hesab"
+      head={['Ad', 'Hesab', 'Valyuta']}
+      row={(b) => [b.name, <span className="code">{b.account}</span>, b.currency]}
+      onNew={() => open('new')}
+      onEdit={open}
+    >
+      {edit && catalog && (
+        <EditDialog
+          title={current ? current.name : 'Yeni kassa'}
+          onClose={() => setEdit(null)}
+          build={() => ({
+            type: 'cashbox.save',
+            companyId: win.companyId,
+            ...(current ? { id: current.id, version: current.version } : {}),
+            name,
+            currency,
+            account,
+            archived,
+          })}
+        >
+          <Field label="Ad" wide>
+            <input
+              aria-label="Kassanın adı"
+              autoFocus
+              maxLength={160}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+          <Field label="Valyuta">
+            <select
+              aria-label="Valyuta"
+              value={currency}
+              onChange={(e) => {
+                const c = e.target.value;
+                setCurrency(c);
+                const fits = allowed.find((a) => a.currency === (c !== 'AZN'));
+                if (fits && !!allowed.find((a) => a.code === account)?.currency !== (c !== 'AZN'))
+                  setAccount(fits.code);
+              }}
+            >
+              {['AZN', ...currencies].map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Hesab">
+            <select aria-label="Hesab" value={account} onChange={(e) => setAccount(e.target.value)}>
+              {allowed.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.code} {a.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {archiveBox(archived, setArchived, !!current)}
+        </EditDialog>
+      )}
+    </ListFrame>
+  );
+}
+
 const productKind = {
   goods: 'Mal',
   material: 'Material',
@@ -467,7 +559,6 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'paymentKind', label: 'Ödəniş növləri' },
   { kind: 'fund', label: 'Fondlar' },
   { kind: 'capitalChange', label: 'Kapital dəyişiklikləri' },
-  { kind: 'cashbox', label: 'Kassalar' },
   { kind: 'productGroup', label: 'Nomenklatura qrupları' },
   { kind: 'cashFlowItem', label: 'Pul vəsaitlərinin hərəkəti maddələri' },
 ];

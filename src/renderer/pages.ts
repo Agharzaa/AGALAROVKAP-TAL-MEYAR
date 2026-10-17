@@ -47,6 +47,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Daxilolma və məxaric, qaimələrə bölgü, ƏDV depoziti',
     icon: Landmark,
   },
+  cash: {
+    title: 'Kassa sənədləri',
+    hint: 'Mədaxil və məxaric orderləri (KMO / KXO), qaimələrə bölgü, avans',
+    icon: Wallet,
+  },
+  cashBook: {
+    title: 'Kassa kitabı',
+    hint: 'Kassa üzrə gün-gün: qalıq, mədaxil, məxaric',
+    icon: BookOpen,
+  },
   statements: {
     title: 'Bank çıxarışları',
     hint: 'Excel/CSV yükləmə, sətirlərin uçotu, bank ↔ uçot qalığı',
@@ -82,11 +92,12 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
   partners: { title: 'Kontragentlər və müqavilələr', hint: 'VÖEN üzrə kitabça', icon: Users },
   bankAccounts: { title: 'Bank hesabları', hint: 'IBAN, valyuta və hesab', icon: Landmark },
+  cashboxes: { title: 'Kassalar', hint: 'Kassa, hesab (221) və valyuta', icon: Wallet },
   products: { title: 'Nomenklatura', hint: 'Mallar, materiallar, əsas vəsaitlər', icon: Package },
   employees: { title: 'İşçilər', hint: '244, 533 subkontosu', icon: UserRound },
   lists: {
     title: 'Siyahılar',
-    hint: 'Xərc maddələri, gəlir və vergi növləri, fondlar, kassalar',
+    hint: 'Xərc maddələri, gəlir və vergi növləri, fondlar, pul hərəkəti maddələri',
     icon: Building2,
   },
   audit: { title: 'Dəyişiklik tarixçəsi', hint: 'Kim, nə vaxt, nəyi dəyişib', icon: History },
@@ -139,7 +150,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Bank sənədləri', icon: Landmark, action: page('bank') },
           { label: 'Bank çıxarışları', icon: Upload, action: page('statements') },
-          { label: 'Kassa sənədləri', icon: Wallet, action: soon('5-ci mərhələ') },
+          { label: 'Kassa sənədləri', icon: Wallet, action: page('cash') },
         ],
       },
       {
@@ -155,6 +166,16 @@ export const sections: Section[] = [
             icon: ArrowUpRight,
             action: { kind: 'view', view: { type: 'bank', direction: 'out' } },
           },
+          {
+            label: 'Kassa mədaxili',
+            icon: ArrowDownLeft,
+            action: { kind: 'view', view: { type: 'cash', direction: 'in' } },
+          },
+          {
+            label: 'Kassa məxarici',
+            icon: ArrowUpRight,
+            action: { kind: 'view', view: { type: 'cash', direction: 'out' } },
+          },
         ],
       },
       {
@@ -162,6 +183,7 @@ export const sections: Section[] = [
         items: [
           card('223', 'Hesab kartı 223'),
           card('224', 'ƏDV depoziti (224)'),
+          { label: 'Kassa kitabı', icon: BookOpen, action: page('cashBook') },
           card('221', 'Hesab kartı 221'),
         ],
       },
@@ -169,6 +191,7 @@ export const sections: Section[] = [
         title: 'Kitabçalar',
         items: [
           { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
+          { label: 'Kassalar', icon: Wallet, action: page('cashboxes') },
           { label: 'Bank qaydaları', icon: ListTree, action: page('rules') },
           { label: 'Büdcə təsnifat kodları', icon: ListTree, action: page('budgetCodes') },
         ],
@@ -330,6 +353,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Kontragentlər və müqavilələr', icon: Users, action: page('partners') },
           { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
+          { label: 'Kassalar', icon: Wallet, action: page('cashboxes') },
         ],
       },
       {
@@ -374,6 +398,7 @@ export function sectionOfView(view: View): string {
     case 'operation':
       return 'ledger';
     case 'bank':
+    case 'cash':
       return 'bank';
     case 'accountCard': {
       const a = view.account;
@@ -406,6 +431,9 @@ export function sectionOfView(view: View): string {
         case 'rules':
         case 'budgetCodes':
         case 'bankAccounts':
+        case 'cash':
+        case 'cashBook':
+        case 'cashboxes':
           return 'bank';
         case 'settings':
           return 'company';
@@ -442,6 +470,16 @@ export const createItems: NavItem[] = [
     icon: Landmark,
     action: { kind: 'view', view: { type: 'bank', direction: 'out' } },
   },
+  {
+    label: 'Kassa mədaxili',
+    icon: Wallet,
+    action: { kind: 'view', view: { type: 'cash', direction: 'in' } },
+  },
+  {
+    label: 'Kassa məxarici',
+    icon: Wallet,
+    action: { kind: 'view', view: { type: 'cash', direction: 'out' } },
+  },
 ];
 
 export function viewTitle(view: View, label?: string): string {
@@ -459,6 +497,10 @@ export function viewTitle(view: View, label?: string): string {
     }
     case 'bank': {
       const kind = view.direction === 'in' ? 'Bank daxilolması' : 'Bank məxarici';
+      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
+    }
+    case 'cash': {
+      const kind = view.direction === 'in' ? 'Kassa mədaxil orderi' : 'Kassa məxaric orderi';
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
     }
     case 'accountCard':

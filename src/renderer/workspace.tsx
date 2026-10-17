@@ -17,6 +17,8 @@ export type Page =
   | 'purchases'
   | 'bank'
   | 'statements'
+  | 'cash'
+  | 'cashBook'
   | 'eqPurchase'
   | 'eqSale'
   | 'eqMaps'
@@ -27,6 +29,7 @@ export type Page =
   | 'accounts'
   | 'partners'
   | 'bankAccounts'
+  | 'cashboxes'
   | 'products'
   | 'employees'
   | 'lists'
@@ -49,6 +52,7 @@ export type View =
       /** A new document for this statement row, prefilled from it. */
       statementLineId?: string;
     }
+  | { type: 'cash'; direction: 'in' | 'out'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
@@ -171,7 +175,10 @@ export function useWindow(): Win {
 const sameView = (a: View, b: View) => JSON.stringify(a) === JSON.stringify(b);
 /** New documents may be opened several times; everything else is focused if already open. */
 const reusable = (v: View) =>
-  !((v.type === 'operation' || v.type === 'invoice' || v.type === 'bank') && !v.id);
+  !(
+    (v.type === 'operation' || v.type === 'invoice' || v.type === 'bank' || v.type === 'cash') &&
+    !v.id
+  );
 
 let sequence = 0;
 const todayIso = () => {

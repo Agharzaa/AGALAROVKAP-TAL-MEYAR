@@ -74,6 +74,15 @@ const flows: { name: string; steps: Step[] }[] = [
     ],
   },
   {
+    name: 'Kassa',
+    steps: [
+      { title: 'Kassalar', posts: '221.01 / 221.04', view: page('cashboxes') },
+      { title: 'Kassa mədaxili', posts: 'Dt 221 · KMO', view: { type: 'cash', direction: 'in' } },
+      { title: 'Kassa məxarici', posts: 'Kt 221 · KXO', view: { type: 'cash', direction: 'out' } },
+      { title: 'Kassa kitabı', posts: 'Gün üzrə qalıq', view: page('cashBook') },
+    ],
+  },
+  {
     name: 'Mühasibat',
     steps: [
       {
@@ -93,6 +102,8 @@ const kindLabel: Record<RecentDocument['kind'], string> = {
   purchase: 'Alış qaiməsi',
   bankIn: 'Bank daxilolması',
   bankOut: 'Bank məxarici',
+  cashIn: 'Kassa mədaxili',
+  cashOut: 'Kassa məxarici',
 };
 const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
   advance: 'Avans əvəzləşdirilməyib',
@@ -114,6 +125,10 @@ const viewOf = (d: RecentDocument): View => {
       return { type: 'bank', direction: 'in', id: d.id };
     case 'bankOut':
       return { type: 'bank', direction: 'out', id: d.id };
+    case 'cashIn':
+      return { type: 'cash', direction: 'in', id: d.id };
+    case 'cashOut':
+      return { type: 'cash', direction: 'out', id: d.id };
     default:
       return { type: 'invoice', direction: d.kind, id: d.id };
   }

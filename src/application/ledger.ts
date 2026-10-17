@@ -8,6 +8,7 @@ import {
   createAccount,
   createCompany,
   saveBankAccount,
+  saveCashbox,
   saveContract,
   saveEmployee,
   saveItem,
@@ -18,6 +19,7 @@ import {
 } from './catalog.js';
 import { cancelBankDocument, saveBankDocument } from './bank.js';
 import { pairBankDocuments } from './bank-pair.js';
+import { cancelCashDocument, saveCashDocument } from './cash.js';
 import { applyRules, applyStatementRules, saveBudgetCode, saveRule } from './rules.js';
 import {
   ignoreStatementLine,
@@ -102,6 +104,8 @@ export class Ledger {
         return saveContract(tx, c);
       case 'bankAccount.save':
         return saveBankAccount(tx, c);
+      case 'cashbox.save':
+        return saveCashbox(tx, c);
       case 'product.save':
         return saveProduct(tx, c);
       case 'employee.save':
@@ -120,6 +124,10 @@ export class Ledger {
         return saveBankDocument(tx, c);
       case 'bank.cancel':
         return cancelBankDocument(tx, c);
+      case 'cash.save':
+        return saveCashDocument(tx, c);
+      case 'cash.cancel':
+        return cancelCashDocument(tx, c);
       case 'bank.pair':
         return pairBankDocuments(tx, c.companyId, c.id, c.pairId);
       case 'statement.import': {

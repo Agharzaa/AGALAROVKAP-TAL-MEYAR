@@ -22,7 +22,7 @@ const tables: Partial<Record<SubkontoKind, { table: string; kind?: string }>> = 
   paymentKind: { table: 'items', kind: 'paymentKind' },
   fund: { table: 'items', kind: 'fund' },
   capitalChange: { table: 'items', kind: 'capitalChange' },
-  cashbox: { table: 'items', kind: 'cashbox' },
+  cashbox: { table: 'cashboxes' },
   productGroup: { table: 'items', kind: 'productGroup' },
 };
 
@@ -40,6 +40,8 @@ export function documentExists(db: Db, companyId: string, value: string): boolea
     return !!db.get('SELECT 1 AS x FROM invoices WHERE company_id=? AND id=?', companyId, id);
   if (type === 'bank' && id)
     return !!db.get('SELECT 1 AS x FROM bank_documents WHERE company_id=? AND id=?', companyId, id);
+  if (type === 'cash' && id)
+    return !!db.get('SELECT 1 AS x FROM cash_documents WHERE company_id=? AND id=?', companyId, id);
   return false;
 }
 
@@ -98,6 +100,14 @@ export function checkSideValues(
       const partner = values[i - 1];
       if (row.partner_id !== partner)
         throw new DomainError(`${label}: müqavilə seçilən kontragentə aid deyil.`, where);
+      if (row.currency !== 'AZN') result.currency = String(row.currency) as CurrencyCode;
+    }
+    if (kind === 'cashbox') {
+      if (row.account !== account.code)
+        throw new DomainError(
+          `${label}: bu kassa ${row.account} hesabına bağlıdır, ${account.code} hesabına yox.`,
+          where,
+        );
       if (row.currency !== 'AZN') result.currency = String(row.currency) as CurrencyCode;
     }
     if (kind === 'bankAccount') {

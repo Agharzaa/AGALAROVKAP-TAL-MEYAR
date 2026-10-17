@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 const v1 = `
 CREATE TABLE companies(
@@ -995,6 +995,86 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v11 — cash (stage 5a; docs/MERHELE-5-AY-BAGLANISI.md §3.1–3.2). A cashbox becomes a catalog of
+// its own, bound to one ledger account (221.01 / 221.02 / 221.04) and currency like a bank
+// account. The former "cashbox" items move over with the same ids, so every posting made on them
+// stays valid; the account is the 221 account the cashbox was used on most (221.01 when unused,
+// 221 itself in a company whose 221 was never split).
+
+const v11 = `
+CREATE TABLE cashboxes(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  account TEXT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'AZN',
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,name),
+  FOREIGN KEY(company_id,account) REFERENCES accounts(company_id,code)
+);
+CREATE TRIGGER cashboxes_no_delete BEFORE DELETE ON cashboxes BEGIN SELECT RAISE(ABORT,'guard: Kassa silinmir; arxivləşdirilir.'); END;
+
+INSERT INTO cashboxes(id,company_id,name,account,currency,archived,version)
+  SELECT i.id, i.company_id, i.name, u.account,
+    CASE WHEN a.currency=1 THEN COALESCE(
+      (SELECT dt_currency FROM postings WHERE company_id=i.company_id AND dt_account=u.account AND dt_s1=i.id AND dt_currency<>'' LIMIT 1),
+      (SELECT kt_currency FROM postings WHERE company_id=i.company_id AND kt_account=u.account AND kt_s1=i.id AND kt_currency<>'' LIMIT 1),
+      'USD') ELSE 'AZN' END,
+    i.archived, i.version
+  FROM items i
+  JOIN (SELECT x.id, x.company_id, COALESCE(
+      (SELECT r.account FROM registers r WHERE r.company_id=x.company_id AND r.s1=x.id AND r.account LIKE '221%'
+        GROUP BY r.account ORDER BY SUM(r.debit+r.credit) DESC, r.account LIMIT 1),
+      (SELECT code FROM accounts WHERE company_id=x.company_id AND code IN('221.01','221')
+        ORDER BY code DESC LIMIT 1)) AS account
+    FROM items x WHERE x.kind='cashbox') u ON u.id=i.id
+  JOIN accounts a ON a.company_id=i.company_id AND a.code=u.account
+  WHERE i.kind='cashbox';
+DROP TRIGGER items_no_delete;
+DELETE FROM items WHERE kind='cashbox';
+CREATE TRIGGER items_no_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT,'guard: Kitabça elementi silinmir; arxivləşdirilir.'); END;
+
+CREATE TABLE cash_documents(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('in','out')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  cashbox_id TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate INTEGER NOT NULL CHECK(rate>0),
+  amount INTEGER NOT NULL CHECK(amount>0),
+  amount_azn INTEGER NOT NULL CHECK(amount_azn>0),
+  counterparty_name TEXT NOT NULL DEFAULT '',
+  basis TEXT NOT NULL DEFAULT '',
+  attachment TEXT NOT NULL DEFAULT '',
+  lines TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,direction,number_key),
+  FOREIGN KEY(company_id,cashbox_id) REFERENCES cashboxes(company_id,id)
+);
+CREATE INDEX cash_documents_date ON cash_documents(company_id,direction,date);
+CREATE INDEX cash_documents_cashbox ON cash_documents(company_id,cashbox_id,date);
+CREATE TRIGGER cash_documents_no_delete BEFORE DELETE ON cash_documents BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER cash_documents_period BEFORE UPDATE ON cash_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+  OR NEW.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-11','Yeniləndi','Baza',id,
+  'Kassa sənədləri üçün baza hazırlandı: kassalar ayrıca kitabçaya köçürüldü (eyni id-lərlə).'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1006,4 +1086,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 8, sql: v8, foreignKeysOff: true },
   { version: 9, sql: v9 },
   { version: 10, sql: v10 },
+  { version: 11, sql: v11 },
 ];

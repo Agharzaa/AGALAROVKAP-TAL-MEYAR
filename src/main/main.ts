@@ -114,6 +114,17 @@ async function smoke(window: import('electron').BrowserWindow, out: string) {
     result.trial = await js(
       `window.meyar.query({ type: 'trialBalance', companyId: ${JSON.stringify(id)}, from: '2026-01-01', to: '2026-12-31' }).then(r => r.ok)`,
     );
+    // A cash order through the same path: the cashbox catalog, the order, the cash book.
+    result.cash = await js(
+      `window.meyar.query({ type: 'catalog', companyId: ${JSON.stringify(id)} }).then(async (c) => {
+        const box = c.value.cashboxes[0].id;
+        const founder = await window.meyar.command({ type: 'partner.save', key: 'smoke-0000002', companyId: ${JSON.stringify(id)}, name: 'Təsisçi', taxId: '', kind: 'individual', note: '', archived: false });
+        const capital = c.value.items.find((i) => i.kind === 'capitalChange').id;
+        const order = await window.meyar.command({ type: 'cash.save', key: 'smoke-0000003', companyId: ${JSON.stringify(id)}, direction: 'in', date: '2026-01-02', cashboxId: box, lines: [{ account: '301', sk: [founder.value.id, capital], amount: '100', cashFlowItem: '', memo: '' }] });
+        const book = await window.meyar.query({ type: 'cashBook', companyId: ${JSON.stringify(id)}, cashboxId: box, from: '2026-01-01', to: '2026-12-31' });
+        return { number: order.value?.number, closing: book.value?.closing };
+      })`,
+    );
     result.integrity = await js(
       `window.meyar.query({ type: 'integrity', companyId: ${JSON.stringify(id)} }).then(r => r.value?.ok)`,
     );

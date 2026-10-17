@@ -228,6 +228,14 @@ export const commandSchema = z.discriminatedUnion('type', [
     name: text(160).default(''),
   }),
   z.object({
+    type: z.literal('cashbox.save'),
+    ...base,
+    ...editable,
+    name: text(160),
+    currency: z.string().max(3).default('AZN'),
+    account: code,
+  }),
+  z.object({
     type: z.literal('product.save'),
     ...base,
     ...editable,
@@ -257,7 +265,6 @@ export const commandSchema = z.discriminatedUnion('type', [
       'paymentKind',
       'fund',
       'capitalChange',
-      'cashbox',
       'productGroup',
       'cashFlowItem',
     ]),
@@ -411,6 +418,34 @@ export const commandSchema = z.discriminatedUnion('type', [
     id,
     /** The other half of the VAT deposit pair; empty undoes the pair. */
     pairId: z.string().max(80),
+  }),
+  z.object({
+    type: z.literal('cash.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    /** in: kassa mədaxil orderi (Dt 221); out: kassa məxaric orderi (Kt 221). */
+    direction: z.enum(['in', 'out']),
+    /** Generated when empty (KMO-000001 / KXO-000001). */
+    number: text(40).default(''),
+    date,
+    cashboxId: id,
+    /** AMB rate for a currency cashbox (4 decimals), empty for AZN. */
+    rate: decimal.default(''),
+    /** "Kimdən qəbul edilib" / "Kimə verilib", as printed on the order. */
+    counterpartyName: text(240).default(''),
+    /** "Əsas" of the order. */
+    basis: text(500).default(''),
+    /** "Əlavə": the papers attached to the order. */
+    attachment: text(240).default(''),
+    lines: z.array(bankLineInput).min(1).max(500),
+  }),
+  z.object({
+    type: z.literal('cash.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
   }),
   z.object({
     type: z.literal('bank.cancel'),

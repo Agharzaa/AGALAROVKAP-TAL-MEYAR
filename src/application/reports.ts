@@ -18,6 +18,7 @@ import type {
   AccountCard,
   AuditView,
   BankAccountView,
+  CashboxView,
   BankDocumentDetail,
   BankDocumentSummary,
   BankLineView,
@@ -50,6 +51,7 @@ import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
 import { eqDocument, eqImports, eqInbox, eqReconcile, eqWarnings } from './eqaime.js';
 import { eqMaps } from './eqaime-book.js';
+import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -118,6 +120,13 @@ export class Names {
           (r) => str(r.currency),
         );
         break;
+      case 'cashbox':
+        put(
+          this.db.all('SELECT id,name,currency FROM cashboxes WHERE company_id=?', c),
+          (r) => str(r.name),
+          (r) => str(r.currency),
+        );
+        break;
       case 'product':
         put(
           this.db.all('SELECT id,name,unit FROM products WHERE company_id=?', c),
@@ -148,6 +157,12 @@ export class Names {
           this.db
             .all('SELECT id,number,date FROM bank_documents WHERE company_id=?', c)
             .map((r) => ({ ...r, id: `bank:${r.id}` })),
+          (r) => `${r.number} · ${dmy(str(r.date))}`,
+        );
+        put(
+          this.db
+            .all('SELECT id,number,date FROM cash_documents WHERE company_id=?', c)
+            .map((r) => ({ ...r, id: `cash:${r.id}` })),
           (r) => `${r.number} · ${dmy(str(r.date))}`,
         );
         break;
@@ -585,11 +600,12 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
     const conds = sk.map((_, i) => ` AND p.${side}_s${i + 1}=?`).join('');
     db.all(
       `SELECT p.*, e.source_type, e.source_id, e.source_number, e.storno, e.rowid AS seq,
-         COALESCE(o.memo, i.memo, b.purpose) AS doc_memo, COALESCE(i.direction, b.direction) AS doc_direction
+         COALESCE(o.memo, i.memo, b.purpose, k.basis) AS doc_memo, COALESCE(i.direction, b.direction, k.direction) AS doc_direction
        FROM postings p JOIN entries e ON e.id=p.entry_id
        LEFT JOIN operations o ON e.source_type='operation' AND o.id=e.source_id
        LEFT JOIN invoices i ON e.source_type='invoice' AND i.id=e.source_id
        LEFT JOIN bank_documents b ON e.source_type='bank' AND b.id=e.source_id
+       LEFT JOIN cash_documents k ON e.source_type='cash' AND k.id=e.source_id
        WHERE p.company_id=? AND p.${side}_account IN (${codes.map(() => '?').join(',')}) AND p.date>=? AND p.date<=?${conds}
        ORDER BY p.date, e.rowid, p.line_no LIMIT ${LIMIT + 1}`,
       q.companyId,
@@ -725,7 +741,7 @@ function invoiceSummary(names: Names, r: Row): InvoiceSummary {
 }
 
 /** Postings and history of a document's last posted version (shared by all document kinds). */
-function documentEntry(db: Db, companyId: string, type: string, id: string) {
+export function documentEntry(db: Db, companyId: string, type: string, id: string) {
   const chart = loadChart(db, companyId);
   const names = new Names(db, companyId);
   const lastPosted = db.get(
@@ -1083,6 +1099,22 @@ function home(db: Db, companyId: string, today: string): HomeView {
         currency: b.currency,
         status: b.status,
       })),
+    ...db
+      .all(
+        `${cashSelect} WHERE d.company_id=? ORDER BY d.date DESC, d.rowid DESC LIMIT 12`,
+        companyId,
+      )
+      .map(cashSummary)
+      .map((k) => ({
+        kind: k.direction === 'in' ? ('cashIn' as const) : ('cashOut' as const),
+        id: k.id,
+        number: k.number,
+        date: k.date,
+        title: k.counterpartyName || k.basis || k.cashbox,
+        total: k.amount,
+        currency: k.currency,
+        status: k.status,
+      })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number))
     .slice(0, 12);
@@ -1258,6 +1290,16 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             name: str(r.name),
             archived: flag(r.archived),
           })),
+        cashboxes: db
+          .all('SELECT * FROM cashboxes WHERE company_id=? ORDER BY account, name', c)
+          .map((r): CashboxView => ({
+            id: str(r.id),
+            version: Number(r.version),
+            name: str(r.name),
+            account: str(r.account),
+            currency: str(r.currency),
+            archived: flag(r.archived),
+          })),
         products: db
           .all('SELECT * FROM products WHERE company_id=? ORDER BY name', c)
           .map((r): ProductView => ({
@@ -1337,6 +1379,14 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'bankDocument':
       return bankDetail(db, q.companyId, q.id);
+    case 'cashDocuments':
+      company(db, q.companyId);
+      return cashDocuments(db, q.companyId, q.from, q.to, q.cashboxId);
+    case 'cashDocument':
+      return cashDetail(db, q.companyId, q.id);
+    case 'cashBook':
+      company(db, q.companyId);
+      return cashBook(db, q.companyId, q.cashboxId, q.from, q.to, new Names(db, q.companyId));
     case 'eqImports':
       company(db, q.companyId);
       return eqImports(db, q.companyId, q.direction);
@@ -1389,6 +1439,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
            UNION ALL
            SELECT 'bank', id, number, date, purpose, bank_reference FROM bank_documents
              WHERE company_id=? AND (number LIKE ? OR purpose LIKE ? OR bank_reference LIKE ? OR counterparty_name LIKE ?)
+           UNION ALL
+           SELECT 'cash', id, number, date, basis, '' FROM cash_documents
+             WHERE company_id=? AND (number LIKE ? OR basis LIKE ? OR counterparty_name LIKE ?)
            ORDER BY date DESC LIMIT 50`,
           q.companyId,
           like,
@@ -1399,6 +1452,10 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
           like,
           q.companyId,
           like,
+          like,
+          like,
+          like,
+          q.companyId,
           like,
           like,
           like,

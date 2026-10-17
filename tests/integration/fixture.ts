@@ -179,6 +179,29 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
       lines,
       ...extra,
     });
+  /** The company's cashbox of that name ("Əsas kassa", 221.01 AZN, comes with the company). */
+  const cashbox = (name = 'Əsas kassa') => catalog().cashboxes.find((b) => b.name === name)!.id;
+  const cash = (
+    direction: 'in' | 'out',
+    date: string,
+    cashboxId: string,
+    lines: BankLineInput[],
+    extra: Partial<Extract<Cmd, { type: 'cash.save' }>> = {},
+  ) =>
+    exec({
+      type: 'cash.save',
+      companyId,
+      direction,
+      number: '',
+      date,
+      cashboxId,
+      rate: '',
+      counterpartyName: '',
+      basis: '',
+      attachment: '',
+      lines,
+      ...extra,
+    });
   const trial = (from: string, to: string, expand: string[] = [], extra: object = {}) =>
     query<TrialBalance>({ type: 'trialBalance', companyId, from, to, expand, ...extra });
   const row = (tb: TrialBalance, key: string): TrialRow | undefined =>
@@ -203,6 +226,8 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
     invoice,
     bankLine,
     bank,
+    cashbox,
+    cash,
     trial,
     row,
     card,

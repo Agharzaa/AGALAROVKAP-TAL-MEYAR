@@ -261,7 +261,7 @@ Misalın rəqəmləri 5c-də testə yazılır və sizə cədvəl kimi göstəril
 
 Hər addım ayrıca commit-dir, testləri yaşıl saxlayır və (icazənizə görə) avtomatik buraxılır.
 
-1. **5a — Kassa.** Sxem v11 (`cashboxes`, `cash_documents`), ümumi pul sənədi nüvəsi, KMO/KXO, kassa kitabı, şablonlar. Testlər K1–K3, U1-in kassa hissəsi.
+1. **5a — Kassa.** ✅ (0.6.5, 17.10.2026) Sxem v11 (`cashboxes`, `cash_documents`), ümumi pul sənədi nüvəsi, KMO/KXO, kassa kitabı, şablonlar, çap forması. Testlər K1–K3, U1-in kassa hissəsi, S1 (0.6.4 bazası, Electron smoke).
 2. **5b — Valyuta məzənnələri və yenidən qiymətləndirmə.** `currency_rates`, AMB faylı, sənədlərdə avtomatik məzənnə, yenidən qiymətləndirmə hesabı. Testlər K4, V1, V2.
 3. **5c — Ay bağlanışı.** `month_closings`, yoxlamalar, FIFO dəqiqləşdirilməsi, ƏDV əvəzləşdirilməsi, 801 / 341 / 343, dövrün kilidi, ləğv. Testlər A1–A6, P1-in bağlanış hissəsi.
 4. **5d — Hesabatlar və idarə paneli.** M/Z, pul hərəkəti, ƏDV icmalı, panel. Testlər H1–H3, P1.
