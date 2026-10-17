@@ -471,6 +471,22 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   /** Map entries (suggest) from how the accountant booked this e-qaimə. */
   z.object({ type: z.literal('eqaime.learn'), ...base, documentId: id }),
+  /**
+   * "The whole e-qaimə of these VÖENs → this service" at once (header entries). A VÖEN that has
+   * one already keeps it; one with a contract-only entry gets the product added.
+   */
+  z.object({
+    type: z.literal('eqMap.bulk'),
+    ...base,
+    direction: z.enum(['sale', 'purchase']),
+    taxIds: z.array(text(20)).min(1).max(5000),
+    productId: id,
+    account: code.default(''),
+    expenseItemId: z.string().max(80).default(''),
+    incomeTypeId: z.string().max(80).default(''),
+    vatTreatment: z.enum(['', 'offset', 'cost']).default(''),
+    mode: z.enum(['suggest', 'auto']).default('suggest'),
+  }),
   z.object({
     type: z.literal('eqMap.save'),
     ...base,

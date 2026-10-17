@@ -24,6 +24,7 @@ import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { readSheet, SheetError } from '../sheet-reader';
 import { Amount, Confirm, DataTable, Empty, Field, Modal, Notice, type Column } from '../ui';
+import { accountOptions, Picker, type Option } from '../picker';
 import { api } from '../api';
 import { useWindow, useWorkspace } from '../workspace';
 
@@ -66,7 +67,7 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 export function EqaimePage({ direction }: { direction: Direction }) {
   const win = useWindow();
   const ws = useWorkspace();
-  const { company } = useCatalog(win.companyId);
+  const { company, catalog } = useCatalog(win.companyId);
   const page = pages[direction === 'purchase' ? 'eqPurchase' : 'eqSale'];
   const box = useQuery<EqInboxView>({
     type: 'eqInbox',
@@ -83,6 +84,13 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   const [tab, setTab] = useState<EqBucket>('proposal');
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [partnersOpen, setPartnersOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulk, setBulk] = useState({
+    productId: '',
+    account: '',
+    expenseItemId: '',
+    mode: 'suggest' as 'suggest' | 'auto',
+  });
   const [withContracts, setWithContracts] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -277,6 +285,43 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       )
       .map((d) => d.taxId),
   ).size;
+  // Known partners whose e-qaimələr carry totals only: one service for the whole e-qaimə.
+  const totalsOnly = [
+    ...new Set(
+      (docs ?? [])
+        .filter(
+          (d) =>
+            d.proposal?.partnerId && d.proposal.reasons.some((r) => /Mal sətirləri yoxdur/.test(r)),
+        )
+        .map((d) => d.taxId),
+    ),
+  ];
+  async function bulkMap() {
+    const r = await m.run({
+      type: 'eqMap.bulk',
+      companyId: win.companyId,
+      direction,
+      taxIds: totalsOnly,
+      productId: bulk.productId,
+      account: bulk.account,
+      expenseItemId: bulk.expenseItemId,
+      incomeTypeId: '',
+      vatTreatment: '',
+      mode: bulk.mode,
+    });
+    if (!r) return;
+    const applied =
+      bulk.mode === 'auto'
+        ? await m.run({ type: 'eqaime.apply', companyId: win.companyId, direction })
+        : null;
+    setBulkOpen(false);
+    setMessage(
+      `${r.learned ?? 0} kontragentə “bütün qaimə” uyğunluğu yazıldı${r.same ? ` (${r.same} kontragentdə artıq var idi)` : ''}.` +
+        (applied
+          ? ` Avtomatik uçota alındı: ${applied.posted ?? 0}${applied.failed?.length ? `; alınmadı: ${applied.failed.length}` : ''}.`
+          : ' Təkliflər hazırdır: hər birini Enter ilə yoxlayıb Ctrl+Enter ilə uçota alın.'),
+    );
+  }
   async function createPartners() {
     const r = await m.run({
       type: 'eqaime.partners',
@@ -644,6 +689,76 @@ export function EqaimePage({ direction }: { direction: Direction }) {
                 Aktiv {direction === 'purchase' ? 'alış' : 'satış'} müqaviləsi olmayan hər
                 kontragentə “Əsas” müqavilə də aç
               </label>
+              {m.error && <Notice>{m.error.message}</Notice>}
+            </Confirm>
+          )}
+          {totalsOnly.length > 0 && (
+            <p>
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={m.busy}
+                onClick={() => setBulkOpen(true)}
+              >
+                Bütün qaiməni bir xidmətə bağla ({totalsOnly.length} kontragent)
+              </button>
+            </p>
+          )}
+          {bulkOpen && catalog && (
+            <Confirm
+              title="Bütün qaimə — bir xidmət"
+              confirmLabel="Uyğunluğu yaz"
+              onCancel={() => setBulkOpen(false)}
+              onConfirm={() => void bulkMap()}
+            >
+              <p>
+                {totalsOnly.length} kontragentin e-qaimələrində mal sətirləri yoxdur (yalnız
+                yekunlar). Seçdiyiniz xidmət bu kontragentlərin hər e-qaiməsinə ƏDV bazalarına görə
+                sətirlərlə yazılacaq. Mal, material və əsas vəsait üçün “Mallar üzrə” hesabatını
+                yükləyin.
+              </p>
+              <Field label="Xidmət (nomenklatura)">
+                <Picker
+                  ariaLabel="Xidmət"
+                  value={bulk.productId}
+                  options={catalog.products
+                    .filter((p) => p.kind === 'service' && !p.archived)
+                    .map((p): Option => ({ value: p.id, label: p.name, hint: p.unit }))}
+                  onChange={(productId) => setBulk({ ...bulk, productId })}
+                />
+              </Field>
+              <Field label="Hesab" hint="Boş qalsa standart">
+                <Picker
+                  ariaLabel="Hesab"
+                  value={bulk.account}
+                  options={accountOptions(catalog)}
+                  emptyLabel="standart"
+                  onChange={(account) => setBulk({ ...bulk, account })}
+                />
+              </Field>
+              {direction === 'purchase' && (
+                <Field label="Xərc maddəsi">
+                  <Picker
+                    ariaLabel="Xərc maddəsi"
+                    value={bulk.expenseItemId}
+                    options={catalog.items
+                      .filter((i) => i.kind === 'expenseItem' && !i.archived)
+                      .map((i): Option => ({ value: i.id, label: i.name }))}
+                    emptyLabel="yoxdur"
+                    onChange={(expenseItemId) => setBulk({ ...bulk, expenseItemId })}
+                  />
+                </Field>
+              )}
+              <Field label="Rejim">
+                <select
+                  aria-label="Rejim"
+                  value={bulk.mode}
+                  onChange={(e) => setBulk({ ...bulk, mode: e.target.value as 'suggest' | 'auto' })}
+                >
+                  <option value="suggest">Təklif — hər birini özüm təsdiqləyirəm</option>
+                  <option value="auto">Avtomatik — yoxlamadan keçənlər dərhal uçota alınsın</option>
+                </select>
+              </Field>
               {m.error && <Notice>{m.error.message}</Notice>}
             </Confirm>
           )}

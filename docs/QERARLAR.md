@@ -287,3 +287,5 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 ### TƏSDİQLƏNDİ
 
 1. Qutuda "Yeni kontragentləri yarat" düyməsi: gözləyən, DVX-də təsdiqlənmiş e-qaimələrin kitabçada olmayan VÖEN-ləri DVX-dəki adla yaradılır (VÖEN-in son rəqəmi 2 — fiziki şəxs, qalanı hüquqi şəxs). İstəyə görə aktiv müqaviləsi olmayan hər kontragentə qutunun növündə "Əsas" müqavilə açılır (tarixi — ilk e-qaimənin tarixi; nömrə və tarix sonra düzəldilir). Yalnız mühasibin düyməsi ilə; 2026-10-15 §5-in "kontragent avtomatik yaradılmır" qaydası (idxalda səssiz yaradılmama) qüvvədədir. Ləğv edilmiş e-qaimələrin VÖEN-ləri yaradılmır; mövcud kontragentlərə toxunulmur.
+2. **Bütün qaimə — bir xidmət, toplu.** Mal sətirləri olmayan ("Qaimələr üzrə") e-qaimələrin kontragentləri üçün qutuda bir xidmət (və alışda xərc maddəsi) seçilir; hər VÖEN-ə "bütün qaimə" uyğunluğu yazılır (öz uyğunluğu olan VÖEN-ə toxunulmur). Rejimi mühasib seçir ("təklif" və ya "avtomatik").
+3. **ƏDV bazası göstərilməyən e-qaimə** (ƏDV ödəyicisi olmayan malsatan — DVX heç bir baza yazmır): ƏDV 0-dırsa, bütün məbləğ "ƏDV-yə cəlb olunmayan"dır; ƏDV varsa, bütün məbləğ 18% kimi yoxlanır.

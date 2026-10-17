@@ -1477,3 +1477,69 @@ test('partners of the box at once: from DVX name and VÖEN, an "Əsas" contract 
   });
   assert.deepEqual([again.partners, again.contracts], [0, 0]);
 });
+
+test('whole e-qaimə of many VÖENs to one service at once; a VÖEN with its own entry keeps it', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const other = f.partner('İcarə MMC', '1700000007');
+  f.contract(other, 'İ-1', 'purchase');
+  // TELECOM has two contracts: its contract-only entry gets the product added.
+  f.contract(s.telecom, 'R-2', 'purchase');
+  map(f, 'purchase', { taxId: TELECOM, contractId: s.telecomContract });
+  map(f, 'purchase', { taxId: SUPPLIER, productId: s.service, expenseItemId: s.rabite }, 'suggest');
+  const bulk = (productId: string, mode: 'auto' | 'suggest' = 'auto') =>
+    f.exec({
+      type: 'eqMap.bulk',
+      companyId: f.companyId,
+      direction: 'purchase',
+      taxIds: [TELECOM, '1700000007', SUPPLIER],
+      productId,
+      account: '',
+      expenseItemId: s.rabite,
+      incomeTypeId: '',
+      vatTreatment: '',
+      mode,
+    });
+  assert.throws(() => bulk(s.paper), /yalnız xidmətə yazılır/);
+  const r = bulk(s.service);
+  assert.deepEqual([r.learned, r.same], [2, 1]);
+  const maps = f.query<EqMapView[]>({ type: 'eqMaps', companyId: f.companyId });
+  const telecom = maps.find((m) => m.taxId === TELECOM)!;
+  assert.deepEqual(
+    [telecom.product, telecom.contractId, telecom.mode],
+    ['Rabitə xidməti', s.telecomContract, 'auto'],
+  );
+  // The supplier's own (suggested) entry is left as it was.
+  assert.equal(maps.find((m) => m.taxId === SUPPLIER)!.mode, 'suggest');
+  const res = load(
+    f,
+    'purchase',
+    [
+      doc('MT1', '2026-09-30', TELECOM, {
+        net: '50.00',
+        vat: '9.00',
+        total: '59.00',
+        base18: '50.00',
+      }),
+      doc('MT2', '2026-09-30', '1700000007', {
+        net: '300.00',
+        vat: '0.00',
+        total: '300.00',
+        baseExempt: '300.00',
+      }),
+      // A supplier outside VAT prints no base at all: the whole amount is outside VAT.
+      doc('MT3', '2026-09-30', '1700000007', { net: '120.00', vat: '0.00', total: '120.00' }),
+    ],
+    'invoices',
+  );
+  assert.equal(res.posted, 3);
+  const mt3 = f.query<InvoiceDetail>({
+    type: 'invoice',
+    companyId: f.companyId,
+    id: byNumber(f, 'MT3').invoiceId,
+  });
+  assert.deepEqual(
+    mt3.lines.map((l) => [l.vatRate, l.net, l.vat]),
+    [['nontaxable', '120.00', '0.00']],
+  );
+});

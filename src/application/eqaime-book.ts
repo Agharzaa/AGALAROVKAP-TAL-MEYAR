@@ -420,7 +420,9 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
       ['nontaxable', doc.base_nontaxable as bigint],
     ];
     const used = bases.filter(([, v]) => v !== 0n);
-    if (!used.length && doc.header_full === 0n) used.push(['18', doc.net as bigint]);
+    // No VAT base printed at all (a supplier outside VAT prints none): without VAT the whole amount
+    // is outside VAT; with VAT it is checked as 18% below.
+    if (!used.length) used.push([doc.vat === 0n ? 'nontaxable' : '18', doc.net as bigint]);
     const baseSum = used.reduce((s, [, v]) => s + v, 0n);
     if (baseSum !== doc.net) {
       linesAuto = false;
@@ -1355,4 +1357,53 @@ export function createEqPartners(tx: Tx, cmd: CommandOf<'eqaime.partners'>): Com
     `${cmd.direction === 'purchase' ? 'Alış' : 'Satış'}: ${partners} kontragent, ${contracts} müqavilə`,
   );
   return { id: cmd.companyId, partners, contracts };
+}
+
+/** Header entries for many VÖENs at once (each checked by saveEqMap like one typed by hand). */
+export function bulkEqMap(tx: Tx, cmd: CommandOf<'eqMap.bulk'>): CommandResult {
+  tx.company(cmd.companyId);
+  let learned = 0;
+  let same = 0;
+  const taxIds = [...new Set(cmd.taxIds.map((t) => t.replace(/\s/g, '')))];
+  for (const taxId of taxIds) {
+    const old = tx.db.get(
+      `SELECT * FROM eq_product_map WHERE company_id=? AND direction=? AND tax_id=? AND dvx_code='' AND name_key=''
+         AND archived=0`,
+      cmd.companyId,
+      cmd.direction,
+      taxId,
+    );
+    if (old && old.product_id) {
+      same++;
+      continue;
+    }
+    const target = {
+      productId: cmd.productId,
+      account: cmd.account,
+      expenseItemId: cmd.expenseItemId,
+      incomeTypeId: cmd.incomeTypeId,
+      vatTreatment: cmd.vatTreatment,
+      mode: cmd.mode,
+    };
+    saveEqMap(
+      tx,
+      old
+        ? { ...mapCommand(old), ...target, key: 'eq-bulk-0', companyId: cmd.companyId }
+        : {
+            type: 'eqMap.save',
+            key: 'eq-bulk-0',
+            companyId: cmd.companyId,
+            archived: false,
+            direction: cmd.direction,
+            taxId,
+            dvxCode: '',
+            name: '',
+            unit: '',
+            contractId: '',
+            ...target,
+          },
+    );
+    learned++;
+  }
+  return { id: cmd.companyId, learned, same };
 }

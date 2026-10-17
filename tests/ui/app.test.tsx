@@ -1198,3 +1198,88 @@ test('DVX box: the partners it names are created at once, with a contract each',
     h.close();
   }
 });
+
+test('DVX box: e-qaimələr with totals only are mapped to one service for all their partners', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Rabitə ASC',
+    taxId: '1700000003',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'R-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  });
+  h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Rabitə xidməti',
+    unit: 'ay',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  });
+  h.run({
+    type: 'eqaime.import',
+    directionConfirmed: true,
+    companyId: s.companyId,
+    direction: 'purchase',
+    report: 'invoices',
+    source: 'file',
+    fileName: 'gelenler.xlsx',
+    fileHash: 'd'.repeat(64),
+    documents: [
+      {
+        row: 2,
+        number: 'MT1',
+        date: '2026-09-30',
+        taxId: '1700000003',
+        name: 'Rabitə ASC',
+        status: 'Təsdiqləndi',
+        net: '50.00',
+        vat: '9.00',
+        base18: '50.00',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(
+      await page.findByRole('button', { name: /Bütün qaiməni bir xidmətə bağla \(1 kontragent\)/ }),
+    );
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.click(dialog.getByRole('combobox', { name: 'Xidmət' }));
+    await user.keyboard('Rabitə');
+    await user.keyboard('{Enter}');
+    await user.click(dialog.getByRole('button', { name: 'Uyğunluğu yaz' }));
+    await page.findByText(/1 kontragentə “bütün qaimə” uyğunluğu yazıldı\. Təkliflər hazırdır/);
+    const box = h.ledger.query({
+      type: 'eqInbox',
+      companyId: s.companyId,
+      direction: 'purchase',
+      from: '',
+      to: '',
+    }) as { documents: { proposal: { lines: unknown[] } | null }[] };
+    assert.equal(box.documents[0]!.proposal!.lines.length, 1);
+  } finally {
+    h.close();
+  }
+});
