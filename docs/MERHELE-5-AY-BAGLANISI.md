@@ -1,6 +1,6 @@
 # Mərhələ 5 — Kassa, valyuta məzənnələri, ay bağlanışı, idarə paneli (dizayn)
 
-Status: **layihə — istifadəçinin təsdiqini gözləyir** (17.10.2026). Kod təsdiqdən sonra yazılır. Açıq suallar §11-dədir; hər birində mühəndis tövsiyəsi var.
+Status: **təsdiqlənib** (17.10.2026). Açıq suallarda (§11) tövsiyələr qəbul olunub. Qərarlar `docs/QERARLAR.md`-dədir (2026-10-17, mərhələ 5); bu sənəd icra planı kimi qalır.
 
 Əsas: `docs/QERARLAR.md` — "Satış və ƏDV" (ay sonu 601 və 604.1 → 801), "1C-də gördüklərimiz" (ay bağlanışı: 721/731 → 801, 601/611 → 801, 604.1 → 801, 801 → 341; valyuta qalıqlarının yenidən qiymətləndirilməsi 731 / 611), 2026-10-07 axşam §4 (valyuta avansları 243.02 / 543.02 ay sonu yenidən qiymətləndirilir), mərhələ 2 "Məhdudiyyətlər" (dəqiq FIFO ay bağlanışında), 2026-10-14 §5 (öz hesabları arası 222.01), 2026-10-07 gecə §2 (221.01–221.05, kassa subkontosu).
 

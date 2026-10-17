@@ -289,3 +289,22 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 1. Qutuda "Yeni kontragentləri yarat" düyməsi: gözləyən, DVX-də təsdiqlənmiş e-qaimələrin kitabçada olmayan VÖEN-ləri DVX-dəki adla yaradılır (VÖEN-in son rəqəmi 2 — fiziki şəxs, qalanı hüquqi şəxs). İstəyə görə aktiv müqaviləsi olmayan hər kontragentə qutunun növündə "Əsas" müqavilə açılır (tarixi — ilk e-qaimənin tarixi; nömrə və tarix sonra düzəldilir). Yalnız mühasibin düyməsi ilə; 2026-10-15 §5-in "kontragent avtomatik yaradılmır" qaydası (idxalda səssiz yaradılmama) qüvvədədir. Ləğv edilmiş e-qaimələrin VÖEN-ləri yaradılmır; mövcud kontragentlərə toxunulmur.
 2. **Bütün qaimə — bir xidmət, toplu.** Mal sətirləri olmayan ("Qaimələr üzrə") e-qaimələrin kontragentləri üçün qutuda bir xidmət (və alışda xərc maddəsi) seçilir; hər VÖEN-ə "bütün qaimə" uyğunluğu yazılır (öz uyğunluğu olan VÖEN-ə toxunulmur). Rejimi mühasib seçir ("təklif" və ya "avtomatik").
 3. **ƏDV bazası göstərilməyən e-qaimə** (ƏDV ödəyicisi olmayan malsatan — DVX heç bir baza yazmır): ƏDV 0-dırsa, bütün məbləğ "ƏDV-yə cəlb olunmayan"dır; ƏDV varsa, bütün məbləğ 18% kimi yoxlanır.
+
+## 2026-10-17 — mərhələ 5: kassa, məzənnələr, ay bağlanışı, idarə paneli
+
+İcra planı: `docs/MERHELE-5-AY-BAGLANISI.md`. İstifadəçi dizaynı və §11 tövsiyələrini təsdiqlədi.
+
+### TƏSDİQLƏNDİ
+
+1. **Kassa sənədi:** mədaxil (KMO-000001) və məxaric (KXO-000001) orderi, bank sənədinin güzgüsü (çoxsətirli, sərbəst müxabir hesab, qaimələrə bölgü, avans, təhtəlhesab, storno). Kassalar ayrıca kitabçadır (hesab 221.01 / 221.02 / 221.04, valyuta); mövcud "kassa" elementləri eyni id ilə köçür.
+2. **Kassa qalığı heç bir gündə mənfi ola bilməz** — sənəd saxlanmır.
+3. **Bankdan nağd pul və banka nağd pul** 222.01 vasitəsilə iki sənədlə (bank məxarici Dt 222.01 / Kt 223 + kassa mədaxili Dt 221 / Kt 222.01 və əksinə).
+4. **Valyuta məzənnələri kitabçası** (AMB, 4 onluq, şirkətlərdən asılı deyil); "AMB-dən yüklə" düyməsi cbar.az-ın rəsmi XML faylından; açılışda avtomatik yükləmə yoxdur. Sənədlərdə məzənnə kitabçadan özü dolur, dəyişdirmək olar.
+5. **Yenidən qiymətləndirmə** ayın son günü bütün valyuta hesablarında (221.04, 222.03, 222.04, 223.02, 211.02, 531.02, 243.02, 543.02, 244.02): gəlir 611 (gəlir növü "Məzənnə fərqi"), xərc 731 (xərc maddəsi "Məzənnə fərqi").
+6. **Alış ƏDV-sinin əvəzləşdirilməsi:** ay sonu Dt 521.01 / Kt 241 yalnız DVX-də təsdiqlənmiş e-qaiməsi olan və ƏDV hissəsi ödənilmiş (224.04-dən; fiziki şəxs və xarici malsatana cari hesabdan) alış qaimələri üzrə; qalanı 241-də gözləyir.
+7. **FIFO dəqiqləşdirilməsi** ay bağlanışında ayrıca düzəliş yazılışı ilə (Dt 701 / Kt 205 və ya əksinə); satış qaimələri yenidən keçirilmir.
+8. **Ay bağlanışı:** 6xx / 7xx → 801, 801 → 341, dekabrda 341 → 343; ardıcıl (əvvəlki ay bağlanmadan sonrakı yox), yalnız sonuncu ay ləğv olunur (storno, səbəblə); bütün addımlar bir tranzaksiyada; Mənfəət və zərər hesabatı bağlanış yazılışlarını istisna edir.
+9. **Mənfəət vergisi** (901 / 521.04) bu mərhələdə hesablanmır.
+10. **Kassa orderləri** standart forma ilə, PDF-ə çap.
+11. **İdarə paneli** göstəriciləri: gəlir, mənfəət, pul (bank + kassa), debitor, kreditor, ödənilməli ƏDV, gözləyən e-qaimələr; 12 ayın dinamikası.
+12. **Valyuta kassası** (221.04) daxildir.
