@@ -458,6 +458,17 @@ export const commandSchema = z.discriminatedUnion('type', [
    * of the same partner and total (its number is then written in; the postings do not change).
    */
   z.object({ type: z.literal('eqaime.link'), ...base, documentId: id, invoiceId: id }),
+  /**
+   * The partners of the waiting e-qaimələr that are not in the catalog yet, created at once from
+   * DVX's name and VÖEN (only on the accountant's request); with contracts: one "Əsas" contract
+   * of the box's kind for each partner of the box that has no active one.
+   */
+  z.object({
+    type: z.literal('eqaime.partners'),
+    ...base,
+    direction: z.enum(['sale', 'purchase']),
+    contracts: z.boolean().default(true),
+  }),
   /** Map entries (suggest) from how the accountant booked this e-qaimə. */
   z.object({ type: z.literal('eqaime.learn'), ...base, documentId: id }),
   z.object({
@@ -506,6 +517,9 @@ export interface CommandResult {
   updated?: number;
   same?: number;
   conflicts?: number;
+  /** eqaime.partners: partners and contracts created. */
+  partners?: number;
+  contracts?: number;
   /** E-qaimə map entries created by eqaime.learn. */
   learned?: number;
   /** Rows an "auto" rule posted, and rows it recognised but could not post (with the reason). */

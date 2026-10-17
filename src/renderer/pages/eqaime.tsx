@@ -82,6 +82,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   });
   const [tab, setTab] = useState<EqBucket>('proposal');
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [partnersOpen, setPartnersOpen] = useState(false);
+  const [withContracts, setWithContracts] = useState(true);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   useEffect(() => setConfirmed(false), [preview]);
@@ -264,6 +266,31 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     if (r) setMessage(`${d.invoiceNumber} storno edildi; ${d.number} sizi gözləyir.`);
   }
   const ready = (docs ?? []).filter((d) => d.proposal?.state === 'auto').length;
+  // Partners DVX names that the catalog lacks, and known partners without a contract of this kind.
+  const newPartners = new Set(
+    (docs ?? []).flatMap((d) => (d.proposal?.newPartner ? [d.proposal.newPartner.taxId] : [])),
+  ).size;
+  const noContract = new Set(
+    (docs ?? [])
+      .filter((d) =>
+        d.proposal?.reasons.some((r) => /aktiv (alış|satış) müqaviləsi yoxdur/.test(r)),
+      )
+      .map((d) => d.taxId),
+  ).size;
+  async function createPartners() {
+    const r = await m.run({
+      type: 'eqaime.partners',
+      companyId: win.companyId,
+      direction,
+      contracts: withContracts,
+    });
+    if (r) {
+      setPartnersOpen(false);
+      setMessage(
+        `Yaradıldı: ${r.partners ?? 0} kontragent${withContracts ? `, ${r.contracts ?? 0} “Əsas” müqavilə` : ''}. Nömrə və tarixi sonra “Kontragentlər və müqavilələr”də düzəldə bilərsiniz.`,
+      );
+    }
+  }
 
   const columns: Column<EqDocumentView>[] = [
     { key: 'date', label: 'Tarix', render: (d) => day(d.date) },
@@ -583,6 +610,43 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             </button>
           </p>
           {reconcileOpen && <Reconcile direction={direction} />}
+          {newPartners + noContract > 0 && (
+            <p>
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={m.busy}
+                onClick={() => setPartnersOpen(true)}
+              >
+                Yeni kontragentləri yarat ({newPartners}
+                {noContract ? ` · müqaviləsiz ${noContract}` : ''})
+              </button>
+            </p>
+          )}
+          {partnersOpen && (
+            <Confirm
+              title="Kontragentləri e-qaimələrdən yarat"
+              confirmLabel="Yarat"
+              onCancel={() => setPartnersOpen(false)}
+              onConfirm={() => void createPartners()}
+            >
+              <p>
+                Gözləyən e-qaimələrdə kitabçada olmayan {newPartners} VÖEN var. Hər biri DVX-dəki
+                adı ilə yaradılacaq (VÖEN-in son rəqəmi 2 olanlar fiziki şəxs, qalanları hüquqi
+                şəxs). Mövcud kontragentlərə toxunulmur.
+              </p>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={withContracts}
+                  onChange={(e) => setWithContracts(e.target.checked)}
+                />{' '}
+                Aktiv {direction === 'purchase' ? 'alış' : 'satış'} müqaviləsi olmayan hər
+                kontragentə “Əsas” müqavilə də aç
+              </label>
+              {m.error && <Notice>{m.error.message}</Notice>}
+            </Confirm>
+          )}
           {ready > 0 && (
             <p>
               <button

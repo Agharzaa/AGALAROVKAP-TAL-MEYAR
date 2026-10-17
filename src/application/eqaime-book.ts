@@ -26,6 +26,7 @@ import { parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { EqLineView, EqMapView, EqProposal, EqProposalLine } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
+import { saveContract, savePartner } from './catalog.js';
 import { saveInvoice } from './invoices.js';
 import { loadChart, type Tx } from './tx.js';
 
@@ -1276,4 +1277,82 @@ export function eqMaps(db: Db, companyId: string): EqMapView[] {
       uses: Number(r.uses),
       lastUsedAt: String(r.last_used_at),
     }));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Partners of the box, at once (on the accountant's request; QERARLAR 2026-10-17)
+
+export function createEqPartners(tx: Tx, cmd: CommandOf<'eqaime.partners'>): CommandResult {
+  tx.company(cmd.companyId);
+  const kind = cmd.direction;
+  // Every VÖEN of the waiting, accepted e-qaimələr: DVX's latest name, the earliest date.
+  const rows = tx.db.all(
+    `SELECT tax_id, MIN(date) AS first, (SELECT d2.name FROM eq_documents d2 WHERE d2.company_id=d.company_id
+         AND d2.direction=d.direction AND d2.tax_id=d.tax_id ORDER BY d2.date DESC LIMIT 1) AS name
+     FROM eq_documents d WHERE company_id=? AND direction=? AND state='waiting' AND status='accepted'
+     GROUP BY tax_id ORDER BY tax_id`,
+    cmd.companyId,
+    kind,
+  );
+  const sub = (type: string) => ({
+    type,
+    key: 'eq-partners-0',
+    companyId: cmd.companyId,
+    archived: false,
+  });
+  let partners = 0;
+  let contracts = 0;
+  for (const r of rows) {
+    const taxId = String(r.tax_id);
+    let partner = tx.db.get(
+      'SELECT id, archived FROM partners WHERE company_id=? AND tax_id=?',
+      cmd.companyId,
+      taxId,
+    );
+    if (!partner) {
+      const id = savePartner(tx, {
+        ...sub('partner.save'),
+        type: 'partner.save',
+        name: (String(r.name).trim() || `VÖEN ${taxId}`).slice(0, 240),
+        taxId,
+        // The last digit of a VÖEN: 2 — an individual (sole trader), otherwise a legal entity.
+        kind: taxId.endsWith('2') ? 'individual' : 'legal',
+        note: 'DVX e-qaiməsindən yaradılıb',
+      }).id;
+      partner = { id, archived: 0n };
+      partners++;
+    }
+    if (!cmd.contracts || partner.archived === 1n) continue;
+    const active = tx.db.get(
+      'SELECT 1 AS x FROM contracts WHERE company_id=? AND partner_id=? AND kind=? AND archived=0',
+      cmd.companyId,
+      String(partner.id),
+      kind,
+    );
+    const taken = tx.db.get(
+      "SELECT 1 AS x FROM contracts WHERE company_id=? AND partner_id=? AND number_key='ƏSAS'",
+      cmd.companyId,
+      String(partner.id),
+    );
+    if (active || taken) continue;
+    saveContract(tx, {
+      ...sub('contract.save'),
+      type: 'contract.save',
+      partnerId: String(partner.id),
+      number: 'Əsas',
+      date: String(r.first),
+      kind,
+      currency: 'AZN',
+      note: 'DVX e-qaimələrindən yaradılıb; nömrəni və tarixi müqaviləyə görə düzəldin',
+    });
+    contracts++;
+  }
+  tx.audit(
+    cmd.companyId,
+    'Kontragentlər e-qaimələrdən yaradıldı',
+    'DVX',
+    cmd.companyId,
+    `${cmd.direction === 'purchase' ? 'Alış' : 'Satış'}: ${partners} kontragent, ${contracts} müqavilə`,
+  );
+  return { id: cmd.companyId, partners, contracts };
 }

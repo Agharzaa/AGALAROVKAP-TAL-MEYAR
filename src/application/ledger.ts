@@ -27,7 +27,7 @@ import {
 } from './statements.js';
 import { cancelInvoice, saveInvoice } from './invoices.js';
 import { ignoreEq, importEq, resolveEq, restoreEq } from './eqaime.js';
-import { applyEq, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
+import { applyEq, createEqPartners, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
 import { cancelOperation, saveOperation } from './operations.js';
 import { runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
@@ -155,6 +155,8 @@ export class Ledger {
         return linkEq(tx, c);
       case 'eqaime.learn':
         return learnEq(tx, c);
+      case 'eqaime.partners':
+        return createEqPartners(tx, c);
       case 'eqMap.save':
         return saveEqMap(tx, c);
       case 'eqaime.ignore':

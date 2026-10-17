@@ -281,3 +281,9 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 1. **Proqram özü yenilənir.** Quraşdırılmış Meyar hər açılanda və açıq qaldıqca hər 4 saatdan bir GitHub-dakı layihə release-lərində yeni versiyanı yoxlayır, arxa planda endirir, proqram bağlananda quraşdırır; status sətrində "İndi yenidən başlat" da var. Saxlanmamış sənəd varsa, bağlanma əvvəlcə soruşur.
 2. Yeniləmə məlumat bazasına toxunmur: baza istifadəçi qovluğunda qalır, miqrasiyadan əvvəl açılış nüsxəsi alınır, köhnə proqram daha yeni bazanı açmır.
 3. İlk dəfə 0.6.1 əl ilə quraşdırılır (0.6.0 və əvvəlkilərdə yeniləyici yoxdur); sonrakı versiyalar özü gəlir. Versiyalar hələ imzalanmamış sınaq versiyalarıdır.
+
+## 2026-10-17 — e-qaimə qutusundan kontragentlərin toplu yaradılması
+
+### TƏSDİQLƏNDİ
+
+1. Qutuda "Yeni kontragentləri yarat" düyməsi: gözləyən, DVX-də təsdiqlənmiş e-qaimələrin kitabçada olmayan VÖEN-ləri DVX-dəki adla yaradılır (VÖEN-in son rəqəmi 2 — fiziki şəxs, qalanı hüquqi şəxs). İstəyə görə aktiv müqaviləsi olmayan hər kontragentə qutunun növündə "Əsas" müqavilə açılır (tarixi — ilk e-qaimənin tarixi; nömrə və tarix sonra düzəldilir). Yalnız mühasibin düyməsi ilə; 2026-10-15 §5-in "kontragent avtomatik yaradılmır" qaydası (idxalda səssiz yaradılmama) qüvvədədir. Ləğv edilmiş e-qaimələrin VÖEN-ləri yaradılmır; mövcud kontragentlərə toxunulmur.

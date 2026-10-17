@@ -1134,3 +1134,67 @@ test('audit: a cabinet export goes only to the box that opened the cabinet, not 
     h.close();
   }
 });
+
+test('DVX box: the partners it names are created at once, with a contract each', async () => {
+  const h = harness();
+  const s = seed(h);
+  h.run({
+    type: 'eqaime.import',
+    directionConfirmed: true,
+    companyId: s.companyId,
+    direction: 'purchase',
+    report: 'invoices',
+    source: 'file',
+    fileName: 'gelenler.xlsx',
+    fileHash: 'c'.repeat(64),
+    documents: [
+      {
+        row: 2,
+        number: 'MT1',
+        date: '2026-09-05',
+        taxId: '1800000001',
+        name: 'Yeni Təchizatçı MMC',
+        status: 'Təsdiqləndi',
+        net: '100.00',
+        vat: '18.00',
+        base18: '100.00',
+      },
+      {
+        row: 3,
+        number: 'MT2',
+        date: '2026-09-06',
+        taxId: '1800000002',
+        name: 'Fərdi Sahibkar',
+        status: 'Təsdiqləndi',
+        net: '50.00',
+        vat: '0.00',
+        baseExempt: '50.00',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(await page.findByRole('button', { name: /Yeni kontragentləri yarat \(2\)/ }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.click(dialog.getByRole('button', { name: 'Yarat' }));
+    await page.findByText(/Yaradıldı: 2 kontragent, 2 “Əsas” müqavilə/);
+    const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+    assert.deepEqual(
+      catalog.partners
+        .filter((p) => p.taxId.startsWith('18'))
+        .map((p) => [p.name, p.kind])
+        .sort(),
+      [
+        ['Fərdi Sahibkar', 'individual'],
+        ['Yeni Təchizatçı MMC', 'legal'],
+      ],
+    );
+  } finally {
+    h.close();
+  }
+});

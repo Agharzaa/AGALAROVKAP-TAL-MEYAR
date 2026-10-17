@@ -311,6 +311,8 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 124, `npm run test:ui` 17, 
 
 Real fayllarda: 0 oxunmayan sətir, tarix "dd-mm-yyyy", məbləğlər 4 onluqla (ƏDV-nin qəpiyə yuvarlaqlaşdırılması Meyar-ın hesabı ilə eynidir), başlıqdan istiqamət ("Daxil olan / Göndərilən qaimələrin siyahısı") düzgün. Müvəqqəti bazada başdan-sona: 461 + 166 yükləndi (37 ms / 9 ms), təkrar yükləmə 0 yeni, "Passiv" kənara qoyuldu, gözləyənlər "DVX-də gözləyir"də. Real faylda düzəlişin əsas e-qaiməyə istinadı yoxdur — düzəlişlər mühasibə təklif olunur. Testlər uydurma məlumatla real quruluşda (`tests/domain/dvx-fixture.ts`). `npm test` 131.
 
+**0.6.3 — kontragentlərin toplu yaradılması** (QERARLAR 2026-10-17): qutuda "Yeni kontragentləri yarat" — DVX adı və VÖEN ilə, istəyə görə "Əsas" müqavilə ilə. Real fayllarla müvəqqəti bazada: 114 + 58 kontragent və müqavilə, 434 + 128 e-qaimə "Naməlum"dan "Təklif"ə keçdi. Testlər: `npm test` 132, `npm run test:ui` 18.
+
 **Hələ yoxlanmayıb:** "Mallar üzrə" real ixracı (sətirlər) — istifadəçidən gözlənilir.
 
 ## Açıq məsələlər

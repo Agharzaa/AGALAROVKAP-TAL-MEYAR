@@ -1427,3 +1427,53 @@ test('2026-10-16 §3: a file that proves no direction loads only on the user’s
   assert.throws(() => cmd(false), /Faylda istiqamət görünmür.*təsdiq edin/);
   assert.equal(cmd(true).added, 1);
 });
+
+test('partners of the box at once: from DVX name and VÖEN, an "Əsas" contract where none is active', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  const lonely = f.partner('Müqaviləsiz MMC', '1700000009');
+  map(f, 'purchase', { dvxCode: '4802', productId: s.paper });
+  const g = () => [good('4802', 'Kağız', '1', '100', '100.00', '18.00')];
+  load(f, 'purchase', [
+    withGoods('MT1', '2026-09-05', '1800000001', g()),
+    withGoods('MT2', '2026-09-03', '1800000001', g()),
+    withGoods('MT3', '2026-09-06', '1800000002', g()),
+    withGoods('MT4', '2026-09-07', '1700000009', g()),
+    { ...withGoods('MT5', '2026-09-08', '1800000005', g()), status: 'Ləğv edildi' },
+  ]);
+  const r = f.exec({
+    type: 'eqaime.partners',
+    companyId: f.companyId,
+    direction: 'purchase',
+    contracts: true,
+  });
+  assert.deepEqual([r.partners, r.contracts], [2, 3]);
+  const partners = f.catalog().partners;
+  const p1 = partners.find((p) => p.taxId === '1800000001')!;
+  assert.deepEqual([p1.name, p1.kind], ['Kontragent 1800000001', 'legal']);
+  assert.equal(partners.find((p) => p.taxId === '1800000002')!.kind, 'individual');
+  // A cancelled e-qaimə's partner is not created.
+  assert.equal(
+    partners.some((p) => p.taxId === '1800000005'),
+    false,
+  );
+  const c = f.catalog().contracts.filter((x) => x.partnerId === p1.id);
+  assert.deepEqual(
+    c.map((x) => [x.number, x.date, x.kind]),
+    [['Əsas', '2026-09-03', 'purchase']],
+  );
+  assert.equal(f.catalog().contracts.filter((x) => x.partnerId === lonely).length, 1);
+  // Known now: the confirmed entry books them.
+  assert.equal(
+    f.exec({ type: 'eqaime.apply', companyId: f.companyId, direction: 'purchase' }).posted,
+    4,
+  );
+  // Again: nothing more to create.
+  const again = f.exec({
+    type: 'eqaime.partners',
+    companyId: f.companyId,
+    direction: 'purchase',
+    contracts: true,
+  });
+  assert.deepEqual([again.partners, again.contracts], [0, 0]);
+});
