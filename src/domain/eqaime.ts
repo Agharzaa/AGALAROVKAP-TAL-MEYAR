@@ -72,12 +72,15 @@ export interface EqReadResult {
   columns: Partial<Record<Column, string>>;
   /** Direction named in the title block or sheet ("Gələnlər" / "Göndərilənlər"). */
   directionHint?: EqDirection;
+  /** The company the export belongs to, printed above the table ("4600468301/…"). */
+  ownerTaxId?: string;
   from?: string;
   to?: string;
 }
 
 type Column =
   | 'kind'
+  | 'docType'
   | 'series'
   | 'number'
   | 'date'
@@ -130,6 +133,8 @@ export function foldKey(text: string): string {
 
 const headerWords: Record<Column, string[]> = {
   kind: ['qaimə/akt növləri', 'qaimə növü', 'qaimənin növü', 'sənədin növü', 'növü', 'növ'],
+  // "Cari" or "Düzəliş": a correction is marked here, not in the kind (DVX 2026 exports).
+  docType: ['tipi', 'tip'],
   series: ['seriya', 'qaimə seriyası', 'seriyası'],
   number: [
     'nömrə',
@@ -252,22 +257,34 @@ export function directionFromText(text: string): EqDirection | undefined {
 export function eqStatus(text: string): EqStatus {
   const t = foldKey(text);
   if (!t) return 'unknown';
-  if (/\blegv\b/.test(t)) return 'cancelled';
-  if (/\bimtina\b/.test(t) || /\brədd\b/.test(t) || /\bredd\b/.test(t)) return 'rejected';
+  // Real DVX texts (2026 exports): "Ləğvdən imtina / Təsdiqləndi" — the cancellation was refused,
+  // the e-qaimə stands; "Passiv edilmiş" — annulled; "Ləğvə göndərildi", "Düzəlişə göndərilmiş",
+  // "Düzəlişə qaytarıldı" — not settled yet.
+  if (/\blegvden imtina\b/.test(t)) return 'accepted';
+  if (/\blegv edil/.test(t) || /\blegv\b/.test(t) || /\bpassiv\b/.test(t)) return 'cancelled';
+  if (/\bimtina\b/.test(t) || /\bredd\b/.test(t)) return 'rejected';
   if (/\bduzelis\b/.test(t)) return 'corrected';
-  if (/\b(gozl|gonderil|qaralama|baxilir|imzalanmayib)/.test(t)) return 'pending';
+  if (/\b(gozl|gonderil|qaralama|baxilir|imzalanmayib)/.test(t) || /\bqaytaril/.test(t))
+    return 'pending';
   if (/\btesdiq(lendi|lenib|lenmis)\b/.test(t)) return 'accepted';
   return 'unknown';
 }
 
-/** "Qaimə/Akt növləri" → kind. An empty cell is an ordinary e-qaimə. */
+/**
+ * "Qaimə/Akt növləri" (and the "Tipi" column) → kind. An empty cell is an ordinary e-qaimə. Only
+ * the standard supply e-qaimə is "main"; agent, processing, export, excise-transfer and VM 177.5
+ * e-qaimələr are "other" (booked by hand). A VM 163 refinement ("Qaytarma istisna olmaqla …
+ * dəqiqləşdirilməsi") is a correction although it names returns.
+ */
 export function eqKind(text: string): EqKind {
   const t = foldKey(text);
   if (!t) return 'main';
-  if (/\bduzelis/.test(t)) return 'correction';
+  if (/\bduzelis/.test(t) || /\bdeqiqlesdiril/.test(t) || /\b163\b/.test(t)) return 'correction';
   if (/\bqaytar/.test(t)) return 'return';
   if (/\bavans/.test(t)) return 'advance';
-  if (/\b(esas|adi|standart|qaime|akt|faktura|elektron)\b/.test(t)) return 'main';
+  if (/\bmallarin islerin ve xidmetlerin teqdim edilmesi\b/.test(t)) return 'main';
+  if (/^(esas|adi|standart)\b/.test(t) || t === 'elektron qaime faktura' || t === 'qaime')
+    return 'main';
   return 'other';
 }
 
@@ -327,6 +344,7 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
     ' ',
   );
   const directionHint = directionFromText(titleText);
+  const ownerTaxId = /(?:^|\s)(\d{10})\s*\//.exec(titleText)?.[1];
   if (!header)
     return {
       documents: [],
@@ -339,6 +357,7 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
       ],
       columns: {},
       ...(directionHint ? { directionHint } : {}),
+      ...(ownerTaxId ? { ownerTaxId } : {}),
     };
   const { index, map } = header;
   const columns: Partial<Record<Column, string>> = {};
@@ -410,7 +429,10 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
         buyerTaxId,
         sellerName: get(row, 'sellerName'),
         buyerName: get(row, 'buyerName'),
-        kind: get(row, 'kind'),
+        kind:
+          foldKey(get(row, 'docType')) === 'duzelis'
+            ? `Düzəliş · ${get(row, 'kind')}`
+            : get(row, 'kind'),
         status: get(row, 'status'),
         refNumber: eqNumber('', get(row, 'refNumber')),
         net: line ? line.net : amount(get(row, 'net'), 'ƏDV-siz məbləğ'),
@@ -451,6 +473,7 @@ export function readEqTable(rows: readonly string[][], title = ''): EqReadResult
     problems,
     columns,
     ...(directionHint ? { directionHint } : {}),
+    ...(ownerTaxId ? { ownerTaxId } : {}),
     ...(dates.length ? { from: dates[0]!, to: dates[dates.length - 1]! } : {}),
   };
 }

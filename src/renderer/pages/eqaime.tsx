@@ -17,6 +17,7 @@ import type {
   EqImportView,
   EqInboxView,
 } from '../../contracts/queries';
+import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { addAmounts, day, money, qty } from '../format';
 import { useMutation, useQuery } from '../hooks';
@@ -65,6 +66,7 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 export function EqaimePage({ direction }: { direction: Direction }) {
   const win = useWindow();
   const ws = useWorkspace();
+  const { company } = useCatalog(win.companyId);
   const page = pages[direction === 'purchase' ? 'eqPurchase' : 'eqSale'];
   const box = useQuery<EqInboxView>({
     type: 'eqInbox',
@@ -151,6 +153,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       companyId: win.companyId,
       direction,
       ...(preview.read.directionHint ? { fileDirection: preview.read.directionHint } : {}),
+      ...(preview.read.ownerTaxId ? { fileOwnerTaxId: preview.read.ownerTaxId } : {}),
       directionConfirmed: confirmed,
       report: preview.read.report,
       source: preview.source,
@@ -422,7 +425,9 @@ export function EqaimePage({ direction }: { direction: Direction }) {
 
   const p = preview?.read;
   const d = detail.data;
-  const wrongDirection = p?.directionHint && p.directionHint !== direction;
+  const wrongDirection =
+    (p?.directionHint && p.directionHint !== direction) ||
+    (!!p?.ownerTaxId && !!company && p.ownerTaxId !== company.taxId);
   // Neither a title nor seller/buyer VÖEN columns: only the user can say which box it is for.
   const unproven =
     !!p && !p.directionHint && !p.documents.some((d) => d.sellerTaxId || d.buyerTaxId);
@@ -505,6 +510,19 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               Dövr: {day(p.from ?? '')} – {day(p.to ?? '')} · {p.documents.length} e-qaimə · cəmi{' '}
               {money(addAmounts(p.documents.map((x) => x.total)))}
             </li>
+            {p.ownerTaxId && (
+              <li>
+                Faylın şirkəti: VÖEN <b>{p.ownerTaxId}</b>
+                {company && p.ownerTaxId !== company.taxId ? (
+                  <b className="pair-bad">
+                    {' '}
+                    — bu şirkət deyil ({company.taxId}); fayl yüklənməyəcək
+                  </b>
+                ) : (
+                  <b className="pair-ok"> — bu şirkətdir</b>
+                )}
+              </li>
+            )}
             <li>Tanınan sütunlar: {Object.values(p.columns).filter(Boolean).join(', ')}</li>
             {p.problems.length > 0 && (
               <li className="pair-bad">

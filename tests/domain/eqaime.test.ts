@@ -13,6 +13,7 @@ import {
   foldKey,
   readEqTable,
 } from '../../src/domain/eqaime.js';
+import { realExport, SUPPLY } from './dvx-fixture.js';
 
 export const invoicesHeader = [
   '№',
@@ -199,4 +200,65 @@ test('DVX status, kind and number are normalised strictly', () => {
   assert.equal(foldKey('ƏDV-yə “0” dərəcə'), 'edv ye 0 derece');
   assert.equal(directionFromText('Gələnlər / Göndərilənlər'), undefined);
   assert.equal(directionFromText('E-qaimələr: Gələnlər'), 'purchase');
+});
+
+test('real DVX export: owner, direction, the "Tipi" column, 4-decimal amounts, real status texts', () => {
+  const r = readEqTable(
+    realExport('Daxil olan qaimələrin siyahısı'),
+    'Elektron qaimə-fakturalar_Gələnlər_Qaimələr üzrə_2026_06_09.xlsx',
+  );
+  assert.deepEqual(
+    [r.report, r.directionHint, r.ownerTaxId, r.problems],
+    ['invoices', 'purchase', '1234567890', []],
+  );
+  assert.deepEqual(
+    r.documents.map((d) => [
+      d.number,
+      d.date,
+      eqKind(d.kind),
+      eqStatus(d.status),
+      d.net,
+      d.vat,
+      d.total,
+    ]),
+    [
+      ['MT260510000001', '2026-05-01', 'main', 'accepted', '622.56', '112.06', '734.62'],
+      ['MT260510000002', '2026-05-02', 'correction', 'accepted', '100.00', '18.00', '118.00'],
+      ['MT260510000003', '2026-05-03', 'main', 'accepted', '1326.00', '0.00', '1326.00'],
+      ['MT260510000004', '2026-05-04', 'main', 'cancelled', '50.00', '9.00', '59.00'],
+      ['MT260510000005', '2026-05-05', 'advance', 'pending', '10.00', '1.80', '11.80'],
+      ['MT260510000006', '2026-05-06', 'return', 'pending', '20.00', '3.60', '23.60'],
+    ],
+  );
+  assert.equal(r.documents[2]!.baseExempt, '1326.00');
+  assert.equal(readEqTable(realExport('Göndərilən qaimələrin siyahısı')).directionHint, 'sale');
+});
+
+test('real DVX kind texts: only the standard supply e-qaimə is booked as ordinary', () => {
+  assert.equal(eqKind(SUPPLY), 'main');
+  assert.equal(
+    eqKind(
+      'Qaytarma istisna olmaqla VM-in 163-cü maddəsinə əsasən dəqiqləşdirilməsi barədə elektron qaimə-faktura',
+    ),
+    'correction',
+  );
+  assert.equal(eqKind('Malların qaytarılması barədə elektron qaimə-faktura'), 'return');
+  assert.equal(eqKind('Alınmış avans ödənişləri barədə elektron qaimə-faktura'), 'advance');
+  for (const other of [
+    'Malların, işlərin və xidmətlərin vəkalətverən (komitent) tərəfindən agentə (komisyonçuya) verilməsi barədə elektron qaimə-faktura',
+    'Agent (komisyonçu) tərəfindən malların, işlərin və xidmətlərin alıcısına (subagentə) təqdim edilməsi barədə elektron qaimə-faktura',
+    'Malların emala yaxud saxlamaya verilməsi barədə elektron qaimə-faktura',
+    'VM-in 177.5-ci maddəsinə əsasən təqdim edilməsi barədə elektron qaimə-faktura',
+    'Malların ixrac qeydi ilə satışı barədə elektron qaimə-faktura',
+    'Aksizli malların (neft məhsulları istisna olmaqla) təsərrüfatdaxili yerdəyişməsi barədə elektron qaimə-faktura',
+  ])
+    assert.equal(eqKind(other), 'other', other);
+  assert.equal(eqStatus('Ləğvdən imtina / Təsdiqləndi'), 'accepted');
+  assert.equal(eqStatus('Passiv edilmiş'), 'cancelled');
+  assert.equal(eqStatus('Passiv'), 'cancelled');
+  assert.equal(eqStatus('Ləğvə göndərildi'), 'pending');
+  assert.equal(eqStatus('Düzəlişə göndərilmiş'), 'pending');
+  assert.equal(eqStatus('Düzəlişə qaytarıldı'), 'pending');
+  assert.equal(eqStatus('Düzəliş edildi'), 'corrected');
+  assert.equal(eqStatus('Təsdiq gözləyən'), 'pending');
 });

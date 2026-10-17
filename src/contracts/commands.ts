@@ -426,6 +426,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     direction: z.enum(['sale', 'purchase']),
     /** The direction the file names in its title, when it names one. */
     fileDirection: z.enum(['sale', 'purchase']).optional(),
+    /** VÖEN of the company the export belongs to, as printed above its table. */
+    fileOwnerTaxId: text(20).optional(),
     /**
      * The user confirmed the direction of a file that proves none (no Gələnlər / Göndərilənlər
      * title, no seller and buyer VÖEN columns).

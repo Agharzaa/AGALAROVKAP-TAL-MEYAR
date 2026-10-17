@@ -295,6 +295,24 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 124, `npm run test:ui` 17, 
 - E-qaimə yük testinin həddi GitHub CI maşınında 20 s (orada yazma ~6 dəfə yavaşdır: 14,7 s; adi kompüterdə 2,3 s, hədd 10 s qalır) — istifadəçi qərarı 16.10.2026. SQLite: 64 MB keş, müvəqqəti məlumat yaddaşda (CI-də çıxarış idxalı 34 s → 3,7 s). 0.6.0-ın CI-si yük testində yıxıldı (lokal 100 000 yazılışla keçir; ehtimal: CI maşınında e-qaimə yükləməsi 10 s həddini keçib) — v0.6.0 release-i yaranmayıb. 0.6.1-in CI rəqəmləri annotasiyada görünəcək.
 - **Yoxlanmayıb:** real yenilənmə (0.6.1 → növbəti versiya) — ilk dəfə növbəti release çıxanda.
 
+## Real DVX faylları ilə yoxlama (17.10.2026)
+
+İstifadəçinin iki real e-taxes.gov.az ixracı ("Göndərilənlər" 461 və "Gələnlər" 166 e-qaimə, "Qaimələr üzrə"; real məlumat repoya köçürülməyib) ilə oxuyucu və idxal yoxlanıldı; aşkar edilənlər düzəldi:
+
+| Real formatda                                                                   | Əvvəl                                                                    | İndi                                             |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
+| Düzəliş "Tipi" sütununda ("Cari" / "Düzəliş"), növdə yox (satışda 40, alışda 2) | adi e-qaimə kimi — "avtomatik" uyğunluqla ikinci dəfə uçota düşə bilərdi | düzəliş: heç vaxt avtomatik deyil                |
+| "Ləğvdən imtina / Təsdiqləndi"                                                  | "imtina" — rədd                                                          | təsdiqlənib (ləğv rədd edilib, qaimə qüvvədədir) |
+| "Passiv edilmiş"                                                                | naməlum status                                                           | ləğv edilib                                      |
+| "Düzəlişə qaytarıldı"                                                           | naməlum                                                                  | gözləyir                                         |
+| VM 163 "dəqiqləşdirilməsi" (adında "Qaytarma istisna olmaqla")                  | qaytarma                                                                 | düzəliş                                          |
+| Agent/komitent, emal, ixrac, aksizli yerdəyişmə, VM 177.5 növləri               | adi                                                                      | "digər" — əl ilə                                 |
+| Başlıqda şirkətin VÖEN-i ("4600…/…")                                            | oxunmurdu                                                                | oxunur; başqa şirkətin faylı rədd olunur         |
+
+Real fayllarda: 0 oxunmayan sətir, tarix "dd-mm-yyyy", məbləğlər 4 onluqla (ƏDV-nin qəpiyə yuvarlaqlaşdırılması Meyar-ın hesabı ilə eynidir), başlıqdan istiqamət ("Daxil olan / Göndərilən qaimələrin siyahısı") düzgün. Müvəqqəti bazada başdan-sona: 461 + 166 yükləndi (37 ms / 9 ms), təkrar yükləmə 0 yeni, "Passiv" kənara qoyuldu, gözləyənlər "DVX-də gözləyir"də. Real faylda düzəlişin əsas e-qaiməyə istinadı yoxdur — düzəlişlər mühasibə təklif olunur. Testlər uydurma məlumatla real quruluşda (`tests/domain/dvx-fixture.ts`). `npm test` 131.
+
+**Hələ yoxlanmayıb:** "Mallar üzrə" real ixracı (sətirlər) — istifadəçidən gözlənilir.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.

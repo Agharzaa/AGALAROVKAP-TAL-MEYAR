@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readEqTable } from '../../src/domain/eqaime.js';
+import { realExport } from '../domain/dvx-fixture.js';
 import type { EqDocumentDetail, EqImportView, EqInboxView } from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 
@@ -63,6 +64,7 @@ function load(f: F, direction: 'sale' | 'purchase', rows: string[][], fileName =
     companyId: f.companyId,
     direction,
     ...(r.directionHint ? { fileDirection: r.directionHint } : {}),
+    ...(r.ownerTaxId ? { fileOwnerTaxId: r.ownerTaxId } : {}),
     report: r.report!,
     source: 'file',
     fileName,
@@ -373,4 +375,29 @@ test('E16: what DVX wrote is not changed or deleted, not even by SQL', (t) => {
   );
   // An ignored e-qaimə always carries its reason.
   assert.throws(() => f.db.run(`UPDATE eq_documents SET state='ignored' WHERE id=?`, id), /CHECK/);
+});
+
+test('the real DVX layout loads end to end; another company’s export is refused', (t) => {
+  const f = fixture(t);
+  // The made-up export of the fixture company (VÖEN 1234567890, see tests/domain/eqaime.test.ts).
+  const r = load(f, 'purchase', realExport('Daxil olan qaimələrin siyahısı'), 'gelenler.xlsx');
+  assert.deepEqual([r.added, r.rejected], [6, []]);
+  assert.deepEqual(
+    inbox(f).documents.map((d) => [d.number, d.kind, d.bucket]),
+    [
+      ['MT260510000001', 'main', 'unknown'],
+      ['MT260510000002', 'correction', 'unknown'],
+      ['MT260510000003', 'main', 'unknown'],
+      ['MT260510000004', 'main', 'ignored'],
+      ['MT260510000005', 'advance', 'dvx'],
+      ['MT260510000006', 'return', 'dvx'],
+    ],
+  );
+  const other = realExport('Daxil olan qaimələrin siyahısı').map((row, i) =>
+    i === 1 ? ['', '9999999999/"BAŞQA" MMC'] : row,
+  );
+  assert.throws(
+    () => load(f, 'purchase', other, 'basqa.xlsx'),
+    /VÖEN 9999999999 şirkətinin DVX çıxarışıdır/,
+  );
 });

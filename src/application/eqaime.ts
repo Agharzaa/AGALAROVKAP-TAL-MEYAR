@@ -157,6 +157,13 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
   const company = tx.company(cmd.companyId);
   const own = String(company.tax_id);
   const fileName = parseText(cmd.fileName, 'Fayl', 240);
+  // A DVX export names the company it was taken for: another company's file is not loaded.
+  const owner = cmd.fileOwnerTaxId?.replace(/\D/g, '') ?? '';
+  if (owner && owner !== own)
+    throw new DomainError(
+      `Fayl VÖEN ${owner} şirkətinin DVX çıxarışıdır, bu şirkətin VÖEN-i isə ${own}. Fayl yüklənmədi.`,
+      'fileOwnerTaxId',
+    );
   if (cmd.fileDirection && cmd.fileDirection !== cmd.direction)
     throw new DomainError(
       `Fayl ${label[cmd.fileDirection]} hesabatıdır, siz isə ${label[cmd.direction]} seçmisiniz. Fayl yüklənmədi.`,
