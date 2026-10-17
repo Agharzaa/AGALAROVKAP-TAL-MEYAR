@@ -32,6 +32,8 @@ export interface MeyarBridge {
   ): () => void;
   /** A download or address the cabinet window refused. */
   onDvxRefused?(listener: (message: string) => void): () => void;
+  /** One day's AMB rates file from cbar.az (desktop app only); null when there is none. */
+  ambFetch?(date: string): Promise<Outcome<string | null>>;
   /** Automatic update state (desktop app only). */
   updateState?(): Promise<UpdateState>;
   /** Restarts into the downloaded version (the close guard still asks about unsaved work). */

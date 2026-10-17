@@ -333,6 +333,15 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 - **Testlər:** K1–K3 və valyuta kassası (`tests/integration/cash.test.ts`), sxem v1 → v11 köçürməsi, UI (şablon, klaviatura, uçot, mənfi qalığın rəddi), yük testi (500 order hər biri ayrıca — order adi əməliyyat qədər, ~2 ms; kassa kitabı, il), Electron smoke (IPC ilə order və kassa kitabı). `npm test` 138, `npm run test:ui` 20.
 - **Yoxlanmayıb:** çap formasının kağızda / PDF-də görünüşü (Windows çap pəncərəsi testdə açılmır).
 
+### 5b — valyuta məzənnələri və yenidən qiymətləndirmə (17.10.2026, 0.6.6)
+
+- **Sxem v12:** `currency_rates` (tarix × valyuta, 1 vahid üçün 4 onluq, mənbə AMB / əl ilə; bütün şirkətlər üçün bir), `revaluations` (şirkət və ay üzrə bir aktiv sənəd), "Məzənnə fərqi" gəlir növü (611) və xərc maddəsi (731) — rollarla (`fxIncome` / `fxExpense`), köhnə bazalara da əlavə olunur.
+- **Valyuta məzənnələri kitabçası** (Bank və kassa → Kitabçalar): "AMB-dən yüklə" seçilmiş dövrün hər günü üçün cbar.az-ın rəsmi XML faylını yükləyir (yalnız düyməylə; əsas proses yalnız `https://www.cbar.az/currencies/DD.MM.YYYY.xml` ünvanına müraciət edir; istirahət və gələcək günlərdə cbar.az son bülleteni qaytarır — o, öz tarixi ilə bir dəfə saxlanır; real fayl 16.10.2026 ilə yoxlanılıb); nominal 100 olan valyuta bölünür; əl ilə yazmaq və düzəltmək olar. Dəyişiklik bütün şirkətlərin audit jurnalına yazılır. Yenidən qiymətləndirmədə istifadə olunmuş məzənnə dəyişdirilmir.
+- **Sənədlərdə məzənnə özü dolur** (bank, kassa, qaimə): sənəd tarixinin, yoxdursa son 6 günün kitabça məzənnəsi; əl ilə yazılan məzənnə əvəz olunmur; serverdə də boş məzənnə kitabçadan götürülür, yoxdursa sənəd saxlanmır.
+- **Yenidən qiymətləndirmə** (Mühasibat → Dövr): ay seçilir, bütün valyuta hesablarında hər subkonto açarı üzrə qalıq × ayın son gününün AMB məzənnəsi (yoxdursa son 6 gün) − uçotdakı manat qalığı; artım Dt hesab / Kt 611, azalma Dt 731 / Kt hesab (aktiv və passiv hesabda eyni qayda — qalıq işarə ilə oxunur); valyuta məbləği 0; valyutası qalmayan açarın manat qalığı da bağlanır. Sənəd YQ-2026-09, ayın son günü; qalıqlar dəyişibsə "yenidən uçota al" (storno + yeni), ləğv səbəblə. Məzənnə yoxdursa — bloklanır, səhifədən AMB yükləmək olar. Bir açarda iki valyuta varsa — bloklanır. Ay bağlanışı (5c) bunu addımlarından biri kimi götürəcək.
+- **Testlər:** V1 (AMB faylı, kitabça, sənəddə avtomatik məzənnə), V2 (223.02, 211.02, 531.02, 243.02, 543.02 — gəlir 18,00 / xərc 5,00 qəpikbəqəpik; köhnəlmə, yenidən uçot, ləğv, istifadə olunmuş məzənnənin qorunması, bağlı dövr), K4 (avro kassası), sxem köçürməsi, UI (AMB yükləmə və uçot), yük testi. `npm test` 142, `npm run test:ui` 21.
+- **Yoxlanmayıb:** proqramın içindən real yükləmə (Electron `net` ilə; faylın formatı real cbar.az faylı ilə yoxlanılıb).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -345,7 +354,7 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
-5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ — hazır (0.6.5). **Növbəti:** 5b — valyuta məzənnələri kitabçası (AMB) və yenidən qiymətləndirmə; sonra 5c ay bağlanışı, 5d hesabatlar və idarə paneli, müstəqil audit, 0.7.0.
+5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır. **Növbəti:** 5c ay bağlanışı, sonra 5d hesabatlar və idarə paneli, müstəqil audit, 0.7.0.
 
 ## Əmrlər
 

@@ -52,6 +52,8 @@ import { statementImports, statementLineView, statementView } from './statements
 import { eqDocument, eqImports, eqInbox, eqReconcile, eqWarnings } from './eqaime.js';
 import { eqMaps } from './eqaime-book.js';
 import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
+import { rateOn, ratesList } from './rates.js';
+import { revaluationView } from './revaluation.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -1379,6 +1381,17 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'bankDocument':
       return bankDetail(db, q.companyId, q.id);
+    case 'rates':
+      company(db, q.companyId);
+      return ratesList(db, q.from, q.to, q.currency);
+    case 'rate':
+      company(db, q.companyId);
+      return rateOn(db, q.currency, parseDate(q.date));
+    case 'revaluation': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return revaluationView(db, q.companyId, q.month, (k, v) => names.name(k as never, v));
+    }
     case 'cashDocuments':
       company(db, q.companyId);
       return cashDocuments(db, q.companyId, q.from, q.to, q.cashboxId);

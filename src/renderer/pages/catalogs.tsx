@@ -563,15 +563,27 @@ const itemKinds: { kind: ItemKind; label: string }[] = [
   { kind: 'cashFlowItem', label: 'Pul vəsaitlərinin hərəkəti maddələri' },
 ];
 
-type Role = '' | 'vatTax' | 'cogs' | 'defaultProductGroup' | 'goodsIncome' | 'serviceIncome';
-/** Roles an element of each kind can take in the posting rules of invoices. */
+type Role =
+  | ''
+  | 'vatTax'
+  | 'cogs'
+  | 'defaultProductGroup'
+  | 'goodsIncome'
+  | 'serviceIncome'
+  | 'fxIncome'
+  | 'fxExpense';
+/** Roles an element of each kind can take in the posting rules (invoices, revaluation). */
 const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
   paymentKind: [{ role: 'vatTax', label: 'Satışın ƏDV-si (Kt 521.01)' }],
-  expenseItem: [{ role: 'cogs', label: 'Satılmış malların maya dəyəri (Dt 701)' }],
+  expenseItem: [
+    { role: 'cogs', label: 'Satılmış malların maya dəyəri (Dt 701)' },
+    { role: 'fxExpense', label: 'Məzənnə fərqi xərci (Dt 731)' },
+  ],
   productGroup: [{ role: 'defaultProductGroup', label: 'Standart nomenklatura qrupu' }],
   incomeType: [
     { role: 'goodsIncome', label: 'Mal satışında standart' },
     { role: 'serviceIncome', label: 'Xidmət satışında standart' },
+    { role: 'fxIncome', label: 'Məzənnə fərqi gəliri (Kt 611)' },
   ],
 };
 const roleTitle = Object.fromEntries(
@@ -652,7 +664,7 @@ export function ListsPage() {
           </Field>
           {roles && (
             <Field
-              label="Qaimələrdə standart"
+              label="Yazılış qaydalarında"
               hint="Qaimə yazılışları bu elementi avtomatik götürür; başqa elementdən köçürülür"
             >
               <select value={role} onChange={(e) => setRole(e.target.value as Role)}>

@@ -22,9 +22,9 @@ import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { refreshPair } from './bank-pair.js';
+import { documentRate } from './rates.js';
 import {
   buildMoneyPostings,
-  documentRate,
   guardAdvances,
   money,
   nextNumber,
@@ -56,7 +56,8 @@ function normalize(tx: Tx, cmd: SaveBank, chart: Chart) {
     of: 'bank hesabının',
   };
   const currency = holder.currency;
-  const rate = documentRate(cmd.rate, currency, 'Manat hesabında məzənnə yazılmır.');
+  const date = parseDate(cmd.date);
+  const rate = documentRate(tx.db, cmd.rate, currency, date, 'Manat hesabında məzənnə yazılmır.');
   const { lines, total, totalAzn } = normalizeLines(
     tx,
     cmd.companyId,
@@ -77,7 +78,7 @@ function normalize(tx: Tx, cmd: SaveBank, chart: Chart) {
     totalAzn,
     header: {
       direction: cmd.direction,
-      date: parseDate(cmd.date),
+      date,
       bankAccountId: String(bank.id),
       currency,
       rate: formatPrice(rate),

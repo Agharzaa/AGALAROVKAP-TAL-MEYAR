@@ -36,6 +36,18 @@ export const querySchema = z.discriminatedUnion('type', [
     cashboxId: id.optional(),
   }),
   z.object({ type: z.literal('cashDocument'), companyId: id, id }),
+  /** Currency rates catalog (shared by all companies). */
+  z.object({
+    type: z.literal('rates'),
+    companyId: id,
+    from: date,
+    to: date,
+    currency: z.string().max(3).optional(),
+  }),
+  /** The rate a document of that date takes: that day's, else the latest within 6 days; or null. */
+  z.object({ type: z.literal('rate'), companyId: id, currency: z.string().max(3), date }),
+  /** Revaluation of the month: the posted one and what posting now would write. */
+  z.object({ type: z.literal('revaluation'), companyId: id, month: z.string().max(7) }),
   /** Kassa kitabı: one cashbox, day by day. */
   z.object({ type: z.literal('cashBook'), companyId: id, cashboxId: id, from: date, to: date }),
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
@@ -326,6 +338,52 @@ export interface BankDocumentSummary {
   /** Counter accounts of the lines, e.g. "211.01, 543.01". */
   accounts: string;
   status: 'posted' | 'cancelled';
+}
+export interface RateView {
+  date: string;
+  currency: string;
+  /** Per one unit, 4 decimals ("1.7000"). */
+  rate: string;
+  source: 'amb' | 'manual';
+  loadedAt: string;
+  actor: string;
+}
+export interface RevaluationLine {
+  account: string;
+  sk: string[];
+  skNames: string[];
+  currency: string;
+  curBalance: string;
+  rate: string;
+  rateDate: string;
+  /** AZN balance in the books before, the value at the rate, and their difference (signed). */
+  booked: string;
+  value: string;
+  difference: string;
+}
+export interface RevaluationView {
+  month: string;
+  date: string;
+  /** The month is in a closed period: nothing can be posted or cancelled. */
+  closed: boolean;
+  /** Why it cannot be computed (mixed currencies on a key, a missing role element…). */
+  error: string;
+  missingRates: string[];
+  rates: { currency: string; date: string; rate: string }[];
+  /** What posting now would write (the posted one taken out). */
+  proposal: RevaluationLine[];
+  income: string;
+  expense: string;
+  posted: {
+    id: string;
+    version: number;
+    number: string;
+    income: string;
+    expense: string;
+    lines: RevaluationLine[];
+    /** Balances changed since it was posted: post again. */
+    stale: boolean;
+  } | null;
 }
 export interface CashDocumentSummary {
   id: string;

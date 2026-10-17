@@ -12,6 +12,7 @@ import { parsePrice, parseQty } from '../../domain/quantity';
 import type { InvoiceLineInput } from '../../contracts/commands';
 import type { Catalog, EqDocumentDetail, InvoiceDetail } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
+import { rateHint, useAutoRate } from '../rates';
 import { ModuleFrame } from '../frame';
 import { day, money, toField } from '../format';
 import { useMutation, useQuery } from '../hooks';
@@ -275,6 +276,13 @@ export function InvoiceEditor({
     };
   }, [catalog, sale]);
 
+  const autoRate = useAutoRate(
+    win.companyId,
+    catalog?.contracts.find((c) => c.id === form?.contractId)?.currency ?? 'AZN',
+    form?.date ?? '',
+    form?.rate ?? '',
+    (rate) => setForm((f) => (f ? { ...f, rate } : f)),
+  );
   const locked = doc?.status === 'cancelled';
   async function save(close = false) {
     if (!form || locked || m.busy) return;
@@ -496,7 +504,7 @@ export function InvoiceEditor({
           {foreign && (
             <Field
               label={`${currency} məzənnəsi`}
-              hint="AMB məzənnəsi, 4 onluq"
+              hint={rateHint(autoRate, form.rate)}
               error={headerError('rate')}
             >
               <input

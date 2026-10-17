@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1075,6 +1075,67 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v12 — currency rates and revaluation (stage 5b; docs/MERHELE-5-AY-BAGLANISI.md §3.3, §4.2).
+// The AMB rate is one for all companies (date × currency, 4 decimals per one unit). A rate a
+// posted revaluation used is not changed under it. A revaluation is a document of its own, one
+// active per company and month, posted on the month's last day (source type "revaluation").
+
+const v12 = `
+CREATE TABLE currency_rates(
+  date TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  rate INTEGER NOT NULL CHECK(rate>0),
+  source TEXT NOT NULL CHECK(source IN('amb','manual')),
+  loaded_at TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  PRIMARY KEY(date,currency)
+) WITHOUT ROWID;
+CREATE INDEX currency_rates_currency ON currency_rates(currency,date);
+
+CREATE TABLE revaluations(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  month TEXT NOT NULL,
+  date TEXT NOT NULL,
+  number TEXT NOT NULL,
+  rates TEXT NOT NULL,
+  lines TEXT NOT NULL,
+  income INTEGER NOT NULL,
+  expense INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id)
+);
+CREATE UNIQUE INDEX revaluations_month ON revaluations(company_id,month) WHERE status='posted';
+CREATE TRIGGER revaluations_no_delete BEFORE DELETE ON revaluations BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER revaluations_period BEFORE UPDATE ON revaluations
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+UPDATE items SET role='fxIncome' WHERE kind='incomeType' AND name='Məzənnə fərqi' AND role='' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='fxIncome');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT ${uuid},id,'incomeType','Məzənnə fərqi','fxIncome'
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c
+    WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.role='fxIncome')
+      AND NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.kind='incomeType' AND i.name='Məzənnə fərqi'));
+UPDATE items SET role='fxExpense' WHERE kind='expenseItem' AND name='Məzənnə fərqi' AND role='' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='fxExpense');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT ${uuid},id,'expenseItem','Məzənnə fərqi','fxExpense'
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c
+    WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.role='fxExpense')
+      AND NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.kind='expenseItem' AND i.name='Məzənnə fərqi'));
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-12','Yeniləndi','Baza',id,
+  'Valyuta məzənnələri kitabçası və yenidən qiymətləndirmə üçün baza hazırlandı ("Məzənnə fərqi" gəlir növü və xərc maddəsi).'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1087,4 +1148,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 9, sql: v9 },
   { version: 10, sql: v10 },
   { version: 11, sql: v11 },
+  { version: 12, sql: v12 },
 ];

@@ -16,6 +16,7 @@ import type {
   StatementView,
   TrialBalance,
 } from '../../src/contracts/queries';
+import { monthEnd } from '../../src/domain/rates';
 import { harness } from './harness';
 
 afterEach(() => cleanup());
@@ -564,6 +565,73 @@ test('cash order: template, keyboard entry, posting, cash book, a payment beyond
       to: '2099-12-31',
     }) as CashBookView;
     assert.equal(book.closing, '200.00');
+  } finally {
+    h.close();
+  }
+});
+
+test('revaluation: missing month-end rate loaded from AMB, the difference posted to 611', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const end = monthEnd(month);
+  const usd = h.run({
+    type: 'bankAccount.save',
+    companyId: s.companyId,
+    bankId: s.bank,
+    iban: 'AZ12AIIB38060019449999999901',
+    currency: 'USD',
+    account: '223.02',
+    name: 'Kapital Bank USD',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'bank.save',
+    companyId: s.companyId,
+    direction: 'in',
+    number: '',
+    date: `${month}-01`,
+    bankAccountId: usd,
+    rate: '1.7',
+    bankReference: '',
+    counterpartyName: '',
+    counterpartyTaxId: '',
+    purpose: '',
+    lines: [
+      { account: '301', sk: [s.founder, s.capitalIn], amount: '100', cashFlowItem: '', memo: '' },
+    ],
+  });
+  const [y, mm, dd] = end.split('-');
+  h.ambFiles.set(
+    end,
+    `<ValCurs Date="${dd}.${mm}.${y}"><ValType Type="Xarici valyutalar"><Valute Code="USD"><Nominal>1</Nominal><Name>ABŞ dolları</Name><Value>1.71</Value></Valute></ValType></ValCurs>`,
+  );
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Valyuta yenidən qiymətləndirilməsi' }));
+    const page = within(pane());
+    await page.findByText(/AMB məzənnəsi yoxdur: USD/);
+    await user.click(page.getByRole('button', { name: 'AMB-dən yüklə' }));
+    await page.findByText(/AMB: 1 bülleten yükləndi — 1 yeni/);
+    assert.equal(h.ambAsked.length, 7);
+    const table = await page.findByRole('region', { name: 'Hesablama' });
+    await within(table).findByText('223.02');
+    within(table).getByText(/gəlir 611: 1,00/);
+    await user.click(page.getByRole('button', { name: 'Uçota al' }));
+    await page.findByText(new RegExp(`YQ-${month} uçota alındı`));
+    await page.findByRole('region', { name: 'Uçotda' });
+    const tb = h.ledger.query({
+      type: 'trialBalance',
+      companyId: s.companyId,
+      from: `${month}-01`,
+      to: end,
+      expand: [],
+    }) as TrialBalance;
+    assert.equal(tb.rows.find((r) => r.account === '611')!.closeKt, '1.00');
   } finally {
     h.close();
   }

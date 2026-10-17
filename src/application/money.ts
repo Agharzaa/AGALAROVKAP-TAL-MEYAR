@@ -24,10 +24,9 @@ import {
   type CurrencyCode,
 } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import { AZN_RATE, toAzn } from '../domain/invoice.js';
+import { toAzn } from '../domain/invoice.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import { checkPostings, type Posting, type Side } from '../domain/posting.js';
-import { parsePrice } from '../domain/quantity.js';
 import { numberKey, parseText } from '../domain/values.js';
 import type { BankLineInput } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
@@ -95,16 +94,6 @@ export function nextNumber(
     )
       return candidate;
   }
-}
-
-/** The document rate: none for AZN, the AMB rate (4 decimals) for a currency holder. */
-export function documentRate(input: string, currency: CurrencyCode, aznMessage: string): Minor {
-  let rate = AZN_RATE;
-  if (currency !== 'AZN') rate = parsePrice(input, `${currency} məzənnəsi`);
-  else if (input.trim() && parsePrice(input, 'Məzənnə') !== AZN_RATE)
-    throw new DomainError(aznMessage, 'rate');
-  if (rate <= 0n) throw new DomainError('Məzənnə müsbət olmalıdır.', 'rate');
-  return rate;
 }
 
 export function normalizeLines(

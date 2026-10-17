@@ -14,6 +14,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
     [
       ['Məhsul satışı', 'goodsIncome'],
       ['Xidmət satışı', 'serviceIncome'],
+      ['Məzənnə fərqi', 'fxIncome'],
     ],
   ],
   [
@@ -42,6 +43,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       'Ofis xərcləri',
       'Əmək haqqı',
       ['Satılmış malların maya dəyəri', 'cogs'],
+      ['Məzənnə fərqi', 'fxExpense'],
     ],
   ],
   ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],
@@ -536,6 +538,8 @@ const roleKind = {
   defaultProductGroup: 'productGroup',
   goodsIncome: 'incomeType',
   serviceIncome: 'incomeType',
+  fxIncome: 'incomeType',
+  fxExpense: 'expenseItem',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -543,6 +547,8 @@ const roleLabel = {
   defaultProductGroup: 'nomenklatura qrupu',
   goodsIncome: 'mal satışı',
   serviceIncome: 'xidmət satışı',
+  fxIncome: 'məzənnə fərqi gəliri (611)',
+  fxExpense: 'məzənnə fərqi xərci (731)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

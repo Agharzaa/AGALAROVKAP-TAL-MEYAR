@@ -314,3 +314,10 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 - Kassa orderi qaiməni **bütöv** bağlayır: kassada ƏDV depoziti yoxdur, ona görə ƏDV / əsas hissə bölgüsü (bank sənədindəki kimi) tətbiq olunmur.
 - Köçürülən kassanın hesabı onun ən çox işləndiyi 221 hesabıdır (işlənməyibsə 221.01); valyutası 221.04-dəki yazılışlardan götürülür. Kassa, bank hesabı kimi, bir hesaba bağlıdır: başqa 221 hesabında bu kassa ilə yazılış saxlanmır.
 - Mənfi qalıq yoxlaması yalnız kassa orderlərinə tətbiq olunur; əl ilə əməliyyatla 221-də yaranan mənfi qalıq İş masasında "Mənfi pul qalığı" kimi göstərilir (ay bağlanışında bloklayır — §8).
+
+### İCRADA DƏQİQLƏŞDİ (5b, 0.6.6)
+
+- **Sənədin məzənnəsi:** valyuta sənədində (bank, kassa, qaimə) məzənnə boş qalarsa kitabçadan götürülür — sənəd tarixinin, yoxdursa son 6 günün (istirahət və bayram günləri) AMB məzənnəsi; daha köhnəsi götürülmür, sənəd saxlanmır. Əl ilə yazılan məzənnə əvəz olunmur.
+- **Ay sonu məzənnəsi** eyni qayda ilə: ayın son günü, yoxdursa son 6 gün.
+- **Yenidən qiymətləndirmə ayrıca sənəddir** (YQ-2026-09, ayın son günü): bütün valyuta hesablarında (221.04, 221.05, 222.03, 222.04, 223.02, 211.02, 531.02, 243.02, 244.02, 543.02); bir subkonto açarında iki valyuta olarsa bloklanır. Ay bağlanışı onu addım kimi götürür.
+- **AMB faylında nominal** (məs. 100 RUB) bölünür: kitabçada 1 vahidin məzənnəsi 4 onluqla saxlanır.

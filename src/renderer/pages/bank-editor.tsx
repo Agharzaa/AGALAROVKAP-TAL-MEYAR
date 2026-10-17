@@ -29,6 +29,7 @@ import {
   type Template,
 } from '../money-lines';
 import { Picker, type Option } from '../picker';
+import { rateHint, useAutoRate } from '../rates';
 import { Postings, todayIso } from '../postings';
 import { Confirm, DateInput, Field, Notice } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
@@ -194,6 +195,13 @@ export function BankEditor({
     [catalog, form?.bankAccountId],
   );
 
+  const autoRate = useAutoRate(
+    win.companyId,
+    catalog?.bankAccounts.find((b) => b.id === form?.bankAccountId)?.currency ?? 'AZN',
+    form?.date ?? '',
+    form?.rate ?? '',
+    (rate) => setForm((f) => (f ? { ...f, rate } : f)),
+  );
   const locked = doc?.status === 'cancelled';
   async function save(close = false) {
     if (!form || locked || m.busy) return;
@@ -439,7 +447,7 @@ export function BankEditor({
           {foreign && (
             <Field
               label={`${currency} məzənnəsi`}
-              hint="AMB məzənnəsi, 4 onluq"
+              hint={rateHint(autoRate, form.rate)}
               error={headerError('rate')}
             >
               <input

@@ -37,6 +37,7 @@ function checkSide(
   which: 'dt' | 'kt',
   field: string,
   sign: 1n | -1n,
+  exchangeDifference = false,
 ): Account {
   const account = chart.require(side.account, `${field}.${which}.account`);
   if (side.sk.length !== account.subkonto.length)
@@ -52,7 +53,11 @@ function checkSide(
       );
   });
   if (account.currency) {
-    if (!side.currency || side.curAmount === undefined || side.curAmount === 0n)
+    if (
+      !side.currency ||
+      side.curAmount === undefined ||
+      (side.curAmount === 0n && !exchangeDifference)
+    )
       throw new DomainError(
         `${sideName[which]} ${account.code} valyuta hesabıdır: valyuta məbləğini yazın.`,
         `${field}.${which}.curAmount`,
@@ -70,8 +75,16 @@ function checkSide(
   return account;
 }
 
-/** Structural rules of a complete entry. Subkonto ids are checked against catalogs by the caller. */
-export function checkPostings(chart: Chart, postings: readonly Posting[], field = 'lines'): void {
+/**
+ * Structural rules of a complete entry. Subkonto ids are checked against catalogs by the caller.
+ * An exchange difference (revaluation) moves AZN only: its currency amount is 0.
+ */
+export function checkPostings(
+  chart: Chart,
+  postings: readonly Posting[],
+  field = 'lines',
+  options: { exchangeDifference?: boolean } = {},
+): void {
   if (!postings.length) throw new DomainError('Ən azı bir yazılış sətri olmalıdır.', field);
   if (postings.length > 2000)
     throw new DomainError('Bir sənəddə ən çox 2000 yazılış ola bilər.', field);
@@ -82,8 +95,8 @@ export function checkPostings(chart: Chart, postings: readonly Posting[], field 
     if (p.amount > MAX_MINOR || -p.amount > MAX_MINOR)
       throw new DomainError(`Sətir ${i + 1}: məbləğ həddi keçir.`, `${f}.amount`);
     const sign = p.amount > 0n ? 1n : -1n;
-    const dt = checkSide(chart, p.dt, 'dt', f, sign);
-    const kt = checkSide(chart, p.kt, 'kt', f, sign);
+    const dt = checkSide(chart, p.dt, 'dt', f, sign, options.exchangeDifference);
+    const kt = checkSide(chart, p.kt, 'kt', f, sign, options.exchangeDifference);
     if (dt.code === kt.code && p.dt.sk.join('|') === p.kt.sk.join('|'))
       throw new DomainError(`Sətir ${i + 1}: debet və kredit eyni ola bilməz.`, f);
     const needsQty = dt.quantitative || kt.quantitative;

@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Outcome } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
+import { fetchAmb } from './amb.js';
 import { openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
 
@@ -176,6 +177,8 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     });
     return { ok: true, value: null } satisfies Outcome<null>;
   });
+  // AMB rates (stage 5b): one day's file from cbar.az, read by the renderer.
+  handle('meyar:amb-fetch', (_e, arg) => fetchAmb(arg));
   let dirty = false;
   const onDirty = (event: Electron.IpcMainEvent, value: unknown) => {
     if (trusted(event)) dirty = value === true;

@@ -81,6 +81,15 @@ export const api = {
     const b = override ?? window.meyar;
     return b?.onUpdate ? b.onUpdate(listener) : () => {};
   },
+  /** AMB rates download (desktop app only). */
+  get hasAmb(): boolean {
+    return !!(override ?? window.meyar)?.ambFetch;
+  },
+  async ambFetch(date: string): Promise<string | null> {
+    const b = bridge();
+    if (!b.ambFetch) throw new Error('AMB-dən yükləmə yalnız masaüstü proqramda işləyir.');
+    return unwrap(await b.ambFetch(date));
+  },
   /** The DVX cabinet window exists only in the desktop app. */
   get hasDvx(): boolean {
     return !!(override ?? window.meyar)?.dvxOpen;

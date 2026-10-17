@@ -17,6 +17,9 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
   let dirty = false;
   // The DVX cabinet window: what the app asked to open, and a way to hand back an export.
   const dvxOpened: string[] = [];
+  // cbar.az: the AMB files a test hands out, by ISO date; asked dates are recorded.
+  const ambFiles = new Map<string, string>();
+  const ambAsked: string[] = [];
   const dvxListeners = new Set<
     (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void
   >();
@@ -58,6 +61,10 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     setDirty(value) {
       dirty = value;
     },
+    async ambFetch(date) {
+      ambAsked.push(date);
+      return { ok: true, value: ambFiles.get(date) ?? null };
+    },
     async dvxOpen(direction) {
       dvxOpened.push(direction);
       return { ok: true, value: null };
@@ -88,6 +95,8 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     release: () => release?.(),
     dirty: () => dirty,
     dvxOpened,
+    ambFiles,
+    ambAsked,
     /** As if the user exported e-qaimələr in the cabinet window. */
     dvxExport(file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) {
       for (const l of dvxListeners) l(file);

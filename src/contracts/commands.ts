@@ -274,7 +274,16 @@ export const commandSchema = z.discriminatedUnion('type', [
      * default income types). Setting it moves the role from any other element; omitted keeps it.
      */
     role: z
-      .enum(['', 'vatTax', 'cogs', 'defaultProductGroup', 'goodsIncome', 'serviceIncome'])
+      .enum([
+        '',
+        'vatTax',
+        'cogs',
+        'defaultProductGroup',
+        'goodsIncome',
+        'serviceIncome',
+        'fxIncome',
+        'fxExpense',
+      ])
       .optional(),
   }),
   z.object({
@@ -439,6 +448,31 @@ export const commandSchema = z.discriminatedUnion('type', [
     /** "Əlavə": the papers attached to the order. */
     attachment: text(240).default(''),
     lines: z.array(bankLineInput).min(1).max(500),
+  }),
+  z.object({
+    type: z.literal('rates.save'),
+    ...base,
+    date,
+    /** amb: read from the AMB file; manual: typed by the accountant. */
+    source: z.enum(['amb', 'manual']),
+    rates: z
+      .array(z.object({ currency: text(3), rate: decimal }))
+      .min(1)
+      .max(60),
+  }),
+  z.object({
+    type: z.literal('revaluation.post'),
+    ...base,
+    /** "2026-10": posted on the month's last day; again = storno of the previous one first. */
+    month: z.string().max(7),
+    version: version.optional(),
+  }),
+  z.object({
+    type: z.literal('revaluation.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
   }),
   z.object({
     type: z.literal('cash.cancel'),

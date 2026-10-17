@@ -164,7 +164,7 @@ test('company creation seeds the agreed chart and catalog lists', (t) => {
       .filter((i) => i.kind === 'incomeType')
       .map((i) => i.name)
       .sort(),
-    ['Məhsul satışı', 'Xidmət satışı'],
+    ['Məhsul satışı', 'Məzənnə fərqi', 'Xidmət satışı'],
   );
   assert.throws(
     () => f.exec({ type: 'company.create', name: 'X', taxId: '1234567890', vatPayer: true }),
@@ -801,6 +801,20 @@ UPDATE accounts SET name='Mənim avanslarım' WHERE company_id='used' AND code='
   );
   assert.equal(db.all("SELECT 1 FROM items WHERE kind='cashbox'").length, 0);
   assert.throws(() => db.run('DELETE FROM cashboxes'), /silinmir/);
+  // v12: the "Məzənnə fərqi" income type and expense item, with their roles.
+  for (const id of ['used', 'fresh'])
+    assert.deepEqual(
+      db
+        .all(
+          "SELECT kind,name FROM items WHERE company_id=? AND role IN('fxIncome','fxExpense') ORDER BY role",
+          id,
+        )
+        .map((r) => [r.kind, r.name]),
+      [
+        ['expenseItem', 'Məzənnə fərqi'],
+        ['incomeType', 'Məzənnə fərqi'],
+      ],
+    );
   assert.throws(() => db.run("DELETE FROM items WHERE kind='paymentKind'"), /silinmir/);
   db.close();
   rmSync(dir, { recursive: true, force: true });

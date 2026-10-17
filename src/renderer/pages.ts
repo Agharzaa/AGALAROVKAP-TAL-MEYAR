@@ -92,6 +92,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
   accounts: { title: 'Hesab planı', hint: 'Hesablar, subhesablar və subkontolar', icon: ListTree },
   partners: { title: 'Kontragentlər və müqavilələr', hint: 'VÖEN üzrə kitabça', icon: Users },
   bankAccounts: { title: 'Bank hesabları', hint: 'IBAN, valyuta və hesab', icon: Landmark },
+  rates: {
+    title: 'Valyuta məzənnələri',
+    hint: 'AMB-nin rəsmi məzənnələri tarix üzrə: yükləmə və əl ilə',
+    icon: Scale,
+  },
+  revaluation: {
+    title: 'Valyuta yenidən qiymətləndirilməsi',
+    hint: 'Ay sonu valyuta qalıqları AMB məzənnəsi ilə: 611 / 731',
+    icon: Scale,
+  },
   cashboxes: { title: 'Kassalar', hint: 'Kassa, hesab (221) və valyuta', icon: Wallet },
   products: { title: 'Nomenklatura', hint: 'Mallar, materiallar, əsas vəsaitlər', icon: Package },
   employees: { title: 'İşçilər', hint: '244, 533 subkontosu', icon: UserRound },
@@ -192,6 +202,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Bank hesabları', icon: Landmark, action: page('bankAccounts') },
           { label: 'Kassalar', icon: Wallet, action: page('cashboxes') },
+          { label: 'Valyuta məzənnələri', icon: Scale, action: page('rates') },
           { label: 'Bank qaydaları', icon: ListTree, action: page('rules') },
           { label: 'Büdcə təsnifat kodları', icon: ListTree, action: page('budgetCodes') },
         ],
@@ -313,7 +324,14 @@ export const sections: Section[] = [
       },
       {
         title: 'Dövr',
-        items: [{ label: 'Dövrün bağlanması', icon: Lock, action: page('settings') }],
+        items: [
+          {
+            label: 'Valyuta yenidən qiymətləndirilməsi',
+            icon: Scale,
+            action: page('revaluation'),
+          },
+          { label: 'Dövrün bağlanması', icon: Lock, action: page('settings') },
+        ],
       },
       {
         title: 'Kitabçalar',
@@ -421,6 +439,7 @@ export function sectionOfView(view: View): string {
           return 'purchases';
         case 'operations':
         case 'accounts':
+        case 'revaluation':
           return 'ledger';
         case 'trial':
         case 'card':
@@ -434,6 +453,7 @@ export function sectionOfView(view: View): string {
         case 'cash':
         case 'cashBook':
         case 'cashboxes':
+        case 'rates':
           return 'bank';
         case 'settings':
           return 'company';

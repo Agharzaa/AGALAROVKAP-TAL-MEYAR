@@ -22,7 +22,6 @@ import { formatPrice, formatQty, parsePrice, parseQty } from '../domain/quantity
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import {
   allocateAdvances,
-  AZN_RATE,
   aznAmounts,
   fifoCost,
   lineAmounts,
@@ -35,6 +34,7 @@ import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { dailyStock, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
 import { buildPostings as buildManualPostings } from './operations.js';
+import { documentRate } from './rates.js';
 import { checkSideValues } from './subkonto.js';
 import { expectVersion, type Tx } from './tx.js';
 import { bindEq, releaseEq } from './eqaime-book.js';
@@ -116,7 +116,7 @@ function role(tx: Tx, companyId: string, name: string, what: string): string {
   );
   if (!r)
     throw new DomainError(
-      `Qaimə üçün standart "${what}" elementi təyin edilməyib. Siyahılar bölməsində elementi açıb "Qaimələrdə standart" sahəsini seçin.`,
+      `Qaimə üçün standart "${what}" elementi təyin edilməyib. Siyahılar bölməsində elementi açıb "Yazılış qaydalarında" sahəsini seçin.`,
       undefined,
       'not-found',
     );
@@ -162,10 +162,13 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
   if (contract.archived === 1n) throw new DomainError('Müqavilə arxivdədir.', 'contractId');
   const currency = String(contract.currency) as CurrencyCode;
   const foreign = currency !== 'AZN';
-  let rate = AZN_RATE;
-  if (foreign) rate = parsePrice(cmd.rate, `${currency} məzənnəsi`);
-  else if (cmd.rate.trim() && parsePrice(cmd.rate, 'Məzənnə') !== AZN_RATE)
-    throw new DomainError('Manat müqaviləsində məzənnə yazılmır.', 'rate');
+  const rate = documentRate(
+    tx.db,
+    cmd.rate,
+    currency,
+    cmd.date.trim(),
+    'Manat müqaviləsində məzənnə yazılmır.',
+  );
   const treatment: 'offset' | 'cost' = !vatPayer
     ? 'cost'
     : (cmd.vatTreatment ?? (company.purchase_vat as 'offset' | 'cost'));

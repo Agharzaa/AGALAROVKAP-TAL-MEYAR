@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('meyar', {
     ipcRenderer.on('meyar:dvx-refused', handler);
     return () => ipcRenderer.removeListener('meyar:dvx-refused', handler);
   },
+  ambFetch: (date: string) => ipcRenderer.invoke('meyar:amb-fetch', String(date)),
   updateState: () => ipcRenderer.invoke('meyar:update-state'),
   updateInstall: () => ipcRenderer.invoke('meyar:update-install'),
   onUpdate: (listener: (state: unknown) => void) => {

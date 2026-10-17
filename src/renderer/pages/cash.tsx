@@ -33,6 +33,7 @@ import { pages, viewTitle } from '../pages';
 import { Picker, type Option } from '../picker';
 import { Postings, todayIso } from '../postings';
 import { usePrint } from '../print';
+import { rateHint, useAutoRate } from '../rates';
 import {
   Amount,
   Confirm,
@@ -508,6 +509,13 @@ export function CashEditor({ direction, id }: { direction: Direction; id?: strin
     [catalog, form?.cashboxId],
   );
 
+  const autoRate = useAutoRate(
+    win.companyId,
+    catalog?.cashboxes.find((b) => b.id === form?.cashboxId)?.currency ?? 'AZN',
+    form?.date ?? '',
+    form?.rate ?? '',
+    (rate) => setForm((f) => (f ? { ...f, rate } : f)),
+  );
   const locked = doc?.status === 'cancelled';
   async function save(close = false) {
     if (!form || locked || m.busy) return;
@@ -679,7 +687,7 @@ export function CashEditor({ direction, id }: { direction: Direction; id?: strin
           {foreign && (
             <Field
               label={`${currency} məzənnəsi`}
-              hint="AMB məzənnəsi, 4 onluq"
+              hint={rateHint(autoRate, form.rate)}
               error={headerError('rate')}
             >
               <input

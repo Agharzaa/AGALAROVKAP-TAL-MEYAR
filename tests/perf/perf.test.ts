@@ -339,6 +339,24 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   time('Kassa sənədləri jurnalı, il', 1500, () =>
     q({ type: 'cashDocuments', from: '2026-01-01', to: '2026-12-31' }),
   );
+  // V2 on the large base: every currency account and key of the year, at the month-end rate.
+  ledger.execute(
+    {
+      key: `perf-rates-${Date.now()}`,
+      type: 'rates.save',
+      companyId,
+      date: '2026-12-31',
+      source: 'manual',
+      rates: ['USD', 'EUR', 'GBP', 'RUB', 'TRY', 'CNY', 'CHF', 'AED'].map((currency) => ({
+        currency,
+        rate: '1.7',
+      })),
+    },
+    { actor: 'perf', correlationId: 'perf' },
+  );
+  time('Valyuta yenidən qiymətləndirilməsi, hesablama', 3000, () =>
+    q({ type: 'revaluation', month: '2026-12' }),
+  );
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
 });

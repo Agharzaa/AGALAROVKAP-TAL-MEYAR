@@ -30,6 +30,8 @@ export type Page =
   | 'partners'
   | 'bankAccounts'
   | 'cashboxes'
+  | 'rates'
+  | 'revaluation'
   | 'products'
   | 'employees'
   | 'lists'

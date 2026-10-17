@@ -20,6 +20,8 @@ import {
 import { cancelBankDocument, saveBankDocument } from './bank.js';
 import { pairBankDocuments } from './bank-pair.js';
 import { cancelCashDocument, saveCashDocument } from './cash.js';
+import { saveRates } from './rates.js';
+import { cancelRevaluation, postRevaluation } from './revaluation.js';
 import { applyRules, applyStatementRules, saveBudgetCode, saveRule } from './rules.js';
 import {
   ignoreStatementLine,
@@ -124,6 +126,12 @@ export class Ledger {
         return saveBankDocument(tx, c);
       case 'bank.cancel':
         return cancelBankDocument(tx, c);
+      case 'rates.save':
+        return saveRates(tx, c);
+      case 'revaluation.post':
+        return postRevaluation(tx, c);
+      case 'revaluation.cancel':
+        return cancelRevaluation(tx, c);
       case 'cash.save':
         return saveCashDocument(tx, c);
       case 'cash.cancel':

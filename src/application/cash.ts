@@ -22,13 +22,13 @@ import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import {
   buildMoneyPostings,
   cashboxHolder,
-  documentRate,
   guardAdvances,
   money,
   nextNumber,
   normalizeLines,
   type Holder,
 } from './money.js';
+import { documentRate } from './rates.js';
 import { expectVersion, type Tx } from './tx.js';
 
 export const CASH = 'cash';
@@ -47,7 +47,14 @@ function normalize(tx: Tx, cmd: SaveCash, chart: Chart) {
   if (!box) throw new DomainError('Kassanı seçin.', 'cashboxId', 'not-found');
   if (box.archived === 1n) throw new DomainError('Kassa arxivdədir.', 'cashboxId');
   const holder = cashboxHolder(box, chart, 'cashboxId');
-  const rate = documentRate(cmd.rate, holder.currency, 'Manat kassasında məzənnə yazılmır.');
+  const date = parseDate(cmd.date);
+  const rate = documentRate(
+    tx.db,
+    cmd.rate,
+    holder.currency,
+    date,
+    'Manat kassasında məzənnə yazılmır.',
+  );
   const { lines, total, totalAzn } = normalizeLines(
     tx,
     cmd.companyId,
@@ -66,7 +73,7 @@ function normalize(tx: Tx, cmd: SaveCash, chart: Chart) {
     totalAzn,
     header: {
       direction: cmd.direction,
-      date: parseDate(cmd.date),
+      date,
       cashboxId: holder.id,
       currency: holder.currency,
       rate: formatPrice(rate),
