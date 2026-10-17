@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 16.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 17.10.2026. Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -328,8 +328,8 @@ Real fayllarda: 0 oxunmayan sətir, tarix "dd-mm-yyyy", məbləğlər 4 onluqla 
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
-4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~ — hazır (0.6.0). **Qalan:** real DVX faylları ilə oxuyucunun yoxlanması (anonimləşdirilmiş nümunələr istifadəçidən), real ASAN İmza / SİMA girişi ilə kabinetin yoxlanması (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır).
-5. İdarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
+4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
+5. **Növbəti (dizayn sənədi və təsdiqlə başlayır):** idarə paneli, ay bağlanışı (6/7 → 801 → 341), kassa, valyuta yenidən qiymətləndirilməsi (243.02 / 543.02 avansları da daxil).
 
 ## Əmrlər
 
