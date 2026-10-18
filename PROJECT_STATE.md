@@ -362,11 +362,37 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 - **Testlər:** `tests/integration/analytics.test.ts` — M/Z Sentyabr misalı (12 711,86 xalis satış, 5 708,86 nəticə) bağlanışdan əvvəl və sonra eyni (A1-in M/Z hissəsi), H1 (maddələr, 222.01 köçürməsi, əl ilə əməliyyat, qalıq tutuşur), H2 (DVX tutuşdurması ilə eyni, bağlanışdan sonra əvəzləşdirmə 180,00), H3 (plitələr dövriyyə balansı və M/Z ilə eyni); UI (plitə → M/Z → hesab kartı, Excel); yük testi: M/Z il 72 ms, panel 136 ms, pul hərəkəti il 134 ms, ƏDV icmalı 110 ms. `npm test` 154, `npm run test:ui` 23.
 - **Yoxlanmayıb:** çap formalarının kağızda görünüşü; mühasibin qəpikbəqəpik cədvəl təsdiqi (§9).
 
+### Mərhələ 5c / 5d auditi (18.10.2026)
+
+Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur, `4a0b5dd` (5c) + `ff0571e` (5d). Hər qüsur üçün əvvəl uğursuz reqressiya testi (`audit:` adlı), sonra minimal düzəliş. Tur 1 — 6 qüsur; tur 2 (düzəlişlərdən sonra yenidən oxunuş və əlavə ssenarilər) — yeni qüsur yoxdur.
+
+| #   | Ağırlıq | Qüsur                                                                                                                                                                         | Düzəliş                                           | Test                |
+| --- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------- |
+| 1   | Yüksək  | Addımı 2000 sətirdən çox olan bağlanış (çox mal FIFO düzəlişi, çox xərc açarı) "Bir sənəddə ən çox 2000 yazılış" ilə rədd olunurdu — yoxlama addımın bölünməsindən əvvəl idi. | Hər 2000-lik yazılış ayrıca yoxlanır və yazılır   | `closing.test.ts`   |
+| 2   | Aşağı   | Bağlanışın geri götürdüyü YQ bağlanışdan sonra da "storno ediləcək" yazırdı.                                                                                                  | "storno edildi"                                   | `closing.test.ts`   |
+| 3   | Orta    | Paneldə "Gözləyən e-qaimələr" düzəlişlə əvəzlənmiş əsas e-qaiməni də sayırdı (İş masası bir dəfə sayır).                                                                      | İş masasının şərti                                | `analytics.test.ts` |
+| 4   | Aşağı   | Qrafikdə mənfi gəlir / xərc (qaytarma) mənfi hündürlüklü sütun idi (görünmür).                                                                                                | Sütun oxdan aşağı                                 | `tests/ui`          |
+| 5   | Orta    | Panelin plitələri hesabatı iş dövrü üçün açırdı, panelin ayı üçün yox — başqa ay seçiləndə hesabatda plitənin rəqəmi yox idi.                                                 | Səhifə pəncərəsi öz dövrünü daşıyır (`usePeriod`) | `tests/ui`          |
+| 6   | Aşağı   | M/Z-də "Bu ildə gəlir və xərc yoxdur" heç vaxt görünmürdü.                                                                                                                    | Cəmdən başqa sətir yoxdursa                       | `tests/ui`          |
+
+**Qüsur tapılmayan yoxlamalar:** bir tranzaksiya, 6xx / 7xx / 801 öz yoxlaması, ləğvdə qırmızı storno (M/Z və ƏDV icmalında sıfırlanır), `month_closings` trigger-ləri, "Dövrün bağlanması" qoruması, ardıcıllıq, FIFO layların sırası satış maya dəyəri ilə eyni, düzəlişdən sonra növbəti ayda təkrar düzəliş yoxdur, ləğv + yenidən bağlanış eyni düzəlişi verir; ƏDV: depozitdən iki ayda hissə-hissə, depozitdən avansla, USD qaimə mütənasib (kumulyativ yuvarlaqlaşdırma); əl ilə bağlanmış ay + bağlanış + ləğv (kilid geri qayıdır); valyuta bankı + YQ ilə pul hərəkəti tutuşur.
+
+**Açıq suallar (istifadəçinin / mühasibin qərarı):**
+
+1. **YQ ay bağlanışının ləğvində qalır** (bağlanış onu yenidən keçiribsə və ya geri götürübsə, ləğv bunu qaytarmır). Tövsiyə: belə qalsın — YQ ayın valyuta qalıqları üçün düzgündür.
+2. **FIFO düzəlişi həmişə 701-ə gedir**, mal 721 / 731-ə (çatışmazlıq) və ya istehsala silinibsə də. Tövsiyə: indiki kimi; alternativ — fərqi ayın silinmə hesablarına mütənasib bölmək.
+3. **Əvəzləşdirilmiş ƏDV geri alınmır:** əvvəlki ayda əvəzləşdirilmiş ƏDV-nin ödənişi sonradan azalarsa, Dt 241 / Kt 521.01 yazılmır (nadir hal). Tövsiyə: mühasib əl ilə əməliyyatla düzəldir.
+4. **Bağlanışın DVX ziddiyyəti xəbərdarlığı ayla məhdud deyil** (İş masasının qaydası). Tövsiyə: saxlanılsın.
+5. **"Gözləyən e-qaimələr" plitəsi alış və satışı birlikdə sayır, keçid alış qutusunadır.** Tövsiyə: keçid sayı olan qutuya və ya iki plitə.
+6. **Ay bağlanışı forması cari ayla açılır** (həmişə "Ay hələ bitməyib"). Tövsiyə: son bitmiş ay.
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 157, `npm run test:ui` 24, `npm run test:perf` keçir. Push və buraxılış (0.7.0) yoxdur.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
 - **Quraşdırıcı:** v0.4.1 CI tərəfindən GitHub Releases-də imzalanmamış sınaq versiyası kimi dərc olunub (`Meyar-Setup-0.4.1.exe`). Köhnə baza (0.3.x, 0.4.0) quraşdırılanda avtomatik yenilənir; Windows-da istifadəçi yoxlamalıdır.
-- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 4 — müstəqil audit (2 tur, 12 qüsur düzəldi, 5 açıq sual 16.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda).
+- **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 4 — müstəqil audit (2 tur, 12 qüsur düzəldi, 5 açıq sual 16.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 5c / 5d — müstəqil audit (2 tur, 6 qüsur düzəldi, 6 açıq sual istifadəçinin qərarını gözləyir; yuxarıda).
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
@@ -374,7 +400,7 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
-5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır; 5c ay bağlanışı və 5d hesabatlar branch-dadır (buraxılmayıb). **Növbəti:** müstəqil audit (2 tur), mühasibin §9 təsdiqi, 0.7.0.
+5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır; 5c ay bağlanışı və 5d hesabatlar branch-dadır (buraxılmayıb), müstəqil audit keçib (18.10.2026). **Növbəti:** auditin açıq sualları, mühasibin §9 təsdiqi, 0.7.0.
 
 ## Əmrlər
 
