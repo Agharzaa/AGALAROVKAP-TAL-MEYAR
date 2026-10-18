@@ -2806,3 +2806,98 @@ button.step:active {
   margin: 6px 0 0;
   padding-left: 18px;
 }
+
+/* Reports (stage 5d): M/Z, cash flow, VAT; totals in bold, subkonto rows indented. */
+.grid.report tbody th {
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+}
+.grid.report tr.total > th,
+.grid.report tr.total > td {
+  font-weight: 600;
+  border-top: 1px solid var(--frame);
+}
+.grid.report th.indent {
+  padding-left: 24px;
+  color: var(--muted);
+}
+.dashboard-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.dashboard-tile {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--frame);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.dashboard-tile:hover {
+  background: var(--hover);
+}
+.dashboard-tile strong {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-tile small {
+  color: var(--muted);
+}
+.dashboard-chart {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--sheet);
+  border: 1px solid var(--frame);
+}
+.dashboard-chart svg {
+  width: 100%;
+  height: auto;
+}
+.dashboard-chart .axis {
+  stroke: var(--line);
+}
+.dashboard-chart .bar.income {
+  fill: var(--ok);
+}
+.dashboard-chart .bar.expense {
+  fill: var(--red);
+  opacity: 0.75;
+}
+.dashboard-chart .profit {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.dashboard-chart text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.dashboard-chart .key::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+.dashboard-chart .key.income::before {
+  background: var(--ok);
+}
+.dashboard-chart .key.expense::before {
+  background: var(--red);
+}
+.dashboard-chart .key.profit::before {
+  height: 2px;
+  vertical-align: 3px;
+  background: var(--ink);
+}

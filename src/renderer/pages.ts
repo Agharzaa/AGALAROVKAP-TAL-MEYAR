@@ -107,6 +107,26 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'FIFO, yenidən qiymətləndirmə, ƏDV, 6xx / 7xx → 801 → 341 və dövrün bağlanması',
     icon: Lock,
   },
+  profitLoss: {
+    title: 'Mənfəət və zərər',
+    hint: 'Gəlir və xərclər aylar üzrə, ay bağlanışı yazılışları çıxılmaqla',
+    icon: Reports,
+  },
+  cashFlow: {
+    title: 'Pul vəsaitlərinin hərəkəti',
+    hint: 'Bank və kassa sətirləri maddələr üzrə; qalıq 221 + 223 + 224',
+    icon: Wallet,
+  },
+  vatSummary: {
+    title: 'ƏDV icmalı',
+    hint: 'Ay üzrə satış və alış ƏDV-si, ödənilməli ƏDV, DVX ilə tutuşdurma',
+    icon: ReceiptText,
+  },
+  dashboard: {
+    title: 'İdarə paneli',
+    hint: 'Ayın əsas göstəriciləri və 12 ayın dinamikası',
+    icon: LayoutDashboard,
+  },
   cashboxes: { title: 'Kassalar', hint: 'Kassa, hesab (221) və valyuta', icon: Wallet },
   products: { title: 'Nomenklatura', hint: 'Mallar, materiallar, əsas vəsaitlər', icon: Package },
   employees: { title: 'İşçilər', hint: '244, 533 subkontosu', icon: UserRound },
@@ -200,6 +220,7 @@ export const sections: Section[] = [
           card('224', 'ƏDV depoziti (224)'),
           { label: 'Kassa kitabı', icon: BookOpen, action: page('cashBook') },
           card('221', 'Hesab kartı 221'),
+          { label: 'Pul vəsaitlərinin hərəkəti', icon: Wallet, action: page('cashFlow') },
         ],
       },
       {
@@ -343,6 +364,13 @@ export const sections: Section[] = [
         ],
       },
       {
+        title: 'Hesabatlar',
+        items: [
+          { label: 'Mənfəət və zərər', icon: Reports, action: page('profitLoss') },
+          { label: 'ƏDV icmalı', icon: ReceiptText, action: page('vatSummary') },
+        ],
+      },
+      {
         title: 'Kitabçalar',
         items: [
           { label: 'Hesab planı', icon: ListTree, action: page('accounts') },
@@ -360,8 +388,12 @@ export const sections: Section[] = [
       {
         title: 'Standart hesabatlar',
         items: [
+          { label: 'İdarə paneli', icon: LayoutDashboard, action: page('dashboard') },
           { label: 'Dövriyyə balansı', icon: Scale, action: page('trial') },
           { label: 'Hesab kartı', icon: FileSpreadsheet, action: page('card') },
+          { label: 'Mənfəət və zərər', icon: Reports, action: page('profitLoss') },
+          { label: 'Pul vəsaitlərinin hərəkəti', icon: Wallet, action: page('cashFlow') },
+          { label: 'ƏDV icmalı', icon: ReceiptText, action: page('vatSummary') },
         ],
       },
       {
@@ -454,7 +486,12 @@ export function sectionOfView(view: View): string {
         case 'trial':
         case 'card':
         case 'audit':
+        case 'profitLoss':
+        case 'vatSummary':
+        case 'dashboard':
           return 'reports';
+        case 'cashFlow':
+          return 'bank';
         case 'bank':
         case 'statements':
         case 'rules':

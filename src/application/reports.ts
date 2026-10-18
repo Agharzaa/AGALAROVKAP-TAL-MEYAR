@@ -57,6 +57,7 @@ import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './
 import { rateOn, ratesList } from './rates.js';
 import { revaluationView } from './revaluation.js';
 import { closingList, closingView, type ClosingControls } from './closing.js';
+import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -1479,6 +1480,24 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'closings':
       company(db, q.companyId);
       return closingList(db, q.companyId);
+    case 'profitLoss': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return profitLoss(db, q.companyId, q.year, (k, v) => names.name(k as SubkontoKind, v));
+    }
+    case 'cashFlow': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return cashFlow(db, q.companyId, q.from, q.to, (k, v) => names.name(k as SubkontoKind, v));
+    }
+    case 'vatSummary':
+      company(db, q.companyId);
+      return vatSummary(db, q.companyId, q.month);
+    case 'dashboard': {
+      company(db, q.companyId);
+      const names = new Names(db, q.companyId);
+      return dashboard(db, q.companyId, q.month, (k, v) => names.name(k as SubkontoKind, v));
+    }
     case 'cashDocuments':
       company(db, q.companyId);
       return cashDocuments(db, q.companyId, q.from, q.to, q.cashboxId);

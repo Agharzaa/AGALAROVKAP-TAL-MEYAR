@@ -72,6 +72,7 @@ import { BankEditor } from './pages/bank-editor';
 import { CashBookPage, CashDocumentsPage, CashEditor } from './pages/cash';
 import { RatesPage, RevaluationPage } from './pages/rates';
 import { ClosingPage } from './pages/closing';
+import { CashFlowPage, DashboardPage, ProfitLossPage, VatSummaryPage } from './pages/reports';
 import { StatementsPage } from './pages/statements';
 import { EqaimePage } from './pages/eqaime';
 import { EqMapsPage } from './pages/eq-maps';
@@ -1127,6 +1128,14 @@ function Routed({ win }: { win: Win }) {
           return <RevaluationPage />;
         case 'closing':
           return <ClosingPage />;
+        case 'profitLoss':
+          return <ProfitLossPage />;
+        case 'cashFlow':
+          return <CashFlowPage />;
+        case 'vatSummary':
+          return <VatSummaryPage />;
+        case 'dashboard':
+          return <DashboardPage />;
         case 'products':
           return <ProductsPage />;
         case 'employees':

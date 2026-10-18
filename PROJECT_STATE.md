@@ -352,6 +352,16 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 - **Testlər:** `tests/integration/closing.test.ts` — A1 (Sentyabr misalı: 601 15 000 / 604.1 2 288,14 / 701 7 000 / 721 3 → mənfəət 5 708,86 = 341), A2 (geriyə tarixli alış → 701 düzəlişi 50,00), A3 (depozitdən ödənilmiş 180,00 və fiziki şəxsdə yarısı 45,00 əvəzləşir; ödənilməmiş 360,00 və təsdiqlənməmiş 18,00 241-də qalır), A4 (ardıcıllıq, yalnız sonuncu ayın ləğvi, storno, kilid, yeni versiya, əl ilə açmanın qadağası), A5 (mənfi kassa, məzənnə yoxdur, mənfi mal — heç nə yazılmır), A6 (dekabr 341 → 343), YQ addımı, xəbərdarlıq təsdiqi; UI (addımlar, Ctrl+Enter, ləğv); yük testi (P1-in bağlanış hissəsi).
 - **Yoxlanmayıb / 5d-yə qalır:** Mənfəət və zərər hesabatı (bağlanış yazılışları istisna), pul hərəkəti, ƏDV icmalı, idarə paneli; mühasibin qəpikbəqəpik cədvəl təsdiqi (§9).
 
+### 5d — hesabatlar və idarə paneli (18.10.2026, eyni branch; buraxılış yoxdur)
+
+- **Mənfəət və zərər** (Hesabatlar, Mühasibat → Hesabatlar): il aylar üzrə, gəlir növü / xərc maddəsi üzrə açılır, aralıq cəmlər (xalis satış, ümumi, əməliyyat mənfəəti, vergiqoyulmadan əvvəl); ay bağlanışının 801 yazılışları çıxılır — bağlanmış ay öz rəqəmlərini saxlayır. Sətrə iki dəfə klik — hesab kartı.
+- **Pul vəsaitlərinin hərəkəti** (Bank və kassa → Hesabatlar): bank və kassa sətirləri maddələr üzrə, maddəsiz ayrıca; öz hesabları arası sətirlər sayılmır; sənədlərdən kənar hərəkət (əl ilə, yenidən qiymətləndirmə) ayrıca; qalıqlar 221 + 223 + 224 ilə tutuşur (tutuşmazsa xəbərdarlıq).
+- **ƏDV icmalı:** satış dərəcələr üzrə, alışın ƏDV-si, əvəzləşdirilən / qalan, ödənilməli ƏDV, DVX ↔ uçot.
+- **İdarə paneli** (Hesabatlar → İdarə paneli): 7 plitə (gəlir, mənfəət, pul, debitor, kreditor, ödənilməli ƏDV, gözləyən e-qaimələr) hər biri öz hesabatını açır; 12 ayın qrafiki və cədvəli.
+- Hamısı registrlərdən (`src/application/analytics.ts`); Excel-ə çıxış və çap (M/Z, pul hərəkəti, ƏDV icmalı).
+- **Testlər:** `tests/integration/analytics.test.ts` — M/Z Sentyabr misalı (12 711,86 xalis satış, 5 708,86 nəticə) bağlanışdan əvvəl və sonra eyni (A1-in M/Z hissəsi), H1 (maddələr, 222.01 köçürməsi, əl ilə əməliyyat, qalıq tutuşur), H2 (DVX tutuşdurması ilə eyni, bağlanışdan sonra əvəzləşdirmə 180,00), H3 (plitələr dövriyyə balansı və M/Z ilə eyni); UI (plitə → M/Z → hesab kartı, Excel); yük testi: M/Z il 72 ms, panel 136 ms, pul hərəkəti il 134 ms, ƏDV icmalı 110 ms. `npm test` 154, `npm run test:ui` 23.
+- **Yoxlanmayıb:** çap formalarının kağızda görünüşü; mühasibin qəpikbəqəpik cədvəl təsdiqi (§9).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -364,7 +374,7 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
-5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır; 5c ay bağlanışı branch-dadır (buraxılmayıb). **Növbəti:** 5d hesabatlar və idarə paneli, müstəqil audit, 0.7.0.
+5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır; 5c ay bağlanışı və 5d hesabatlar branch-dadır (buraxılmayıb). **Növbəti:** müstəqil audit (2 tur), mühasibin §9 təsdiqi, 0.7.0.
 
 ## Əmrlər
 

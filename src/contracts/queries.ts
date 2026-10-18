@@ -51,6 +51,14 @@ export const querySchema = z.discriminatedUnion('type', [
   /** Month closing (stage 5c): the posted one, or what closing now would do. */
   z.object({ type: z.literal('closing'), companyId: id, month: z.string().max(7) }),
   z.object({ type: z.literal('closings'), companyId: id }),
+  /** Mənfəət və zərər (stage 5d): the year by months, closing entries left out. */
+  z.object({ type: z.literal('profitLoss'), companyId: id, year: z.string().max(4) }),
+  /** Pul vəsaitlərinin hərəkəti: bank and cash document lines by cash-flow item. */
+  z.object({ type: z.literal('cashFlow'), companyId: id, from: date, to: date }),
+  /** ƏDV icmalı of a month: sales by rate, purchase VAT, VAT payable, DVX side. */
+  z.object({ type: z.literal('vatSummary'), companyId: id, month: z.string().max(7) }),
+  /** İdarə paneli: the month's figures and the 12 months up to it. */
+  z.object({ type: z.literal('dashboard'), companyId: id, month: z.string().max(7) }),
   /** Kassa kitabı: one cashbox, day by day. */
   z.object({ type: z.literal('cashBook'), companyId: id, cashboxId: id, from: date, to: date }),
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
@@ -441,6 +449,83 @@ export interface ClosingView {
   cancelled: ClosingSummary | null;
   /** Why the posted closing cannot be cancelled now (a later month is closed…); '' when it can. */
   cancelBlocked: string;
+}
+/** One row of a period report (M/Z): an account, one of its subkonto values, or a total. */
+export interface ReportRow {
+  key: string;
+  label: string;
+  /** 0: account or total, 1: subkonto value under its account. */
+  level: 0 | 1;
+  total: boolean;
+  /** Drill-down: the account card of this account (and subkonto), '' for totals. */
+  account: string;
+  sk: string[];
+  /** One amount per month of the report, then their sum. */
+  values: string[];
+  sum: string;
+}
+export interface ProfitLossView {
+  year: string;
+  months: string[];
+  rows: ReportRow[];
+  ms: number;
+}
+export interface CashFlowRow {
+  key: string;
+  label: string;
+  /** in / out: bank and cash document lines; other: the money accounts moved without them. */
+  kind: 'in' | 'out' | 'other';
+  /** The cash-flow item ('' — lines without one). */
+  item: string;
+  amount: string;
+}
+export interface CashFlowView {
+  from: string;
+  to: string;
+  /** 221 + 223 + 224 at the start (the day before `from`) and at the end of `to`. */
+  opening: string;
+  closing: string;
+  rows: CashFlowRow[];
+  inflow: string;
+  outflow: string;
+  other: string;
+  /** opening + inflow − outflow + other = closing, to the qəpik. */
+  reconciled: boolean;
+}
+export interface VatSummaryView {
+  month: string;
+  /** Sales by VAT rate: the taxable amount (601 − 602 − 603 without VAT) and the VAT (604). */
+  sales: { rate: string; label: string; base: string; vat: string }[];
+  salesVat: string;
+  /** Purchase VAT recorded on 241 in the month, offset by the month closing, and waiting on 241. */
+  purchaseVat: string;
+  offset: string;
+  waiting: string;
+  /** Sales VAT − offset purchase VAT. */
+  payable: string;
+  /** DVX ↔ books for the month (the same figures as the reconciliation). */
+  dvx: {
+    direction: 'sale' | 'purchase';
+    covered: boolean;
+    dvxVat: string;
+    bookedVat: string;
+    difference: string;
+  }[];
+}
+export interface DashboardTile {
+  key: 'income' | 'profit' | 'money' | 'receivables' | 'payables' | 'vat' | 'eqWaiting';
+  label: string;
+  value: string;
+  /** The tile shows a count, not an amount. */
+  count?: boolean;
+  hint: string;
+}
+export interface DashboardView {
+  month: string;
+  tiles: DashboardTile[];
+  /** 12 months up to `month`: income, expense, profit (M/Z) and money at the month's end. */
+  series: { month: string; income: string; expense: string; profit: string; money: string }[];
+  ms: number;
 }
 export interface CashDocumentSummary {
   id: string;

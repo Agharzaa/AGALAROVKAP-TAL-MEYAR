@@ -1531,3 +1531,57 @@ test('month closing: steps of the last month, Ctrl+Enter closes it, cancel opens
     h.close();
   }
 });
+
+test('reports: the dashboard tile opens M/Z, a row opens the account card, Excel is saved', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-01`,
+    memo: 'Xidmət',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '601',
+        ktSk: [service.id, '0'],
+        amount: '1000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
+    const panel = within(pane());
+    const income = await panel.findByRole('button', { name: /^Gəlirs*1.000,00/ });
+    panel.getByRole('button', { name: /^Debitor borcus*1.000,00/ });
+    panel.getByRole('img', { name: '12 ayın gəlir, xərc və mənfəəti' });
+    await user.click(income);
+    const report = within(pane());
+    const row = await report.findByRole('rowheader', { name: '601 · Satış' });
+    await user.click(report.getByRole('button', { name: /Excel/ }));
+    await report.findByText(
+      new RegExp(`Saxlanıldı: .*Mənfəət və zərər ${month.slice(0, 4)}\.xlsx`),
+    );
+    assert.equal(h.saved.length, 1);
+    await user.dblClick(row);
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector('.mdi-window.active .mdi-caption')?.textContent,
+        'Hesab kartı 601',
+      ),
+    );
+  } finally {
+    h.close();
+  }
+});

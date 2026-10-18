@@ -13,8 +13,11 @@ import { Db } from '../../src/infrastructure/sqlite/db.js';
 import { Ledger } from '../../src/application/ledger.js';
 import type {
   AccountCard,
+  CashFlowView,
   ClosingView,
+  DashboardView,
   IntegrityView,
+  ProfitLossView,
   TrialBalance,
 } from '../../src/contracts/queries.js';
 
@@ -395,6 +398,26 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     const after = q({ type: 'closing', month: '2026-09' }) as ClosingView;
     assert.equal(after.profit, preview.profit);
   }
+  // P1 (5d): M/Z of a year, the dashboard, the cash flow of a year and the VAT summary.
+  const plYear = time(
+    'Mənfəət və zərər, il',
+    1000,
+    () => q({ type: 'profitLoss', year: '2026' }) as ProfitLossView,
+  );
+  assert.ok(plYear.rows.length > 1);
+  const panel = time(
+    'İdarə paneli',
+    1500,
+    () => q({ type: 'dashboard', month: '2026-09' }) as DashboardView,
+  );
+  assert.equal(panel.series.length, 12);
+  const flow = time(
+    'Pul vəsaitlərinin hərəkəti, il',
+    3000,
+    () => q({ type: 'cashFlow', from: '2026-01-01', to: '2026-12-31' }) as CashFlowView,
+  );
+  assert.equal(flow.reconciled, true);
+  time('ƏDV icmalı, ay', 1500, () => q({ type: 'vatSummary', month: '2026-09' }));
 });
 
 function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] } {
