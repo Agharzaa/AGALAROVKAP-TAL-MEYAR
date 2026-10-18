@@ -56,7 +56,7 @@ import { eqMaps } from './eqaime-book.js';
 import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
 import { rateOn, ratesList } from './rates.js';
 import { revaluationView } from './revaluation.js';
-import { closingList, closingView, type ClosingControls } from './closing.js';
+import { closingList, closingView, nextClosingMonth, type ClosingControls } from './closing.js';
 import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
@@ -1480,6 +1480,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'closings':
       company(db, q.companyId);
       return closingList(db, q.companyId);
+    case 'closingNext':
+      company(db, q.companyId);
+      return { month: nextClosingMonth(db, q.companyId) };
     case 'profitLoss': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);

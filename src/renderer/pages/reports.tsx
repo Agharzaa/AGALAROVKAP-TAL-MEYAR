@@ -484,8 +484,6 @@ const tileView = (key: DashboardTile['key'], month: string): View => {
       return { type: 'accountCard', account: '531', ...period };
     case 'vat':
       return { type: 'page', page: 'vatSummary', period };
-    case 'eqWaiting':
-      return { type: 'page', page: 'eqPurchase' };
   }
 };
 
@@ -583,7 +581,7 @@ export function DashboardPage() {
                   onClick={() => ws.open(tileView(t.key, month), win.companyId)}
                 >
                   <span>{t.label}</span>
-                  <strong>{t.count ? t.value : money(t.value)}</strong>
+                  <strong>{money(t.value)}</strong>
                   <small>{t.hint}</small>
                 </button>
               </li>

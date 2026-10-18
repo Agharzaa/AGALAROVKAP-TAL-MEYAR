@@ -195,12 +195,12 @@ Xəbərdarlıqla bağlanış davam edə bilər. Mühasib "oxudum" təsdiqi verir
 
 ## 6. Hesabatlar və idarə paneli
 
-| Hesabat                    | Mənbə                                                       | Qeyd                                                                                                                                                              |
-| -------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mənfəət və zərər           | 6xx / 7xx dövriyyəsi, bağlanış yazılışları çıxılmaqla       | Aylar sütunlarda, il cəmi; gəlir növü və xərc maddəsi üzrə açılır                                                                                                 |
-| Pul vəsaitlərinin hərəkəti | Bank və kassa sənədlərinin sətirləri (pul hərəkəti maddəsi) | Birbaşa metod; əvvələ / sona qalıq 221 + 223 + 224 ilə tutuşur; maddəsiz məbləğ ayrıca sətirdə                                                                    |
-| ƏDV icmalı                 | 604.1 / 521.01, 241, e-qaimələr                             | Satış: 18%, 0%, azad, cəlb olunmayan; alış: əvəzləşdirilən / əvəzləşdirilməmiş; ödənilməli ƏDV                                                                    |
-| İdarə paneli               | Registrlər                                                  | Plitələr: ayın gəliri, mənfəəti, pul (bank + kassa), debitor, kreditor, ödənilməli ƏDV, gözləyən e-qaimələr; 12 ayın qrafiki (gəlir / xərc / mənfəət, pul qalığı) |
+| Hesabat                    | Mənbə                                                       | Qeyd                                                                                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mənfəət və zərər           | 6xx / 7xx dövriyyəsi, bağlanış yazılışları çıxılmaqla       | Aylar sütunlarda, il cəmi; gəlir növü və xərc maddəsi üzrə açılır                                                                                                                           |
+| Pul vəsaitlərinin hərəkəti | Bank və kassa sənədlərinin sətirləri (pul hərəkəti maddəsi) | Birbaşa metod; əvvələ / sona qalıq 221 + 223 + 224 ilə tutuşur; maddəsiz məbləğ ayrıca sətirdə                                                                                              |
+| ƏDV icmalı                 | 604.1 / 521.01, 241, e-qaimələr                             | Satış: 18%, 0%, azad, cəlb olunmayan; alış: əvəzləşdirilən / əvəzləşdirilməmiş; ödənilməli ƏDV                                                                                              |
+| İdarə paneli               | Registrlər                                                  | Plitələr: ayın gəliri, mənfəəti, pul (bank + kassa), debitor, kreditor, ödənilməli ƏDV (gözləyən e-qaimələr auditdən sonra çıxarıldı); 12 ayın qrafiki (gəlir / xərc / mənfəət, pul qalığı) |
 
 - İdarə panelində hər rəqəmdən hesabata, oradan sənədə keçmək olur (1C "rasşifrovka").
 - Excel-ə çıxış və çap.
@@ -255,7 +255,7 @@ Bağlanış Sentyabr misalı (QERARLAR) üzərində yoxlanacaq:
 - 801-in nəticəsi;
 - 341.
 
-Misalın rəqəmləri 5c-də testə yazılır və sizə cədvəl kimi göstərilir — təsdiqinizdən sonra mərhələ bitmiş sayılır.
+Misalın rəqəmləri 5c-də testə yazılır və sizə cədvəl kimi göstərilir — təsdiqinizdən sonra mərhələ bitmiş sayılır. **Təsdiqləndi 18.10.2026** (QERARLAR): 801-in nəticəsi 5 708,86 → 341.
 
 ## 10. İcra ardıcıllığı
 

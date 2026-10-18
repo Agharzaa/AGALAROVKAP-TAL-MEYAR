@@ -251,7 +251,11 @@ test('H3: the dashboard reads the registers — tiles equal the trial balance an
   assert.equal(tile('payables'), close('a:531', 'closeKt'));
   assert.equal(tile('payables'), '250.00');
   assert.equal(tile('vat'), '2288.14', 'nothing offset yet');
-  assert.equal(tile('eqWaiting'), '0');
+  assert.deepEqual(
+    v.tiles.map((x) => x.key),
+    ['income', 'profit', 'money', 'receivables', 'payables', 'vat'],
+    'no tile of e-qaimələr waiting: an e-qaimə in Meyar is posted (decided after the audit)',
+  );
   assert.equal(v.series.length, 12);
   assert.deepEqual(v.series.map((x) => x.month).slice(-2), ['2026-08', '2026-09']);
   const sep = v.series[11]!;
@@ -265,63 +269,4 @@ test('H3: the dashboard reads the registers — tiles equal the trial balance an
     'income − expense = profit',
   );
   assert.deepEqual([v.series[10]!.money, v.series[10]!.profit], ['43000.00', '0.00']);
-});
-
-test('audit: the dashboard counts an e-qaimə and the correction replacing it once, as İş masası does', (t) => {
-  const f = fixture(t);
-  const header = {
-    sellerTaxId: '',
-    buyerTaxId: '',
-    sellerName: '',
-    buyerName: '',
-    name: 'Kontragent',
-    status: 'Təsdiqləndi',
-    total: '',
-    base0: '',
-    baseExempt: '',
-    baseNontaxable: '',
-    excise: '',
-    roadTax: '',
-    note: '',
-  };
-  f.exec({
-    type: 'eqaime.import',
-    directionConfirmed: true,
-    companyId: f.companyId,
-    direction: 'purchase',
-    report: 'invoices',
-    source: 'file',
-    fileName: 'dvx.xlsx',
-    fileHash: '3'.padStart(64, '0'),
-    documents: [
-      {
-        ...header,
-        row: 2,
-        number: 'MT1',
-        date: '2026-09-05',
-        taxId: '1700000002',
-        kind: 'Əsas',
-        refNumber: '',
-        net: '1000.00',
-        vat: '180.00',
-        base18: '1000.00',
-      },
-      {
-        ...header,
-        row: 3,
-        number: 'MT9',
-        date: '2026-09-08',
-        taxId: '1700000002',
-        kind: 'Düzəliş qaiməsi',
-        refNumber: 'MT1',
-        net: '900.00',
-        vat: '162.00',
-        base18: '900.00',
-      },
-    ],
-  });
-  const home = f.home().warnings.find((w) => w.kind === 'eqWaiting')!;
-  assert.match(home.text, /: 1 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb/);
-  const v = f.query<DashboardView>({ type: 'dashboard', companyId: f.companyId, month: '2026-09' });
-  assert.equal(v.tiles.find((x) => x.key === 'eqWaiting')!.value, '1');
 });

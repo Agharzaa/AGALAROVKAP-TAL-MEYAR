@@ -1504,7 +1504,8 @@ test('month closing: steps of the last month, Ctrl+Enter closes it, cancel opens
     await user.click(screen.getByRole('menuitem', { name: 'Ay bağlanışı' }));
     const page = within(pane());
     const input = page.getByLabelText('Ay') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: month } });
+    // It opens on the first month not closed (decided after the audit), not the work period.
+    await waitFor(() => assert.equal(input.value, month));
     const income = await page.findByRole('listitem', {
       name: 'Gəlir və xərclərin 801-ə bağlanması',
     });

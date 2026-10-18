@@ -4,7 +4,7 @@
  * checks stop it; warnings are read and acknowledged ("Oxudum"). The last closed month can be
  * cancelled (storno, the lock opens again) and closed again. Below: every closing of the company.
  */
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Check } from '../icons';
 import type {
   ClosingPosting,
@@ -164,7 +164,16 @@ function Signals({ title, signals }: { title: string; signals: Signal[] }) {
 export function ClosingPage() {
   const win = useWindow();
   const ws = useWorkspace();
-  const [month, setMonth] = useState(ws.period.from.slice(0, 7));
+  // The form opens on the first month not closed; none yet — the work period's month.
+  const next = useQuery<{ month: string }>({ type: 'closingNext', companyId: win.companyId });
+  const [month, setMonth] = useState('');
+  // Taken once: closing the month must not move the form to the next one.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !next.data) return;
+    opened.current = true;
+    setMonth(next.data.month || ws.period.from.slice(0, 7));
+  }, [next.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const valid = /^\d{4}-\d{2}$/.test(month);
   const view = useQuery<ClosingView>(
     valid ? { type: 'closing', companyId: win.companyId, month } : null,

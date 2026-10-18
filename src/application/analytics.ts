@@ -518,17 +518,6 @@ export function dashboard(
   });
   const last = series[series.length - 1]!;
   const vat = vatOf(db, companyId, month);
-  const waiting = Number(
-    db.get(
-      `SELECT COUNT(*) AS n FROM eq_documents WHERE company_id=? AND state='waiting' AND status='accepted' AND date<=?
-         -- An e-qaimə replaced by its correction is not DVX's word any more (as on İş masası).
-         AND NOT (kind='main' AND EXISTS(SELECT 1 FROM eq_documents c WHERE c.company_id=eq_documents.company_id
-           AND c.direction=eq_documents.direction AND c.tax_id=eq_documents.tax_id
-           AND c.ref_key=eq_documents.eq_key AND c.kind='correction' AND c.status='accepted'))`,
-      companyId,
-      monthEnd(month),
-    )!.n,
-  );
   return {
     month,
     tiles: [
@@ -562,13 +551,6 @@ export function dashboard(
         label: 'Ödənilməli ƏDV',
         value: money(vat.salesVat - vat.offset),
         hint: 'Satışın ƏDV-si − əvəzləşdirilən ƏDV',
-      },
-      {
-        key: 'eqWaiting',
-        label: 'Gözləyən e-qaimələr',
-        value: String(waiting),
-        count: true,
-        hint: 'DVX-də təsdiqlənib, uçota alınmayıb',
       },
     ],
     series,

@@ -7,7 +7,8 @@
  *      stock or cash on a day of the month, registers ≠ journal) and warnings, which the
  *      accountant acknowledges (kept with the closing);
  *   2. FIFO re-costing: what is left of every product at strict FIFO value; the difference to the
- *      books is one adjustment, Dt 701 / Kt 20x (or back); sales are not posted again;
+ *      books is adjusted where the month's goods went, by quantity (Dt 701 / 721 / 731 … / Kt 20x or
+ *      back; a share to another stock account, or nothing out, goes to 701); sales are not posted again;
  *   3. currency revaluation: the month's YQ- document (5b) — posted, or posted again when stale;
  *   4. purchase VAT offset: Dt 521.01 / Kt 241 for the VAT paid on purchases whose e-qaimə DVX
  *      confirmed (through the VAT deposit; individuals, foreign partners and currency invoices
@@ -191,10 +192,23 @@ interface Draft {
   notes: string[];
 }
 
-function fifoStep(db: Db, companyId: string, chart: Chart, month: string): Draft {
+interface Outflow {
+  target: { account: string; sk: string[] };
+  /** The goods went to another quantitative (stock) account. */
+  stock: boolean;
+  quantity: bigint;
+}
+
+function fifoStep(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  month: string,
+): Draft & { products: number } {
   const end = monthEnd(month);
   const postings: Posting[] = [];
   const notes: string[] = [];
+  const products = new Set<string>();
   const stock = chart
     .all()
     .filter(
@@ -230,6 +244,30 @@ function fifoStep(db: Db, companyId: string, chart: Chart, month: string): Draft
       list.push({ source: String(r.s), quantity: r.q as bigint, value: r.a as bigint });
       layers.set(String(r.product), list);
     }
+    // Where the month's goods went (storno nets a cancelled outflow out); not the closing's own.
+    const outflows = new Map<string, Outflow[]>();
+    for (const r of db.all(
+      `SELECT p.kt_s1 AS product, p.dt_account, p.dt_s1, p.dt_s2, p.dt_s3, SUM(p.kt_qty) AS q
+       FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND p.kt_account=? AND p.kt_qty<>0 AND p.date BETWEEN ? AND ?
+         AND e.source_type<>'${CLOSING}'
+       GROUP BY p.kt_s1, p.dt_account, p.dt_s1, p.dt_s2, p.dt_s3
+       HAVING SUM(p.kt_qty)>0`,
+      companyId,
+      account.code,
+      `${month}-01`,
+      end,
+    )) {
+      const sk = [String(r.dt_s1), String(r.dt_s2), String(r.dt_s3)];
+      while (sk.length && !sk[sk.length - 1]) sk.pop();
+      const list = outflows.get(String(r.product)) ?? [];
+      list.push({
+        target: { account: String(r.dt_account), sk },
+        stock: !!chart.get(String(r.dt_account))?.quantitative,
+        quantity: r.q as bigint,
+      });
+      outflows.set(String(r.product), list);
+    }
     for (const b of db.all(
       `SELECT s1, SUM(debit-credit) AS v, SUM(qty_dt-qty_kt) AS q FROM registers
        WHERE company_id=? AND account=? AND month<=? GROUP BY s1`,
@@ -255,17 +293,58 @@ function fifoStep(db: Db, companyId: string, chart: Chart, month: string): Draft
       const group =
         groups.get(product) ||
         (defaultGroup ||= role(db, companyId, 'defaultProductGroup', 'Əsas nomenklatura qrupu'));
-      const expense = { account: '701', sk: [group, cogs] };
       const goods = { account: account.code, sk: [product] };
-      postings.push({
-        dt: diff > 0n ? expense : goods,
-        kt: diff > 0n ? goods : expense,
-        amount: diff > 0n ? diff : -diff,
-        memo: 'Maya dəyərinin dəqiqləşdirilməsi (FIFO)',
-      });
+      for (const [target, amount] of shares(diff, outflows.get(product) ?? [], {
+        account: '701',
+        sk: [group, cogs],
+      }))
+        postings.push({
+          dt: amount > 0n ? target : goods,
+          kt: amount > 0n ? goods : target,
+          amount: amount > 0n ? amount : -amount,
+          memo: 'Maya dəyərinin dəqiqləşdirilməsi (FIFO)',
+        });
+      products.add(product);
     }
   }
-  return { postings, notes };
+  return { postings, notes, products: products.size };
+}
+
+/**
+ * The difference split over where the goods went this month, by quantity (cumulative rounding,
+ * so the parts sum to it exactly). A share that went to another stock account goes to 701: an
+ * adjustment there, without quantity, would not be a FIFO layer of that account. Nothing out
+ * this month — all of it to 701.
+ */
+function shares(
+  diff: Minor,
+  out: readonly Outflow[],
+  cogs: { account: string; sk: string[] },
+): [{ account: string; sk: string[] }, Minor][] {
+  const total = out.reduce((s, o) => s + o.quantity, 0n);
+  if (total <= 0n) return [[cogs, diff]];
+  const targets = new Map<
+    string,
+    { target: { account: string; sk: string[] }; quantity: bigint }
+  >();
+  for (const o of out) {
+    const target = o.stock ? cogs : o.target;
+    const key = `${target.account}|${target.sk.join('|')}`;
+    const t = targets.get(key) ?? { target, quantity: 0n };
+    t.quantity += o.quantity;
+    targets.set(key, t);
+  }
+  const list = [...targets.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const result: [{ account: string; sk: string[] }, Minor][] = [];
+  let seen = 0n;
+  let given = 0n;
+  for (const [, t] of list) {
+    seen += t.quantity;
+    const upTo = roundHalfAwayFromZero(diff * seen, total);
+    if (upTo !== given) result.push([t.target, upTo - given]);
+    given = upTo;
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -535,7 +614,7 @@ interface Plan {
   date: string;
   blocking: Signal[];
   warnings: Signal[];
-  fifo: Draft;
+  fifo: Draft & { products: number };
   revaluation: RevaluationStep | null;
   vat: Draft;
   out: CloseOut;
@@ -602,7 +681,7 @@ function buildPlan(
   };
   blocking.push(...negativeBalances(db, companyId, chart, month, controls.name));
   for (const problem of controls.integrity(month)) blocking.push(signal('integrity', problem));
-  const fifo = attempt<Draft>('closing', { postings: [], notes: [] }, () =>
+  const fifo = attempt<Plan['fifo']>('closing', { postings: [], notes: [], products: 0 }, () =>
     fifoStep(db, companyId, chart, month),
   );
   // A missing month-end rate or two currencies on one key: the revaluation cannot be computed.
@@ -682,7 +761,7 @@ function steps(plan: Plan, posted: boolean): ClosingStep[] {
       'Maya dəyərinin dəqiqləşdirilməsi (FIFO)',
       plan.fifo.postings,
       plan.fifo.postings.length
-        ? `${plan.fifo.postings.length} mal üzrə düzəliş · ${show(sum(plan.fifo.postings))}`
+        ? `${plan.fifo.products} mal üzrə düzəliş · ${show(sum(plan.fifo.postings))}`
         : 'Maya dəyəri FIFO ilə uyğundur',
       plan.fifo.notes,
     ),
@@ -967,6 +1046,23 @@ export function closingList(db: Db, companyId: string): ClosingSummary[] {
   return db
     .all('SELECT * FROM month_closings WHERE company_id=? ORDER BY month DESC', companyId)
     .map(summary);
+}
+
+/**
+ * The first month not closed: the month of the first posting after the lock; with none, the
+ * month after the lock; '' when nothing is posted nor locked.
+ */
+export function nextClosingMonth(db: Db, companyId: string): string {
+  const closed = String(
+    db.get('SELECT closed_through FROM companies WHERE id=?', companyId)!.closed_through,
+  );
+  const first = db.get(
+    'SELECT MIN(date) AS d FROM postings WHERE company_id=? AND date>?',
+    companyId,
+    closed,
+  )!.d;
+  if (first) return String(first).slice(0, 7);
+  return closed ? nextDay(closed).slice(0, 7) : '';
 }
 
 export function closingView(

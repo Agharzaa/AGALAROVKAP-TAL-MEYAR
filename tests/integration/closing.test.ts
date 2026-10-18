@@ -588,3 +588,56 @@ test('audit: a revaluation the closing took back reads "storno edildi" once the 
   assert.equal(balance(f, '611'), '0');
   assert.equal(balance(f, '223'), '0');
 });
+
+test('FIFO adjustment goes where the goods went, by quantity; to another stock account — 701', (t) => {
+  const f = fixture(t);
+  const supplier = f.partner('Təchizat ASC', '1700000002');
+  const customer = f.partner('Alıcı MMC', '1700000001');
+  const cp = f.contract(supplier, 'P-1', 'purchase');
+  const cs = f.contract(customer, 'S-1', 'sale');
+  const paper = f.product('Kağız A4', 'qutu');
+  const shortage = f.item('expenseItem', 'Ofis xərcləri');
+  const buy = (date: string, quantity: string, price: string) =>
+    f.invoice('purchase', date, supplier, cp, [
+      { productId: paper, quantity, price, vatRate: '0' },
+    ]);
+  buy('2026-09-10', '10', '10');
+  f.invoice('sale', '2026-09-15', customer, cs, [
+    { productId: paper, quantity: '4', price: '30', vatRate: '0' },
+  ]);
+  f.operation('2026-09-20', [
+    f.line('731', [shortage], '205', [paper], '20', { quantity: '2' }),
+    f.line('201', [paper], '205', [paper], '20', { quantity: '2' }),
+  ]);
+  // Entered afterwards, dated first: the 8 qutu out took 8 × 20.00 under FIFO, booked 8 × 10.00.
+  buy('2026-09-05', '10', '20');
+  const fifo = step(view(f, '2026-09'), 'fifo');
+  const sale = f.db.get("SELECT dt_s1, dt_s2 FROM postings WHERE dt_account='701'")!;
+  // 4 sold and 2 moved to 201 (its stock is not re-costed from here): 6/8 of 80.00 to 701.
+  assert.deepEqual(
+    fifo.postings.map((p) => [p.dt, p.dtSk, p.kt, p.ktSk, p.amount]),
+    [
+      ['701', [String(sale.dt_s1), String(sale.dt_s2)], '205', [paper], '60.00'],
+      ['731', [shortage], '205', [paper], '20.00'],
+    ],
+  );
+  assert.equal(fifo.summary, '1 mal üzrə düzəliş · 80,00');
+  close(f, '2026-09');
+  assert.equal(balance(f, '205'), '14000', '2 × 20.00 + 10 × 10.00');
+  assert.equal(balance(f, '201'), '2000', 'the stock moved keeps its value');
+});
+
+test('the closing form opens on the first month not closed: the first posting after the lock', (t) => {
+  const f = fixture(t);
+  const next = () =>
+    f.query<{ month: string }>({ type: 'closingNext', companyId: f.companyId }).month;
+  assert.equal(next(), '', 'no postings, no lock: the form keeps the work period');
+  september(f);
+  assert.equal(next(), '2026-08', 'the opening balances of 31.08');
+  close(f, '2026-08');
+  assert.equal(next(), '2026-09');
+  close(f, '2026-09');
+  assert.equal(next(), '2026-10', 'nothing after the lock: the month after it');
+  cancel(f, '2026-09');
+  assert.equal(next(), '2026-09');
+});

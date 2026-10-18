@@ -51,6 +51,8 @@ export const querySchema = z.discriminatedUnion('type', [
   /** Month closing (stage 5c): the posted one, or what closing now would do. */
   z.object({ type: z.literal('closing'), companyId: id, month: z.string().max(7) }),
   z.object({ type: z.literal('closings'), companyId: id }),
+  /** The month the closing form opens on: the first one not closed ({ month: '' } — none yet). */
+  z.object({ type: z.literal('closingNext'), companyId: id }),
   /** Mənfəət və zərər (stage 5d): the year by months, closing entries left out. */
   z.object({ type: z.literal('profitLoss'), companyId: id, year: z.string().max(4) }),
   /** Pul vəsaitlərinin hərəkəti: bank and cash document lines by cash-flow item. */
@@ -513,11 +515,9 @@ export interface VatSummaryView {
   }[];
 }
 export interface DashboardTile {
-  key: 'income' | 'profit' | 'money' | 'receivables' | 'payables' | 'vat' | 'eqWaiting';
+  key: 'income' | 'profit' | 'money' | 'receivables' | 'payables' | 'vat';
   label: string;
   value: string;
-  /** The tile shows a count, not an amount. */
-  count?: boolean;
   hint: string;
 }
 export interface DashboardView {
