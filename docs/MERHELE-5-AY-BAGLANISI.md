@@ -265,7 +265,7 @@ Hər addım ayrıca commit-dir, testləri yaşıl saxlayır və (icazənizə gö
 2. **5b — Valyuta məzənnələri və yenidən qiymətləndirmə.** ✅ (0.6.6, 17.10.2026) `currency_rates`, AMB faylı, sənədlərdə avtomatik məzənnə, yenidən qiymətləndirmə hesabı. Testlər K4, V1, V2.
 3. **5c — Ay bağlanışı.** ✅ (18.10.2026, branch-da; buraxılış 5d və auditdən sonra) Sxem v13 (`month_closings`), yoxlamalar, FIFO dəqiqləşdirilməsi, YQ addımı, ƏDV əvəzləşdirilməsi, 801 / 341 / 343, dövrün kilidi, ləğv. Testlər A1–A6, P1-in bağlanış hissəsi.
 4. **5d — Hesabatlar və idarə paneli.** ✅ (18.10.2026, branch-da) M/Z, pul hərəkəti, ƏDV icmalı, panel. Testlər H1–H3, P1.
-5. **Audit, 0.7.0, `PROJECT_STATE.md` və `QERARLAR.md`.**
+5. **Audit, 0.7.0, `PROJECT_STATE.md` və `QERARLAR.md`.** ✅ (0.7.0, 18.10.2026) Müstəqil audit (6 qüsur), açıq suallar qərarlaşdırılıb, §9 təsdiqlənib.
 
 ## 11. Açıq suallar (istifadəçi və mühasib)
 

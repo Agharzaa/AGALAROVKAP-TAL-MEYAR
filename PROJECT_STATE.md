@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 18.10.2026. Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 18.10.2026 (0.7.0). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -342,7 +342,7 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 - **Testlər:** V1 (AMB faylı, kitabça, sənəddə avtomatik məzənnə), V2 (223.02, 211.02, 531.02, 243.02, 543.02 — gəlir 18,00 / xərc 5,00 qəpikbəqəpik; köhnəlmə, yenidən uçot, ləğv, istifadə olunmuş məzənnənin qorunması, bağlı dövr), K4 (avro kassası), sxem köçürməsi, UI (AMB yükləmə və uçot), yük testi. `npm test` 142, `npm run test:ui` 21.
 - **Yoxlanmayıb:** proqramın içindən real yükləmə (Electron `net` ilə; faylın formatı real cbar.az faylı ilə yoxlanılıb).
 
-### 5c — ay bağlanışı (18.10.2026, branch `claude/merhele-5c-ay-baglanisi`; buraxılış yoxdur — 5d və müstəqil auditdən sonra 0.7.0)
+### 5c — ay bağlanışı (18.10.2026, 0.7.0)
 
 - **Sxem v13:** `month_closings` (şirkət + ay üzrə bir sənəd AB-2026-09, ayın son günü; addımlar, məzənnələr, oxunmuş xəbərdarlıqlar, YQ sənədi, 801 nəticəsi, bağlanışdan əvvəlki kilid tarixi; silinmir, bağlı dövrdə dəyişmir). Hər addım öz yazılışıdır (`source_type = 'closing'`).
 - **Addımlar** (`src/application/closing.ts`, hamısı bir tranzaksiyada): 1) yoxlamalar — bloklayan (ay bitməyib, əvvəlki ay bağlanmayıb, ayın hər hansı günündə mənfi mal / kassa qalığı, ay sonu məzənnəsi yoxdur, ayın registrləri ≠ jurnal) və xəbərdarlıqlar (avans, yolda köçürmə, ƏDV depozit cütü, DVX, e-qaiməsi təsdiqlənməmiş alışın ƏDV-si; "Oxudum" təsdiqi ilə, bağlanışda saxlanılır); 2) FIFO dəqiqləşdirilməsi — 20x hesablarında qalığın ciddi FIFO dəyəri, fərq ayın məxariclərinin hesablarına miqdara mütənasib (701 / 721 / 731 …; başqa ehtiyat hesabına köçürmə və ya məxaric yoxdursa 701), miqdarsız; 3) yenidən qiymətləndirmə — YQ- sənədi (5b) uçota alınır və ya köhnəlibsə yenidən keçirilir; 4) ƏDV əvəzləşdirilməsi Dt 521.01 / Kt 241 — DVX-də təsdiqlənmiş e-qaiməli alışlar, depozitdən ödənilən (fiziki şəxs / xarici / valyuta — mütənasib); 5) 6xx / 7xx → 801 subkonto açarları üzrə; 6) 801 → 341, dekabrda 341 → 343; 7) kilid ayın sonuna. Sonra 6xx / 7xx / 801 sıfır deyilsə heç nə saxlanmır.
@@ -352,7 +352,7 @@ Dizayn: `docs/MERHELE-5-AY-BAGLANISI.md` (təsdiqlənib 17.10.2026, §11-də tö
 - **Testlər:** `tests/integration/closing.test.ts` — A1 (Sentyabr misalı: 601 15 000 / 604.1 2 288,14 / 701 7 000 / 721 3 → mənfəət 5 708,86 = 341), A2 (geriyə tarixli alış → 701 düzəlişi 50,00), A3 (depozitdən ödənilmiş 180,00 və fiziki şəxsdə yarısı 45,00 əvəzləşir; ödənilməmiş 360,00 və təsdiqlənməmiş 18,00 241-də qalır), A4 (ardıcıllıq, yalnız sonuncu ayın ləğvi, storno, kilid, yeni versiya, əl ilə açmanın qadağası), A5 (mənfi kassa, məzənnə yoxdur, mənfi mal — heç nə yazılmır), A6 (dekabr 341 → 343), YQ addımı, xəbərdarlıq təsdiqi; UI (addımlar, Ctrl+Enter, ləğv); yük testi (P1-in bağlanış hissəsi).
 - **Mühasibin qəpikbəqəpik cədvəl təsdiqi (§9):** istifadəçi 18.10.2026-da təsdiqlədi (QERARLAR).
 
-### 5d — hesabatlar və idarə paneli (18.10.2026, eyni branch; buraxılış yoxdur)
+### 5d — hesabatlar və idarə paneli (18.10.2026, 0.7.0)
 
 - **Mənfəət və zərər** (Hesabatlar, Mühasibat → Hesabatlar): il aylar üzrə, gəlir növü / xərc maddəsi üzrə açılır, aralıq cəmlər (xalis satış, ümumi, əməliyyat mənfəəti, vergiqoyulmadan əvvəl); ay bağlanışının 801 yazılışları çıxılır — bağlanmış ay öz rəqəmlərini saxlayır. Sətrə iki dəfə klik — hesab kartı.
 - **Pul vəsaitlərinin hərəkəti** (Bank və kassa → Hesabatlar): bank və kassa sətirləri maddələr üzrə, maddəsiz ayrıca; öz hesabları arası sətirlər sayılmır; sənədlərdən kənar hərəkət (əl ilə, yenidən qiymətləndirmə) ayrıca; qalıqlar 221 + 223 + 224 ilə tutuşur (tutuşmazsa xəbərdarlıq).
@@ -387,7 +387,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur, `4a0b5dd` (5c) + `ff0571e
 6. Ay bağlanışı forması bağlanmamış ilk ayla açılır (kilidin sonrakı ilk yazılışının ayı; yoxdursa kilidin növbəti ayı) — sorğu `closingNext`, `closing.test.ts`, `tests/ui`.
 
 Mühasibin §9 qəpikbəqəpik təsdiqi alınıb (Sentyabr misalı, 801 nəticəsi 5 708,86 → 341).
-Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `npm test` 158, `npm run test:ui` 24, `npm run test:perf` keçir. Push və buraxılış (0.7.0) yoxdur.
+Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `npm test` 158, `npm run test:ui` 24, `npm run test:perf` keçir. **0.7.0** main-ə push edilib (18.10.2026, istifadəçinin icazəsi ilə); CI pre-release dərc edir, quraşdırılmış Meyar özü yenilənir.
 
 ## Açıq məsələlər
 
@@ -401,7 +401,7 @@ Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `n
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
-5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6) — hazır; 5c ay bağlanışı və 5d hesabatlar branch-dadır (buraxılmayıb), müstəqil audit keçib (18.10.2026). auditin açıq sualları qərarlaşdırılıb və tətbiq olunub, mühasibin §9 təsdiqi alınıb (18.10.2026). **Növbəti:** 0.7.0 buraxılışı (istifadəçinin icazəsi ilə).
+5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 
 ## Əmrlər
 
