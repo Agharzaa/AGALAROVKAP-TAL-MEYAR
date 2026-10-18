@@ -43,7 +43,12 @@ export type Page =
   | 'audit'
   | 'settings';
 export type View =
-  | { type: 'page'; page: Page }
+  | {
+      type: 'page';
+      page: Page;
+      /** The period a report opens with (a dashboard tile's month); the working period otherwise. */
+      period?: Period;
+    }
   | { type: 'operation'; id?: string }
   | {
       type: 'invoice';
@@ -177,6 +182,12 @@ export function useWindow(): Win {
   const value = useContext(WindowContext);
   if (!value) throw new Error('Window context missing');
   return value;
+}
+/** The period a report opens with: its window's own (from a dashboard tile), else the working one. */
+export function usePeriod(): Period {
+  const { view } = useWindow();
+  const { period } = useWorkspace();
+  return (view.type === 'page' && view.period) || period;
 }
 
 const sameView = (a: View, b: View) => JSON.stringify(a) === JSON.stringify(b);

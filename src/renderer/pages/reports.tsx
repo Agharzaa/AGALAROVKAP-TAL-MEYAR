@@ -22,7 +22,7 @@ import { useQuery } from '../hooks';
 import { pages } from '../pages';
 import { usePrint } from '../print';
 import { Amount, Empty, Notice } from '../ui';
-import { useWindow, useWorkspace, type View } from '../workspace';
+import { monthOf, usePeriod, useWindow, useWorkspace, type View } from '../workspace';
 import { workbook, type SheetSpec } from '../xlsx';
 
 const monthNames = [
@@ -94,7 +94,7 @@ function useOutput(file: string, sheet: () => SheetSpec, paper: () => ReactNode)
 export function ProfitLossPage() {
   const win = useWindow();
   const ws = useWorkspace();
-  const [year, setYear] = useState(ws.period.from.slice(0, 4));
+  const [year, setYear] = useState(usePeriod().from.slice(0, 4));
   const valid = /^\d{4}$/.test(year);
   const view = useQuery<ProfitLossView>(
     valid ? { type: 'profitLoss', companyId: win.companyId, year } : null,
@@ -197,7 +197,7 @@ export function ProfitLossPage() {
     >
       {!v ? (
         <div className="loading">Yüklənir…</div>
-      ) : v.rows.length > 1 ? (
+      ) : v.rows.some((r) => !r.total) ? (
         <div className="table-scroll">{table}</div>
       ) : (
         <Empty title="Bu ildə gəlir və xərc yoxdur" />
@@ -211,8 +211,7 @@ export function ProfitLossPage() {
 
 export function CashFlowPage() {
   const win = useWindow();
-  const ws = useWorkspace();
-  const range = useRange(ws.period);
+  const range = useRange(usePeriod());
   const view = useQuery<CashFlowView>({
     type: 'cashFlow',
     companyId: win.companyId,
@@ -318,8 +317,7 @@ export function CashFlowPage() {
 
 export function VatSummaryPage() {
   const win = useWindow();
-  const ws = useWorkspace();
-  const [month, setMonth] = useState(ws.period.from.slice(0, 7));
+  const [month, setMonth] = useState(usePeriod().from.slice(0, 7));
   const valid = /^\d{4}-\d{2}$/.test(month);
   const view = useQuery<VatSummaryView>(
     valid ? { type: 'vatSummary', companyId: win.companyId, month } : null,
@@ -471,19 +469,21 @@ export function VatSummaryPage() {
 
 // ---------------------------------------------------------------------------------------------
 
-const tileView = (key: DashboardTile['key']): View => {
+/** The report of a tile, opened for the dashboard's month (M/Z: the year of it). */
+const tileView = (key: DashboardTile['key'], month: string): View => {
+  const period = monthOf(`${month}-01`);
   switch (key) {
     case 'income':
     case 'profit':
-      return { type: 'page', page: 'profitLoss' };
+      return { type: 'page', page: 'profitLoss', period };
     case 'money':
-      return { type: 'page', page: 'cashFlow' };
+      return { type: 'page', page: 'cashFlow', period };
     case 'receivables':
-      return { type: 'accountCard', account: '211' };
+      return { type: 'accountCard', account: '211', ...period };
     case 'payables':
-      return { type: 'accountCard', account: '531' };
+      return { type: 'accountCard', account: '531', ...period };
     case 'vat':
-      return { type: 'page', page: 'vatSummary' };
+      return { type: 'page', page: 'vatSummary', period };
     case 'eqWaiting':
       return { type: 'page', page: 'eqPurchase' };
   }
@@ -494,12 +494,14 @@ function Chart({ series }: { series: DashboardView['series'] }) {
   const n = (s: string) => Number(s);
   const top = Math.max(
     1,
-    ...series.flatMap((s) => [n(s.income), n(s.expense), Math.abs(n(s.profit))]),
+    ...series.flatMap((s) => [s.income, s.expense, s.profit].map((x) => Math.abs(n(x)))),
   );
   const w = 640;
   const h = 180;
   const step = w / series.length;
   const y = (v: number) => h / 2 - (v / top) * (h / 2 - 8);
+  // A bar grows from the axis: up for a positive figure, down for a negative one (returns).
+  const bar = (v: number) => ({ y: Math.min(y(v), h / 2), height: Math.abs(h / 2 - y(v)) });
   const profit = series.map((s, i) => `${i * step + step / 2},${y(n(s.profit))}`).join(' ');
   return (
     <figure className="dashboard-chart">
@@ -511,8 +513,7 @@ function Chart({ series }: { series: DashboardView['series'] }) {
               className="bar income"
               x={i * step + step * 0.15}
               width={step * 0.33}
-              y={y(n(s.income))}
-              height={h / 2 - y(n(s.income))}
+              {...bar(n(s.income))}
             >
               <title>{`${monthLabel(s.month)}: gəlir ${money(s.income)}`}</title>
             </rect>
@@ -520,8 +521,7 @@ function Chart({ series }: { series: DashboardView['series'] }) {
               className="bar expense"
               x={i * step + step * 0.52}
               width={step * 0.33}
-              y={y(n(s.expense))}
-              height={h / 2 - y(n(s.expense))}
+              {...bar(n(s.expense))}
             >
               <title>{`${monthLabel(s.month)}: xərc ${money(s.expense)}`}</title>
             </rect>
@@ -580,7 +580,7 @@ export function DashboardPage() {
                   type="button"
                   className="dashboard-tile"
                   title={t.hint}
-                  onClick={() => ws.open(tileView(t.key), win.companyId)}
+                  onClick={() => ws.open(tileView(t.key, month), win.companyId)}
                 >
                   <span>{t.label}</span>
                   <strong>{t.count ? t.value : money(t.value)}</strong>

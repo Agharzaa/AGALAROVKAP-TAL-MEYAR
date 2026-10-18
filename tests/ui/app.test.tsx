@@ -1585,3 +1585,63 @@ test('reports: the dashboard tile opens M/Z, a row opens the account card, Excel
     h.close();
   }
 });
+
+test('audit: a dashboard tile opens its report for the dashboard month; returns draw no negative bar; an empty year says so', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const month = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  // Only a return in the month: its income is negative.
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-10`,
+    memo: 'Qaytarma',
+    lines: [
+      {
+        dtAccount: '602',
+        dtSk: [service.id, '0'],
+        ktAccount: '211.01',
+        ktSk: [s.customer, s.contract, ''],
+        amount: '100',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
+    const panel = within(pane());
+    fireEvent.change(panel.getByLabelText('Ay'), { target: { value: month } });
+    const income = await panel.findByRole('button', { name: /^Gəlir\s*[−-]100,00/ });
+    for (const bar of document.querySelectorAll('.dashboard-chart rect'))
+      assert.ok(Number(bar.getAttribute('height')) >= 0, bar.outerHTML);
+    await user.click(panel.getByRole('button', { name: /^Ödənilməli ƏDV/ }));
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector('.mdi-window.active .mdi-caption')?.textContent,
+        'ƏDV icmalı',
+      ),
+    );
+    assert.equal((within(pane()).getByLabelText('Ay') as HTMLInputElement).value, month);
+    await user.click(income);
+    const report = within(pane());
+    await report.findByRole('rowheader', {
+      name: '602 · Satılmış malların qaytarılması və ucuzlaşdırılması',
+    });
+    const year = report.getByLabelText('İl') as HTMLInputElement;
+    assert.equal(year.value, month.slice(0, 4));
+    await user.clear(year);
+    await user.type(year, '2001');
+    await report.findByText('Bu ildə gəlir və xərc yoxdur');
+  } finally {
+    h.close();
+  }
+});

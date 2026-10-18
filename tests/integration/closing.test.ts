@@ -509,3 +509,82 @@ test('warnings are read and acknowledged; they are kept with the closing', (t) =
     /AB-2026-09 · mənfəət 100\.00 AZN · 1 xəbərdarlıq oxundu/,
   );
 });
+
+test('audit: a step of more than 2000 lines is posted in several entries, not refused', (t) => {
+  const f = fixture(t);
+  const founder = f.partner('Təsisçi', '', 'individual');
+  const capital = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
+  const items = Array.from(
+    { length: 2001 },
+    (_, i) =>
+      f.exec({
+        type: 'item.save',
+        companyId: f.companyId,
+        kind: 'expenseItem',
+        name: `Xərc ${i}`,
+        archived: false,
+      }).id,
+  );
+  // 2001 expense keys of 721: the closing moves each of them to 801.
+  for (const part of [items.slice(0, 1000), items.slice(1000)])
+    f.operation(
+      '2026-09-10',
+      part.map((x) => f.line('721', [x], '301', [founder, capital], '1')),
+    );
+  assert.equal(step(view(f, '2026-09'), 'income').postings.length, 2001);
+  const r = close(f, '2026-09');
+  assert.equal(balance(f, '721'), '0');
+  assert.equal(balance(f, '341'), '200100');
+  assert.deepEqual(
+    f.db
+      .all(
+        `SELECT COUNT(*) AS n FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE e.source_id=? AND p.kt_account='721' GROUP BY e.id ORDER BY n DESC`,
+        r.id,
+      )
+      .map((x) => x.n),
+    [2000n, 1n],
+  );
+  cancel(f, '2026-09');
+  assert.equal(balance(f, '721'), '200100');
+});
+
+test('audit: a revaluation the closing took back reads "storno edildi" once the month is closed', (t) => {
+  const f = fixture(t);
+  const kapital = f.partner('Kapital Bank ASC', '9900003611');
+  const founder = f.partner('Təsisçi', '', 'individual');
+  const capital = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
+  for (const [date, rate] of [
+    ['2026-09-01', '1.7'],
+    ['2026-09-30', '1.71'],
+  ] as const)
+    f.exec({
+      type: 'rates.save',
+      companyId: f.companyId,
+      date,
+      source: 'manual',
+      rates: [{ currency: 'USD', rate }],
+    });
+  const usd = f.bankAccount(kapital, 'AZ12AIIB38060019449999999901', '223.02', 'USD', 'USD');
+  const doc = f.bank('in', '2026-09-01', usd, [f.bankLine('301', [founder, capital], '1000')]);
+  f.exec({ type: 'revaluation.post', companyId: f.companyId, month: '2026-09' });
+  // The money was never there: with the document cancelled the revaluation has nothing to revalue.
+  f.exec({
+    type: 'bank.cancel',
+    companyId: f.companyId,
+    id: doc.id,
+    version: doc.version!,
+    reason: 'Səhv sənəd',
+  });
+  assert.equal(
+    step(view(f, '2026-09'), 'revaluation').summary,
+    'YQ-2026-09: fərq qalmayıb — storno ediləcək',
+  );
+  close(f, '2026-09');
+  assert.equal(
+    step(view(f, '2026-09'), 'revaluation').summary,
+    'YQ-2026-09: fərq qalmayıb — storno edildi',
+  );
+  assert.equal(balance(f, '611'), '0');
+  assert.equal(balance(f, '223'), '0');
+});

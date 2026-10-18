@@ -695,7 +695,7 @@ function steps(plan: Plan, posted: boolean): ClosingStep[] {
         : r.action === 'none'
           ? 'Yenidən qiymətləndiriləcək valyuta qalığı yoxdur'
           : r.action === 'takeBack'
-            ? `${r.number}: fərq qalmayıb — storno ediləcək`
+            ? `${r.number}: fərq qalmayıb — storno ${posted ? 'edildi' : 'ediləcək'}`
             : `${r.number}${r.action === 'keep' ? ' (uçotdadır)' : posted ? '' : ' (uçota alınacaq)'} · gəlir 611: ${show(r.income)} · xərc 731: ${show(r.expense)}`,
       r && r.action !== 'none'
         ? [
@@ -796,11 +796,12 @@ export function postClosing(
   const source = { type: CLOSING, id, number: no, version };
   const chart = tx.chart(cmd.companyId);
   const post = (postings: readonly Posting[], options = {}) => {
-    if (!postings.length) return;
-    checkPostings(chart, postings, 'steps', options);
     // An entry holds at most 2000 lines; a long step (many products, keys) takes several.
-    for (let i = 0; i < postings.length; i += 2000)
-      tx.post(cmd.companyId, chart, source, date, false, postings.slice(i, i + 2000));
+    for (let i = 0; i < postings.length; i += 2000) {
+      const entry = postings.slice(i, i + 2000);
+      checkPostings(chart, entry, 'steps', options);
+      tx.post(cmd.companyId, chart, source, date, false, entry);
+    }
   };
   post(plan.fifo.postings, { costAdjustment: true });
   const revaluation = plan.revaluation!.write(tx)?.id ?? plan.revaluation!.id;
