@@ -616,6 +616,20 @@ export function closePeriod(tx: Tx, cmd: CommandOf<'period.close'>): CommandResu
     throw new DomainError('Yalnız keçmiş tarixə qədər dövr bağlamaq olar.', 'through');
   const reopen = current && through < current;
   const reason = parseText(cmd.reason, 'Səbəb', 240, !!reopen);
+  // A month closing keeps its month closed: it is cancelled first (stage 5c).
+  const closing = reopen
+    ? tx.db.get(
+        "SELECT number FROM month_closings WHERE company_id=? AND status='posted' AND date>? ORDER BY date DESC LIMIT 1",
+        cmd.companyId,
+        through,
+      )
+    : undefined;
+  if (closing)
+    throw new DomainError(
+      `${String(closing.number)} ay bağlanışı uçotdadır: dövrü bu tarixə qədər açmaq üçün əvvəlcə ay bağlanışını ləğv edin (Mühasibat → Ay bağlanışı).`,
+      'through',
+      'conflict',
+    );
   tx.db.run('UPDATE companies SET closed_through=? WHERE id=?', through, cmd.companyId);
   tx.audit(
     cmd.companyId,

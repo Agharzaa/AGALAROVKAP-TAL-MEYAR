@@ -2753,3 +2753,56 @@ button.step:active {
     border-top: 1px dashed #000;
   }
 }
+
+/* Month closing (stage 5c): steps as a numbered sheet, signals above them. */
+.closing {
+  display: contents;
+}
+.closing-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.closing-step,
+.closing-signals {
+  padding: 10px 16px 12px;
+  background: var(--sheet);
+  border: 1px solid var(--frame);
+  border-left: 3px solid var(--ok);
+  border-radius: 2px;
+}
+.closing-step.empty {
+  border-left-color: var(--line);
+}
+.closing-step.blocked,
+.closing-signals {
+  border-left-color: var(--bad);
+}
+.closing-step .section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.closing-step h2,
+.closing-signals h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+}
+.closing-step p {
+  margin: 4px 0 8px;
+}
+.closing-state {
+  color: var(--muted);
+  font-size: 12px;
+}
+.closing-signals {
+  margin-bottom: 8px;
+}
+.closing-signals ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}

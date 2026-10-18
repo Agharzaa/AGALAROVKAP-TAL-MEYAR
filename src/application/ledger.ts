@@ -22,6 +22,7 @@ import { pairBankDocuments } from './bank-pair.js';
 import { cancelCashDocument, saveCashDocument } from './cash.js';
 import { saveRates } from './rates.js';
 import { cancelRevaluation, postRevaluation } from './revaluation.js';
+import { cancelClosing, postClosing } from './closing.js';
 import { applyRules, applyStatementRules, saveBudgetCode, saveRule } from './rules.js';
 import {
   ignoreStatementLine,
@@ -33,7 +34,7 @@ import { cancelInvoice, saveInvoice } from './invoices.js';
 import { ignoreEq, importEq, resolveEq, restoreEq } from './eqaime.js';
 import { applyEq, bulkEqMap, createEqPartners, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
 import { cancelOperation, saveOperation } from './operations.js';
-import { runQuery } from './reports.js';
+import { closingControls, runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
 
 /**
@@ -132,6 +133,10 @@ export class Ledger {
         return postRevaluation(tx, c);
       case 'revaluation.cancel':
         return cancelRevaluation(tx, c);
+      case 'closing.post':
+        return postClosing(tx, c, closingControls(tx.db, c.companyId));
+      case 'closing.cancel':
+        return cancelClosing(tx, c);
       case 'cash.save':
         return saveCashDocument(tx, c);
       case 'cash.cancel':

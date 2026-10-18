@@ -793,12 +793,16 @@ export function eqReconcile(
   };
 }
 
-/** İş masası signals of the e-qaimə boxes (open period only; a closed period is past change). */
+/**
+ * İş masası signals of the e-qaimə boxes (open period only; a closed period is past change). The
+ * month closing reads them up to the month's end (`today` = `to` = the last day).
+ */
 export function eqWarnings(
   db: Db,
   companyId: string,
   closed: string,
   today: string,
+  to = '9999-12-31',
 ): HomeView['warnings'] {
   const out: HomeView['warnings'] = [];
   const from = closed ? nextDay(closed) : '2000-01-01';
@@ -822,7 +826,7 @@ export function eqWarnings(
       );
     const waiting = db.get(
       `SELECT COUNT(*) AS n, COALESCE(SUM(vat),0) AS vat FROM eq_documents WHERE company_id=? AND direction=?
-         AND date>=? AND state='waiting' AND status='accepted'
+         AND date BETWEEN ? AND ? AND state='waiting' AND status='accepted'
          -- An e-qaimə replaced by its correction is not DVX's word any more (as in eqReconcile).
          AND NOT (kind='main' AND EXISTS(SELECT 1 FROM eq_documents c WHERE c.company_id=eq_documents.company_id
            AND c.direction=eq_documents.direction AND c.tax_id=eq_documents.tax_id
@@ -830,6 +834,7 @@ export function eqWarnings(
       companyId,
       direction,
       from,
+      to,
     )!;
     if (waiting.n)
       push(

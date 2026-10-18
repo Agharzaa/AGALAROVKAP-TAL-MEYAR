@@ -475,6 +475,23 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({
+    type: z.literal('closing.post'),
+    ...base,
+    /** "2026-09": every step in one transaction, then the period is closed through the month's end. */
+    month: z.string().max(7),
+    /** The accountant has read the warnings (they are kept with the closing). */
+    acknowledged: z.boolean().default(false),
+    /** Version of the cancelled closing of this month, when closing it again. */
+    version: version.optional(),
+  }),
+  z.object({
+    type: z.literal('closing.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
+  }),
+  z.object({
     type: z.literal('cash.cancel'),
     ...base,
     id,

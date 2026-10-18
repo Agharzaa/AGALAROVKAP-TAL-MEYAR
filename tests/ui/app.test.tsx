@@ -2,7 +2,7 @@ import './setup';
 import React from 'react';
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../src/renderer/App';
 import type {
@@ -1466,6 +1466,67 @@ test('DVX box: e-qaimələr with totals only are mapped to one service for all t
       to: '',
     }) as { documents: { proposal: { lines: unknown[] } | null }[] };
     assert.equal(box.documents[0]!.proposal!.lines.length, 1);
+  } finally {
+    h.close();
+  }
+});
+
+test('month closing: steps of the last month, Ctrl+Enter closes it, cancel opens it again', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const month = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-10`,
+    memo: 'Xidmət',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '601',
+        ktSk: [service.id, '0'],
+        amount: '1000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Ay bağlanışı' }));
+    const page = within(pane());
+    const input = page.getByLabelText('Ay') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: month } });
+    const income = await page.findByRole('listitem', {
+      name: 'Gəlir və xərclərin 801-ə bağlanması',
+    });
+    within(income).getByRole('table', { name: 'Bağlanışdan əvvəlki qalıqlar' });
+    await user.click(within(income).getByRole('button', { name: 'Yazılışlar (1)' }));
+    within(income).getByText('Ay bağlanışı · 601 → 801');
+    within(page.getByRole('listitem', { name: 'Nəticənin 341-ə keçirilməsi' })).getByText(
+      /^Mənfəət 1.000,00$/,
+    );
+    input.focus();
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await page.findByText(new RegExp(`AB-${month} uçota alındı: dövr`));
+    await page.findByText(new RegExp(`AB-${month} uçotdadır \\(versiya 1\\)`));
+    const company = h.db.get('SELECT closed_through FROM companies')!;
+    assert.equal(company.closed_through, monthEnd(month));
+    await user.click(page.getByRole('button', { name: 'Ləğv et' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.type(dialog.getByRole('textbox', { name: 'Səbəb' }), 'Gecikən sənəd');
+    await user.click(dialog.getByRole('button', { name: 'Ləğv et' }));
+    await page.findByText(/Ay bağlanışı ləğv edildi: yazılışları storno edildi, dövr açıldı/);
+    await page.findByRole('button', { name: 'Ayı bağla' });
+    assert.equal(h.db.get('SELECT closed_through FROM companies')!.closed_through, '');
   } finally {
     h.close();
   }

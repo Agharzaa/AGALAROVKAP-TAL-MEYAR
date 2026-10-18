@@ -102,6 +102,18 @@ function layerSlice(layers: readonly StockLayer[], start: Qty, quantity: Qty): M
 }
 
 /**
+ * Strict FIFO value of what is left: the newest `quantity` units of the layers (month-end
+ * re-costing, stage 5c). The slices are the ones the issues were costed with, so a stock that
+ * followed FIFO all along keeps exactly this value. Null when the layers hold fewer units.
+ */
+export function fifoRemainder(layers: readonly StockLayer[], quantity: Qty): Minor | null {
+  if (quantity <= 0n) return 0n;
+  const received = layers.reduce((s, l) => s + (l.quantity > 0n ? l.quantity : 0n), 0n);
+  if (received < quantity) return null;
+  return layerSlice(layers, received - quantity, quantity);
+}
+
+/**
  * FIFO cost of issuing `quantity` units on the issue date: the oldest units not yet issued by
  * then. The journal is the judge of what is really left, so the cost always reconciles with it:
  * - the issue that empties the stock takes exactly the value left on the account;

@@ -22,7 +22,7 @@ import { formatPrice } from '../domain/quantity.js';
 import { monthEnd } from '../domain/rates.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { RevaluationLine, RevaluationView } from '../contracts/queries.js';
-import type { Db } from '../infrastructure/sqlite/db.js';
+import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import { catalogRate } from './rates.js';
 import { loadChart, rowToPosting, expectVersion, type Tx } from './tx.js';
 
@@ -237,26 +237,103 @@ export function postRevaluation(tx: Tx, cmd: CommandOf<'revaluation.post'>): Com
   const month = checkMonth(cmd.month);
   const date = monthEnd(month);
   tx.open(cmd.companyId, date, 'month');
-  const chart = tx.chart(cmd.companyId);
-  const existing = tx.db.get(
-    "SELECT * FROM revaluations WHERE company_id=? AND month=? AND status='posted'",
-    cmd.companyId,
-    month,
-  );
+  const existing = postedRevaluation(tx.db, cmd.companyId, month);
   if (existing && cmd.version !== undefined)
     expectVersion(existing, cmd.version, 'Yenidən qiymətləndirmə');
   const c = compute(tx.db, cmd.companyId, month, existing ? String(existing.id) : undefined);
-  if (c.missing.length)
-    throw new DomainError(
-      `${dmy(date)} üçün AMB məzənnəsi yoxdur: ${c.missing.join(', ')}. Valyuta məzənnələri kitabçasında AMB-dən yükləyin və ya əl ilə yazın.`,
-      'month',
-      'not-found',
-    );
+  if (c.missing.length) throw missingRates(date, c.missing);
   if (!c.lines.length && !existing)
     throw new DomainError(
       `${dmy(date)} tarixinə yenidən qiymətləndiriləcək fərq yoxdur: valyuta qalıqları məzənnə ilə uyğundur.`,
       'month',
     );
+  return writeRevaluation(tx, cmd.companyId, month, existing, c);
+}
+
+const postedRevaluation = (db: Db, companyId: string, month: string) =>
+  db.get(
+    "SELECT * FROM revaluations WHERE company_id=? AND month=? AND status='posted'",
+    companyId,
+    month,
+  );
+
+const missingRates = (date: string, missing: string[]) =>
+  new DomainError(
+    `${dmy(date)} üçün AMB məzənnəsi yoxdur: ${missing.join(', ')}. Valyuta məzənnələri kitabçasında AMB-dən yükləyin və ya əl ilə yazın.`,
+    'month',
+    'not-found',
+  );
+
+const sameLines = (posted: readonly RevaluationLine[], fresh: readonly RevaluationLine[]) =>
+  JSON.stringify(posted.map((l) => [l.account, l.sk, l.difference])) ===
+  JSON.stringify(fresh.map((l) => [l.account, l.sk, l.difference]));
+
+/**
+ * The revaluation as a step of the month closing (5c): what the month needs now, measured
+ * against the posted revaluation. "keep": the posted one is current; "post": none is posted and
+ * there are differences, or the posted one is stale (posted again: storno + new); "takeBack": the
+ * posted one is no longer needed (cancelled by storno); "none": nothing to revalue. Mixed
+ * currencies on a key and missing month-end rates are refused, as for the document itself.
+ */
+export interface RevaluationStep {
+  action: 'none' | 'keep' | 'post' | 'takeBack';
+  /** The posted revaluation of the month ('' when there is none yet). */
+  id: string;
+  number: string;
+  income: Minor;
+  expense: Minor;
+  rates: Record<string, { date: string; rate: string }>;
+  /** The revaluation's postings in the books once the step is done. */
+  lines: Posting[];
+  /** What the step changes in the books: the storno of the posted ones and the new postings. */
+  delta: Posting[];
+  write(tx: Tx): CommandResult | undefined;
+}
+
+export function revaluationStep(db: Db, companyId: string, month: string): RevaluationStep {
+  const date = monthEnd(month);
+  const existing = postedRevaluation(db, companyId, month);
+  const c = compute(db, companyId, month, existing ? String(existing.id) : undefined);
+  if (c.missing.length) throw missingRates(date, c.missing);
+  const posted = existing ? (JSON.parse(String(existing.lines)) as RevaluationLine[]) : [];
+  const action: RevaluationStep['action'] = existing
+    ? sameLines(posted, storedLines(c))
+      ? 'keep'
+      : c.lines.length
+        ? 'post'
+        : 'takeBack'
+    : c.lines.length
+      ? 'post'
+      : 'none';
+  const previous = existing ? excludedPostings(db, companyId, String(existing.id)) : [];
+  const fresh = c.lines.map((l) => l.posting!);
+  const kept = action === 'keep' || action === 'none';
+  return {
+    action,
+    id: existing ? String(existing.id) : '',
+    number: `YQ-${month}`,
+    income: action === 'keep' ? (existing!.income as Minor) : c.income,
+    expense: action === 'keep' ? (existing!.expense as Minor) : c.expense,
+    rates:
+      action === 'keep'
+        ? (JSON.parse(String(existing!.rates)) as RevaluationStep['rates'])
+        : ratesJson(c),
+    lines: action === 'keep' ? previous : fresh,
+    delta: kept ? [] : [...storno(previous), ...fresh],
+    write: (tx) => (kept ? undefined : writeRevaluation(tx, companyId, month, existing, c)),
+  };
+}
+
+/** Posts the computed revaluation of the month: the posted one (if any) is stornoed first. */
+function writeRevaluation(
+  tx: Tx,
+  companyId: string,
+  month: string,
+  existing: Row | undefined,
+  c: Computed,
+): CommandResult {
+  const date = monthEnd(month);
+  const chart = tx.chart(companyId);
   const postings = c.lines.map((l) => l.posting!);
   if (postings.length) checkPostings(chart, postings, 'lines', { exchangeDifference: true });
   const id = existing ? String(existing.id) : tx.id();
@@ -264,9 +341,9 @@ export function postRevaluation(tx: Tx, cmd: CommandOf<'revaluation.post'>): Com
   const number = `YQ-${month}`;
   const now = tx.clock.now();
   if (existing) {
-    const prev = tx.entryPostings(cmd.companyId, REVALUATION, id, Number(existing.version));
+    const prev = tx.entryPostings(companyId, REVALUATION, id, Number(existing.version));
     tx.post(
-      cmd.companyId,
+      companyId,
       chart,
       { type: REVALUATION, id, number, version: Number(existing.version) },
       prev.date,
@@ -282,9 +359,9 @@ export function postRevaluation(tx: Tx, cmd: CommandOf<'revaluation.post'>): Com
       now,
       id,
     );
-    tx.history(cmd.companyId, REVALUATION, id, version, 'cancelled', { reason: 'fərq qalmadı' });
+    tx.history(companyId, REVALUATION, id, version, 'cancelled', { reason: 'fərq qalmadı' });
     tx.audit(
-      cmd.companyId,
+      companyId,
       'Ləğv edildi (storno)',
       'Yenidən qiymətləndirmə',
       id,
@@ -312,20 +389,20 @@ export function postRevaluation(tx: Tx, cmd: CommandOf<'revaluation.post'>): Com
        VALUES(?,?,?,?,?,?,?,?,?,?,?,'posted',?)`,
       ...values,
       id,
-      cmd.companyId,
+      companyId,
       month,
       date,
       number,
       now,
     );
-  tx.post(cmd.companyId, chart, { type: REVALUATION, id, number, version }, date, false, postings);
-  tx.history(cmd.companyId, REVALUATION, id, version, 'posted', {
+  tx.post(companyId, chart, { type: REVALUATION, id, number, version }, date, false, postings);
+  tx.history(companyId, REVALUATION, id, version, 'posted', {
     month,
     rates: ratesJson(c),
     lines: storedLines(c),
   });
   tx.audit(
-    cmd.companyId,
+    companyId,
     existing ? 'Düzəliş edildi (storno + yeni yazılış)' : 'Uçota alındı',
     'Yenidən qiymətləndirmə',
     id,
@@ -386,11 +463,7 @@ export function revaluationView(
   name: (kind: string, id: string) => string,
 ): RevaluationView {
   const month = checkMonth(monthInput);
-  const row = db.get(
-    "SELECT * FROM revaluations WHERE company_id=? AND month=? AND status='posted'",
-    companyId,
-    month,
-  );
+  const row = postedRevaluation(db, companyId, month);
   const chart = loadChart(db, companyId);
   const names = (l: RevaluationLine): RevaluationLine => ({
     ...l,
@@ -407,10 +480,7 @@ export function revaluationView(
   }
   const proposal = fresh ? storedLines(fresh).map(names) : [];
   const posted = row ? (JSON.parse(String(row.lines)) as RevaluationLine[]).map(names) : [];
-  const same =
-    !!row &&
-    JSON.stringify(posted.map((l) => [l.account, l.sk, l.difference])) ===
-      JSON.stringify(proposal.map((l) => [l.account, l.sk, l.difference]));
+  const same = !!row && sameLines(posted, proposal);
   return {
     month,
     date: monthEnd(month),

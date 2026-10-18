@@ -48,6 +48,9 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rate'), companyId: id, currency: z.string().max(3), date }),
   /** Revaluation of the month: the posted one and what posting now would write. */
   z.object({ type: z.literal('revaluation'), companyId: id, month: z.string().max(7) }),
+  /** Month closing (stage 5c): the posted one, or what closing now would do. */
+  z.object({ type: z.literal('closing'), companyId: id, month: z.string().max(7) }),
+  z.object({ type: z.literal('closings'), companyId: id }),
   /** Kassa kitabı: one cashbox, day by day. */
   z.object({ type: z.literal('cashBook'), companyId: id, cashboxId: id, from: date, to: date }),
   z.object({ type: z.literal('statementImports'), companyId: id, bankAccountId: id.optional() }),
@@ -385,6 +388,60 @@ export interface RevaluationView {
     stale: boolean;
   } | null;
 }
+/** One Dt/Kt pair of a closing step, with the subkonto names. */
+export interface ClosingPosting {
+  dt: string;
+  dtSk: string[];
+  dtNames: string[];
+  kt: string;
+  ktSk: string[];
+  ktNames: string[];
+  amount: string;
+  memo: string;
+}
+export type ClosingStepKey =
+  'checks' | 'fifo' | 'revaluation' | 'vat' | 'income' | 'result' | 'year' | 'lock';
+export interface ClosingStep {
+  key: ClosingStepKey;
+  title: string;
+  /** done: posted (or would post) entries; empty: nothing to do; blocked: refused by a check. */
+  state: 'done' | 'empty' | 'blocked';
+  summary: string;
+  postings: ClosingPosting[];
+  /** What the step leaves for the accountant (unpaid VAT, an invoice without its e-qaimə…). */
+  notes: string[];
+  /** Step 5: the balances closed to 801 per account — the month's figures before closing. */
+  totals: { account: string; name: string; debit: string; credit: string }[];
+}
+export interface ClosingSummary {
+  id: string;
+  version: number;
+  month: string;
+  number: string;
+  date: string;
+  status: 'posted' | 'cancelled';
+  /** 801 result: profit positive, loss negative. */
+  profit: string;
+  updatedAt: string;
+}
+export interface ClosingView {
+  month: string;
+  date: string;
+  number: string;
+  closedThrough: string;
+  /** Refusals: month not over, previous month open, a blocking check. Nothing can be posted. */
+  blocking: Signal[];
+  /** Warnings the accountant reads and acknowledges before closing (kept with the closing). */
+  warnings: Signal[];
+  steps: ClosingStep[];
+  profit: string;
+  /** The posted closing of the month; its steps are the ones posted. */
+  posted: (ClosingSummary & { warnings: string[] }) | null;
+  /** The last cancelled one, when the month is open again (closing again makes a new version). */
+  cancelled: ClosingSummary | null;
+  /** Why the posted closing cannot be cancelled now (a later month is closed…); '' when it can. */
+  cancelBlocked: string;
+}
 export interface CashDocumentSummary {
   id: string;
   version: number;
@@ -705,7 +762,13 @@ export interface HomeView {
       | 'eqConflict'
       | 'eqWaiting'
       | 'eqVat'
-      | 'eqMissing';
+      | 'eqMissing'
+      // Month closing (stage 5c): missing month-end rate, register ≠ journal, steps refused, a
+      // purchase whose VAT waits for its e-qaimə.
+      | 'rate'
+      | 'integrity'
+      | 'closing'
+      | 'vatUnconfirmed';
     text: string;
     account: string;
     sk: string[];
@@ -713,10 +776,15 @@ export interface HomeView {
     document?: { id: string; direction: 'in' | 'out' };
     /** The e-qaimə box the signal is about (stage 4c). */
     eq?: 'sale' | 'purchase';
+    /** The invoice the signal is about (month closing: VAT waiting for its e-qaimə). */
+    invoice?: { id: string; direction: 'sale' | 'purchase' };
   }[];
   postings: number;
   closedThrough: string;
 }
+
+/** A control signal (İş masası, month closing checks). */
+export type Signal = HomeView['warnings'][number];
 
 export interface DocumentRef {
   value: string;

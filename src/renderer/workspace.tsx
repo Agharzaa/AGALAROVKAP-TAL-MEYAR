@@ -32,6 +32,7 @@ export type Page =
   | 'cashboxes'
   | 'rates'
   | 'revaluation'
+  | 'closing'
   | 'products'
   | 'employees'
   | 'lists'

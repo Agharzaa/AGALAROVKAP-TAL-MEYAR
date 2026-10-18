@@ -77,13 +77,14 @@ function checkSide(
 
 /**
  * Structural rules of a complete entry. Subkonto ids are checked against catalogs by the caller.
- * An exchange difference (revaluation) moves AZN only: its currency amount is 0.
+ * An exchange difference (revaluation) moves AZN only: its currency amount is 0. A cost
+ * adjustment (month-end FIFO re-costing) moves value only: no quantity on a quantitative account.
  */
 export function checkPostings(
   chart: Chart,
   postings: readonly Posting[],
   field = 'lines',
-  options: { exchangeDifference?: boolean } = {},
+  options: { exchangeDifference?: boolean; costAdjustment?: boolean } = {},
 ): void {
   if (!postings.length) throw new DomainError('Ən azı bir yazılış sətri olmalıdır.', field);
   if (postings.length > 2000)
@@ -100,12 +101,12 @@ export function checkPostings(
     if (dt.code === kt.code && p.dt.sk.join('|') === p.kt.sk.join('|'))
       throw new DomainError(`Sətir ${i + 1}: debet və kredit eyni ola bilməz.`, f);
     const needsQty = dt.quantitative || kt.quantitative;
-    if (needsQty && (p.quantity === undefined || p.quantity === 0n))
+    if (needsQty && !options.costAdjustment && (p.quantity === undefined || p.quantity === 0n))
       throw new DomainError(
         `Sətir ${i + 1}: ${dt.quantitative ? dt.code : kt.code} hesabında miqdar yazılmalıdır.`,
         `${f}.quantity`,
       );
-    if (!needsQty && p.quantity !== undefined)
+    if ((!needsQty || options.costAdjustment) && p.quantity !== undefined)
       throw new DomainError(
         `Sətir ${i + 1}: bu hesablarda miqdar uçotu aparılmır.`,
         `${f}.quantity`,

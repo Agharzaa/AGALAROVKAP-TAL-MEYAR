@@ -13,6 +13,7 @@ import {
 import { DomainError } from '../domain/errors.js';
 import { displayMinor, formatMinor } from '../domain/money.js';
 import { formatPrice, formatQty } from '../domain/quantity.js';
+import { monthEnd } from '../domain/rates.js';
 import { parseDate } from '../domain/values.js';
 import type {
   AccountCard,
@@ -30,6 +31,7 @@ import type {
   EmployeeView,
   HomeView,
   IntegrityView,
+  Signal,
   InvoiceDetail,
   InvoiceLineView,
   InvoiceSummary,
@@ -54,6 +56,7 @@ import { eqMaps } from './eqaime-book.js';
 import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
 import { rateOn, ratesList } from './rates.js';
 import { revaluationView } from './revaluation.js';
+import { closingList, closingView, type ClosingControls } from './closing.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 
@@ -955,6 +958,81 @@ function operationDetail(db: Db, companyId: string, id: string): OperationDetail
 // Home
 
 const homeAccounts = ['223', '224', '221', '211', '243', '531', '543', '521', '533'];
+const SETTLE = ['211', '543', '531', '243'];
+const leafCodes = (chart: Chart, fam: string) =>
+  chart
+    .all()
+    .filter((a) => inFamily(a.code, fam) && !chart.children(a.code, true).length)
+    .map((a) => a.code);
+
+/**
+ * Net (debit − credit) of the settlement accounts (211, 543, 531, 243) per partner × contract
+ * on `date`, by family; `onRow` also sees every account row (İş masası sums the balances).
+ */
+function settlementNets(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  date: string,
+  onRow?: (account: string, agg: Agg) => void,
+): Map<string, Map<string, bigint>> {
+  const settle = SETTLE.filter((c) => chart.get(c));
+  const nets = new Map<string, Map<string, bigint>>();
+  for (const r of aggregate(db, companyId, date, date, ['account', 's1', 's2'], {
+    accounts: settle.flatMap((f) => leafCodes(chart, f)),
+  })) {
+    onRow?.(r.key[0]!, r.agg);
+    const fam = settle.find((f) => inFamily(r.key[0]!, f))!;
+    const m = nets.get(fam) ?? new Map<string, bigint>();
+    const k = `${r.key[1]}|${r.key[2]}`;
+    m.set(k, (m.get(k) ?? 0n) + r.agg.closeDt - r.agg.closeKt);
+    nets.set(fam, m);
+  }
+  return nets;
+}
+
+/** A debt and an advance of the same partner × contract: the advance has not been offset. */
+function advanceWarnings(nets: Map<string, Map<string, bigint>>, names: Names): Signal[] {
+  const out: Signal[] = [];
+  const pair = (debtAcc: string, advAcc: string, debtSign: 1n | -1n, text: string) => {
+    const debts = nets.get(debtAcc) ?? new Map<string, bigint>();
+    for (const [k, adv] of nets.get(advAcc) ?? []) {
+      const debt = debts.get(k) ?? 0n;
+      if (debt * debtSign > 0n && adv * -debtSign > 0n) {
+        const [p, c] = k.split('|') as [string, string];
+        out.push({
+          kind: 'advance',
+          account: advAcc,
+          sk: [p, c],
+          text: `${names.name('partner', p)} · ${names.name('contract', c)}: ${debtAcc}-də ${displayMinor(debt * debtSign)} borc, ${advAcc}-də ${displayMinor(adv * -debtSign)} avans — ${text}`,
+        });
+      }
+    }
+  };
+  pair('211', '543', 1n, 'avans əvəzləşdirilməyib.');
+  pair('531', '243', -1n, 'verilmiş avans əvəzləşdirilməyib.');
+  return out;
+}
+
+/**
+ * Transfers between own accounts pass through 222.01 / 222.03: a balance left there on `date` is
+ * money that left one account and has not arrived on another.
+ */
+function transitWarnings(db: Db, companyId: string, chart: Chart, date: string): Signal[] {
+  const transit = ['222.01', '222.03'].filter((c) => chart.get(c) && chart.postable(c));
+  const out: Signal[] = [];
+  for (const r of aggregate(db, companyId, date, date, ['account'], { accounts: transit })) {
+    const net = r.agg.closeDt - r.agg.closeKt;
+    if (net !== 0n)
+      out.push({
+        kind: 'transit',
+        account: r.key[0]!,
+        sk: [],
+        text: `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
+      });
+  }
+  return out;
+}
 
 function home(db: Db, companyId: string, today: string): HomeView {
   const co = company(db, companyId);
@@ -967,7 +1045,6 @@ function home(db: Db, companyId: string, today: string): HomeView {
       .map((a) => a.code);
   const famOf = (code: string, fams: readonly string[]) => fams.find((f) => inFamily(code, f));
   const present = homeAccounts.filter((c) => chart.get(c));
-  const settle = ['211', '543', '531', '243'].filter((c) => chart.get(c));
   const perFamily = new Map<string, Agg>();
   const addFamily = (code: string, agg: Agg) => {
     const fam = famOf(code, present);
@@ -975,18 +1052,8 @@ function home(db: Db, companyId: string, today: string): HomeView {
   };
   // Settlement accounts in one pass: per partner × contract nets (for the advance check) and,
   // summed, their expanded balances.
-  const nets = new Map<string, Map<string, bigint>>();
-  for (const r of aggregate(db, companyId, today, today, ['account', 's1', 's2'], {
-    accounts: settle.flatMap(leafs),
-  })) {
-    addFamily(r.key[0]!, r.agg);
-    const fam = famOf(r.key[0]!, settle)!;
-    const m = nets.get(fam) ?? new Map<string, bigint>();
-    const k = `${r.key[1]}|${r.key[2]}`;
-    m.set(k, (m.get(k) ?? 0n) + r.agg.closeDt - r.agg.closeKt);
-    nets.set(fam, m);
-  }
-  const others = present.filter((c) => !settle.includes(c));
+  const nets = settlementNets(db, companyId, chart, today, addFamily);
+  const others = present.filter((c) => !SETTLE.includes(c));
   for (const r of aggregate(db, companyId, today, today, ['account'], {
     accounts: others.flatMap(leafs),
   }))
@@ -995,24 +1062,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
     const g = perFamily.get(c) ?? emptyAgg();
     return { account: c, name: chart.get(c)!.name, dt: money(g.closeDt), kt: money(g.closeKt) };
   });
-  const warnings: HomeView['warnings'] = [];
-  const pair = (debtAcc: string, advAcc: string, debtSign: 1n | -1n, text: string) => {
-    const debts = nets.get(debtAcc) ?? new Map<string, bigint>();
-    for (const [k, adv] of nets.get(advAcc) ?? []) {
-      const debt = debts.get(k) ?? 0n;
-      if (debt * debtSign > 0n && adv * -debtSign > 0n) {
-        const [p, c] = k.split('|') as [string, string];
-        warnings.push({
-          kind: 'advance',
-          account: advAcc,
-          sk: [p, c],
-          text: `${names.name('partner', p)} · ${names.name('contract', c)}: ${debtAcc}-də ${displayMinor(debt * debtSign)} borc, ${advAcc}-də ${displayMinor(adv * -debtSign)} avans — ${text}`,
-        });
-      }
-    }
-  };
-  pair('211', '543', 1n, 'avans əvəzləşdirilməyib.');
-  pair('531', '243', -1n, 'verilmiş avans əvəzləşdirilməyib.');
+  const warnings: HomeView['warnings'] = advanceWarnings(nets, names);
   const qtyAccounts = chart
     .all()
     .filter((a) => a.quantitative && chart.postable(a.code))
@@ -1037,19 +1087,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
         text: `${a.code} · ${names.name(a.subkonto[0] ?? 'bankAccount', r.key[1]!)}: mənfi pul qalığı (${displayMinor(-r.agg.closeKt)}).`,
       });
   }
-  // Transfers between own accounts pass through 222.01 / 222.03: a balance left there is money
-  // that left one account and has not arrived on another.
-  const transit = ['222.01', '222.03'].filter((c) => chart.get(c) && chart.postable(c));
-  for (const r of aggregate(db, companyId, today, today, ['account'], { accounts: transit })) {
-    const net = r.agg.closeDt - r.agg.closeKt;
-    if (net !== 0n)
-      warnings.push({
-        kind: 'transit',
-        account: r.key[0]!,
-        sk: [],
-        text: `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
-      });
-  }
+  warnings.push(...transitWarnings(db, companyId, chart, today));
   warnings.push(...vatPairWarnings(db, companyId, names));
   warnings.push(...eqWarnings(db, companyId, co.closedThrough, today));
   const recent = db
@@ -1135,17 +1173,26 @@ const SIGNAL_LIMIT = 10;
 
 /**
  * VAT deposit documents without their current-account half, and pairs whose deposit part is not
- * 18/118 of the whole payment. Documents in a closed period are past correction and not listed.
+ * 18/118 of the whole payment. Documents in a closed period are past correction and not listed;
+ * the month closing asks for the documents of its month (`month`).
  */
-function vatPairWarnings(db: Db, companyId: string, names: Names): HomeView['warnings'] {
+function vatPairWarnings(
+  db: Db,
+  companyId: string,
+  names: Names,
+  month?: string,
+): HomeView['warnings'] {
   const rows = db.all(
     `SELECT b.*, x.account AS account FROM bank_documents b
        JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
      WHERE b.company_id=? AND b.status='posted' AND b.currency='AZN'
        AND (x.account='224' OR x.account LIKE '224.%')
        AND b.date>(SELECT closed_through FROM companies WHERE id=b.company_id)
+       AND b.date BETWEEN ? AND ?
      ORDER BY b.date, b.rowid`,
     companyId,
+    month ? `${month}-01` : '',
+    month ? `${month}-31` : '9999-12-31',
   );
   const out: HomeView['warnings'] = [];
   let unpaired = 0;
@@ -1190,24 +1237,32 @@ function vatPairWarnings(db: Db, companyId: string, names: Names): HomeView['war
 // ---------------------------------------------------------------------------------------------
 // Integrity
 
-export function integrity(db: Db, companyId: string, now: string): IntegrityView {
+/**
+ * Registers against the journal, and debit = credit over all registers. The month closing checks
+ * the registers of its own month only (`month`): the earlier months are behind the lock.
+ */
+export function integrity(db: Db, companyId: string, now: string, month?: string): IntegrityView {
   const started = performance.now();
   const problems: string[] = [];
+  // Without a month the journal is read whole (a table scan beats the date index there).
+  const range = month ? 'AND date BETWEEN ?2 AND ?3' : '';
   // Registers rebuilt from the journal must equal the stored registers, row for row (in SQLite).
   const expected = `SELECT account,s1,s2,s3,month,SUM(d) AS d,SUM(c) AS c,SUM(qd) AS qd,SUM(qk) AS qk,SUM(cd) AS cd,SUM(ck) AS ck FROM (
-       SELECT dt_account AS account,dt_s1 AS s1,dt_s2 AS s2,dt_s3 AS s3,substr(date,1,7) AS month,amount AS d,0 AS c,dt_qty AS qd,0 AS qk,dt_cur AS cd,0 AS ck FROM postings WHERE company_id=?1
+       SELECT dt_account AS account,dt_s1 AS s1,dt_s2 AS s2,dt_s3 AS s3,substr(date,1,7) AS month,amount AS d,0 AS c,dt_qty AS qd,0 AS qk,dt_cur AS cd,0 AS ck FROM postings WHERE company_id=?1 ${range}
        UNION ALL
-       SELECT kt_account,kt_s1,kt_s2,kt_s3,substr(date,1,7),0,amount,0,kt_qty,0,kt_cur FROM postings WHERE company_id=?1)
+       SELECT kt_account,kt_s1,kt_s2,kt_s3,substr(date,1,7),0,amount,0,kt_qty,0,kt_cur FROM postings WHERE company_id=?1 ${range})
      GROUP BY account,s1,s2,s3,month`;
   const stored = `SELECT account,s1,s2,s3,month,debit,credit,qty_dt,qty_kt,cur_dt,cur_kt FROM registers WHERE company_id=?1
+     ${month ? 'AND month=substr(?2,1,7)' : ''}
      AND NOT (debit=0 AND credit=0 AND qty_dt=0 AND qty_kt=0 AND cur_dt=0 AND cur_kt=0)`;
   const nonzero = `SELECT * FROM (${expected}) WHERE NOT (d=0 AND c=0 AND qd=0 AND qk=0 AND cd=0 AND ck=0)`;
   const r = db.raw
     .prepare(
       `SELECT (SELECT COUNT(*) FROM (${nonzero} EXCEPT ${stored})) + (SELECT COUNT(*) FROM (${stored} EXCEPT ${nonzero})) AS bad`,
     )
-    .get(companyId) as { bad: number };
-  if (r.bad) problems.push(`${r.bad} qalıq registri jurnalla üst-üstə düşmür.`);
+    .get(...(month ? [companyId, `${month}-01`, `${month}-31`] : [companyId])) as { bad: number };
+  if (r.bad)
+    problems.push(`${r.bad} qalıq registri jurnalla üst-üstə düşmür${month ? ` (${month})` : ''}.`);
   const totals = db.get(
     'SELECT COALESCE(SUM(debit),0) AS d, COALESCE(SUM(credit),0) AS c, COUNT(*) AS n FROM registers WHERE company_id=?',
     companyId,
@@ -1230,6 +1285,32 @@ export function integrity(db: Db, companyId: string, now: string): IntegrityView
 }
 
 // ---------------------------------------------------------------------------------------------
+
+/** What the month closing reads from the reports: names, the month's signals, its registers. */
+export function closingControls(db: Db, companyId: string): ClosingControls {
+  const names = new Names(db, companyId);
+  return {
+    name: (kind, id) => names.name(kind as SubkontoKind, id),
+    warnings: (month) => {
+      const chart = loadChart(db, companyId);
+      const end = monthEnd(month);
+      // Signals as İş masası shows them, read at the month's end; DVX for the month itself.
+      return [
+        ...advanceWarnings(settlementNets(db, companyId, chart, end), names),
+        ...transitWarnings(db, companyId, chart, end),
+        ...vatPairWarnings(db, companyId, names, month),
+        ...eqWarnings(db, companyId, previousDay(`${month}-01`), end, end),
+      ];
+    },
+    integrity: (month) => integrity(db, companyId, '', month).problems,
+  };
+}
+
+const previousDay = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 
 export function runQuery(db: Db, q: Query, today: string, now: string): unknown {
   switch (q.type) {
@@ -1392,6 +1473,12 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       const names = new Names(db, q.companyId);
       return revaluationView(db, q.companyId, q.month, (k, v) => names.name(k as never, v));
     }
+    case 'closing':
+      company(db, q.companyId);
+      return closingView(db, q.companyId, q.month, today, closingControls(db, q.companyId));
+    case 'closings':
+      company(db, q.companyId);
+      return closingList(db, q.companyId);
     case 'cashDocuments':
       company(db, q.companyId);
       return cashDocuments(db, q.companyId, q.from, q.to, q.cashboxId);

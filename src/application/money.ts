@@ -29,7 +29,7 @@ import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import { checkPostings, type Posting, type Side } from '../domain/posting.js';
 import { numberKey, parseText } from '../domain/values.js';
 import type { BankLineInput } from '../contracts/commands.js';
-import type { Row } from '../infrastructure/sqlite/db.js';
+import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import { checkSideValues } from './subkonto.js';
 import type { Tx } from './tx.js';
 
@@ -251,7 +251,8 @@ function openInvoices(
     const vat = inv.currency === 'AZN' ? (inv.vat as bigint) : 0n;
     const vatOpen =
       vat > 0n
-        ? vat - depositPaid(tx, companyId, direction, account, partner, contract, String(b.s))
+        ? vat -
+          depositPaid(tx.db, companyId, direction, account.code, partner, contract, String(b.s))
         : 0n;
     out.push({
       document: String(b.s),
@@ -267,31 +268,35 @@ function openInvoices(
 
 /**
  * What has reached an invoice through the VAT deposit: settlements whose other side is a 224
- * account, and advance offsets whose advance came from a bank document on a 224 account.
+ * account, and advance offsets whose advance came from a bank document on a 224 account; up to
+ * `through` (the month closing reads it at the month's end).
  */
-function depositPaid(
-  tx: Tx,
+export function depositPaid(
+  db: Db,
   companyId: string,
   direction: Direction,
-  account: Account,
+  account: string,
   partner: string,
   contract: string,
   document: string,
+  through = '9999-12-31',
 ): Minor {
   const [own, other] = direction === 'in' ? (['kt', 'dt'] as const) : (['dt', 'kt'] as const);
-  return tx.db.get(
+  return db.get(
     `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p
      WHERE p.company_id=? AND p.${own}_account=? AND p.${own}_s1=? AND p.${own}_s2=? AND p.${own}_s3=?
+       AND p.date<=?
        AND (p.${other}_account='224' OR p.${other}_account LIKE '224.%'
          OR (p.${other}_s3 LIKE 'bank:%' AND EXISTS(
            SELECT 1 FROM bank_documents b JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
            WHERE b.company_id=p.company_id AND 'bank:'||b.id=p.${other}_s3
              AND (x.account='224' OR x.account LIKE '224.%'))))`,
     companyId,
-    account.code,
+    account,
     partner,
     contract,
     document,
+    through,
   )!.a as bigint;
 }
 

@@ -11,7 +11,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Db } from '../../src/infrastructure/sqlite/db.js';
 import { Ledger } from '../../src/application/ledger.js';
-import type { AccountCard, IntegrityView, TrialBalance } from '../../src/contracts/queries.js';
+import type {
+  AccountCard,
+  ClosingView,
+  IntegrityView,
+  TrialBalance,
+} from '../../src/contracts/queries.js';
 
 const POSTINGS = Number(process.env.MEYAR_PERF_POSTINGS ?? 500_000);
 
@@ -359,6 +364,37 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   );
   const check = time('Bütövlük yoxlaması', 20000, () => q({ type: 'integrity' }) as IntegrityView);
   assert.equal(check.ok, true, check.problems.join());
+  // P1 (5c): September closed on the large base — checks, FIFO of 1 000 products, the VAT of the
+  // month's 1 200 e-qaimə invoices, 6xx / 7xx → 801 → 341 and the lock, in one transaction. The
+  // months before are locked by hand (a reused MEYAR_PERF_DB keeps its closing: skipped).
+  if (!db.get("SELECT 1 FROM month_closings WHERE company_id=? AND month='2026-09'", companyId)) {
+    const ctx = { actor: 'perf', correlationId: 'perf' };
+    ledger.execute(
+      { key: `perf-lock-${Date.now()}`, type: 'period.close', companyId, through: '2026-08-31' },
+      ctx,
+    );
+    const preview = time(
+      'Ay bağlanışı, baxış (bütün addımlar)',
+      10000,
+      () => q({ type: 'closing', month: '2026-09' }) as ClosingView,
+    );
+    assert.deepEqual(preview.blocking, []);
+    const closed = time('Ay bağlanışı (FIFO, ƏDV, 801, 341, kilid)', 10000, () =>
+      ledger.execute(
+        {
+          key: `perf-closing-${Date.now()}`,
+          type: 'closing.post',
+          companyId,
+          month: '2026-09',
+          acknowledged: true,
+        },
+        ctx,
+      ),
+    ) as { number: string };
+    assert.equal(closed.number, 'AB-2026-09');
+    const after = q({ type: 'closing', month: '2026-09' }) as ClosingView;
+    assert.equal(after.profit, preview.profit);
+  }
 });
 
 function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] } {

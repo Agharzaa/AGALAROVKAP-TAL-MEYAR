@@ -102,6 +102,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Ay sonu valyuta qalıqları AMB məzənnəsi ilə: 611 / 731',
     icon: Scale,
   },
+  closing: {
+    title: 'Ay bağlanışı',
+    hint: 'FIFO, yenidən qiymətləndirmə, ƏDV, 6xx / 7xx → 801 → 341 və dövrün bağlanması',
+    icon: Lock,
+  },
   cashboxes: { title: 'Kassalar', hint: 'Kassa, hesab (221) və valyuta', icon: Wallet },
   products: { title: 'Nomenklatura', hint: 'Mallar, materiallar, əsas vəsaitlər', icon: Package },
   employees: { title: 'İşçilər', hint: '244, 533 subkontosu', icon: UserRound },
@@ -310,7 +315,10 @@ export const sections: Section[] = [
     groups: [
       {
         title: 'Sənədlər',
-        items: [{ label: 'Əl ilə əməliyyatlar', icon: ScrollText, action: page('operations') }],
+        items: [
+          { label: 'Əl ilə əməliyyatlar', icon: ScrollText, action: page('operations') },
+          { label: 'Ay bağlanışları', icon: Lock, action: page('closing') },
+        ],
       },
       {
         title: 'Yarat',
@@ -325,6 +333,7 @@ export const sections: Section[] = [
       {
         title: 'Dövr',
         items: [
+          { label: 'Ay bağlanışı', icon: Lock, action: page('closing') },
           {
             label: 'Valyuta yenidən qiymətləndirilməsi',
             icon: Scale,
@@ -440,6 +449,7 @@ export function sectionOfView(view: View): string {
         case 'operations':
         case 'accounts':
         case 'revaluation':
+        case 'closing':
           return 'ledger';
         case 'trial':
         case 'card':

@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1136,6 +1136,43 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// ---------------------------------------------------------------------------------------------
+// v13 — month closing (stage 5c; docs/MERHELE-5-AY-BAGLANISI.md §3.4, §5). One document per
+// company and month (AB-2026-09), posted on the month's last day (source type "closing"), each
+// step its own entry. Closing again after a cancellation is a new version of the same document.
+// closed_before is the closing date the closing moved the lock from: cancelling restores it.
+
+const v13 = `
+CREATE TABLE month_closings(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  month TEXT NOT NULL,
+  date TEXT NOT NULL,
+  number TEXT NOT NULL,
+  closed_before TEXT NOT NULL,
+  steps TEXT NOT NULL,
+  rates TEXT NOT NULL,
+  warnings TEXT NOT NULL,
+  revaluation_id TEXT NOT NULL DEFAULT '',
+  profit INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,month)
+);
+CREATE TRIGGER month_closings_no_delete BEFORE DELETE ON month_closings BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER month_closings_period BEFORE UPDATE ON month_closings
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-13','Yeniləndi','Baza',id,
+  'Ay bağlanışı üçün baza hazırlandı.'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1149,4 +1186,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 10, sql: v10 },
   { version: 11, sql: v11 },
   { version: 12, sql: v12 },
+  { version: 13, sql: v13 },
 ];
