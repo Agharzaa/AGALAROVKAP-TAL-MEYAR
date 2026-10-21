@@ -3246,8 +3246,15 @@ button.step:active {
 .dashboard-chart svg {
   display: block;
 }
-.dashboard-chart .axis {
-  stroke: var(--line);
+/* Y scale: light grid lines, a darker zero line the bars stand on */
+.dashboard-chart .grid {
+  stroke: var(--rule-soft);
+}
+.dashboard-chart .zero {
+  stroke: var(--frame);
+}
+.dashboard-chart text.tick {
+  font-variant-numeric: tabular-nums;
 }
 .dashboard-chart .bar.income {
   fill: var(--income);

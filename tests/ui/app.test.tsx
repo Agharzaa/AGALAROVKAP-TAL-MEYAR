@@ -2047,3 +2047,81 @@ test('design §8: a negative amount or quantity is always written with "−", ne
   assert.equal(plain(qty('-1234.5')), '−1 234,5');
   assert.equal(plain(qty('1234.5')), '1 234,5');
 });
+
+test('design §8: the dashboard chart has a Y scale — 3–4 grid lines, a zero line, figures with "−"', async () => {
+  const h = harness();
+  const s = seed(h);
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  const line = (amount: string, back: boolean) =>
+    back
+      ? {
+          dtAccount: '602',
+          dtSk: [service.id, '0'],
+          ktAccount: '211.01',
+          ktSk: [s.customer, s.contract, ''],
+          amount,
+          memo: '',
+        }
+      : {
+          dtAccount: '211.01',
+          dtSk: [s.customer, s.contract, ''],
+          ktAccount: '601',
+          ktSk: [service.id, '0'],
+          amount,
+          memo: '',
+        };
+  // A return in the last month (income −100), a sale in this one (+1 000).
+  for (const [date, amount, back] of [
+    [`${monthsBack(1).iso}-10`, '100', true],
+    [`${monthsBack(0).iso}-01`, '1000', false],
+  ] as const)
+    h.run({
+      type: 'operation.save',
+      companyId: s.companyId,
+      number: '',
+      date,
+      memo: '',
+      lines: [line(amount, back)],
+    });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
+    const svg = await waitFor(() => {
+      const found = document.querySelector('.dashboard-chart svg');
+      assert.ok(found);
+      return found;
+    });
+    const grid = svg.querySelectorAll('line.grid');
+    assert.ok(grid.length >= 3 && grid.length <= 4, `${grid.length} grid lines`);
+    const zero = svg.querySelectorAll('line.zero');
+    assert.equal(zero.length, 1);
+    const ticks = [...svg.querySelectorAll('text.tick')].map((t) =>
+      t.textContent!.replace(/\s/g, ' '),
+    );
+    assert.equal(ticks.length, grid.length + 1);
+    assert.ok(ticks.includes('0'), ticks.join(' | '));
+    assert.ok(
+      ticks.some((t) => t.startsWith('−')),
+      ticks.join(' | '),
+    );
+    assert.ok(!ticks.some((t) => t.includes('-')), ticks.join(' | '));
+    // The scale is not symmetric: zero sits where the figures put it, bars stand on it.
+    const zeroY = Number(zero[0]!.getAttribute('y1'));
+    const height = Number(svg.getAttribute('height'));
+    assert.ok(zeroY > height / 2, `zero at ${zeroY} of ${height}`);
+    for (const bar of svg.querySelectorAll('rect.bar')) {
+      const top = Number(bar.getAttribute('y'));
+      const bottom = top + Number(bar.getAttribute('height'));
+      assert.ok(Math.abs(top - zeroY) < 0.01 || Math.abs(bottom - zeroY) < 0.01, bar.outerHTML);
+    }
+    // The grid lines start right of the figures, not under them.
+    const x1 = Number(grid[0]!.getAttribute('x1'));
+    assert.ok(x1 >= 30, `grid from x=${x1}`);
+  } finally {
+    h.close();
+  }
+});

@@ -478,6 +478,32 @@ const tileView = (key: DashboardTile['key'], month: string): View => {
 };
 
 /**
+ * A Y scale of 3–4 even steps (1, 2, 2,5 or 5 × 10ⁿ) that holds every figure and zero; with no
+ * figures, only the zero line.
+ */
+function chartScale(min: number, max: number): { min: number; max: number; ticks: number[] } {
+  if (min === max) return { min: 0, max: 1, ticks: [0] };
+  const range = max - min;
+  let unit = 10 ** Math.floor(Math.log10(range / 4));
+  for (;;) {
+    for (const m of [1, 2, 2.5, 5]) {
+      const s = m * unit;
+      const lo = Math.floor(min / s);
+      const hi = Math.ceil(max / s);
+      if (hi - lo <= 4) {
+        const ticks = Array.from({ length: hi - lo + 1 }, (_, i) => (lo + i) * s);
+        return { min: lo * s, max: hi * s, ticks: ticks.map((t) => (Object.is(t, -0) ? 0 : t)) };
+      }
+    }
+    unit *= 10;
+  }
+}
+/** A figure of the scale: whole manats with group spaces and a real minus, "−1 500". */
+function tickLabel(v: number): string {
+  return money(v.toFixed(2)).replace(/,00$/, '');
+}
+
+/**
  * 12 months: income and expense bars, profit as a line, on one scale. Drawn at the width it
  * really has (not stretched), so month names keep the size of the text around them.
  */
@@ -495,16 +521,19 @@ function Chart({ series }: { series: DashboardView['series'] }) {
     return () => observer.disconnect();
   }, []);
   const n = (s: string) => Number(s);
-  const top = Math.max(
-    1,
-    ...series.flatMap((s) => [s.income, s.expense, s.profit].map((x) => Math.abs(n(x)))),
-  );
+  const values = series.flatMap((s) => [s.income, s.expense, s.profit].map(n));
+  const scale = chartScale(Math.min(0, ...values), Math.max(0, ...values));
+  const labels = scale.ticks.map(tickLabel);
+  // The figures of the scale on the left, the months under the plot.
+  const left = 8 + 7 * Math.max(...labels.map((l) => l.length));
   const h = Math.round(Math.min(240, Math.max(160, w * 0.18)));
-  const step = w / series.length;
-  const y = (v: number) => h / 2 - (v / top) * (h / 2 - 8);
-  // A bar grows from the axis: up for a positive figure, down for a negative one (returns).
-  const bar = (v: number) => ({ y: Math.min(y(v), h / 2), height: Math.abs(h / 2 - y(v)) });
-  const profit = series.map((s, i) => `${i * step + step / 2},${y(n(s.profit))}`).join(' ');
+  const step = (w - left) / series.length;
+  const pad = 8;
+  const y = (v: number) => pad + ((scale.max - v) / (scale.max - scale.min)) * (h - 2 * pad);
+  const x = (i: number) => left + i * step;
+  // A bar grows from the zero line: up for a positive figure, down for a negative one (returns).
+  const bar = (v: number) => ({ y: Math.min(y(v), y(0)), height: Math.abs(y(0) - y(v)) });
+  const profit = series.map((s, i) => `${x(i) + step / 2},${y(n(s.profit))}`).join(' ');
   return (
     <figure className="dashboard-chart" ref={figure}>
       <svg
@@ -514,12 +543,19 @@ function Chart({ series }: { series: DashboardView['series'] }) {
         role="img"
         aria-label="12 ayın gəlir, xərc və mənfəəti"
       >
-        <line x1="0" x2={w} y1={h / 2} y2={h / 2} className="axis" />
+        {scale.ticks.map((t, i) => (
+          <g key={t}>
+            <line x1={left} x2={w} y1={y(t)} y2={y(t)} className={t === 0 ? 'zero' : 'grid'} />
+            <text x={left - 6} y={y(t) + 4} textAnchor="end" className="tick">
+              {labels[i]}
+            </text>
+          </g>
+        ))}
         {series.map((s, i) => (
           <g key={s.month}>
             <rect
               className="bar income"
-              x={i * step + step * 0.15}
+              x={x(i) + step * 0.15}
               width={step * 0.33}
               {...bar(n(s.income))}
             >
@@ -527,13 +563,13 @@ function Chart({ series }: { series: DashboardView['series'] }) {
             </rect>
             <rect
               className="bar expense"
-              x={i * step + step * 0.52}
+              x={x(i) + step * 0.52}
               width={step * 0.33}
               {...bar(n(s.expense))}
             >
               <title>{`${monthLabel(s.month)}: xərc ${money(s.expense)}`}</title>
             </rect>
-            <text x={i * step + step / 2} y={h + 17} textAnchor="middle">
+            <text x={x(i) + step / 2} y={h + 17} textAnchor="middle">
               {monthLabel(s.month)}
             </text>
           </g>
