@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 18.10.2026 (0.7.0). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 21.10.2026 (0.7.1). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
