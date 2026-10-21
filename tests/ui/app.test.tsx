@@ -1853,24 +1853,39 @@ test('design §8: a document form shows its state by its title, a cancelled one 
       },
     ],
   });
-  h.run({ type: 'operation.cancel', companyId: s.companyId, id: op.id, version: 1, reason: 'Səhv' });
+  h.run({
+    type: 'operation.cancel',
+    companyId: s.companyId,
+    id: op.id,
+    version: 1,
+    reason: 'Səhv',
+  });
   const heading = () => pane().querySelector('.module-heading') as HTMLElement;
   try {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole('navigation', { name: 'Əsas menyu' });
     // New forms are drafts; the posting rule is one line, folded, until asked for.
-    for (const create of ['Satış qaiməsi', 'Bank daxilolması', 'Kassa mədaxili', 'Əl ilə əməliyyat']) {
+    for (const create of [
+      'Satış qaiməsi',
+      'Bank daxilolması',
+      'Kassa mədaxili',
+      'Əl ilə əməliyyat',
+    ]) {
       await user.click(screen.getByRole('button', { name: 'Yarat' }));
       await user.click(screen.getByRole('menuitem', { name: create }));
       await waitFor(() => assert.ok(heading().querySelector('.status.draft'), create));
       assert.equal(heading().querySelector('.status')!.textContent, 'Qaralama');
-      const rule = within(pane()).getByRole('group', { name: 'Yazılış qaydası' }) as HTMLDetailsElement;
+      const rule = within(pane()).getByRole('group', {
+        name: 'Yazılış qaydası',
+      }) as HTMLDetailsElement;
       assert.equal(rule.tagName, 'DETAILS', create);
       assert.equal(rule.open, false, create);
       assert.doesNotMatch(pane().textContent!, /Yazılış: Dt/, create);
     }
-    const rule = within(pane()).getByRole('group', { name: 'Yazılış qaydası' }) as HTMLDetailsElement;
+    const rule = within(pane()).getByRole('group', {
+      name: 'Yazılış qaydası',
+    }) as HTMLDetailsElement;
     await user.click(within(rule).getByText('Yazılış qaydası'));
     assert.equal(rule.open, true);
     // A cancelled document: ✕ by the title and a band across the form.
@@ -1886,4 +1901,149 @@ test('design §8: a document form shows its state by its title, a cancelled one 
   } finally {
     h.close();
   }
+});
+
+test('design §8: the sales list sums net, VAT and total; the AZN column only when a currency is there', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = `${monthsBack(0).iso}-01`;
+  const service = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: 'X-1',
+    name: 'Konsaltinq',
+    unit: 'saat',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  const sale = (price: string, contractId = s.contract, rate = '') =>
+    h.run({
+      type: 'invoice.save',
+      companyId: s.companyId,
+      direction: 'sale',
+      number: '',
+      date,
+      partnerId: s.customer,
+      contractId,
+      rate,
+      pricesIncludeVat: false,
+      eqSeries: '',
+      eqNumber: '',
+      memo: '',
+      lines: [{ productId: service, quantity: '1', price, vatRate: '18', memo: '' }],
+    });
+  sale('100');
+  sale('200');
+  const cancelled = sale('5000');
+  h.run({
+    type: 'invoice.cancel',
+    companyId: s.companyId,
+    id: cancelled.id,
+    version: 1,
+    reason: 'Səhv',
+  });
+  const headers = () =>
+    within(pane())
+      .getAllByRole('columnheader')
+      .map((c) => c.textContent);
+  const footer = () =>
+    [...pane().querySelectorAll('tfoot td')].map((c) => c.textContent!.replace(/\s/g, ' ').trim());
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(
+      within(screen.getByRole('navigation', { name: 'Əsas menyu' })).getByRole('button', {
+        name: 'Satış',
+      }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Satış qaimələri' }));
+    await within(pane()).findAllByRole('cell', { name: /^SQ-/ });
+    // All in manats: one total column, and the footer sums what is posted.
+    assert.deepEqual(headers().slice(5, 8), ['ƏDV-siz', 'ƏDV', 'Cəmi']);
+    assert.ok(!headers().includes('Cəmi, AZN'));
+    assert.deepEqual(footer().filter(Boolean), [
+      'Uçotdakı qaimələr üzrə cəmi',
+      '300,00',
+      '54,00',
+      '354,00',
+    ]);
+  } finally {
+    h.close();
+  }
+  cleanup();
+  // A dollar invoice: the list shows "Cəmi, AZN" and sums in manats.
+  const h2 = harness();
+  const s2 = seed(h2);
+  const usd = h2.run({
+    type: 'contract.save',
+    companyId: s2.companyId,
+    partnerId: s2.customer,
+    number: 'USD-1',
+    date: '2026-01-01',
+    kind: 'sale',
+    currency: 'USD',
+    note: '',
+    archived: false,
+  }).id;
+  const service2 = h2.run({
+    type: 'product.save',
+    companyId: s2.companyId,
+    code: 'X-1',
+    name: 'Konsaltinq',
+    unit: 'saat',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  for (const [contractId, price, rate] of [
+    [s2.contract, '100', ''],
+    [usd, '100', '1.7000'],
+  ] as const)
+    h2.run({
+      type: 'invoice.save',
+      companyId: s2.companyId,
+      direction: 'sale',
+      number: '',
+      date,
+      partnerId: s2.customer,
+      contractId,
+      rate,
+      pricesIncludeVat: false,
+      eqSeries: '',
+      eqNumber: '',
+      memo: '',
+      lines: [{ productId: service2, quantity: '1', price, vatRate: '18', memo: '' }],
+    });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(
+      within(screen.getByRole('navigation', { name: 'Əsas menyu' })).getByRole('button', {
+        name: 'Satış',
+      }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Satış qaimələri' }));
+    await within(pane()).findAllByRole('cell', { name: /^SQ-/ });
+    assert.deepEqual(headers().slice(5, 9), ['ƏDV-siz', 'ƏDV', 'Cəmi', 'Cəmi, AZN']);
+    // 100 + 170 net, 18 + 30,60 VAT, 118 + 200,60 total — in manats, the currency column blank.
+    assert.deepEqual(footer().filter(Boolean), [
+      'Uçotdakı qaimələr üzrə cəmi, AZN',
+      '270,00',
+      '48,60',
+      '318,60',
+    ]);
+  } finally {
+    h2.close();
+  }
+});
+
+test('design §8: a negative amount or quantity is always written with "−", never a hyphen', async () => {
+  const { money, qty } = await import('../../src/renderer/format');
+  const plain = (v: string) => v.replace(/\s/g, ' ');
+  assert.equal(plain(money('-1234.50')), '−1 234,50');
+  assert.equal(plain(qty('-1234.5')), '−1 234,5');
+  assert.equal(plain(qty('1234.5')), '1 234,5');
 });

@@ -11,7 +11,7 @@ import {
   type SubkontoKind,
 } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import { displayMinor, formatMinor } from '../domain/money.js';
+import { displayMinor, formatMinor, parseMoney } from '../domain/money.js';
 import { formatPrice, formatQty } from '../domain/quantity.js';
 import { monthEnd } from '../domain/rates.js';
 import { parseDate } from '../domain/values.js';
@@ -743,7 +743,15 @@ function invoiceSummary(names: Names, r: Row): InvoiceSummary {
     vat: money(r.vat as bigint),
     total: money(r.total as bigint),
     totalAzn: money(r.total_azn as bigint),
+    ...aznSplit(str(r.lines)),
   };
+}
+/** The invoice's net and VAT in manats, summed from its stored lines (a list can mix currencies). */
+function aznSplit(stored: string): { netAzn: string; vatAzn: string } {
+  const lines = JSON.parse(stored) as { netAzn: string; vatAzn: string }[];
+  const sum = (pick: (l: { netAzn: string; vatAzn: string }) => string) =>
+    money(lines.reduce((s, l) => s + parseMoney(pick(l)), 0n));
+  return { netAzn: sum((l) => l.netAzn), vatAzn: sum((l) => l.vatAzn) };
 }
 
 /** Postings and history of a document's last posted version (shared by all document kinds). */

@@ -307,6 +307,9 @@ export interface InvoiceSummary {
   vat: string;
   total: string;
   totalAzn: string;
+  /** Net and VAT in manats (the list sums them across currencies). */
+  netAzn: string;
+  vatAzn: string;
 }
 export interface InvoiceDetail extends InvoiceSummary {
   /** The DVX e-qaimə booked by this invoice, if any. */

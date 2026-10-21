@@ -20,11 +20,13 @@ export function isNegative(value: string): boolean {
 export function day(value: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('.') : value;
 }
-/** Quantities: "1234.5" → "1 234,5". */
+/** Quantities: "1234.5" → "1 234,5", "-2" → "−2". */
 export function qty(value: string | undefined): string {
   if (!value) return '';
-  const [whole = '', fraction] = value.split('.');
-  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${fraction ? `,${fraction}` : ''}`;
+  // A minus sign, like money(): a hyphen reads as a dash in a column of figures.
+  const negative = value.startsWith('-');
+  const [whole = '', fraction] = (negative ? value.slice(1) : value).split('.');
+  return `${negative ? '−' : ''}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${fraction ? `,${fraction}` : ''}`;
 }
 export function today(): string {
   const d = new Date();

@@ -27,6 +27,12 @@ export function InvoicesPage({ direction }: { direction: 'sale' | 'purchase' }) 
   const open = (id?: string) =>
     ws.open({ type: 'invoice', direction, ...(id ? { id } : {}) }, win.companyId);
   const newLabel = direction === 'sale' ? 'Yeni satış qaiməsi' : 'Yeni alış qaiməsi';
+  // All in manats: one total column; with a currency, its total and the total in manats.
+  const manatsOnly = rows.every((r) => r.currency === 'AZN');
+  const posted = rows.filter((r) => r.status === 'posted');
+  const sum = (pick: (r: InvoiceSummary) => string) => (
+    <Amount value={addAmounts(posted.map(pick))} strong />
+  );
   const columns: Column<InvoiceSummary>[] = [
     { key: 'date', label: 'Tarix', render: (r) => day(r.date) },
     {
@@ -70,12 +76,16 @@ export function InvoicesPage({ direction }: { direction: 'sale' | 'purchase' }) 
         </>
       ),
     },
-    {
-      key: 'totalAzn',
-      label: 'Cəmi, AZN',
-      align: 'end',
-      render: (r) => <Amount value={r.totalAzn} />,
-    },
+    ...(manatsOnly
+      ? []
+      : [
+          {
+            key: 'totalAzn',
+            label: 'Cəmi, AZN',
+            align: 'end',
+            render: (r) => <Amount value={r.totalAzn} />,
+          } satisfies Column<InvoiceSummary>,
+        ]),
     { key: 'status', label: 'Vəziyyət', render: (r) => <Status status={r.status} /> },
   ];
   return (
@@ -117,14 +127,19 @@ export function InvoicesPage({ direction }: { direction: 'sale' | 'purchase' }) 
           </Empty>
         }
         footer={
+          // Net and VAT in manats: a list with a currency sums them through the rate.
           <tr>
-            <td colSpan={8}>Uçotdakı qaimələr üzrə cəmi, AZN</td>
-            <td className="num">
-              <Amount
-                value={addAmounts(rows.filter((r) => r.status === 'posted').map((r) => r.totalAzn))}
-                strong
-              />
-            </td>
+            <td colSpan={5}>Uçotdakı qaimələr üzrə cəmi{manatsOnly ? '' : ', AZN'}</td>
+            <td className="num">{sum((r) => r.netAzn)}</td>
+            <td className="num">{sum((r) => r.vatAzn)}</td>
+            {manatsOnly ? (
+              <td className="num">{sum((r) => r.totalAzn)}</td>
+            ) : (
+              <>
+                <td />
+                <td className="num">{sum((r) => r.totalAzn)}</td>
+              </>
+            )}
             <td />
           </tr>
         }
