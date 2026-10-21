@@ -31,7 +31,7 @@ import {
 import { Picker, type Option } from '../picker';
 import { rateHint, useAutoRate } from '../rates';
 import { Postings, todayIso } from '../postings';
-import { Confirm, DateInput, Field, Notice } from '../ui';
+import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
 type Direction = 'in' | 'out';
@@ -284,7 +284,8 @@ export function BankEditor({
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
-      hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
+      hint={doc ? `Versiya ${doc.version}` : 'Saxlanmayıb'}
+      status={doc ? doc.status : 'draft'}
       actions={
         <>
           {!locked && (
@@ -519,15 +520,15 @@ export function BankEditor({
             errorField={m.error?.field}
           />
         </fieldset>
-        <p className="doc-hint">
+        <PostingRule>
           {incoming
-            ? 'Yazılış: Dt bank hesabı (223 / 224.04) / Kt sətrin hesabı.'
-            : 'Yazılış: Dt sətrin hesabı / Kt bank hesabı (223 / 224.04).'}{' '}
+            ? 'Dt bank hesabı (223 / 224.04) / Kt sətrin hesabı.'
+            : 'Dt sətrin hesabı / Kt bank hesabı (223 / 224.04).'}{' '}
           {incoming ? '211' : '531'} sətrində hesablaşma sənədi seçilməsə, məbləğ müqavilənin açıq
           qaimələrinə ən köhnədən bölünür, qalanı avans olur ({incoming ? '543' : '243'}). ƏDV
           depoziti (224.04) qaimənin yalnız ƏDV hissəsini, cari hesab qalan hissəsini bağlayır.
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
-        </p>
+        </PostingRule>
         {doc && doc.pairable && (
           <section className="invoice-postings" aria-label="ƏDV cütü">
             <div className="section-head">

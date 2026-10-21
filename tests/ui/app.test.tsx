@@ -1832,3 +1832,58 @@ test('design §8: the month picker speaks Azerbaijani, not the Windows language,
     h.close();
   }
 });
+
+test('design §8: a document form shows its state by its title, a cancelled one is banded; the posting rule folds', async () => {
+  const h = harness();
+  const s = seed(h);
+  const op = h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${monthsBack(0).iso}-01`,
+    memo: 'Ləğv olunacaq',
+    lines: [
+      {
+        dtAccount: '223.01',
+        dtSk: [s.bankAccount],
+        ktAccount: '301',
+        ktSk: [s.founder, s.capitalIn],
+        amount: '100',
+        memo: '',
+      },
+    ],
+  });
+  h.run({ type: 'operation.cancel', companyId: s.companyId, id: op.id, version: 1, reason: 'Səhv' });
+  const heading = () => pane().querySelector('.module-heading') as HTMLElement;
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    // New forms are drafts; the posting rule is one line, folded, until asked for.
+    for (const create of ['Satış qaiməsi', 'Bank daxilolması', 'Kassa mədaxili', 'Əl ilə əməliyyat']) {
+      await user.click(screen.getByRole('button', { name: 'Yarat' }));
+      await user.click(screen.getByRole('menuitem', { name: create }));
+      await waitFor(() => assert.ok(heading().querySelector('.status.draft'), create));
+      assert.equal(heading().querySelector('.status')!.textContent, 'Qaralama');
+      const rule = within(pane()).getByRole('group', { name: 'Yazılış qaydası' }) as HTMLDetailsElement;
+      assert.equal(rule.tagName, 'DETAILS', create);
+      assert.equal(rule.open, false, create);
+      assert.doesNotMatch(pane().textContent!, /Yazılış: Dt/, create);
+    }
+    const rule = within(pane()).getByRole('group', { name: 'Yazılış qaydası' }) as HTMLDetailsElement;
+    await user.click(within(rule).getByText('Yazılış qaydası'));
+    assert.equal(rule.open, true);
+    // A cancelled document: ✕ by the title and a band across the form.
+    await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Əl ilə əməliyyatlar' }));
+    await user.dblClick(await within(pane()).findByRole('cell', { name: 'ƏƏ-000001' }));
+    await waitFor(() => assert.ok(heading().querySelector('.status.cancelled')));
+    assert.equal(heading().querySelector('.status')!.textContent, 'Ləğv edilib');
+    const band = pane().querySelector('.doc-cancelled') as HTMLElement;
+    assert.ok(band);
+    assert.match(band.textContent!, /ləğv edilib/i);
+    assert.equal(document.querySelector('.module.cancelled'), pane().querySelector('.module'));
+  } finally {
+    h.close();
+  }
+});

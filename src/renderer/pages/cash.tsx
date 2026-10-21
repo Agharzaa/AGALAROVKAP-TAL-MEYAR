@@ -42,6 +42,7 @@ import {
   Empty,
   Field,
   Notice,
+  PostingRule,
   Status,
   type Column,
 } from '../ui';
@@ -586,7 +587,8 @@ export function CashEditor({ direction, id }: { direction: Direction; id?: strin
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
-      hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
+      hint={doc ? `Versiya ${doc.version}` : 'Saxlanmayıb'}
+      status={doc ? doc.status : 'draft'}
       actions={
         <>
           {!locked && (
@@ -750,15 +752,13 @@ export function CashEditor({ direction, id }: { direction: Direction; id?: strin
             errorField={m.error?.field}
           />
         </fieldset>
-        <p className="doc-hint">
-          {incoming
-            ? 'Yazılış: Dt kassa (221) / Kt sətrin hesabı.'
-            : 'Yazılış: Dt sətrin hesabı / Kt kassa (221).'}{' '}
+        <PostingRule>
+          {incoming ? 'Dt kassa (221) / Kt sətrin hesabı.' : 'Dt sətrin hesabı / Kt kassa (221).'}{' '}
           {incoming ? '211' : '531'} sətrində hesablaşma sənədi seçilməsə, məbləğ müqavilənin açıq
           qaimələrinə ən köhnədən bölünür, qalanı avans olur ({incoming ? '543' : '243'}). Bank ilə
           kassa arasında pul 222.01 vasitəsilə keçir. Kassa qalığı heç bir gündə mənfi ola bilməz.
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
-        </p>
+        </PostingRule>
         {doc && (
           <section className="invoice-postings" aria-label="Yazılışlar">
             <div className="section-head">

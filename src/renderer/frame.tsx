@@ -2,6 +2,7 @@ import { RefreshCw } from './icons';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';
+import { Status } from './ui';
 
 /**
  * One form: command bar, an optional filter strip, notices and the work area. It sits inside a
@@ -16,6 +17,7 @@ export function ModuleFrame({
   onFilter,
   notices,
   onRefresh,
+  status,
   children,
 }: {
   title: string;
@@ -26,6 +28,8 @@ export function ModuleFrame({
   onFilter?: () => void;
   notices?: ReactNode;
   onRefresh?: () => void;
+  /** A document form: its state by the title (● uçotda, ○ qaralama, ✕ ləğv edilib). */
+  status?: 'draft' | 'posted' | 'cancelled' | undefined;
   children: ReactNode;
 }) {
   const win = useContext(WindowContext);
@@ -33,7 +37,7 @@ export function ModuleFrame({
   const ws = useWorkspace();
   const foreign = win && company && win.companyId !== ws.companyId;
   return (
-    <section className="module" aria-label={title}>
+    <section className={`module${status === 'cancelled' ? ' cancelled' : ''}`} aria-label={title}>
       {/* 1C form layout: the window caption names the form, so the form opens with its
           command bar (actions on the left), and what it shows is summed up on the right. */}
       <header className="module-heading">
@@ -60,6 +64,7 @@ export function ModuleFrame({
               </span>
             )}
           </h1>
+          {status && <Status status={status} />}
           {(hint || foreign) && (
             <p>
               {foreign ? <b className="company-flag">{company.name}</b> : null}
@@ -81,6 +86,11 @@ export function ModuleFrame({
         >
           {filters}
         </form>
+      )}
+      {status === 'cancelled' && (
+        <p className="doc-cancelled">
+          Sənəd ləğv edilib: yazılışları storno edilib, sənədi dəyişdirmək olmur.
+        </p>
       )}
       {notices && <div className="module-notices">{notices}</div>}
       <div className="module-content">{children}</div>

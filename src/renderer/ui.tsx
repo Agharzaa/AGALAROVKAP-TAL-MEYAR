@@ -609,3 +609,13 @@ function todayMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/** How a document is posted (Dt / Kt), folded to one line: read once, then out of the way. */
+export function PostingRule({ children }: { children: ReactNode }) {
+  return (
+    <details className="doc-rule" aria-label="Yazılış qaydası">
+      <summary>Yazılış qaydası</summary>
+      <p className="doc-hint">{children}</p>
+    </details>
+  );
+}

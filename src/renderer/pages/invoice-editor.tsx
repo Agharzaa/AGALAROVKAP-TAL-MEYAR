@@ -18,7 +18,7 @@ import { day, money, toField } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { accountOptions, Picker, subkontoOptions, type Option } from '../picker';
-import { Confirm, DateInput, Field, Notice } from '../ui';
+import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 import { EntryGrid, entryLinesFrom, toEntryInput, type EntryLine } from '../entry-grid';
 import { Postings, todayIso } from '../postings';
@@ -377,7 +377,8 @@ export function InvoiceEditor({
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
-      hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
+      hint={doc ? `Versiya ${doc.version}` : 'Saxlanmayıb'}
+      status={doc ? doc.status : 'draft'}
       actions={
         <>
           {!locked && (
@@ -782,12 +783,12 @@ export function InvoiceEditor({
             </tfoot>
           </table>
         </fieldset>
-        <p className="doc-hint">
+        <PostingRule>
           {sale
-            ? 'Yazılış: Dt 211 / Kt 601 (ƏDV daxil), Dt 604.1 / Kt 521.01 (ƏDV), mal üçün Dt 701 / Kt 205 (FIFO). Müqavilədə alınmış avans varsa, avtomatik əvəzləşir (Dt 543 / Kt 211).'
-            : 'Yazılış: Dt 721/201/205/113 / Kt 531 (ƏDV-siz), Dt 241 / Kt 531 (ƏDV). Müqavilədə verilmiş avans varsa, avtomatik əvəzləşir (Dt 531 / Kt 243).'}{' '}
+            ? 'Dt 211 / Kt 601 (ƏDV daxil), Dt 604.1 / Kt 521.01 (ƏDV), mal üçün Dt 701 / Kt 205 (FIFO). Müqavilədə alınmış avans varsa, avtomatik əvəzləşir (Dt 543 / Kt 211).'
+            : 'Dt 721/201/205/113 / Kt 531 (ƏDV-siz), Dt 241 / Kt 531 (ƏDV). Müqavilədə verilmiş avans varsa, avtomatik əvəzləşir (Dt 531 / Kt 243).'}{' '}
           Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç vaxt silinmir.
-        </p>
+        </PostingRule>
         {doc && (
           <section className="invoice-postings" aria-label="Yazılışlar" id={`postings-${win.id}`}>
             <div className="section-head">

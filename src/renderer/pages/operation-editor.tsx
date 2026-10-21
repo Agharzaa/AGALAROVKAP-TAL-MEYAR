@@ -13,7 +13,7 @@ import { ModuleFrame } from '../frame';
 import { day } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
-import { Confirm, DateInput, Field, Notice } from '../ui';
+import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
 interface Form {
@@ -137,7 +137,8 @@ export function OperationEditor({ id }: { id?: string }) {
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
-      hint={doc ? `Versiya ${doc.version}${locked ? ' · ləğv edilib' : ''}` : 'Saxlanmayıb'}
+      hint={doc ? `Versiya ${doc.version}` : 'Saxlanmayıb'}
+      status={doc ? doc.status : 'draft'}
       actions={
         <>
           {!locked && (
@@ -227,11 +228,11 @@ export function OperationEditor({ id }: { id?: string }) {
             errorField={m.error?.field}
           />
         </fieldset>
-        <p className="doc-hint">
+        <PostingRule>
           Hər sətir bir yazılışdır: Dt hesab (subkontoları ilə) / Kt hesab. “Hesablaşma sənədi” boş
           qalarsa, bu sənədin özü yazılır. Düzəliş köhnə yazılışı qırmızı storno edir; jurnal heç
           vaxt silinmir.
-        </p>
+        </PostingRule>
         {doc && doc.history.length > 0 && (
           <section className="history" aria-label="Sənədin tarixçəsi">
             <h2>Tarixçə</h2>

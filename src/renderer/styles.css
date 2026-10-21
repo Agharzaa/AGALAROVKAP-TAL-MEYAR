@@ -1797,6 +1797,37 @@ body.dragging * {
   font-size: 13px;
   line-height: 16px;
 }
+/* "Yazılış qaydası": one folded line under the form; the Dt / Kt rule opens on a click */
+.doc-rule summary {
+  width: max-content;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.doc-rule summary:hover {
+  color: var(--ink);
+}
+.doc-rule[open] summary {
+  margin-bottom: 4px;
+}
+.doc-rule .doc-hint {
+  max-width: 900px;
+}
+/* A cancelled document: a band across the form under its command bar */
+.doc-cancelled {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--bad-line);
+  border-bottom: 1px solid var(--bad-line);
+  background: var(--bad-bg);
+  color: var(--bad);
+  font-size: 13px;
+  font-weight: 600;
+}
+.doc-cancelled::before {
+  content: '✕ ';
+}
 
 /* Trial balance */
 .trial th[scope='colgroup'] {
