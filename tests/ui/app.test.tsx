@@ -1646,3 +1646,98 @@ test('audit: a dashboard tile opens its report for the dashboard month; returns 
     h.close();
   }
 });
+
+test('design 0.7.1: a closing step with nothing to post is not laid out as an empty page', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const month = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-10`,
+    memo: 'Xidmət',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '601',
+        ktSk: [service.id, '0'],
+        amount: '1000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Ay bağlanışı' }));
+    await within(pane()).findByRole('listitem', {
+      name: 'Valyuta qalıqlarının yenidən qiymətləndirilməsi',
+    });
+    const steps = [...document.querySelectorAll('.closing-steps > li')];
+    const classes = steps.map((li) => li.className).join(' | ');
+    // Some steps of the month have nothing to post…
+    assert.ok(
+      steps.some((li) => (li as HTMLElement).dataset.state === 'empty'),
+      classes,
+    );
+    // …and `.empty` is the centred "nothing here" block: a step keeps its own layout.
+    for (const li of steps) assert.ok(!li.classList.contains('empty'), classes);
+  } finally {
+    h.close();
+  }
+});
+
+test('design 0.7.1: the dashboard chart is drawn at its real size, so month names keep their size', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
+    const svg = await waitFor(() => {
+      const found = document.querySelector('.dashboard-chart svg');
+      assert.ok(found);
+      return found;
+    });
+    const [, , w, h2] = svg.getAttribute('viewBox')!.split(' ').map(Number);
+    assert.equal(Number(svg.getAttribute('width')), w);
+    assert.equal(Number(svg.getAttribute('height')), h2);
+  } finally {
+    h.close();
+  }
+});
+
+test('design 0.7.1: the dark theme is chosen in the settings, applied at once and kept', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    assert.equal(document.documentElement.dataset.theme, undefined);
+    await user.click(screen.getByRole('button', { name: 'Müəssisə' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Şirkət və dövrün bağlanması' }));
+    const page = within(pane());
+    const dark = await page.findByRole('button', { name: 'Tünd' });
+    assert.equal(page.getByRole('button', { name: 'Açıq' }).getAttribute('aria-pressed'), 'true');
+    await user.click(dark);
+    await waitFor(() => assert.equal(document.documentElement.dataset.theme, 'dark'));
+    assert.equal(dark.getAttribute('aria-pressed'), 'true');
+    assert.equal(h.theme(), 'dark');
+    await user.click(page.getByRole('button', { name: 'Açıq' }));
+    await waitFor(() => assert.equal(document.documentElement.dataset.theme, undefined));
+    assert.equal(h.theme(), 'light');
+  } finally {
+    h.close();
+  }
+});

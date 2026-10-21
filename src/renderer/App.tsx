@@ -34,7 +34,7 @@ import {
 } from './icons';
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
-import { api } from './api';
+import { api, applyTheme } from './api';
 import type { UpdateState } from '../contracts/bridge';
 import { useCatalog } from './catalog';
 import { useMutation, useQuery } from './hooks';
@@ -94,6 +94,12 @@ export default function App() {
   const [companies, setCompanies] = useState<CompanyView[] | null>(null);
   const [error, setError] = useState('');
   const [initial, setInitial] = useState('');
+  useEffect(() => {
+    void api
+      .theme()
+      .then(applyTheme)
+      .catch(() => undefined);
+  }, []);
   const load = () =>
     api
       .query<CompanyView[]>({ type: 'companies' })
@@ -567,7 +573,8 @@ function MainMenuItem({
         className={`menu-item${current ? ' current' : ''}${open ? ' open' : ''}`}
         onClick={onOpen}
       >
-        {section.label}
+        <section.icon size={18} />
+        <span>{section.label}</span>
       </button>
       {open && (
         <div className="menu-drop" role="menu" aria-label={section.label}>

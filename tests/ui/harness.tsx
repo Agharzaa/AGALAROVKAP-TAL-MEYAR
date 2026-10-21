@@ -35,6 +35,7 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
       throw e;
     }
   };
+  let theme: 'light' | 'dark' = 'light';
   const bridge: MeyarBridge = {
     async command(command) {
       const c = command as { type: string; companyId?: string };
@@ -65,6 +66,10 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
       ambAsked.push(date);
       return { ok: true, value: ambFiles.get(date) ?? null };
     },
+    async theme(value) {
+      if (value) theme = value;
+      return theme;
+    },
     async dvxOpen(direction) {
       dvxOpened.push(direction);
       return { ok: true, value: null };
@@ -94,6 +99,7 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     saved,
     release: () => release?.(),
     dirty: () => dirty,
+    theme: () => theme,
     dvxOpened,
     ambFiles,
     ambAsked,

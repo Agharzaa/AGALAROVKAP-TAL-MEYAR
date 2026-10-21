@@ -37,6 +37,14 @@ export function requestKey(): string {
   return crypto.randomUUID();
 }
 
+export type Theme = 'light' | 'dark';
+
+/** The theme is one attribute on <html>; styles.css switches every token with it. */
+export function applyTheme(theme: Theme) {
+  if (theme === 'dark') document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+}
+
 export const api = {
   async command(command: CommandInput, key = requestKey()): Promise<CommandResult> {
     return unwrap(await bridge().command({ ...command, key }));
@@ -57,6 +65,11 @@ export const api = {
   async zoom(step?: 'in' | 'out' | 'reset'): Promise<number> {
     const b = override ?? window.meyar;
     return b?.zoom ? b.zoom(step) : 1;
+  },
+  /** Colour theme, kept by the desktop app; previews without the bridge stay light. */
+  async theme(value?: Theme): Promise<Theme> {
+    const b = override ?? window.meyar;
+    return b?.theme ? b.theme(value) : 'light';
   },
   onZoom(listener: (factor: number) => void): () => void {
     const b = override ?? window.meyar;

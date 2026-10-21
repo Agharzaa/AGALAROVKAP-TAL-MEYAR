@@ -4,7 +4,7 @@
  * Every figure leads on: M/Z rows to the account card (and from there to the document), the
  * dashboard tiles to their report. Each report is exported to Excel and printed.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileDown } from '../icons';
 import type {
   CashFlowView,
@@ -487,23 +487,43 @@ const tileView = (key: DashboardTile['key'], month: string): View => {
   }
 };
 
-/** 12 months: income and expense bars, profit as a line, on one scale. */
+/**
+ * 12 months: income and expense bars, profit as a line, on one scale. Drawn at the width it
+ * really has (not stretched), so month names keep the size of the text around them.
+ */
 function Chart({ series }: { series: DashboardView['series'] }) {
+  const figure = useRef<HTMLElement>(null);
+  const [w, setW] = useState(640);
+  useEffect(() => {
+    const el = figure.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.floor(entry?.contentRect.width ?? 0);
+      if (width > 0) setW(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const n = (s: string) => Number(s);
   const top = Math.max(
     1,
     ...series.flatMap((s) => [s.income, s.expense, s.profit].map((x) => Math.abs(n(x)))),
   );
-  const w = 640;
-  const h = 180;
+  const h = Math.round(Math.min(240, Math.max(160, w * 0.18)));
   const step = w / series.length;
   const y = (v: number) => h / 2 - (v / top) * (h / 2 - 8);
   // A bar grows from the axis: up for a positive figure, down for a negative one (returns).
   const bar = (v: number) => ({ y: Math.min(y(v), h / 2), height: Math.abs(h / 2 - y(v)) });
   const profit = series.map((s, i) => `${i * step + step / 2},${y(n(s.profit))}`).join(' ');
   return (
-    <figure className="dashboard-chart">
-      <svg viewBox={`0 0 ${w} ${h + 20}`} role="img" aria-label="12 ayın gəlir, xərc və mənfəəti">
+    <figure className="dashboard-chart" ref={figure}>
+      <svg
+        width={w}
+        height={h + 24}
+        viewBox={`0 0 ${w} ${h + 24}`}
+        role="img"
+        aria-label="12 ayın gəlir, xərc və mənfəəti"
+      >
         <line x1="0" x2={w} y1={h / 2} y2={h / 2} className="axis" />
         {series.map((s, i) => (
           <g key={s.month}>
@@ -523,7 +543,7 @@ function Chart({ series }: { series: DashboardView['series'] }) {
             >
               <title>{`${monthLabel(s.month)}: xərc ${money(s.expense)}`}</title>
             </rect>
-            <text x={i * step + step / 2} y={h + 14} textAnchor="middle">
+            <text x={i * step + step / 2} y={h + 17} textAnchor="middle">
               {monthLabel(s.month)}
             </text>
           </g>

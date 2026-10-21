@@ -354,3 +354,12 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 ### TƏSDİQLƏNDİ (18.10.2026, §9)
 
 - **Mühasibin qəpikbəqəpik yoxlaması** (`docs/MERHELE-5-AY-BAGLANISI.md` §9): Sentyabr misalının bağlanışı — 601 Kt 15 000,00; 604.1 Dt 2 288,14; 701 Dt 7 000,00; 721 Dt 3,00 → 801; 801-in nəticəsi 5 708,86 (mənfəət) → Dt 801 / Kt 341; sonra 601 / 604 / 701 / 721 / 801 sıfır, 341-in kredit qalığı 5 708,86. FIFO düzəlişi və ƏDV əvəzləşdirilməsi yoxdur (alışın 1 800,00 ƏDV-si əl ilə əməliyyatdır, e-qaiməsi yoxdur, 241-də qalır). İstifadəçi təsdiqlədi (`closing.test.ts` A1, `analytics.test.ts` M/Z).
+
+## 2026-10-21 — Dizayn (0.7.1)
+
+- **Məqsəd:** gündə 8+ saat işdə göz yorulmasın; kiçik və böyük ekranda eyni rahatlıq. Sistem `docs/DIZAYN.md`-dədir, `styles.css` ona tabedir.
+- **Ağ səth yoxdur.** Ən açıq böyük səth (cədvəl) 77 % parlaqlıqdır; yazı təmiz qara deyil (11:1). "Jurnal" (0.4.6) və açıq boz variantlar istifadəçiyə "ağ ekran" kimi gəldi.
+- **1C-nin surəti deyil.** İş məntiqi 1C kimidir (bölmələr, pəncərələr, tablar, klaviatura); sarı əsas düymə, sarı cari sətir və ikonu yazının üstündə olan iri bölmə paneli kimi 1C əlamətləri yoxdur. Vurğu rəngi Meyar-ın öz petrolu.
+- **Açıq və tünd mövzu**, Parametrlər → Görünüş (istifadəçinin seçimi: "ikisi, seçim ilə"); açıq — əsas.
+- **Vəziyyət yalnız rənglə göstərilmir:** ● uçotda, ○ qaralama, ✕ ləğv; ləğv olunmuş sənədin məbləğləri üstündən xətlə (auditorun tələbi).
+- **Rəy üsulu:** dizayn mühasib, dizayner və auditor baxışı ilə real ekran şəkilləri üzərində yoxlanır.

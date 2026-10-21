@@ -78,7 +78,7 @@ function Postings({ postings }: { postings: ClosingPosting[] }) {
 function Step({ step, index }: { step: ClosingStep; index: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className={`closing-step ${step.state}`} aria-label={step.title}>
+    <li className="closing-step" data-state={step.state} aria-label={step.title}>
       <div className="section-head">
         <h2>
           {index + 1}. {step.title}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from '../icons';
 import type { AuditView } from '../../contracts/queries';
-import { api } from '../api';
+import { api, applyTheme, type Theme } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { SearchField, matches } from '../filters';
@@ -21,6 +21,7 @@ export function SettingsPage() {
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
   const [version, setVersion] = useState('');
+  const [theme, setTheme] = useState<Theme>('light');
   const m = useMutation();
   useEffect(() => {
     if (!company) return;
@@ -34,7 +35,19 @@ export function SettingsPage() {
       .version()
       .then(setVersion)
       .catch(() => undefined);
+    void api
+      .theme()
+      .then(setTheme)
+      .catch(() => undefined);
   }, []);
+  const chooseTheme = (value: Theme) =>
+    void api
+      .theme(value)
+      .then((t) => {
+        setTheme(t);
+        applyTheme(t);
+      })
+      .catch((e: Error) => setMessage(e.message));
   if (!company) return <ModuleFrame title={pages.settings.title}>Yüklənir…</ModuleFrame>;
   const reopening = !!company.closedThrough && !!through && through < company.closedThrough;
   return (
@@ -158,6 +171,31 @@ export function SettingsPage() {
               </button>
             </div>
           </form>
+        </section>
+        <section className="panel">
+          <h2 className="panel-title">Görünüş</h2>
+          <p className="panel-text">
+            Açıq — gündüz üçün, tünd — axşam və ya zəif işıqda. Seçim bu kompüterdə yadda qalır.
+          </p>
+          <div className="form-actions">
+            <div className="segmented" role="group" aria-label="Görünüş">
+              {(
+                [
+                  ['light', 'Açıq'],
+                  ['dark', 'Tünd'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={theme === value}
+                  onClick={() => chooseTheme(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
         <section className="panel">
           <h2 className="panel-title">Ehtiyat nüsxə</h2>

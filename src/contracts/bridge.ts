@@ -23,6 +23,8 @@ export interface MeyarBridge {
   setDirty(dirty: boolean): void;
   /** Page zoom: one step in or out, back to 100%, or (no step) the current factor. */
   zoom?(step?: 'in' | 'out' | 'reset'): Promise<number>;
+  /** Colour theme: sets it when given, returns the current one (kept between sessions). */
+  theme?(value?: 'light' | 'dark'): Promise<'light' | 'dark'>;
   /** Called when the zoom changes (keyboard, mouse wheel or the status bar). */
   onZoom?(listener: (factor: number) => void): () => void;
   /** Opens the official DVX cabinet (stage 4d); its Excel exports come back via onDvxFile. */

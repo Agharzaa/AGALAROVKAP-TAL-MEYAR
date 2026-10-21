@@ -7,7 +7,7 @@ Yenilənib: 18.10.2026 (0.7.0). Növbəti sessiya buradan davam etməlidir.
 - **Məqsəd:** Azərbaycan şirkətləri üçün 1C-dən güclü, avtomatlaşdırılmış masaüstü uçot sistemi. Uçot modeli 1C AZ-ın subkonto modelidir. Avtomatika heç vaxt təxmin etmir: əmin olmadığı yerdə mühasibə saxlayır.
 - **Qərarlar:** istifadəçi ilə razılaşdırılmış bütün uçot qərarları `docs/QERARLAR.md`-dədir. Kod onlara tabedir.
 - **Texnologiya:** Electron 44.5.1, React 19.3, TypeScript 7 strict, Vite 8, zod 4.6.5, SQLite (`node:sqlite`, WAL). Uçot ayrıca worker thread-lərdə işləyir.
-- **Dizayn:** "Jurnal" (0.4.6, istifadəçinin seçimi): mühasibat kitabı üslubu, yuxarıda 1C kimi əsas menyu, formalar pəncərədə, "Uçota al və bağla" (Ctrl+Enter). Ətraflı: aşağıda 0.4.6 bölməsi.
+- **Dizayn:** 0.7.1 dizayn sistemi (`docs/DIZAYN.md`): göz yormayan daş-boz açıq və tünd mövzu (Parametrlərdə seçim), Segoe UI, petrol vurğu; iş məntiqi 1C kimi (bölmələr yuxarıda, formalar pəncərədə, tablar aşağıda), görünüş öz. Ətraflı: aşağıda "0.7.1 — dizayn" bölməsi.
 - **İş yeri:** Windows kompüterdə klon `C:\Users\rxfet\Desktop\AGALAROVKAP-TAL-MEYAR` (Node 24.20, Git 2.55). Masaüstündəki `meyar-0.1.0-source` köhnə nüsxədir, istifadə olunmur.
 - **Repo:** https://github.com/Agharzaa/AGALAROVKAP-TAL-MEYAR. Quraşdırıcı `download` branch-ində dərc olunur.
 - **Köhnə kod:** v2 (qaimə, ödəniş, bank çıxarışı) `v0.2.0` tag-ındadır (c49c4fd). v3-də istifadə olunmur, yalnız istinad üçündür.
@@ -388,6 +388,22 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), 2 tur, `4a0b5dd` (5c) + `ff0571e
 
 Mühasibin §9 qəpikbəqəpik təsdiqi alınıb (Sentyabr misalı, 801 nəticəsi 5 708,86 → 341).
 Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `npm test` 158, `npm run test:ui` 24, `npm run test:perf` keçir. **0.7.0** main-ə push edilib (18.10.2026, istifadəçinin icazəsi ilə); CI pre-release dərc edir, quraşdırılmış Meyar özü yenilənir.
+
+## 0.7.1 — dizayn: uzun iş günü üçün (21.10.2026)
+
+İstifadəçi: "dizayn çox zəifdir, gözü kor edir". Gedişat: 3 token variantı (açıq boz, tünd, yumşaq kağız) — "heç biri"; açıq "Sakit" — "ağ ekran"; tünd "Qrafit"; 1C üslubu — "1C kopyası olmasın, cədvəl, bölmə, düymə, kölgə — hər şeyi düşün"; sonra mühasib, dizayner və auditor rəyi (üç ayrı rəyçi, real ekran şəkilləri üzrə) birləşdirildi. İstifadəçi açıq və tünd mövzunu seçimlə istədi.
+
+| Sahə                                                                                                                     | Sübut                           |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| Bütün rənglər tokendir; açıq və tünd mövzu (`:root`, `:root[data-theme='dark']`), hər cüt üçün WCAG kontrastı hesablanıb | `docs/DIZAYN.md` §1–2           |
+| Mövzu Parametrlər → Görünüşdə seçilir, dərhal tətbiq olunur, `ui.json`-da saxlanır; başlıq zolağı da rəngini dəyişir     | UI testi "dark theme"           |
+| Səhifə pəncərə eninə görə miqyaslanır (1920 → 105 %, ≤ 125 %), alçaq ekranda sıx rejim                                   | `tests/domain/fit-zoom.test.ts` |
+| Qüsur: İdarə paneli qrafiki enə uzanırdı (ay adları ~32 px) — indi real enində                                           | UI testi "dashboard chart"      |
+| Qüsur: Ay bağlanışı addımı qlobal `.empty` sinfi ilə mərkəzə düzülürdü — indi `data-state`                               | UI testi "closing step"         |
+| Lora şrifti çıxarıldı; Segoe UI (Inter ehtiyat)                                                                          | `package.json`                  |
+| Ekran şəkilləri real Electron-da, 1920×1080 və 1366×768, açıq və tünd                                                    | sessiya qeydləri                |
+
+Rəylərdən ayrıca işə qalanlar: `docs/DIZAYN.md` §8 (Azərbaycan dilində ay seçicisi, sənəd formasında vəziyyət nişanı, satış siyahısının yekunları, qrafikin oxu).
 
 ## Açıq məsələlər
 

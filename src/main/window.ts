@@ -10,6 +10,7 @@ import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
 import { openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
+import { fitZoom } from './fit-zoom.js';
 
 export interface WindowOptions {
   ledger: LedgerClient;
@@ -25,8 +26,15 @@ export interface WindowOptions {
 
 /** Zoom steps (Ctrl + / Ctrl − / Ctrl 0, Ctrl + mouse wheel): readable on any screen. */
 const ZOOMS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+/** The title bar and window background of each theme (styles.css --bar, --ink, --desk). */
+const THEMES = {
+  light: { bar: '#d2d0ca', symbol: '#2a2a28', desk: '#c7c5be' },
+  dark: { bar: '#1b1c1e', symbol: '#dcdad5', desk: '#181a1c' },
+} as const;
+type Theme = keyof typeof THEMES;
 interface UiState {
   zoom?: number;
+  theme?: Theme;
   bounds?: { x: number; y: number; width: number; height: number };
   maximized?: boolean;
 }
@@ -66,18 +74,20 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
       /* the next session simply starts with the defaults */
     }
   };
+  let theme: Theme = ui.theme === 'dark' ? 'dark' : 'light';
   const window = new BrowserWindow({
     ...(visible(ui.bounds) ? ui.bounds : { width: 1440, height: 900 }),
     minWidth: 1024,
     minHeight: 640,
     show: false,
     title: 'Meyar',
-    backgroundColor: '#fbfaf8',
+    // The desk colour of the theme, so there is no white flash on start.
+    backgroundColor: THEMES[theme].desk,
     autoHideMenuBar: true,
     // The app draws its own title bar (the main menu lives in it); Windows keeps the caption
     // buttons (minimize, maximize, close) and snap layouts.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#fbfaf8', symbolColor: '#1c2a44', height: 40 },
+    titleBarOverlay: { color: THEMES[theme].bar, symbolColor: THEMES[theme].symbol, height: 40 },
     webPreferences: {
       preload: options.preloadFile,
       contextIsolation: true,
@@ -199,10 +209,23 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
   });
   window.on('closed', () => ipcMain.removeListener('meyar:dirty', onDirty));
   // Zoom: one factor for the whole page, so windows, pointer and layout stay consistent.
+  // The user's step (Ctrl + / −, shown in the status bar) times the fit to the window width.
   let zoom = ZOOMS.includes(ui.zoom ?? 1) ? (ui.zoom ?? 1) : 1;
+  let fit = 1;
+  const apply = () => {
+    contents.setZoomFactor(zoom * fit);
+    // The caption buttons stay as tall as the zoomed 40 px title bar.
+    window.setTitleBarOverlay({ height: Math.round(40 * zoom * fit) });
+  };
+  const refit = () => {
+    const next = fitZoom(window.getContentBounds().width);
+    if (next === fit) return;
+    fit = next;
+    apply();
+  };
   const setZoom = (next: number) => {
     zoom = next;
-    contents.setZoomFactor(zoom);
+    apply();
     contents.send('meyar:zoom', zoom);
     saveUi({ zoom });
   };
@@ -213,7 +236,11 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     else if (dir === 'out' && i > 0) setZoom(ZOOMS[i - 1]!);
     return zoom;
   };
-  contents.on('did-finish-load', () => contents.setZoomFactor(zoom));
+  contents.on('did-finish-load', () => {
+    fit = fitZoom(window.getContentBounds().width);
+    apply();
+  });
+  window.on('resize', refit);
   contents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || !input.control || input.alt) return;
     const dir =
@@ -230,6 +257,15 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     }
   });
   contents.on('zoom-changed', (_event, direction) => step(direction));
+  handle('meyar:theme', (_e, arg) => {
+    if (arg === 'light' || arg === 'dark') {
+      theme = arg;
+      window.setBackgroundColor(THEMES[theme].desk);
+      window.setTitleBarOverlay({ color: THEMES[theme].bar, symbolColor: THEMES[theme].symbol });
+      saveUi({ theme });
+    }
+    return theme;
+  });
   handle('meyar:zoom', (_e, arg) =>
     arg === 'in' || arg === 'out' || arg === 'reset' ? step(arg) : zoom,
   );
