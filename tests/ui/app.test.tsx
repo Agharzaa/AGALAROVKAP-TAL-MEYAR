@@ -2,7 +2,7 @@ import './setup';
 import React from 'react';
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../src/renderer/App';
 import type {
@@ -20,6 +20,31 @@ import { monthEnd } from '../../src/domain/rates';
 import { harness } from './harness';
 
 afterEach(() => cleanup());
+const azMonths = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'İyun',
+  'İyul',
+  'Avqust',
+  'Sentyabr',
+  'Oktyabr',
+  'Noyabr',
+  'Dekabr',
+];
+const monthsBack = (n: number) => {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() - n, 1);
+  return {
+    year: d.getFullYear(),
+    index: d.getMonth(),
+    iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+  };
+};
+const azMonth = (m: { year: number; index: number }) => `${azMonths[m.index]} ${m.year}`;
+
 const pane = () =>
   (document.querySelector('.mdi-window.active:not([hidden])') ??
     document.querySelector('.desktop')) as HTMLElement;
@@ -1503,9 +1528,11 @@ test('month closing: steps of the last month, Ctrl+Enter closes it, cancel opens
     await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
     await user.click(screen.getByRole('menuitem', { name: 'Ay bağlanışı' }));
     const page = within(pane());
-    const input = page.getByLabelText('Ay') as HTMLInputElement;
+    const input = within(page.getByRole('group', { name: 'Ay' })).getByRole('button', {
+      name: /^Ay seçimi/,
+    });
     // It opens on the first month not closed (decided after the audit), not the work period.
-    await waitFor(() => assert.equal(input.value, month));
+    await waitFor(() => assert.equal(input.textContent, azMonth(monthsBack(1))));
     const income = await page.findByRole('listitem', {
       name: 'Gəlir və xərclərin 801-ə bağlanması',
     });
@@ -1620,7 +1647,11 @@ test('audit: a dashboard tile opens its report for the dashboard month; returns 
     await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
     await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
     const panel = within(pane());
-    fireEvent.change(panel.getByLabelText('Ay'), { target: { value: month } });
+    await user.click(
+      within(await panel.findByRole('group', { name: 'Ay' })).getByRole('button', {
+        name: 'Əvvəlki ay',
+      }),
+    );
     const income = await panel.findByRole('button', { name: /^Gəlir\s*[−-]100,00/ });
     for (const bar of document.querySelectorAll('.dashboard-chart rect'))
       assert.ok(Number(bar.getAttribute('height')) >= 0, bar.outerHTML);
@@ -1631,7 +1662,9 @@ test('audit: a dashboard tile opens its report for the dashboard month; returns 
         'ƏDV icmalı',
       ),
     );
-    assert.equal((within(pane()).getByLabelText('Ay') as HTMLInputElement).value, month);
+    within(within(pane()).getByRole('group', { name: 'Ay' })).getByRole('button', {
+      name: `Ay seçimi: ${azMonth(monthsBack(1))}`,
+    });
     await user.click(income);
     const report = within(pane());
     await report.findByRole('rowheader', {
@@ -1737,6 +1770,64 @@ test('design 0.7.1: the dark theme is chosen in the settings, applied at once an
     await user.click(page.getByRole('button', { name: 'Açıq' }));
     await waitFor(() => assert.equal(document.documentElement.dataset.theme, undefined));
     assert.equal(h.theme(), 'light');
+  } finally {
+    h.close();
+  }
+});
+
+test('design §8: the month picker speaks Azerbaijani, not the Windows language, and marks closed months', async () => {
+  const h = harness();
+  const s = seed(h);
+  const current = monthsBack(0);
+  const prev = monthsBack(1);
+  const closed = monthsBack(2);
+  h.run({
+    type: 'period.close',
+    companyId: s.companyId,
+    through: monthEnd(closed.iso),
+    reason: '',
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İdarə paneli' }));
+    const panel = within(pane());
+    const picker = within(await panel.findByRole('group', { name: 'Ay' }));
+    // No native month input: its names come from the Windows language ("Ekim", "Ağustos").
+    assert.equal(document.querySelector('input[type="month"]'), null);
+    const shown = picker.getByRole('button', { name: /^Ay seçimi/ });
+    assert.equal(shown.textContent, azMonth(current));
+    await user.click(picker.getByRole('button', { name: 'Əvvəlki ay' }));
+    assert.equal(shown.textContent, azMonth(prev));
+    await waitFor(() =>
+      assert.match(
+        document.querySelector('.mdi-window.active')!.textContent!,
+        new RegExp(prev.iso),
+      ),
+    );
+    await user.click(picker.getByRole('button', { name: 'Növbəti ay' }));
+    assert.equal(shown.textContent, azMonth(current));
+    // The list of a year: closed months are marked, by text as well as by look.
+    await user.click(shown);
+    const list = within(await screen.findByRole('dialog', { name: 'Ay seçimi' }));
+    if (closed.year !== current.year)
+      await user.click(list.getByRole('button', { name: 'Əvvəlki il' }));
+    const closedButton = list.getByRole('button', { name: `${azMonth(closed)}, dövr bağlıdır` });
+    assert.ok(closedButton.classList.contains('closed'));
+    if (prev.year === closed.year) list.getByRole('button', { name: azMonth(prev) });
+    assert.equal(list.getAllByRole('button', { name: /^\S+ \d{4}/ }).length, 12);
+    await user.click(closedButton);
+    assert.equal(screen.queryByRole('dialog', { name: 'Ay seçimi' }), null);
+    assert.equal(shown.textContent, azMonth(closed));
+    assert.match(shown.getAttribute('aria-label')!, /dövr bağlıdır/);
+    // Escape closes the list without a change.
+    await user.click(shown);
+    await screen.findByRole('dialog', { name: 'Ay seçimi' });
+    await user.keyboard('{Escape}');
+    assert.equal(screen.queryByRole('dialog', { name: 'Ay seçimi' }), null);
+    assert.equal(shown.textContent, azMonth(closed));
   } finally {
     h.close();
   }

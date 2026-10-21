@@ -2770,6 +2770,111 @@ button.step:active {
   min-height: 0;
 }
 
+/* Month field: "‹ Oktyabr 2026 ›" in a recessed box like a field; the year's list drops below */
+.month-input {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--control);
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius);
+  background: var(--field);
+  box-shadow: var(--recessed);
+  font-family: var(--sans);
+  font-style: normal;
+  color: var(--ink);
+}
+.month-input:hover {
+  border-color: var(--field-hover);
+}
+.month-input:focus-within {
+  border-color: var(--mark);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.month-step {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.month-step:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.month-current {
+  min-width: 118px;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+.month-current:focus-visible {
+  outline: none;
+}
+.month-lock {
+  color: var(--muted);
+}
+.month-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  width: 246px;
+  padding: 8px;
+  border: 1px solid var(--frame);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow-drop);
+}
+.month-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.month-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--control);
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+}
+.month-cell:hover {
+  background: var(--hover);
+}
+.month-cell.closed {
+  color: var(--muted);
+  background: var(--desk-2);
+}
+.month-cell.closed:hover {
+  background: var(--hover);
+}
+.month-cell.selected {
+  border-color: var(--primary-line);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
 @media (max-width: 1280px) {
   .statusbar-keys {
     display: none;

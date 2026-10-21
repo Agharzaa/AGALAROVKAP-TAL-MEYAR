@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Search, X } from './icons';
 import { startOfYear, today } from './format';
-import { DateInput } from './ui';
+import { useCatalog } from './catalog';
+import { DateInput, MonthInput } from './ui';
+import { useWindow } from './workspace';
 import { searchKey } from '../domain/values';
 
 export interface Range {
@@ -89,3 +91,20 @@ export const matches = (query: string, ...fields: string[]) => {
   const q = searchKey(query.trim());
   return !q || fields.some((f) => searchKey(f).includes(q));
 };
+
+/** The "Ay" filter of month pages: the Azerbaijani month field, the company's closed months marked. */
+export function MonthFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (ym: string) => void;
+}) {
+  const { company } = useCatalog(useWindow().companyId);
+  return (
+    <div className="filter-text">
+      <span aria-hidden="true">Ay</span>
+      <MonthInput value={value} onChange={onChange} closedThrough={company?.closedThrough} />
+    </div>
+  );
+}

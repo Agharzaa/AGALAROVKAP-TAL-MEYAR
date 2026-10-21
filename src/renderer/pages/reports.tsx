@@ -16,7 +16,7 @@ import type {
 import { api } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { RangeFields, useRange } from '../filters';
+import { MonthFilter, RangeFields, useRange } from '../filters';
 import { day, money } from '../format';
 import { useQuery } from '../hooks';
 import { pages } from '../pages';
@@ -413,17 +413,7 @@ export function VatSummaryPage() {
       hint={pages.vatSummary.hint}
       onRefresh={view.reload}
       actions={v && out.buttons}
-      filters={
-        <label className="filter-text">
-          <span>Ay</span>
-          <input
-            type="month"
-            aria-label="Ay"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-        </label>
-      }
+      filters={<MonthFilter value={month} onChange={setMonth} />}
       notices={
         <>
           {view.error && <Notice>{view.error}</Notice>}
@@ -572,17 +562,7 @@ export function DashboardPage() {
       title={pages.dashboard.title}
       hint={v ? `${month} · ${v.ms} ms · rəqəmə klik — hesabat` : pages.dashboard.hint}
       onRefresh={view.reload}
-      filters={
-        <label className="filter-text">
-          <span>Ay</span>
-          <input
-            type="month"
-            aria-label="Ay"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-        </label>
-      }
+      filters={<MonthFilter value={month} onChange={setMonth} />}
       notices={view.error && <Notice>{view.error}</Notice>}
     >
       {!valid ? (

@@ -14,6 +14,7 @@ import type {
   Signal,
 } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
+import { MonthFilter } from '../filters';
 import { money } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
@@ -245,17 +246,7 @@ export function ClosingPage() {
             )}
           </>
         }
-        filters={
-          <label className="filter-text">
-            <span>Ay</span>
-            <input
-              type="month"
-              aria-label="Ay"
-              value={month}
-              onChange={(e) => (setMonth(e.target.value), setRead(false))}
-            />
-          </label>
-        }
+        filters={<MonthFilter value={month} onChange={(ym) => (setMonth(ym), setRead(false))} />}
         notices={
           <>
             {view.error && <Notice>{view.error}</Notice>}

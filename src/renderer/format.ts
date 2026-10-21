@@ -82,3 +82,19 @@ export function longDate(iso: string): string {
   const weekday = weekdays[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
   return `${d} ${months[m - 1]} ${y}, ${weekday}`;
 }
+
+/** "2026-10" → "Oktyabr 2026" — Azerbaijani, whatever the Windows language (a native month input shows "Ekim"). */
+export function monthTitle(ym: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  const name = m && months[Number(m[2]) - 1];
+  if (!name) return ym;
+  // Azerbaijani capital of "i" is "İ"; toUpperCase() without a locale gives "I".
+  const first = name[0] === 'i' ? 'İ' : name[0]!.toUpperCase();
+  return `${first}${name.slice(1)} ${m[1]}`;
+}
+/** "2026-10" moved by `delta` months. */
+export function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number) as [number, number];
+  const index = y * 12 + (m - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}

@@ -11,7 +11,7 @@ import { monthEnd } from '../../domain/rates';
 import type { RateView, RevaluationLine, RevaluationView } from '../../contracts/queries';
 import { api } from '../api';
 import { ModuleFrame } from '../frame';
-import { RangeFields, useRange } from '../filters';
+import { MonthFilter, RangeFields, useRange } from '../filters';
 import { day, money, toField } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
@@ -348,17 +348,7 @@ export function RevaluationPage() {
           )}
         </>
       }
-      filters={
-        <label className="filter-text">
-          <span>Ay</span>
-          <input
-            type="month"
-            aria-label="Ay"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
-        </label>
-      }
+      filters={<MonthFilter value={month} onChange={setMonth} />}
       notices={
         <>
           {view.error && <Notice>{view.error}</Notice>}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Inbox, X } from './icons';
-import { isNegative, isZero, money } from './format';
+import { monthEnd } from '../domain/rates';
+import { CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Inbox, Lock, X } from './icons';
+import { isNegative, isZero, monthTitle, money, shiftMonth } from './format';
 
 export function Amount({ value, strong = false }: { value: string; strong?: boolean }) {
   const className = `amount${isZero(value) ? ' zero' : ''}${isNegative(value) ? ' negative' : ''}`;
@@ -417,4 +418,194 @@ export function DateInput({
       />
     </span>
   );
+}
+
+/** How much of a month the closed period covers: all of it, part of it (up to a day) or none. */
+function monthClosure(ym: string, closedThrough: string | undefined): string {
+  if (!closedThrough || closedThrough < `${ym}-01`) return '';
+  return closedThrough >= monthEnd(ym)
+    ? 'dövr bağlıdır'
+    : `dövr ${closedThrough.split('-').reverse().join('.')}-dək bağlıdır`;
+}
+
+/**
+ * Month field in Azerbaijani ("‹ Oktyabr 2026 ›") regardless of the Windows locale — a native
+ * month input shows "Ekim". ← / → move a month, ↓ opens the year's list; months of the closed
+ * period are marked there and on the field. The value stays "YYYY-MM".
+ */
+export function MonthInput({
+  value,
+  onChange,
+  closedThrough,
+  'aria-label': ariaLabel = 'Ay',
+}: {
+  value: string;
+  onChange: (ym: string) => void;
+  closedThrough?: string;
+  'aria-label'?: string;
+}) {
+  const valid = /^\d{4}-\d{2}$/.test(value);
+  const current = valid ? value : todayMonth();
+  const [open, setOpen] = useState(false);
+  const [year, setYear] = useState(Number(current.slice(0, 4)));
+  const [cursor, setCursor] = useState(current);
+  const root = useRef<HTMLSpanElement>(null);
+  const shown = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const popupId = useId();
+  const closure = valid ? monthClosure(value, closedThrough) : '';
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  useEffect(() => {
+    if (open) list.current?.querySelector<HTMLElement>(`[data-month="${cursor}"]`)?.focus();
+  }, [open, cursor]);
+  const show = () => {
+    setYear(Number(current.slice(0, 4)));
+    setCursor(current);
+    setOpen(true);
+  };
+  const choose = (ym: string) => {
+    setOpen(false);
+    shown.current?.focus();
+    if (ym !== value) onChange(ym);
+  };
+  const moveCursor = (delta: number) => {
+    const next = shiftMonth(cursor, delta);
+    setCursor(next);
+    setYear(Number(next.slice(0, 4)));
+  };
+  return (
+    <span
+      ref={root}
+      role="group"
+      aria-label={ariaLabel}
+      className={`month-input${closure ? ' closed' : ''}`}
+    >
+      <button
+        type="button"
+        tabIndex={-1}
+        className="month-step"
+        aria-label="Əvvəlki ay"
+        title="Əvvəlki ay (←)"
+        onClick={() => onChange(shiftMonth(current, -1))}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <button
+        ref={shown}
+        type="button"
+        className="month-current"
+        aria-label={`Ay seçimi: ${valid ? monthTitle(value) : 'seçilməyib'}${closure ? `, ${closure}` : ''}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? popupId : undefined}
+        title={closure ? `${closure[0]!.toUpperCase()}${closure.slice(1)}` : undefined}
+        onClick={() => (open ? setOpen(false) : show())}
+        onKeyDown={(e) => {
+          if (e.ctrlKey || e.altKey) return;
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            onChange(shiftMonth(current, e.key === 'ArrowLeft' ? -1 : 1));
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            show();
+          }
+        }}
+      >
+        {valid ? monthTitle(value) : 'Ayı seçin'}
+      </button>
+      {closure && <Lock size={13} className="month-lock" aria-hidden="true" />}
+      <button
+        type="button"
+        tabIndex={-1}
+        className="month-step"
+        aria-label="Növbəti ay"
+        title="Növbəti ay (→)"
+        onClick={() => onChange(shiftMonth(current, 1))}
+      >
+        <ChevronRight size={14} />
+      </button>
+      {open && (
+        <div
+          ref={list}
+          id={popupId}
+          role="dialog"
+          aria-label="Ay seçimi"
+          className="month-popup"
+          onKeyDown={(e) => {
+            const steps: Record<string, number> = {
+              ArrowLeft: -1,
+              ArrowRight: 1,
+              ArrowUp: -3,
+              ArrowDown: 3,
+              PageUp: -12,
+              PageDown: 12,
+            };
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+              shown.current?.focus();
+            } else if (steps[e.key] && (e.target as HTMLElement).dataset.month) {
+              e.preventDefault();
+              moveCursor(steps[e.key]!);
+            }
+          }}
+        >
+          <div className="month-year">
+            <button
+              type="button"
+              className="month-step"
+              aria-label="Əvvəlki il"
+              onClick={() => setYear(year - 1)}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <b>{year}</b>
+            <button
+              type="button"
+              className="month-step"
+              aria-label="Növbəti il"
+              onClick={() => setYear(year + 1)}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="month-grid">
+            {Array.from({ length: 12 }, (_, i) => {
+              const ym = `${year}-${String(i + 1).padStart(2, '0')}`;
+              const closed = monthClosure(ym, closedThrough);
+              const name = monthTitle(ym);
+              return (
+                <button
+                  key={ym}
+                  type="button"
+                  data-month={ym}
+                  tabIndex={ym === cursor ? 0 : -1}
+                  className={`month-cell${closed ? ' closed' : ''}${ym === value ? ' selected' : ''}`}
+                  aria-label={`${name}${closed ? `, ${closed}` : ''}`}
+                  aria-pressed={ym === value}
+                  title={closed ? `${closed[0]!.toUpperCase()}${closed.slice(1)}` : undefined}
+                  onClick={() => choose(ym)}
+                >
+                  {closed && <Lock size={12} aria-hidden="true" />}
+                  {name.split(' ')[0]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+function todayMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
