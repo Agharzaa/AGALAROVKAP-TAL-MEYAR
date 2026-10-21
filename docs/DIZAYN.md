@@ -63,7 +63,8 @@ Boşluqlar 8 / 12 / 16 px; künclər 3 px (idarəetmə), 5 px (pəncərə, panel
 
 Ekran miqyası (`src/main/fit-zoom.ts`): 1760 px-ə qədər 100 %; daha geniş pəncərə 0.05 pillə ilə böyüyür,
 ən çox 125 % (1920 → 105 %, 2560 → 125 %); 1200 px-dən dar pəncərə 90 %. İstifadəçinin Ctrl + / − miqyası
-bunun üstünə vurulur.
+bunun üstünə vurulur. Status zolağı hasili göstərir (1920 px-də seçilmiş 100 % → "105%"); ipucu iki hissəni
+ayrıca yazır, rəqəmə basmaq seçilmişi 100 %-ə qaytarır.
 
 ## 5. Dərinlik (kölgə)
 
@@ -113,4 +114,10 @@ Bunlar görünüşdən artıq funksional dəyişiklikdir, ayrıca sessiyada edil
 - ~~Qrafikə ox və ölçü xətləri~~ — Y oxu solda (rəqəmlər "−" ilə), 3–4 incə ölçü xətti (`--rule-soft`),
   sıfır xətti tünd (`--frame`); şkala 1 / 2 / 2,5 / 5 × 10ⁿ addımla, simmetrik deyil.
 
-Hələ qalan: sənəd pəncərəsi 1600 px-dən dar ekranda tam açılsın; status zolağında effektiv miqyas.
+- ~~Sənəd pəncərəsi dar ekranda tam~~ — iş sahəsi (miqyasdan sonra, CSS px) 1600 px-dən dardırsa yeni
+  qaimə, bank, kassa, əməliyyat pəncərəsi böyüdülmüş açılır (`workspace.tsx`, `NARROW`); daha geniş sahədə
+  əvvəlki kimi siyahının üstündə pəncərə. "Əvvəlki ölçü" sahəyə sığan pəncərə verir; istifadəçinin həmin
+  növ pəncərə üçün son seçimi yenə üstündür. 1366 → tam, 1920 (105 % ilə 1828 px) → pəncərə.
+- ~~Status zolağında effektiv miqyas~~ — "− +" yanında seçilmiş pillə × ekran eninə uyğunlaşma
+  (`fitZoom`): 1920 px-də 100 % seçilib → "105%", ipucunda "seçilmiş 100% × ekran eninə görə 105%".
+  Pəncərənin eni dəyişəndə rəqəm də dəyişir (`meyar:zoom` artıq `{ step, fit }` göndərir).

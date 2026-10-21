@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Outcome } from '../contracts/bridge.js';
+import type { Outcome, Zoom } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
 import { openDvxPortal } from './dvx-portal.js';
@@ -212,10 +212,13 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
   // The user's step (Ctrl + / −, shown in the status bar) times the fit to the window width.
   let zoom = ZOOMS.includes(ui.zoom ?? 1) ? (ui.zoom ?? 1) : 1;
   let fit = 1;
+  const current = (): Zoom => ({ step: zoom, fit });
   const apply = () => {
     contents.setZoomFactor(zoom * fit);
     // The caption buttons stay as tall as the zoomed 40 px title bar.
     window.setTitleBarOverlay({ height: Math.round(40 * zoom * fit) });
+    // The status bar shows the factor the page is drawn at, so it hears of the fit too.
+    contents.send('meyar:zoom', current());
   };
   const refit = () => {
     const next = fitZoom(window.getContentBounds().width);
@@ -226,7 +229,6 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
   const setZoom = (next: number) => {
     zoom = next;
     apply();
-    contents.send('meyar:zoom', zoom);
     saveUi({ zoom });
   };
   const step = (dir: 'in' | 'out' | 'reset') => {
@@ -234,7 +236,7 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     if (dir === 'reset') setZoom(1);
     else if (dir === 'in' && i < ZOOMS.length - 1) setZoom(ZOOMS[i + 1]!);
     else if (dir === 'out' && i > 0) setZoom(ZOOMS[i - 1]!);
-    return zoom;
+    return current();
   };
   contents.on('did-finish-load', () => {
     fit = fitZoom(window.getContentBounds().width);
@@ -267,7 +269,7 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     return theme;
   });
   handle('meyar:zoom', (_e, arg) =>
-    arg === 'in' || arg === 'out' || arg === 'reset' ? step(arg) : zoom,
+    arg === 'in' || arg === 'out' || arg === 'reset' ? step(arg) : current(),
   );
   const keepBounds = () =>
     saveUi({ bounds: window.getNormalBounds(), maximized: window.isMaximized() });

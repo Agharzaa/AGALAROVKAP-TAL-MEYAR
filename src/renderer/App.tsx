@@ -35,7 +35,7 @@ import {
 import type { CompanyView, IntegrityView } from '../contracts/queries';
 import { searchKey } from '../domain/values';
 import { api, applyTheme } from './api';
-import type { UpdateState } from '../contracts/bridge';
+import type { UpdateState, Zoom } from '../contracts/bridge';
 import { useCatalog } from './catalog';
 import { useMutation, useQuery } from './hooks';
 import {
@@ -482,16 +482,26 @@ function UpdateStatus() {
   );
 }
 
-/** Excel-style zoom in the status bar: − slider + and the percentage (Ctrl +/−/0, Ctrl+wheel). */
+/**
+ * Excel-style zoom in the status bar: − slider + and the percentage (Ctrl +/−/0, Ctrl+wheel).
+ * The figure is the zoom the page is drawn at — the user's step times the fit to the window
+ * width — so a full HD monitor at the 100% step reads 105%; the tooltip tells the two apart.
+ */
 const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+const percent = (factor: number) => `${Math.round(factor * 100)}%`;
 function ZoomControl() {
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState<Zoom>({ step: 1, fit: 1 });
   useEffect(() => {
     void api.zoom().then(setZoom);
     return api.onZoom(setZoom);
   }, []);
   const go = (step: 'in' | 'out' | 'reset') => void api.zoom(step).then(setZoom);
-  const index = Math.max(0, ZOOM_STEPS.indexOf(zoom));
+  const index = Math.max(0, ZOOM_STEPS.indexOf(zoom.step));
+  const shown = percent(zoom.step * zoom.fit);
+  const made =
+    zoom.fit === 1
+      ? `seçilmiş ${percent(zoom.step)}`
+      : `seçilmiş ${percent(zoom.step)} × ekran eninə görə ${percent(zoom.fit)}`;
   return (
     <span className="zoom" role="group" aria-label="Miqyas">
       <button
@@ -519,11 +529,11 @@ function ZoomControl() {
       </button>
       <button
         type="button"
-        title="100% (Ctrl 0)"
+        title={`Miqyas ${shown}: ${made}. Ctrl 0 — seçilmişi 100%-ə qaytarır`}
         className="zoom-value"
         onClick={() => go('reset')}
       >
-        {Math.round(zoom * 100)}%
+        {shown}
       </button>
     </span>
   );

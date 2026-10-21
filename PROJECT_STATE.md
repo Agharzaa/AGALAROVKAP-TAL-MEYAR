@@ -418,7 +418,15 @@ Hər qüsur üçün əvvəl uğursuz UI testi ("design §8"); versiya dəyişdir
 | İdarə paneli qrafiki: Y oxu (1 / 2 / 2,5 / 5 × 10ⁿ addım, 3–4 ölçü xətti), sıfır xətti rəqəmlərin qoyduğu yerdə (simmetrik deyil), sütunlar onun üstündə                                              | UI testi "dashboard Y scale" |
 | Ekran şəkilləri real Electron-da (açıq və tünd)                                                                                                                                                       | sessiya qeydləri             |
 
-Hələ qalan (§8): sənəd pəncərəsi 1600 px-dən dar ekranda tam açılsın; status zolağında effektiv miqyas.
+Sonra (22.10.2026) §8-in son iki maddəsi, yenə əvvəl uğursuz UI testi ilə:
+
+| Sahə                                                                                                                                                               | Sübut                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| İş sahəsi 1600 px-dən dardırsa (1366, böyük miqyas) yeni sənəd pəncərəsi böyüdülmüş açılır; geniş sahədə pəncərə. İstifadəçinin həmin növ üçün son seçimi üstündür | UI testi "narrower than 1600 px" |
+| Status zolağında effektiv miqyas: seçilmiş pillə × `fitZoom` (1920 px-də 100 % → "105%"), ipucunda hər iki hissə; `meyar:zoom` körpüsü `{ step, fit }` qaytarır    | UI testi "status bar zoom"       |
+| Ekran şəkilləri real Electron-da, 1920 × 1080 və 1366 × 768                                                                                                        | sessiya qeydləri                 |
+
+§8-də qalan iş yoxdur.
 
 ## Açıq məsələlər
 

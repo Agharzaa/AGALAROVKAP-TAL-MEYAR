@@ -1,4 +1,4 @@
-import type { MeyarBridge, Outcome, UpdateState } from '../contracts/bridge';
+import type { MeyarBridge, Outcome, UpdateState, Zoom } from '../contracts/bridge';
 import type { Command, CommandResult, ErrorPayload } from '../contracts/commands';
 import type { Query } from '../contracts/queries';
 
@@ -62,16 +62,16 @@ export const api = {
     return bridge().version();
   },
   /** Zoom of the whole page (1 = 100%); previews without the desktop bridge stay at 100%. */
-  async zoom(step?: 'in' | 'out' | 'reset'): Promise<number> {
+  async zoom(step?: 'in' | 'out' | 'reset'): Promise<Zoom> {
     const b = override ?? window.meyar;
-    return b?.zoom ? b.zoom(step) : 1;
+    return b?.zoom ? b.zoom(step) : { step: 1, fit: 1 };
   },
   /** Colour theme, kept by the desktop app; previews without the bridge stay light. */
   async theme(value?: Theme): Promise<Theme> {
     const b = override ?? window.meyar;
     return b?.theme ? b.theme(value) : 'light';
   },
-  onZoom(listener: (factor: number) => void): () => void {
+  onZoom(listener: (zoom: Zoom) => void): () => void {
     const b = override ?? window.meyar;
     return b?.onZoom ? b.onZoom(listener) : () => {};
   },

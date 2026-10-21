@@ -2125,3 +2125,98 @@ test('design §8: the dashboard chart has a Y scale — 3–4 grid lines, a zero
     h.close();
   }
 });
+
+/** jsdom has no layout: the work area reports the given size, as Electron would measure it. */
+function workArea(w: number, h: number) {
+  const proto = window.HTMLElement.prototype;
+  const original = {
+    w: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientWidth')!,
+    h: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientHeight')!,
+  };
+  const size = (el: Element, value: number, fallback: PropertyDescriptor) =>
+    el.classList.contains('workspace') ? value : (fallback.get!.call(el) as number);
+  Object.defineProperty(proto, 'clientWidth', {
+    configurable: true,
+    get(this: Element) {
+      return size(this, w, original.w);
+    },
+  });
+  Object.defineProperty(proto, 'clientHeight', {
+    configurable: true,
+    get(this: Element) {
+      return size(this, h, original.h);
+    },
+  });
+  return () => {
+    delete (proto as unknown as Record<string, unknown>).clientWidth;
+    delete (proto as unknown as Record<string, unknown>).clientHeight;
+  };
+}
+
+test('design §8: on a work area narrower than 1600 px a document opens full; on a wider one as a window', async () => {
+  for (const [width, full] of [
+    [1366, true],
+    [1599, true],
+    [1828, false],
+  ] as const) {
+    window.localStorage.removeItem('meyar.windows.v2');
+    const restore = workArea(width, 700);
+    const h = harness();
+    seed(h);
+    try {
+      const user = userEvent.setup();
+      render(<App />);
+      await screen.findByRole('navigation', { name: 'Əsas menyu' });
+      await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
+      await user.keyboard('{Control>}n{/Control}');
+      const windows = [...document.querySelectorAll<HTMLElement>('.mdi-window')];
+      assert.equal(windows.length, 2);
+      // A new invoice and a new operation: both follow the width of the work area.
+      const [invoice, operation] = windows as [HTMLElement, HTMLElement];
+      assert.equal(invoice.classList.contains('maximized'), full, `invoice, ${width} px`);
+      assert.equal(operation.classList.contains('maximized'), full, `operation, ${width} px`);
+      if (full) {
+        // "Əvvəlki ölçü" still gives a window that fits on the work area.
+        await user.click(within(invoice).getByRole('button', { name: 'Əvvəlki ölçü' }));
+        assert.ok(!invoice.classList.contains('maximized'));
+        assert.ok(
+          parseFloat(invoice.style.left) + parseFloat(invoice.style.width) <= width,
+          invoice.style.cssText,
+        );
+      }
+    } finally {
+      h.close();
+      cleanup();
+      restore();
+      window.localStorage.removeItem('meyar.windows.v2');
+    }
+  }
+});
+
+test('design §8: the status bar shows the zoom the page is drawn at — the step times the fit to the screen', async () => {
+  // A full HD monitor: the page is fitted to 105% (src/main/fit-zoom.ts).
+  const h = harness({ fit: 1.05 });
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    const value = () => document.querySelector<HTMLButtonElement>('.zoom-value')!;
+    await waitFor(() => assert.equal(value().textContent, '105%'));
+    // What makes up the figure is told, and what the button does.
+    assert.match(value().title, /seçilmiş 100%/);
+    assert.match(value().title, /ekran eninə görə 105%/);
+    assert.match(value().title, /Ctrl 0/);
+    await user.click(screen.getByRole('button', { name: 'Miqyası böyüt' }));
+    await waitFor(() => assert.equal(value().textContent, '116%'));
+    assert.match(value().title, /seçilmiş 110%/);
+    // The window is made narrower: the fit changes, the figure follows.
+    h.refit(1);
+    await waitFor(() => assert.equal(value().textContent, '110%'));
+    assert.doesNotMatch(value().title, /ekran eninə/);
+    await user.click(value());
+    await waitFor(() => assert.equal(value().textContent, '100%'));
+  } finally {
+    h.close();
+  }
+});

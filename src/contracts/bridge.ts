@@ -9,6 +9,15 @@ export interface UpdateState {
   message: string;
 }
 
+/**
+ * Page zoom: the user's step (Ctrl + / −, 80–150%) and the fit to the window width
+ * (src/main/fit-zoom.ts). The page is drawn at their product.
+ */
+export interface Zoom {
+  step: number;
+  fit: number;
+}
+
 export type Outcome<T> = { ok: true; value: T } | { ok: false; error: ErrorPayload };
 
 export interface MeyarBridge {
@@ -21,12 +30,12 @@ export interface MeyarBridge {
   saveFile(defaultName: string, bytes: Uint8Array): Promise<Outcome<string | null>>;
   /** Unsaved-change state of the window, used by the close guard. */
   setDirty(dirty: boolean): void;
-  /** Page zoom: one step in or out, back to 100%, or (no step) the current factor. */
-  zoom?(step?: 'in' | 'out' | 'reset'): Promise<number>;
+  /** Page zoom: one step in or out, back to 100%, or (no step) the current zoom. */
+  zoom?(step?: 'in' | 'out' | 'reset'): Promise<Zoom>;
   /** Colour theme: sets it when given, returns the current one (kept between sessions). */
   theme?(value?: 'light' | 'dark'): Promise<'light' | 'dark'>;
-  /** Called when the zoom changes (keyboard, mouse wheel or the status bar). */
-  onZoom?(listener: (factor: number) => void): () => void;
+  /** Called when the zoom changes (keyboard, mouse wheel, the status bar or a resized window). */
+  onZoom?(listener: (zoom: Zoom) => void): () => void;
   /** Opens the official DVX cabinet (stage 4d); its Excel exports come back via onDvxFile. */
   dvxOpen?(direction: 'sale' | 'purchase'): Promise<Outcome<null>>;
   onDvxFile?(

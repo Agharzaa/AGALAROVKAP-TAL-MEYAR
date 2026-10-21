@@ -144,6 +144,11 @@ function remember(view: View, l: WinLayout) {
   }
 }
 const CASCADE = 26;
+/**
+ * A document form is drawn for about 1180 px with the lists behind it; on a work area narrower
+ * than this (a laptop, or a large zoom) a window would cover the list anyway, so it opens full.
+ */
+const NARROW = 1600;
 
 /** Working period (month) used as the default range of reports and new documents. */
 export interface Period {
@@ -229,6 +234,8 @@ export function WorkspaceProvider({
   // layout is kept in a ref and every change builds on it.
   const mdiRef = useRef(mdi);
   const desktop = useRef({ w: 1200, h: 680 });
+  // Until the work area is measured its width is unknown, so nothing opens full because of it.
+  const measured = useRef(false);
   const anyDirty = windows.some((w) => w.dirty);
   useEffect(() => {
     try {
@@ -303,8 +310,11 @@ export function WorkspaceProvider({
       x = Math.max(0, Math.min(x, dw - w));
       y = Math.max(0, Math.min(y, dh - h));
       // Lists and reports fill the work area (like tabs); documents open as windows over them,
-      // as in 1C. What the user last chose for a kind of window wins.
-      const state: WinLayout['prev'] = (saved ? saved.max : view.type === 'page')
+      // as in 1C, unless the work area is narrow. What the user last chose for a kind of window
+      // wins.
+      const state: WinLayout['prev'] = (
+        saved ? saved.max : view.type === 'page' || (measured.current && dw < NARROW)
+      )
         ? 'maximized'
         : 'normal';
       windowsRef.current = [...windowsRef.current, { id, companyId: target, view, dirty: false }];
@@ -441,6 +451,7 @@ export function WorkspaceProvider({
     showDesktop: () => open({ type: 'page', page: 'home' }),
     setDesktop: (size) => {
       desktop.current = size;
+      measured.current = true;
     },
   };
   return (

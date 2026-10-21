@@ -18,9 +18,11 @@ contextBridge.exposeInMainWorld('meyar', {
     ),
   theme: (value?: string) =>
     ipcRenderer.invoke('meyar:theme', value === 'light' || value === 'dark' ? value : null),
-  onZoom: (listener: (factor: number) => void) => {
-    const handler = (_event: IpcRendererEvent, factor: unknown) => {
-      if (typeof factor === 'number') listener(factor);
+  onZoom: (listener: (zoom: { step: number; fit: number }) => void) => {
+    const handler = (_event: IpcRendererEvent, zoom: unknown) => {
+      const z = zoom as { step?: unknown; fit?: unknown };
+      if (typeof z?.step === 'number' && typeof z.fit === 'number')
+        listener({ step: z.step, fit: z.fit });
     };
     ipcRenderer.on('meyar:zoom', handler);
     return () => ipcRenderer.removeListener('meyar:zoom', handler);

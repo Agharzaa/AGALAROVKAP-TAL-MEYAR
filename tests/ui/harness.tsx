@@ -1,13 +1,19 @@
 import { Db } from '../../src/infrastructure/sqlite/db';
 import { Ledger } from '../../src/application/ledger';
 import { DomainError } from '../../src/domain/errors';
-import type { MeyarBridge, Outcome } from '../../src/contracts/bridge';
+import type { MeyarBridge, Outcome, Zoom } from '../../src/contracts/bridge';
 import type { CommandResult } from '../../src/contracts/commands';
 import { setBridge } from '../../src/renderer/api';
 import { resetCatalogs } from '../../src/renderer/catalog';
 
 /** In-process stand-in for the preload bridge, with the same error contract as main. */
-export function harness(options: { hold?: (command: { type: string }) => boolean } = {}) {
+export function harness(
+  options: {
+    hold?: (command: { type: string }) => boolean;
+    /** The fit to the window width the desktop app applies (src/main/fit-zoom.ts). */
+    fit?: number;
+  } = {},
+) {
   const db = new Db(':memory:');
   const ledger = new Ledger(db);
   const listeners = new Set<(companyId: string) => void>();
@@ -36,6 +42,14 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     }
   };
   let theme: 'light' | 'dark' = 'light';
+  // The desktop app's zoom: the user's step times the fit to the window width.
+  const STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+  let zoom: Zoom = { step: 1, fit: options.fit ?? 1 };
+  const zoomListeners = new Set<(zoom: Zoom) => void>();
+  const setZoom = (next: Zoom) => {
+    zoom = next;
+    for (const l of zoomListeners) l(zoom);
+  };
   const bridge: MeyarBridge = {
     async command(command) {
       const c = command as { type: string; companyId?: string };
@@ -70,6 +84,17 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
       if (value) theme = value;
       return theme;
     },
+    async zoom(step) {
+      const i = STEPS.indexOf(zoom.step);
+      if (step === 'reset') setZoom({ ...zoom, step: 1 });
+      else if (step === 'in' && i < STEPS.length - 1) setZoom({ ...zoom, step: STEPS[i + 1]! });
+      else if (step === 'out' && i > 0) setZoom({ ...zoom, step: STEPS[i - 1]! });
+      return zoom;
+    },
+    onZoom(listener) {
+      zoomListeners.add(listener);
+      return () => zoomListeners.delete(listener);
+    },
     async dvxOpen(direction) {
       dvxOpened.push(direction);
       return { ok: true, value: null };
@@ -100,6 +125,8 @@ export function harness(options: { hold?: (command: { type: string }) => boolean
     release: () => release?.(),
     dirty: () => dirty,
     theme: () => theme,
+    /** As if the window was resized and the desktop app fitted the page anew. */
+    refit: (fit: number) => setZoom({ ...zoom, fit }),
     dvxOpened,
     ambFiles,
     ambAsked,
