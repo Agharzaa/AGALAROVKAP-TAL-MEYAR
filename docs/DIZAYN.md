@@ -92,15 +92,25 @@ açıq xətdir; tünd çərçivə yalnız pəncərədə, cədvəl başlığını
 - **Ay bağlanışı:** addımlar bir vərəqin sətirləridir; vəziyyət nişandır (yaşıl — hazır, boz — yazılış
   yoxdur, qırmızı — bloklayır).
 - **İdarə paneli:** 6 plitə bir sırada, qrafik real enində çəkilir (ay adları 12 px qalır), hündürlüyü
-  ən çox 240 px.
+  ən çox 240 px; Y oxu, 3–4 ölçü xətti, sıfır xətti.
+- **Ay sahəsi:** "‹ Oktyabr 2026 ›", sistemin dilindən asılı deyil; bağlı aylar qıfıllı.
+- **Sənəd forması:** vəziyyət nişanı əmr panelində; ləğv olunmuş sənəddə qırmızı-çalar zolaq; yazılış
+  qaydası bir sətrə yığılıb.
 
 ## 8. Rəylərdən ayrıca işə qalanlar
 
-Bunlar görünüşdən artıq funksional dəyişiklikdir, ayrıca sessiyada:
+Bunlar görünüşdən artıq funksional dəyişiklikdir, ayrıca sessiyada edildi (21.10.2026, testlər "design §8"):
 
-- Ay seçicisi (`input type=month`) Windows dilində ("Ekim", "Ağustos") — Azərbaycan dilində öz seçici;
-  bağlanmış aylar işarəli.
-- Sənəd formasında vəziyyət nişanı (uçotda / qaralama / ləğv), ləğv olunmuş sənəddə zolaq; "Yazılış qaydası"
-  izahı yığılan olsun; sənəd pəncərəsi 1600 px-dən dar ekranda tam açılsın.
-- Satış siyahısında "Cəmi" / "Cəmi, AZN" sütunları və ƏDV yekunları; mənfi məbləğ həmişə "−" ilə.
-- İdarə paneli qrafikinə ox və ölçü xətləri; status zolağında effektiv miqyas.
+- ~~Ay seçicisi Windows dilində~~ — `MonthInput` (`ui.tsx`): "‹ Oktyabr 2026 ›" sahə kimi çökük qutu; ← / →
+  ay, ↓ ilin siyahısı (3 × 4, ox düymələri, PageUp / PageDown il, Esc). Bağlı aylar siyahıda qıfıl və
+  `--desk-2` fonla, sahədə qıfılla; ekran oxuyucusu üçün "dövr bağlıdır" mətni. Seçilmiş ay petrol.
+- ~~Sənəd formasında vəziyyət nişanı~~ — `ModuleFrame status`: əmr panelinin sağında ● Uçotda / ○ Qaralama
+  / ✕ Ləğv edilib (yeni sənəd qaralamadır); ləğv olunmuş sənəddə əmr panelinin altında `--bad-bg` zolağı.
+  ~~"Yazılış qaydası" yığılan~~ — `PostingRule` (`<details>`), bağlı açılır.
+- ~~Satış siyahısında yekunlar~~ — hamısı manatdırsa bir "Cəmi" sütunu; valyuta varsa "Cəmi" (valyutası
+  ilə) və "Cəmi, AZN". Yekun sətri uçotdakılar üzrə ƏDV-siz, ƏDV, cəmi — valyuta olanda manatla.
+  ~~Mənfi məbləğ "−" ilə~~ — `money()` və `qty()`.
+- ~~Qrafikə ox və ölçü xətləri~~ — Y oxu solda (rəqəmlər "−" ilə), 3–4 incə ölçü xətti (`--rule-soft`),
+  sıfır xətti tünd (`--frame`); şkala 1 / 2 / 2,5 / 5 × 10ⁿ addımla, simmetrik deyil.
+
+Hələ qalan: sənəd pəncərəsi 1600 px-dən dar ekranda tam açılsın; status zolağında effektiv miqyas.

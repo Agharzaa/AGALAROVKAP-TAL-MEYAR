@@ -405,6 +405,21 @@ Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `n
 
 Rəylərdən ayrıca işə qalanlar: `docs/DIZAYN.md` §8 (Azərbaycan dilində ay seçicisi, sənəd formasında vəziyyət nişanı, satış siyahısının yekunları, qrafikin oxu).
 
+## 0.7.1 — DIZAYN §8: rəylərdən qalan funksional işlər (21.10.2026)
+
+Hər qüsur üçün əvvəl uğursuz UI testi ("design §8"); versiya dəyişdirilməyib.
+
+| Sahə                                                                                                                                                                                                  | Sübut                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Ay seçicisi Azərbaycan dilində (`MonthInput`: ‹ Oktyabr 2026 ›, ← / → ay, ↓ ilin siyahısı, Esc); `input type=month` qalmayıb (Windows dilində "Ekim" göstərirdi). Bağlı aylar qıfıl və mətnlə işarəli | UI testi "month picker"      |
+| Qaimə, bank, kassa, əməliyyat formasında vəziyyət nişanı (● Uçotda / ○ Qaralama / ✕ Ləğv edilib); ləğv olunmuş sənəddə `--bad-bg` zolağı; "Yazılış qaydası" yığılandır                                | UI testi "document form"     |
+| Satış/alış siyahısı: hamısı manatdırsa "Cəmi, AZN" sütunu yoxdur; yekun sətri ƏDV-siz, ƏDV, cəmi (valyuta olanda manatla — `InvoiceSummary.netAzn / vatAzn`, sətirlərdən)                             | UI testi "sales list"        |
+| Mənfi miqdar da "−" ilə (`qty()`), məbləğ kimi                                                                                                                                                        | UI testi "negative amount"   |
+| İdarə paneli qrafiki: Y oxu (1 / 2 / 2,5 / 5 × 10ⁿ addım, 3–4 ölçü xətti), sıfır xətti rəqəmlərin qoyduğu yerdə (simmetrik deyil), sütunlar onun üstündə                                              | UI testi "dashboard Y scale" |
+| Ekran şəkilləri real Electron-da (açıq və tünd)                                                                                                                                                       | sessiya qeydləri             |
+
+Hələ qalan (§8): sənəd pəncərəsi 1600 px-dən dar ekranda tam açılsın; status zolağında effektiv miqyas.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
