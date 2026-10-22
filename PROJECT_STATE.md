@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 22.10.2026 (0.7.2). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 22.10.2026 (0.7.3, mərhələ 6a). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -428,6 +428,25 @@ Sonra (22.10.2026) §8-in son iki maddəsi, yenə əvvəl uğursuz UI testi ilə
 
 §8-də qalan iş yoxdur.
 
+## Mərhələ 6 — DVX e-qaimələrinin avtomatik gəlməsi
+
+Plan: `docs/MERHELE-6-DVX-AVTOMAT.md` (təsdiqlənib 22.10.2026); qərarlar `docs/QERARLAR.md` 2026-10-22. İstifadəçinin sualı ("DVX-dən e-qaiməni necə yükləyib uçota alacaq?") mərhələni seçdirdi.
+
+**Araşdırma (22.10.2026):** DVX-in rəsmi açıq API-si yoxdur (taxes.gov.az: yalnız eFP, imzalı paket, XML formatı). Portal (`new.e-taxes.gov.az/eportal`, React) e-qaimə siyahısını öz daxili sorğuları ilə alır: `POST /api/po/invoice/public/v2/invoice/find.inbox|find.outbox`, mal sətirləri `v1/…/find.inbox/byProducts`; səlahiyyət `x-authorization: Bearer <JWT>`. Kabinetin "Excel-ə ixrac" düyməsi faylı serverdə hazırladır (`…/find.<qutu>/<növ>` → fayl id → `GET /api/po/filestorage/public/v1/download/{id}?type=lk`). Əsas yol: Meyar həmin ixracı özü istəyir, `.xlsx` mövcud oxuyucudan keçir. Köhnə v1.17 API istifadə etmirdi (yalnız DOM).
+
+### 6a — sessiya və diaqnostika (22.10.2026, 0.7.3)
+
+| Sahə                                                                                                                                                                                                                                                                                       | Sübut                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Kabinet sessiyasında portalın `/api/po/…` sorğuları izlənir (`src/main/dvx-api.ts`, `webRequest`): `x-authorization` açarı yalnız yaddaşda, sorğu sətri, JSON gövdə, cavab kodu və tipi (ən çox 200). Səhifəyə skript yoxdur, sahələr oxunmur. Pəncərə bağlananda açar və qeydlər unudulur | Electron smoke (`MEYAR_SMOKE_DVX=1`): `afterClose` — "DVX ilə əlaqə yoxdur" |
+| Saf qaydalar (`src/main/dvx-api-policy.ts`): yalnız `https://new.e-taxes.gov.az/api/po/…` (oxşar adlar, http, istifadəçi:parol@, başqa yollar — yox); yolda id / VÖEN / nömrə `{id}`, sorğu dəyərləri `…`; dəyərsiz quruluş (status / növ açarlarında yalnız qısa kodlar sayı ilə)         | `tests/domain/dvx-api-policy.test.ts` (6 test, D1–D2)                       |
+| Meyar yalnız `find.inbox` / `find.outbox` (və `/byProducts`) siyahısını portalın öz filtri ilə, ən çox 10 e-qaimə, kabinetin sessiyası ilə təkrar edir; yönləndirmə qadağan, 30 s; öz işarəsi (`x-meyar-own`) serverə getmir, öz sorğuları qeydə düşmür                                    | smoke: server açarı aldı, `maxCount` 10, işarə yoxdur; hesabatda 1 sorğu    |
+| Qutuda "DVX sorğularının quruluşunu saxla" → `Sənədlər\Meyar-DVX-quruluş-<tarix>.json`; faylda açar, VÖEN, nömrə, ad, məbləğ, tarix yoxdur                                                                                                                                                 | `tests/ui` ("stage 6a"), smoke: `leaked: []`                                |
+
+Testlər Windows-da: `npm run typecheck`, `npm test` 168, `npm run test:ui` 35, `npm run test:perf` keçir. Real Electron (`MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`): ok (4d yoxlamaları da: fayl gəldi, .exe / 52 MB / kənar ünvan rədd, müvəqqəti fayl yox, 0 kuki).
+
+**Gözlənilir (istifadəçidən, QERARLAR 2026-10-22 §5):** 0.7.3-də kabinetə ASAN İmza ilə daxil olmaq → Gələnlər və Göndərilənlər siyahısını açmaq → hər birində bir dəfə "Excel-ə ixrac" → qutuda "DVX sorğularının quruluşunu saxla" → faylı göndərmək. 6b-nin ixrac sorğusu (yol, gövdənin filtrləri, tarix formatı) bu fayldan yazılacaq; ondan əvvəl təxmin edilmir.
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -441,7 +460,7 @@ Sonra (22.10.2026) §8-in son iki maddəsi, yenə əvvəl uğursuz UI testi ilə
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
-6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, layihə 22.10.2026; istifadəçi seçdi): rəsmi açıq API yoxdur; portal e-qaimə siyahısını öz daxili JSON sorğuları ilə alır (`/api/po/invoice/public/v2/invoice/find.inbox|find.outbox`, `x-authorization: Bearer`). Plan: kabinetə bir dəfə giriş → "DVX-dən yenilə" hər iki istiqaməti, mal sətirlərini və statusları özü alır, Excel yolu ehtiyatdır. 6a sessiya və oxu kanalı, 6b çevirici və idxal, 6c axın, audit. **Açıq suallar (§11) istifadəçidədir — təsdiqsiz kod yoxdur.**
+6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3). **Növbəti:** istifadəçinin diaqnostika faylı → 6b ixracın təkrarı və idxal → 6c "DVX-dən yenilə" axını (əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
 
 ## Əmrlər
 

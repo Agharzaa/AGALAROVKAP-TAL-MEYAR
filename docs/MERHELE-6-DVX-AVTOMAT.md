@@ -20,12 +20,12 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 
 **Daxil deyil:**
 
-| İş                                                                                  | Mərhələ / səbəb                                                          |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| E-qaimənin Meyar-dan DVX-ə **göndərilməsi** (yaratma, imzalama)                     | sonra; ASAN İmza ilə imza lazımdır, səhvin bədəli yüksəkdir (§11 sual 4) |
-| Girişin avtomatlaşdırılması (PIN, parol, ASAN İmza təsdiqi)                         | heç vaxt — PIN Meyar-a düşmür (mərhələ 4 §7)                             |
-| Arxa planda girişsiz yeniləmə (cədvəllə)                                            | mümkün deyil — sessiya açarı qısa ömürlüdür və diskdə saxlanmır          |
-| Kabinet səhifəsinin DOM-undan oxuma (v1.17 kimi)                                    | götürülmür (mərhələ 4 §2)                                                |
+| İş                                                                                 | Mərhələ / səbəb                                                          |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| E-qaimənin Meyar-dan DVX-ə **göndərilməsi** (yaratma, imzalama)                    | sonra; ASAN İmza ilə imza lazımdır, səhvin bədəli yüksəkdir (§11 sual 4) |
+| Girişin avtomatlaşdırılması (PIN, parol, ASAN İmza təsdiqi)                        | heç vaxt — PIN Meyar-a düşmür (mərhələ 4 §7)                             |
+| Arxa planda girişsiz yeniləmə (cədvəllə)                                           | mümkün deyil — sessiya açarı qısa ömürlüdür və diskdə saxlanmır          |
+| Kabinet səhifəsinin DOM-undan oxuma (v1.17 kimi)                                   | götürülmür (mərhələ 4 §2)                                                |
 | ƏDV bəyannaməsi, e-qaimə aktları, VHF (2020-dən əvvəlki), ƏDV depozit hesabı (VAT) | sonra                                                                    |
 
 ## 2. Araşdırma: DVX-in "API"si
@@ -34,14 +34,14 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 - **Kommersiya vasitəçiləri var** (məs. vatportal.az: "Auto-download from e-taxes", SAP / 1C ilə). Necə qoşulduqları açıqlanmayıb.
 - **Portalın öz sorğuları.** `new.e-taxes.gov.az/eportal` səhifəsi (React) e-qaimə siyahısını brauzerdən JSON sorğuları ilə alır. Sorğular hər kəsə açıq JS faylındadır (22.10.2026-da baxılıb, giriş edilmədən):
 
-| Məqsəd                    | Sorğu                                                                    |
-| ------------------------- | ------------------------------------------------------------------------ |
-| Gələnlər                  | `POST /api/po/invoice/public/v2/invoice/find.inbox`                      |
-| Göndərilənlər             | `POST /api/po/invoice/public/v2/invoice/find.outbox`                     |
-| Mal sətirləri üzrə        | `POST /api/po/invoice/public/v1/invoice/find.inbox/byProducts` (outbox)  |
-| Bir e-qaimə               | `GET /api/po/invoice/public/v2/invoice/{id}?sourceSystem=…`              |
-| Səlahiyyət                | başlıq `x-authorization: Bearer <JWT>`; JWT girişdə cavab başlığında gəlir |
-| Səhifələmə                | sorğu gövdəsində `offset`, `maxCount`; filtrlər (tarix, status) gövdədə  |
+| Məqsəd             | Sorğu                                                                      |
+| ------------------ | -------------------------------------------------------------------------- |
+| Gələnlər           | `POST /api/po/invoice/public/v2/invoice/find.inbox`                        |
+| Göndərilənlər      | `POST /api/po/invoice/public/v2/invoice/find.outbox`                       |
+| Mal sətirləri üzrə | `POST /api/po/invoice/public/v1/invoice/find.inbox/byProducts` (outbox)    |
+| Bir e-qaimə        | `GET /api/po/invoice/public/v2/invoice/{id}?sourceSystem=…`                |
+| Səlahiyyət         | başlıq `x-authorization: Bearer <JWT>`; JWT girişdə cavab başlığında gəlir |
+| Səhifələmə         | sorğu gövdəsində `offset`, `maxCount`; filtrlər (tarix, status) gövdədə    |
 
 - **Kabinetin "Excel-ə ixrac" düyməsi faylı serverdə hazırladır:** `POST /api/po/invoice/public/{v1|v2}/invoice/find.{inbox|outbox}/<hesabat növü>` (gövdə — siyahının filtrləri) → faylın id-si → `GET /api/po/filestorage/public/v1/download/{id}?type=lk` → `.xlsx`. Bu, mərhələ 4-də real fayllarla yoxlanmış ixracın eynisidir.
 
@@ -62,15 +62,15 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
   → kabinet pəncərəsi bağlananda (və ya Meyar bağlananda, 401 cavabında) açar unudulur
 ```
 
-| Qayda                                   | Necə                                                                                                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PIN / parol yenə də Meyar-a düşmür      | Səhifəyə skript, preload yoxdur; sahələr oxunmur. Yalnız portalın **özünün** göndərdiyi sorğu başlığı oxunur                                                 |
-| Açar diskdə heç vaxt olmur              | Yalnız əsas prosesin yaddaşında; renderer-ə, loqa, audit jurnalına, diaqnostika faylına düşmür (testlə yoxlanır)                                             |
-| Açar yalnız bir yerə gedir              | `https://new.e-taxes.gov.az` + siyahıdakı yollar (§2 cədvəli); başqa ünvana, yönləndirməyə (redirect) göndərilmir                                           |
-| Yalnız oxuma                            | Siyahıda yalnız `find.*` və `GET invoice/{id}`; yazma / imza / silmə sorğuları kod səviyyəsində yoxdur                                                      |
-| Bir şirkət — bir sessiya                | Açar onu alan qutuya (şirkət + pəncərə) bağlıdır; başqa şirkətin qutusu ondan istifadə etmir (mərhələ 4 auditinin 8-ci qüsuru kimi)                         |
-| VÖEN yoxlaması                          | Cavabdakı öz VÖEN (alan / satan tərəf) şirkətin VÖEN-i deyilsə — bütün yeniləmə rədd (Excel-dəki istiqamət qoruması kimi, E3)                              |
-| Yük                                     | Ardıcıl sorğular, səhifə 100 e-qaimə, sorğular arası fasilə; 429 / 5xx — dayanır, alınanlar saxlanır                                                        |
+| Qayda                              | Necə                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| PIN / parol yenə də Meyar-a düşmür | Səhifəyə skript, preload yoxdur; sahələr oxunmur. Yalnız portalın **özünün** göndərdiyi sorğu başlığı oxunur                        |
+| Açar diskdə heç vaxt olmur         | Yalnız əsas prosesin yaddaşında; renderer-ə, loqa, audit jurnalına, diaqnostika faylına düşmür (testlə yoxlanır)                    |
+| Açar yalnız bir yerə gedir         | `https://new.e-taxes.gov.az` + siyahıdakı yollar (§2 cədvəli); başqa ünvana, yönləndirməyə (redirect) göndərilmir                   |
+| Yalnız oxuma                       | Siyahıda yalnız `find.*` və `GET invoice/{id}`; yazma / imza / silmə sorğuları kod səviyyəsində yoxdur                              |
+| Bir şirkət — bir sessiya           | Açar onu alan qutuya (şirkət + pəncərə) bağlıdır; başqa şirkətin qutusu ondan istifadə etmir (mərhələ 4 auditinin 8-ci qüsuru kimi) |
+| VÖEN yoxlaması                     | Cavabdakı öz VÖEN (alan / satan tərəf) şirkətin VÖEN-i deyilsə — bütün yeniləmə rədd (Excel-dəki istiqamət qoruması kimi, E3)       |
+| Yük                                | Ardıcıl sorğular, səhifə 100 e-qaimə, sorğular arası fasilə; 429 / 5xx — dayanır, alınanlar saxlanır                                |
 
 ## 4. Məlumat axını
 
@@ -89,14 +89,14 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 
 ## 6. Səhvlər və etibarlılıq
 
-| Hal                                                       | Davranış                                                                                                                         |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| İxrac sorğusu rədd olunur və ya gələn fayl Excel deyil    | Həmin istiqamət üzrə heç nə yazılmır; mesaj: "DVX sorğusu dəyişib — Excel ixracı ilə davam edin"; diaqnostika təklifi          |
-| Bir e-qaimə oxunmur (məs. naməlum ölçü vahidi)            | Excel-dəki kimi: e-qaimə bütövlükdə yüklənmir, problem siyahısında adı ilə; digərləri gedir                                      |
-| 401 / açarın vaxtı bitib                                  | Dayanır, alınanlar saxlanır; "Kabinetə yenidən daxil olun"                                                                       |
-| Şəbəkə, 5xx, 429                                          | 3 dəfə fasilə ilə təkrar, sonra `partial`                                                                                        |
-| Yarımçıq yeniləmə                                         | Hər səhifə öz tranzaksiyasıdır; təkrar yeniləmə qalanını alır (idempotent)                                                       |
-| Cəmlərin tutuşması                                        | Hər səhifədə DVX-in göstərdiyi ümumi say ilə alınanlar tutuşdurulur; fərq — `partial` və xəbərdarlıq                             |
+| Hal                                                    | Davranış                                                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| İxrac sorğusu rədd olunur və ya gələn fayl Excel deyil | Həmin istiqamət üzrə heç nə yazılmır; mesaj: "DVX sorğusu dəyişib — Excel ixracı ilə davam edin"; diaqnostika təklifi |
+| Bir e-qaimə oxunmur (məs. naməlum ölçü vahidi)         | Excel-dəki kimi: e-qaimə bütövlükdə yüklənmir, problem siyahısında adı ilə; digərləri gedir                           |
+| 401 / açarın vaxtı bitib                               | Dayanır, alınanlar saxlanır; "Kabinetə yenidən daxil olun"                                                            |
+| Şəbəkə, 5xx, 429                                       | 3 dəfə fasilə ilə təkrar, sonra `partial`                                                                             |
+| Yarımçıq yeniləmə                                      | Hər səhifə öz tranzaksiyasıdır; təkrar yeniləmə qalanını alır (idempotent)                                            |
+| Cəmlərin tutuşması                                     | Hər səhifədə DVX-in göstərdiyi ümumi say ilə alınanlar tutuşdurulur; fərq — `partial` və xəbərdarlıq                  |
 
 ## 7. İnterfeys
 
@@ -108,32 +108,32 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 
 ## 8. Qəbul testləri
 
-| #   | Ssenari                                                                                                                                                      | Növ                                      |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| D1  | Saxta yerli server (portalın sorğularını təqlid edir): kabinet pəncərəsindən gələn `x-authorization` tutulur, yalnız siyahıdakı yollara göndərilir           | Electron smoke, `tests/domain`           |
-| D2  | Açar renderer-ə, loqa, audit jurnalına, bazaya, diaqnostika faylına düşmür (bütün çıxışlarda axtarış)                                                         | integration, smoke                       |
-| D3  | Saxta serverin ixrac sorğusu ilə verdiyi `.xlsx` (real quruluşda uydurma, `tests/domain/dvx-fixture.ts`) əl ilə yüklənən eyni faylla eyni nəticəni verir | integration                              |
-| D4  | Eyni dövr: əvvəl Excel, sonra API (və tərsinə) — 0 yeni; status dəyişən e-qaimə — tarixçədə bir qeyd                                                         | integration                              |
-| D5  | Sxem dəyişib (sahə yoxdur, tip fərqlidir) — heç nə yazılmır, mesaj; naməlum status — `unknown`, avtomatik keçmir                                            | `tests/domain`, integration              |
-| D6  | 401 ortada, 5xx, 429, şəbəkə kəsilir — alınanlar qalır, `partial`, təkrar yeniləmə qalanını alır                                                             | integration (saxta server)               |
-| D7  | Başqa şirkətin VÖEN-i cavabda — bütün yeniləmə rədd; iki şirkətin qutusu açıq — açar yalnız birinə                                                           | integration, `tests/ui`                  |
-| D8  | UI: "DVX-dən yenilə" → giriş → gedişat → yeni e-qaimələr "Təklif"də; son yeniləmə sətri; F5                                                                  | `tests/ui`                               |
-| D9  | Yük: 5 000 e-qaimə / 50 000 mal sətri saxta serverdən 50 səhifə ilə ≤ 10 s (CI 20 s)                                                                          | `npm run test:perf`                      |
-| D10 | Real giriş: istifadəçi bir dəfə ASAN İmza ilə daxil olur — diaqnostika faylı, sonra real yeniləmə Excel faylları ilə eyni say və cəmi verir                 | istifadəçi (əl ilə)                      |
+| #   | Ssenari                                                                                                                                                  | Növ                            |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| D1  | Saxta yerli server (portalın sorğularını təqlid edir): kabinet pəncərəsindən gələn `x-authorization` tutulur, yalnız siyahıdakı yollara göndərilir       | Electron smoke, `tests/domain` |
+| D2  | Açar renderer-ə, loqa, audit jurnalına, bazaya, diaqnostika faylına düşmür (bütün çıxışlarda axtarış)                                                    | integration, smoke             |
+| D3  | Saxta serverin ixrac sorğusu ilə verdiyi `.xlsx` (real quruluşda uydurma, `tests/domain/dvx-fixture.ts`) əl ilə yüklənən eyni faylla eyni nəticəni verir | integration                    |
+| D4  | Eyni dövr: əvvəl Excel, sonra API (və tərsinə) — 0 yeni; status dəyişən e-qaimə — tarixçədə bir qeyd                                                     | integration                    |
+| D5  | Sxem dəyişib (sahə yoxdur, tip fərqlidir) — heç nə yazılmır, mesaj; naməlum status — `unknown`, avtomatik keçmir                                         | `tests/domain`, integration    |
+| D6  | 401 ortada, 5xx, 429, şəbəkə kəsilir — alınanlar qalır, `partial`, təkrar yeniləmə qalanını alır                                                         | integration (saxta server)     |
+| D7  | Başqa şirkətin VÖEN-i cavabda — bütün yeniləmə rədd; iki şirkətin qutusu açıq — açar yalnız birinə                                                       | integration, `tests/ui`        |
+| D8  | UI: "DVX-dən yenilə" → giriş → gedişat → yeni e-qaimələr "Təklif"də; son yeniləmə sətri; F5                                                              | `tests/ui`                     |
+| D9  | Yük: 5 000 e-qaimə / 50 000 mal sətri saxta serverdən 50 səhifə ilə ≤ 10 s (CI 20 s)                                                                     | `npm run test:perf`            |
+| D10 | Real giriş: istifadəçi bir dəfə ASAN İmza ilə daxil olur — diaqnostika faylı, sonra real yeniləmə Excel faylları ilə eyni say və cəmi verir              | istifadəçi (əl ilə)            |
 
 ## 9. Mövcud koddan nə götürülür
 
-| Kod                                                        | Qərar                                                                                                         |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `src/main/dvx-portal.ts` (pəncərə, yaddaşdakı sessiya)     | Dəyişməz qalır; yalnız `webRequest` ilə başlığın tutulması əlavə olunur                                        |
-| `src/main/dvx-policy.ts` (ünvan siyahısı)                  | API yolları üçün ayrıca, daha dar siyahı                                                                      |
-| `src/domain/eqaime.ts` (`readEqTable`, status / növ)        | Dəyişməz: API ixracı eyni Excel faylıdır                                                                      |
-| `src/application/eqaime.ts` (idxal, bir dəfəlik açar)      | Dəyişməz; yalnız `source` sütunu                                                                              |
-| `MEYAR_SMOKE_DVX` yerli sınaq serveri                      | Portalın JSON sorğularını da təqlid edir                                                                      |
+| Kod                                                    | Qərar                                                                   |
+| ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `src/main/dvx-portal.ts` (pəncərə, yaddaşdakı sessiya) | Dəyişməz qalır; yalnız `webRequest` ilə başlığın tutulması əlavə olunur |
+| `src/main/dvx-policy.ts` (ünvan siyahısı)              | API yolları üçün ayrıca, daha dar siyahı                                |
+| `src/domain/eqaime.ts` (`readEqTable`, status / növ)   | Dəyişməz: API ixracı eyni Excel faylıdır                                |
+| `src/application/eqaime.ts` (idxal, bir dəfəlik açar)  | Dəyişməz; yalnız `source` sütunu                                        |
+| `MEYAR_SMOKE_DVX` yerli sınaq serveri                  | Portalın JSON sorğularını da təqlid edir                                |
 
 ## 10. İcra ardıcıllığı
 
-1. **6a — sessiya və diaqnostika.** Kabinet sessiyasında portalın API sorğularının qeydi (yaddaşda): açar, yol, gövdənin quruluşu, cavab kodu. Saf qaydalar (`src/main/dvx-api-policy.ts`: API ünvanı, açarın başlıqdan alınması, yolun maskalanması, dəyərsiz quruluş). Yalnız `find.*` siyahısını təkrar edən oxu müştərisi (`src/main/dvx-api.ts`, kabinetin öz sessiyası ilə). Diaqnostika faylı. Saxta serverlə D1, D2. **Bitəndə:** istifadəçi real girişlə (siyahını açıb bir dəfə "Excel-ə ixrac" basaraq) diaqnostika faylını göndərir — D10-un birinci yarısı.
+1. **6a — sessiya və diaqnostika.** ✅ Hazır (22.10.2026, 0.7.3; istifadəçinin real diaqnostika faylı gözlənilir). Kabinet sessiyasında portalın API sorğularının qeydi (yaddaşda): açar, yol, gövdənin quruluşu, cavab kodu. Saf qaydalar (`src/main/dvx-api-policy.ts`: API ünvanı, açarın başlıqdan alınması, yolun maskalanması, dəyərsiz quruluş). Yalnız `find.*` siyahısını təkrar edən oxu müştərisi (`src/main/dvx-api.ts`, kabinetin öz sessiyası ilə). Diaqnostika faylı. Saxta serverlə D1, D2. **Bitəndə:** istifadəçi real girişlə (siyahını açıb bir dəfə "Excel-ə ixrac" basaraq) diaqnostika faylını göndərir — D10-un birinci yarısı.
 2. **6b — ixracın təkrarı və idxal.** Real quruluş əsasında ixrac sorğusu (dövr, istiqamət, hesabat növü), `.xlsx` → `readEqTable`, sxem v14 (`eq_imports.source`, `dvx_syncs`), xəta / təkrar / 401. D3 (API ixracı = əl ilə ixrac), D4, D5, D6, D7.
 3. **6c — "DVX-dən yenilə" axını.** Qutuda düymə, gedişat, ləğv, son yeniləmə, İş masası xəbərdarlığı, yeniləmədən sonra avtomatik uyğunluqlar. D8, D9.
 4. **Müstəqil audit** (kodu yazmayan sessiya), D10 — istifadəçi ilə real yeniləmə.

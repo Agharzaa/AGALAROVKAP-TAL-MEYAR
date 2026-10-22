@@ -117,6 +117,12 @@ export const api = {
     const b = override ?? window.meyar;
     return b?.onDvxFile ? b.onDvxFile(listener) : () => {};
   },
+  /** Stage 6a: the shape of the cabinet's API requests, saved for the developers. */
+  async dvxDiagnose(): Promise<{ file: string; requests: number; replayed: number }> {
+    const b = bridge();
+    if (!b.dvxDiagnose) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
+    return unwrap(await b.dvxDiagnose());
+  },
   onDvxRefused(listener: (message: string) => void): () => void {
     const b = override ?? window.meyar;
     return b?.onDvxRefused ? b.onDvxRefused(listener) : () => {};

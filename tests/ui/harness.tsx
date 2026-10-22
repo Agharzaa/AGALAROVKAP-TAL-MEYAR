@@ -23,6 +23,12 @@ export function harness(
   let dirty = false;
   // The DVX cabinet window: what the app asked to open, and a way to hand back an export.
   const dvxOpened: string[] = [];
+  // Stage 6a diagnostics: what the main process answers (a file, or not signed in).
+  const dvxDiagnoses: number[] = [];
+  let dvxDiagnosis: Outcome<{ file: string; requests: number; replayed: number }> = {
+    ok: false,
+    error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
+  };
   // cbar.az: the AMB files a test hands out, by ISO date; asked dates are recorded.
   const ambFiles = new Map<string, string>();
   const ambAsked: string[] = [];
@@ -99,6 +105,10 @@ export function harness(
       dvxOpened.push(direction);
       return { ok: true, value: null };
     },
+    async dvxDiagnose() {
+      dvxDiagnoses.push(1);
+      return dvxDiagnosis;
+    },
     onDvxFile(listener) {
       dvxListeners.add(listener);
       return () => dvxListeners.delete(listener);
@@ -128,6 +138,11 @@ export function harness(
     /** As if the window was resized and the desktop app fitted the page anew. */
     refit: (fit: number) => setZoom({ ...zoom, fit }),
     dvxOpened,
+    dvxDiagnoses,
+    /** What the next diagnostics request answers. */
+    setDvxDiagnosis(answer: typeof dvxDiagnosis) {
+      dvxDiagnosis = answer;
+    },
     ambFiles,
     ambAsked,
     /** As if the user exported e-qaimələr in the cabinet window. */

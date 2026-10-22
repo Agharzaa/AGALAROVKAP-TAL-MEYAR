@@ -41,6 +41,11 @@ export interface MeyarBridge {
   onDvxFile?(
     listener: (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void,
   ): () => void;
+  /**
+   * Stage 6a: saves the shape (no values) of the cabinet's API requests to the Documents folder;
+   * fails when nobody is signed in to the cabinet.
+   */
+  dvxDiagnose?(): Promise<Outcome<{ file: string; requests: number; replayed: number }>>;
   /** A download or address the cabinet window refused. */
   onDvxRefused?(listener: (message: string) => void): () => void;
   /** One day's AMB rates file from cbar.az (desktop app only); null when there is none. */

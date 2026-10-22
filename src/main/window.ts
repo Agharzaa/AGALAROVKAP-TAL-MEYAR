@@ -1,4 +1,12 @@
-import { BrowserWindow, dialog, ipcMain, screen, shell, type IpcMainInvokeEvent } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  screen,
+  shell,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -8,7 +16,7 @@ import path from 'node:path';
 import type { Outcome, Zoom } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
-import { openDvxPortal } from './dvx-portal.js';
+import { dvxDiagnose, openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
 import { fitZoom } from './fit-zoom.js';
 
@@ -186,6 +194,18 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
       onRefused: (message) => !window.isDestroyed() && contents.send('meyar:dvx-refused', message),
     });
     return { ok: true, value: null } satisfies Outcome<null>;
+  });
+  // Stage 6a: the shape of the cabinet's API requests, to the user's Documents folder.
+  handle('meyar:dvx-diagnose', async () => {
+    try {
+      const value = await dvxDiagnose(app.getPath('documents'), app.getVersion());
+      return { ok: true, value } satisfies Outcome<typeof value>;
+    } catch (error) {
+      return {
+        ok: false,
+        error: { message: (error as Error).message, code: 'dvx' },
+      } satisfies Outcome<never>;
+    }
   });
   // AMB rates (stage 5b): one day's file from cbar.az, read by the renderer.
   handle('meyar:amb-fetch', (_e, arg) => fetchAmb(arg));

@@ -9,13 +9,25 @@
  * exports e-qaimələr to Excel with the cabinet's own button, the file is handed to the e-qaimə
  * box for the usual preview; it passes through a temporary file that is deleted at once
  * (Electron has no in-memory download).
+ *
+ * Stage 6a: the cabinet's own API requests are watched in this session (src/main/dvx-api.ts); the
+ * diagnostics file (docs/MERHELE-6-DVX-AVTOMAT.md §7) holds their shape, never a value.
  */
 import { BrowserWindow, session as sessions, type BrowserWindow as Win } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { allowedUrl, MAX_DOWNLOAD, refuseDownload, startUrl } from './dvx-policy.js';
+import { OWN_REQUEST, recordDvxApi, type DvxRecorder } from './dvx-api.js';
+import {
+  apiUrl,
+  diagnosticReport,
+  maskPath,
+  replayable,
+  replayBody,
+  type Replay,
+} from './dvx-api-policy.js';
 
 export type DvxDirection = 'sale' | 'purchase';
 export interface DvxFile {
@@ -30,7 +42,8 @@ export interface DvxEvents {
   onRefused: (message: string) => void;
 }
 
-let current: { window: Win; direction: DvxDirection; ses: Electron.Session } | undefined;
+let current:
+  { window: Win; direction: DvxDirection; ses: Electron.Session; api: DvxRecorder } | undefined;
 /** Set only by the smoke test in the main process (never over IPC); loopback origins only. */
 let testOrigin = '';
 export function setDvxTestOrigin(origin: string) {
@@ -63,7 +76,8 @@ export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxE
     },
   });
   window.removeMenu();
-  const state = { window, direction, ses };
+  const api = recordDvxApi(ses, () => testOrigin);
+  const state = { window, direction, ses, api };
   current = state;
   const contents = window.webContents;
   const allowed = (url: string) => allowedUrl(url, testOrigin);
@@ -124,6 +138,7 @@ export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxE
 
   window.on('closed', () => {
     if (current === state) current = undefined;
+    api.forget();
     // Sign-out: cookies, storage and cache of the cabinet are gone with the window.
     void ses.clearStorageData();
     void ses.clearCache();
@@ -144,4 +159,64 @@ export async function closeDvxPortal(): Promise<number | null> {
   await done;
   await state.ses.clearStorageData();
   return (await state.ses.cookies.get({})).length;
+}
+
+const NOT_SIGNED_IN =
+  'DVX ilə əlaqə yoxdur. Əvvəlcə "DVX kabinetini aç" ilə daxil olun və e-qaimələr siyahısını (Gələnlər / Göndərilənlər) açın.';
+
+/**
+ * Stage 6a diagnostics: the shape of the cabinet's API requests seen so far, and of one small page
+ * of each e-qaimə list the portal asked for, repeated by Meyar with the portal's own filter. Written
+ * to `dir`; the file holds no value and no key (dvx-api-policy.ts).
+ */
+export async function dvxDiagnose(
+  dir: string,
+  version: string,
+  now = new Date(),
+): Promise<{ file: string; requests: number; replayed: number }> {
+  const state = current;
+  const token = state && !state.window.isDestroyed() ? state.api.token() : '';
+  if (!state || !token) throw new Error(NOT_SIGNED_IN);
+  const seen = state.api.seen();
+  // The last filter the portal sent for each list.
+  const lists = new Map<string, { url: string; body: Record<string, unknown> }>();
+  for (const r of seen) {
+    const listPath = maskPath(r.url).split('?')[0]!;
+    const body = replayBody(r.body);
+    if (replayable(r.method, listPath) && body && apiUrl(r.url, testOrigin))
+      lists.set(listPath, { url: r.url, body });
+  }
+  const replays: Replay[] = [];
+  for (const [listPath, { url, body }] of lists) {
+    try {
+      const res = await state.ses.fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-authorization': `Bearer ${token}`,
+          [OWN_REQUEST]: '1',
+        },
+        body: JSON.stringify(body),
+        redirect: 'error',
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (res.status === 401) {
+        replays.push({ path: listPath, status: 401, error: 'Sessiyanın vaxtı bitib' });
+        continue;
+      }
+      const json = /json/i.test(res.headers.get('content-type') ?? '');
+      replays.push(
+        json
+          ? { path: listPath, status: res.status, response: await res.json() }
+          : { path: listPath, status: res.status, error: 'Cavab JSON deyil' },
+      );
+    } catch (error) {
+      replays.push({ path: listPath, error: (error as Error).name || 'Sorğu alınmadı' });
+    }
+  }
+  const report = diagnosticReport(seen, replays, version, now);
+  const stamp = now.toISOString().slice(0, 16).replace('T', '-').replace(':', '');
+  const file = path.join(dir, `Meyar-DVX-quruluş-${stamp}.json`);
+  await writeFile(file, JSON.stringify(report, null, 2), 'utf8');
+  return { file, requests: report.requests.length, replayed: replays.length };
 }

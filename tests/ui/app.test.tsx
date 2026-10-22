@@ -2220,3 +2220,33 @@ test('design §8: the status bar shows the zoom the page is drawn at — the ste
     h.close();
   }
 });
+
+test('stage 6a: the box saves the shape of the DVX requests; without a sign-in it says what to do', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    const save = await page.findByRole('button', { name: 'DVX sorğularının quruluşunu saxla' });
+    await user.click(save);
+    await page.findByText('DVX ilə əlaqə yoxdur.');
+    h.setDvxDiagnosis({
+      ok: true,
+      value: {
+        file: 'C:\Users\m\Documents\Meyar-DVX-quruluş-2026-10-22-1200.json',
+        requests: 7,
+        replayed: 2,
+      },
+    });
+    await user.click(save);
+    await page.findByText(/Meyar-DVX-quruluş-2026-10-22-1200\.json/);
+    await page.findByText(/7 sorğu, 2 siyahı/);
+    assert.equal(h.dvxDiagnoses.length, 2);
+  } finally {
+    h.close();
+  }
+});

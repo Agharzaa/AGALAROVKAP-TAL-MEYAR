@@ -156,6 +156,20 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
+  // Stage 6a: the shape of the cabinet's API requests, for the automatic update (§7).
+  async function diagnose() {
+    setReadError('');
+    try {
+      const r = await api.dvxDiagnose();
+      setMessage(
+        `DVX sorğularının quruluşu saxlandı: ${r.file} (${r.requests} sorğu, ${r.replayed} siyahı). ` +
+          'Faylda nömrə, VÖEN, ad, məbləğ və sessiya açarı yoxdur — onu Meyar-ın tərtibatçısına göndərin.',
+      );
+    } catch (e) {
+      setReadError((e as Error).message);
+    }
+  }
+
   async function load() {
     if (!preview?.read.report) return;
     const r = await m.run({
@@ -528,6 +542,11 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           {api.hasDvx && (
             <button type="button" className="button secondary" onClick={() => void openCabinet()}>
               DVX kabinetini aç
+            </button>
+          )}
+          {api.hasDvx && (
+            <button type="button" className="button secondary" onClick={() => void diagnose()}>
+              DVX sorğularının quruluşunu saxla
             </button>
           )}
         </>

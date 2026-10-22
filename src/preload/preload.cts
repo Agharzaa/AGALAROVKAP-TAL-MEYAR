@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('meyar', {
     ipcRenderer.on('meyar:dvx-file', handler);
     return () => ipcRenderer.removeListener('meyar:dvx-file', handler);
   },
+  dvxDiagnose: () => ipcRenderer.invoke('meyar:dvx-diagnose'),
   onDvxRefused: (listener: (message: string) => void) => {
     const handler = (_event: IpcRendererEvent, message: unknown) => {
       if (typeof message === 'string') listener(message);
