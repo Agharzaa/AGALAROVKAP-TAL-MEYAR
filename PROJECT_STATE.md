@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 21.10.2026 (0.7.1). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 22.10.2026 (0.7.2). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -405,7 +405,7 @@ Testlər Windows-da (qərarlar tətbiq olunandan sonra): `npm run typecheck`, `n
 
 Rəylərdən ayrıca işə qalanlar: `docs/DIZAYN.md` §8 (Azərbaycan dilində ay seçicisi, sənəd formasında vəziyyət nişanı, satış siyahısının yekunları, qrafikin oxu).
 
-## 0.7.1 — DIZAYN §8: rəylərdən qalan funksional işlər (21.10.2026)
+## 0.7.2 — DIZAYN §8: rəylərdən qalan funksional işlər (21–22.10.2026)
 
 Hər qüsur üçün əvvəl uğursuz UI testi ("design §8"); versiya dəyişdirilməyib.
 
