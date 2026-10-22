@@ -33,6 +33,12 @@ export function harness(
   const ambFiles = new Map<string, string>();
   const ambAsked: string[] = [];
   let dvxConnected = false;
+  // Stage 6b: what the cabinet's Excel export answers, and what was asked.
+  const dvxExports: { direction: string; from: string; to: string }[] = [];
+  let dvxExportFile: Outcome<{ name: string; bytes: Uint8Array }> = {
+    ok: false,
+    error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
+  };
   const dvxStateListeners = new Set<(state: { connected: boolean }) => void>();
   const dvxListeners = new Set<
     (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void
@@ -111,6 +117,10 @@ export function harness(
       dvxDiagnoses.push(1);
       return dvxDiagnosis;
     },
+    async dvxExport(direction, from, to) {
+      dvxExports.push({ direction, from, to });
+      return dvxExportFile;
+    },
     async dvxConnected() {
       return { ok: true, value: dvxConnected };
     },
@@ -148,6 +158,11 @@ export function harness(
     refit: (fit: number) => setZoom({ ...zoom, fit }),
     dvxOpened,
     dvxDiagnoses,
+    dvxExports,
+    /** What the next export answers. */
+    setDvxExport(answer: typeof dvxExportFile) {
+      dvxExportFile = answer;
+    },
     /** As if the user signed in to (or closed) the cabinet window. */
     dvxState(state: { connected: boolean }) {
       dvxConnected = state.connected;

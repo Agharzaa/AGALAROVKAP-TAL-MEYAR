@@ -15,7 +15,7 @@
  */
 import { BrowserWindow, session as sessions, type BrowserWindow as Win } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { allowedUrl, MAX_DOWNLOAD, refuseDownload, startUrl } from './dvx-policy.js';
@@ -24,6 +24,11 @@ import {
   apiUrl,
   diagnosticReport,
   maskPath,
+  downloadPath,
+  DVX_API_HOST,
+  exportRequest,
+  fileIdOf,
+  isXlsx,
   replayable,
   replayBody,
   type Replay,
@@ -186,6 +191,8 @@ export async function dvxDiagnose(
   dir: string,
   version: string,
   now = new Date(),
+  /** What went wrong in an automatic update (stage 6b), written with the rest. */
+  extra: Replay[] = [],
 ): Promise<{ file: string; requests: number; replayed: number }> {
   const state = current;
   const token = state && !state.window.isDestroyed() ? state.api.token() : '';
@@ -199,7 +206,7 @@ export async function dvxDiagnose(
     if (replayable(r.method, listPath) && body && apiUrl(r.url, testOrigin))
       lists.set(listPath, { url: r.url, body });
   }
-  const replays: Replay[] = [];
+  const replays: Replay[] = [...extra];
   for (const [listPath, { url, body }] of lists) {
     try {
       const res = await state.ses.fetch(url, {
@@ -232,6 +239,123 @@ export async function dvxDiagnose(
   const file = path.join(dir, `Meyar-DVX-quruluş-${stamp}.json`);
   await writeFile(file, JSON.stringify(report, null, 2), 'utf8');
   return { file, requests: report.requests.length, replayed: replays.length };
+}
+
+class ExportError extends Error {
+  constructor(
+    message: string,
+    readonly step: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Stage 6b: the cabinet's own Excel export of one box (purchase: Gələnlər, sale: Göndərilənlər)
+ * for a period, asked by Meyar with the portal's session key through the cabinet's session —
+ * the same file the user downloads with "Exceli endir → Qaimələr üzrə", read by the same reader.
+ * When DVX answers something else, the diagnostics (no values) are written to `diagDir` by
+ * themselves, so the cause can be read without asking the user.
+ */
+export async function dvxExport(
+  direction: DvxDirection,
+  from: string,
+  to: string,
+  diagDir: string,
+  version: string,
+): Promise<{ name: string; bytes: Uint8Array }> {
+  const state = current;
+  const token = state && !state.window.isDestroyed() ? state.api.token() : '';
+  if (!state || !token)
+    throw new Error(
+      'DVX ilə əlaqə yoxdur: "DVX kabinetini aç" ilə daxil olun və yenidən yoxlayın.',
+    );
+  const origin = testOrigin || `https://${DVX_API_HOST}`;
+  const request = exportRequest(direction, from, to);
+  const ask = (url: string, init: { method: string; body?: string }) =>
+    state.ses.fetch(url, {
+      ...init,
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        ...(init.body ? { 'content-type': 'application/json' } : {}),
+        'x-authorization': `Bearer ${token}`,
+        [OWN_REQUEST]: '1',
+      },
+      redirect: 'error',
+      signal: AbortSignal.timeout(120_000),
+    });
+  const refused = (step: string, status: number) =>
+    status === 401 || status === 403
+      ? new ExportError(
+          'DVX sessiyasının vaxtı bitib: kabinetə yenidən daxil olun və yenidən yoxlayın.',
+          step,
+          status,
+        )
+      : new ExportError(
+          `DVX ixracı alınmadı (cavab ${status}). Hələlik kabinetdə "Exceli endir" ilə davam edin.`,
+          step,
+          status,
+        );
+  try {
+    const res = await ask(origin + request.path, {
+      method: 'POST',
+      body: JSON.stringify(request.body),
+    });
+    if (!res.ok) throw refused('export', res.status);
+    const type = res.headers.get('content-type') ?? '';
+    let bytes: Uint8Array;
+    if (/json|text/i.test(type)) {
+      const text = await res.text();
+      let answer: unknown = text;
+      try {
+        answer = JSON.parse(text);
+      } catch {
+        // A plain-text id.
+      }
+      const id = fileIdOf(answer);
+      if (!id)
+        throw new ExportError(
+          'DVX ixracı gözlənilməyən cavab verdi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
+          'export-answer',
+          res.status,
+        );
+      const file = await ask(origin + downloadPath(id), { method: 'GET' });
+      if (!file.ok) throw refused('download', file.status);
+      bytes = new Uint8Array(await file.arrayBuffer());
+    } else {
+      // The file itself, without an id.
+      bytes = new Uint8Array(await res.arrayBuffer());
+    }
+    if (bytes.length > MAX_DOWNLOAD)
+      throw new ExportError('DVX faylı 50 MB-dan böyükdür.', 'download-size');
+    if (!isXlsx(bytes))
+      throw new ExportError(
+        'DVX-dən Excel faylı gəlmədi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
+        'download-type',
+      );
+    const box = direction === 'purchase' ? 'Gelenler' : 'Gonderilenler';
+    return { name: `DVX-${box}-${from}_${to}.xlsx`, bytes };
+  } catch (error) {
+    const e =
+      error instanceof ExportError
+        ? error
+        : new ExportError(`DVX ilə əlaqə alınmadı: ${(error as Error).message}`, 'network');
+    // The cause, for the developers, without values (Meyar's data folder).
+    try {
+      await mkdir(diagDir, { recursive: true });
+      await dvxDiagnose(diagDir, version, new Date(), [
+        {
+          path: `${request.path} → ${e.step}`,
+          ...(e.status ? { status: e.status } : {}),
+          error: e.message,
+        },
+      ]);
+    } catch {
+      // The update failed already; the diagnostics are a help only.
+    }
+    throw e;
+  }
 }
 
 /** Signed in to the cabinet now: its window is open and the portal's session key was seen. */

@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 22.10.2026 (0.7.4, mərhələ 6a). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 22.10.2026 (0.7.5, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -456,6 +456,18 @@ Testlər: `npm test` 168, `npm run test:ui` 36, `npm run test:perf`, Electron sm
 
 **Gözlənilir (istifadəçidən, QERARLAR 2026-10-22 §5):** 0.7.3-də kabinetə ASAN İmza ilə daxil olmaq → Gələnlər və Göndərilənlər siyahısını açmaq → hər birində bir dəfə "Excel-ə ixrac" → qutuda "DVX sorğularının quruluşunu saxla" → faylı göndərmək. 6b-nin ixrac sorğusu (yol, gövdənin filtrləri, tarix formatı) bu fayldan yazılacaq; ondan əvvəl təxmin edilmir.
 
+### 6b — "DVX-dən yenilə" (22.10.2026, 0.7.5)
+
+İstifadəçi diaqnostika faylını göndərmədən işləməyi istədi ("özün et"); ixrac sorğusu portalın açıq kodundan götürüldü (QERARLAR 2026-10-22 §8–§9).
+
+| Sahə                                                                                                                                                                                                                                                                                                                     | Sübut                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Qutuda "DVX-dən yenilə" (əsas düymə): açıq dövr (bağlı dövrdən sonrakı gün, yoxdursa 1 yanvar → bu gün), qutunun istiqaməti (Alış → Gələnlər, Satış → Göndərilənlər); daxil olunmayıbsa kabinet açılır, girişdən sonra özü başlayır; sonra adi idxal (bir dəfəlik açar, statuslar, avtomatik uyğunluqlar)                | `tests/ui` ("stage 6b": giriş → avtomatik → yeni 1; təkrar → yeni 0; rədd mesajı) |
+| Əsas proses (`dvxExport`): `POST …/invoice/find.<inbox/outbox>/excel` portalın filtri ilə (bütün statuslar, növlər, "GG-AA-İİİİ SS:dd"), id → `GET /api/po/filestorage/public/v1/download/{id}?type=lk`; kabinetin sessiyası və açarı ilə, yönləndirmə yox, 120 s; yalnız `.xlsx` (PK), 50 MB-a qədər; id yalnız `[\w-]` | `tests/domain/dvx-export.test.ts` (4), Electron smoke                             |
+| 401/403 — "sessiyanın vaxtı bitib"; başqa cavab — "ixrac alınmadı (cavab N)", Excel yolu təklif olunur; hər uğursuzluqda diaqnostika (dəyərsiz) `userData/dvx-diagnostics`-ə özü yazılır                                                                                                                                 | smoke: 500 → mesaj, 1 diaqnostika faylı, sızma yoxdur                             |
+
+Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron smoke — keçir. **Real DVX ilə yoxlanmayıb:** sorğu portalın kodundan oxunub; ilk real yeniləmə uğursuz olsa, səbəb `%APPDATA%\Meyar\dvx-diagnostics`-dədir (məlumat qovluğu).
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -469,7 +481,7 @@ Testlər: `npm test` 168, `npm run test:ui` 36, `npm run test:perf`, Electron sm
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
-6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4). **Növbəti:** istifadəçinin diaqnostika faylı → 6b ixracın təkrarı və idxal → 6c "DVX-dən yenilə" axını (əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
+6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5; real DVX ilə yoxlanmayıb). **Növbəti:** ilk real "DVX-dən yenilə" (uğursuz olsa — `dvx-diagnostics`) → 6c (son yeniləmə vaxtı, "yenilənməyib" xəbərdarlığı, hər iki istiqamət birdən, "Mallar üzrə"; əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
 
 ## Əmrlər
 

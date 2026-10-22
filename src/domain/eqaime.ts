@@ -486,3 +486,15 @@ export function minorOf(text: string): Minor {
   const v = BigInt(w!) * 100n + BigInt((f + '00').slice(0, 2));
   return negative ? -v : v;
 }
+
+/**
+ * The open period of "DVX-dən yenilə" (stage 6b; QERARLAR 2026-10-22 §3): from the day after the
+ * closed period (or 1 January of this year) to today; ISO days.
+ */
+export function openPeriod(closedThrough: string, today: string): { from: string; to: string } {
+  if (!closedThrough) return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  const d = new Date(`${closedThrough}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  const next = d.toISOString().slice(0, 10);
+  return { from: next < today ? next : today, to: today };
+}

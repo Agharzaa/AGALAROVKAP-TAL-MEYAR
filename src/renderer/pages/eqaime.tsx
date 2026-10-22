@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload } from '../icons';
-import { readEqTable, type EqReadResult } from '../../domain/eqaime';
+import { openPeriod, readEqTable, type EqReadResult } from '../../domain/eqaime';
+import type { CommandResult } from '../../contracts/commands';
 import type {
   EqReconcileView,
   InvoiceDetail,
@@ -58,6 +59,22 @@ interface Preview {
 
 /** The box (window) that last opened the DVX cabinet: the cabinet's exports go there only. */
 let cabinetBox = '';
+
+/** What an e-qaimə import did, in one sentence. */
+function importSummary(r: CommandResult): string {
+  return (
+    `yeni ${r.added ?? 0} e-qaimə` +
+    (r.updated ? `, ${r.updated} e-qaimənin DVX statusu və ya sətirləri yeniləndi` : '') +
+    (r.same ? `, ${r.same} dəyişməyib (təkrar yaradılmadı)` : '') +
+    (r.conflicts ? `, ${r.conflicts} ziddiyyət (bax “Ziddiyyət”)` : '') +
+    (r.rejected?.length ? `, ${r.rejected.length} sətir qəbul olunmadı` : '') +
+    (r.posted
+      ? `. ${r.posted} e-qaimə təsdiqlənmiş uyğunluqlarla avtomatik uçota alındı və ya əl ilə yazılmış qaiməyə bağlandı`
+      : '. Heç nə avtomatik uçota alınmayıb') +
+    (r.failed?.length ? `; ${r.failed.length} alınmadı (səbəb sətirdə)` : '') +
+    '.'
+  );
+}
 
 async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice());
@@ -185,6 +202,71 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
+  // Stage 6b: "DVX-dən yenilə" — the cabinet's own Excel export of this box for the open period,
+  // asked by Meyar and loaded as from a file (QERARLAR 2026-10-22). Not signed in: the cabinet
+  // opens and the update starts by itself once the sign-in is seen.
+  const [syncing, setSyncing] = useState(false);
+  const [syncAfterSignIn, setSyncAfterSignIn] = useState(false);
+  async function sync() {
+    setReadError('');
+    setMessage('');
+    m.clear();
+    if (!connected) {
+      cabinetBox = win.id;
+      try {
+        await api.dvxOpen(direction);
+        setSyncAfterSignIn(true);
+        setMessage(
+          'DVX kabineti açıldı. Daxil olun (ASAN İmza, SİMA və ya PIN) — girişdən sonra yeniləmə özü başlayacaq.',
+        );
+      } catch (e) {
+        setReadError((e as Error).message);
+      }
+      return;
+    }
+    setSyncing(true);
+    try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const { from, to } = openPeriod(company?.closedThrough ?? '', today);
+      const f = await api.dvxExport(direction, from, to);
+      const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
+      const period = `${day(from)}–${day(to)}`;
+      if (!read.report || !read.documents.length) {
+        if (read.problems.length) setReadError(read.problems[0]!.message);
+        else setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
+        return;
+      }
+      const r = await m.run({
+        type: 'eqaime.import',
+        companyId: win.companyId,
+        direction,
+        ...(read.directionHint ? { fileDirection: read.directionHint } : {}),
+        ...(read.ownerTaxId ? { fileOwnerTaxId: read.ownerTaxId } : {}),
+        // The box was chosen by Meyar itself: Gələnlər for purchases, Göndərilənlər for sales.
+        directionConfirmed: true,
+        report: read.report,
+        source: 'portal',
+        fileName: f.name,
+        fileHash: await sha256(f.bytes),
+        documents: read.documents,
+      });
+      if (!r) return;
+      setMessage(`DVX-dən yeniləndi (${period}): ${importSummary(r)}`);
+      imports.reload();
+    } catch (e) {
+      setReadError(e instanceof SheetError ? e.message : (e as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+  useEffect(() => {
+    if (syncAfterSignIn && connected) {
+      setSyncAfterSignIn(false);
+      void sync();
+    }
+  }, [syncAfterSignIn, connected]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function load() {
     if (!preview?.read.report) return;
     const r = await m.run({
@@ -202,18 +284,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     });
     if (!r) return;
     setPreview(null);
-    setMessage(
-      `Yükləndi: yeni ${r.added ?? 0} e-qaimə` +
-        (r.updated ? `, ${r.updated} e-qaimənin DVX statusu və ya sətirləri yeniləndi` : '') +
-        (r.same ? `, ${r.same} dəyişməyib (təkrar yaradılmadı)` : '') +
-        (r.conflicts ? `, ${r.conflicts} ziddiyyət (bax “Ziddiyyət”)` : '') +
-        (r.rejected?.length ? `, ${r.rejected.length} sətir qəbul olunmadı` : '') +
-        (r.posted
-          ? `. ${r.posted} e-qaimə təsdiqlənmiş uyğunluqlarla avtomatik uçota alındı və ya əl ilə yazılmış qaiməyə bağlandı`
-          : '. Heç nə avtomatik uçota alınmayıb') +
-        (r.failed?.length ? `; ${r.failed.length} alınmadı (səbəb sətirdə)` : '') +
-        '.',
-    );
+    setMessage(`Yükləndi: ${importSummary(r)}`);
     imports.reload();
   }
 
@@ -551,7 +622,22 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               if (f) void choose(f);
             }}
           />
-          <button type="button" className="button primary" onClick={() => file.current?.click()}>
+          {api.hasDvx && (
+            <button
+              type="button"
+              className="button primary"
+              disabled={syncing || m.busy}
+              title="DVX-dən açıq dövrün e-qaimələrini özü alır və yükləyir (kabinetə giriş lazımdır)"
+              onClick={() => void sync()}
+            >
+              {syncing ? 'DVX-dən alınır…' : 'DVX-dən yenilə'}
+            </button>
+          )}
+          <button
+            type="button"
+            className={api.hasDvx ? 'button secondary' : 'button primary'}
+            onClick={() => file.current?.click()}
+          >
             <Upload size={15} /> DVX faylını yüklə
           </button>
           {api.hasDvx && (

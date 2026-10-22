@@ -2271,3 +2271,55 @@ test('stage 6a: the box shows whether the DVX cabinet is signed in', async () =>
     h.close();
   }
 });
+
+test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by itself, once', async () => {
+  const h = harness();
+  seed(h);
+  const csv = [
+    'Daxil olan qaimələrin siyahısı',
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;118,00;100,00;Təsdiqləndi',
+  ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    // Not signed in: the cabinet opens and the update waits for the sign-in.
+    await user.click(await page.findByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText(/girişdən sonra yeniləmə özü başlayacaq/);
+    assert.deepEqual(h.dvxOpened, ['purchase']);
+    assert.equal(h.dvxExports.length, 0);
+    h.setDvxExport({
+      ok: true,
+      value: { name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) },
+    });
+    act(() => h.dvxState({ connected: true }));
+    await page.findByText(/DVX-dən yeniləndi .*yeni 1 e-qaimə/);
+    assert.equal(h.dvxExports.length, 1);
+    assert.equal(h.dvxExports[0]!.direction, 'purchase');
+    assert.match(h.dvxExports[0]!.from, /^\d{4}-01-01$/);
+    const imports = h.ledger.query({
+      type: 'eqImports',
+      companyId: (h.ledger.query({ type: 'companies' }) as { id: string }[])[0]!.id,
+      direction: 'purchase',
+    }) as { source: string }[];
+    assert.deepEqual(
+      imports.map((i) => i.source),
+      ['portal'],
+    );
+    // Signed in: the next update goes straight to DVX; the same e-qaimə is not added again.
+    await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText(/DVX-dən yeniləndi .*yeni 0 e-qaimə/);
+    assert.equal(h.dvxExports.length, 2);
+    assert.deepEqual(h.dvxOpened, ['purchase']);
+    // A refused export says why, nothing is loaded.
+    h.setDvxExport({ ok: false, error: { message: 'DVX sessiyasının vaxtı bitib.', code: 'dvx' } });
+    await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText('DVX sessiyasının vaxtı bitib.');
+  } finally {
+    h.close();
+  }
+});

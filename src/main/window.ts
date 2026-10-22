@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { Outcome, Zoom } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
-import { dvxConnected, dvxDiagnose, openDvxPortal } from './dvx-portal.js';
+import { dvxConnected, dvxDiagnose, dvxExport, openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
 import { fitZoom } from './fit-zoom.js';
 
@@ -201,6 +201,34 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     'meyar:dvx-connected',
     () => ({ ok: true, value: dvxConnected() }) satisfies Outcome<boolean>,
   );
+  // Stage 6b: the cabinet's own Excel export of one box, asked by Meyar.
+  handle('meyar:dvx-export', async (_e, arg) => {
+    try {
+      const a = (arg ?? {}) as { direction?: unknown; from?: unknown; to?: unknown };
+      const day = /^\d{4}-\d{2}-\d{2}$/;
+      if (
+        (a.direction !== 'sale' && a.direction !== 'purchase') ||
+        typeof a.from !== 'string' ||
+        typeof a.to !== 'string' ||
+        !day.test(a.from) ||
+        !day.test(a.to)
+      )
+        throw new Error('DVX sorğusu düzgün deyil.');
+      const value = await dvxExport(
+        a.direction,
+        a.from,
+        a.to,
+        path.join(app.getPath('userData'), 'dvx-diagnostics'),
+        app.getVersion(),
+      );
+      return { ok: true, value } satisfies Outcome<typeof value>;
+    } catch (error) {
+      return {
+        ok: false,
+        error: { message: (error as Error).message, code: 'dvx' },
+      } satisfies Outcome<never>;
+    }
+  });
   // Stage 6a: the shape of the cabinet's API requests, to the user's Documents folder.
   handle('meyar:dvx-diagnose', async () => {
     try {

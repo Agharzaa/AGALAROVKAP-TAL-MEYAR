@@ -203,3 +203,122 @@ export function diagnosticReport(
     })),
   };
 }
+
+// Stage 6b: the cabinet's own Excel export ("Exceli endir → Qaimələr üzrə"), as its page asks it
+// (new.e-taxes.gov.az/eportal, read from the public code 22.10.2026): POST the list filter to
+// …/invoice/find.<box>/excel, then GET /api/po/filestorage/public/v1/download/{id}?type=lk.
+
+/** Every status of the portal but drafts and deleted ones: Meyar tracks cancellations too. */
+const EXPORT_STATUSES = [
+  'approved',
+  'onApproval',
+  'updateApproval',
+  'approvedAttachment',
+  'partiallyReturned',
+  'updateRequested',
+  'cancelRequested',
+  'canceled',
+  'returned',
+  'corrected',
+  'approvedBySystem',
+  'refunded',
+  'cancelRequestedForUnapproved',
+  'receiverChangeRequested',
+  'cancelationRefused',
+  'correctionRefused',
+  'onApprovalEdited',
+  'deactivated',
+  'waitingForSellerApproval',
+  'waitingForBuyerApproval',
+  'waitingForSellerCancelApproval',
+  'waitingForBuyerCancelApproval',
+  'waitingForSellerCorrectionApproval',
+  'waitingForBuyerCorrectionApproval',
+  'returnedForCorrection',
+  'cancellationRefused',
+];
+/** The portal's own list of e-qaimə kinds (its default filter). */
+const EXPORT_KINDS = [
+  'defaultInvoice',
+  'agent',
+  'resale',
+  'recycling',
+  'taxCodex163',
+  'taxCodex177_5',
+  'returnInvoice',
+  'returnByAgent',
+  'returnRecycled',
+  'exportNoteInvoice',
+  'exciseGoodsTransfer',
+  'advanceInvoice',
+];
+const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function isoDay(text: string): Date {
+  const m = ISO.exec(text);
+  if (!m) throw new Error(`DVX dövrü düzgün deyil: ${text}`);
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+const portalDay = (d: Date) =>
+  `${String(d.getUTCDate()).padStart(2, '0')}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${d.getUTCFullYear()} 00:00`;
+
+/** The export request for one box (purchase: Gələnlər, sale: Göndərilənlər) and period. */
+export function exportRequest(
+  direction: 'sale' | 'purchase',
+  from: string,
+  to: string,
+): { path: string; body: Record<string, unknown> } {
+  const start = isoDay(from);
+  const end = isoDay(to);
+  if (end < start) throw new Error(`DVX dövrü düzgün deyil: ${from} – ${to}`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return {
+    path: `/api/po/invoice/public/v2/invoice/find.${direction === 'purchase' ? 'inbox' : 'outbox'}/excel`,
+    body: {
+      statuses: EXPORT_STATUSES,
+      types: ['current', 'corrected'],
+      kinds: EXPORT_KINDS,
+      serialNumber: null,
+      senderTin: null,
+      senderName: null,
+      productName: null,
+      productCode: null,
+      receiverTin: null,
+      receiverName: null,
+      creationDateFrom: portalDay(start),
+      creationDateTo: portalDay(end),
+      amountFrom: null,
+      amountTo: null,
+      offset: 0,
+      maxCount: 100000,
+      actionOwner: null,
+    },
+  };
+}
+
+const FILE_ID = /^[\w-]{1,200}$/;
+
+/** The file id the export answers (a plain string, or one field of an object); empty if none. */
+export function fileIdOf(answer: unknown): string {
+  if (typeof answer === 'string') {
+    const id = answer.trim().replace(/^"(.*)"$/, '$1');
+    return FILE_ID.test(id) ? id : '';
+  }
+  if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return '';
+  const o = answer as Record<string, unknown>;
+  for (const k of ['id', 'fileId', 'uuid', 'fileUuid', 'key'])
+    if (typeof o[k] === 'string') return fileIdOf(o[k]);
+  return o.data !== undefined ? fileIdOf(o.data) : '';
+}
+
+export function downloadPath(id: string): string {
+  if (!FILE_ID.test(id)) throw new Error('DVX faylının id-si düzgün deyil.');
+  return `/api/po/filestorage/public/v1/download/${id}?type=lk`;
+}
+
+/** An .xlsx file is a zip: "PK\x03\x04". */
+export function isXlsx(bytes: Uint8Array): boolean {
+  return (
+    bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4
+  );
+}

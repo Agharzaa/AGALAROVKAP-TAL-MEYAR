@@ -123,6 +123,16 @@ export const api = {
     if (!b.dvxDiagnose) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
     return unwrap(await b.dvxDiagnose());
   },
+  /** Stage 6b: the cabinet's Excel export of one box, asked by Meyar (desktop app only). */
+  async dvxExport(
+    direction: 'sale' | 'purchase',
+    from: string,
+    to: string,
+  ): Promise<{ name: string; bytes: Uint8Array }> {
+    const b = bridge();
+    if (!b.dvxExport) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
+    return unwrap(await b.dvxExport(direction, from, to));
+  },
   async dvxConnected(): Promise<boolean> {
     const b = override ?? window.meyar;
     return b?.dvxConnected ? unwrap(await b.dvxConnected()) : false;

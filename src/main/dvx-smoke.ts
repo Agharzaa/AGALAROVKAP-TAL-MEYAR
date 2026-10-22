@@ -14,10 +14,12 @@ import type { BrowserWindow } from 'electron';
 import { createServer } from 'node:http';
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   closeDvxPortal,
   dvxConnected,
   dvxDiagnose,
+  dvxExport,
   dvxPortalWindow,
   setDvxTestOrigin,
 } from './dvx-portal.js';
@@ -58,8 +60,38 @@ setTimeout(() => { location.href = 'http://evil.invalid/'; }, 1500);
 export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, unknown>> {
   const repeats: { key: boolean; ownHeader: boolean; body: unknown }[] = [];
   let portalAsked = 0;
+  // Stage 6b: the cabinet's Excel export (POST the filter → a file id → GET the file).
+  const exports: { key: boolean; ownHeader: boolean; from: unknown; to: unknown }[] = [];
+  let exportFails = false;
   const server = createServer((req, res) => {
-    if (req.url === LIST) {
+    if (req.url === `${LIST}/excel`) {
+      let text = '';
+      req.on('data', (c: Buffer) => (text += c.toString('utf8')));
+      req.on('end', () => {
+        const key = req.headers['x-authorization'] === `Bearer ${KEY}`;
+        const body = JSON.parse(text || '{}') as {
+          creationDateFrom?: string;
+          creationDateTo?: string;
+        };
+        exports.push({
+          key,
+          ownHeader: 'x-meyar-own' in req.headers,
+          from: body.creationDateFrom,
+          to: body.creationDateTo,
+        });
+        if (exportFails) {
+          res.writeHead(500, { 'content-type': 'application/json' });
+          res.end('{"message":"server"}');
+          return;
+        }
+        res.writeHead(key ? 200 : 401, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: 'file-123' }));
+      });
+    } else if (req.url === '/api/po/filestorage/public/v1/download/file-123?type=lk') {
+      const key = req.headers['x-authorization'] === `Bearer ${KEY}`;
+      res.writeHead(key ? 200 : 401, { 'content-type': 'application/octet-stream' });
+      res.end(Buffer.from([0x50, 0x4b, 3, 4, 20, 0, 0, 0]));
+    } else if (req.url === LIST) {
       let text = '';
       req.on('data', (c: Buffer) => (text += c.toString('utf8')));
       req.on('end', () => {
@@ -128,6 +160,35 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
     const text = await readFile(diagnosis.file, 'utf8');
     await rm(diagnosis.file, { force: true });
     const report = JSON.parse(text) as { requests: { path: string; status?: number }[] };
+    // Stage 6b: the export arrives as an .xlsx; a refused one writes the diagnostics by itself.
+    const diagDir = path.join(tmpdir(), `meyar-dvx-diag-${process.pid}`);
+    const file = await dvxExport('purchase', '2026-10-01', '2026-10-22', diagDir, 'smoke');
+    exportFails = true;
+    const refusedExport = await dvxExport(
+      'purchase',
+      '2026-10-01',
+      '2026-10-22',
+      diagDir,
+      'smoke',
+    ).then(
+      () => 'alındı',
+      (e: Error) => e.message,
+    );
+    const diagFiles = await readdir(diagDir).catch(() => [] as string[]);
+    const diagText = diagFiles.length
+      ? await readFile(path.join(diagDir, diagFiles[0]!), 'utf8')
+      : '';
+    await rm(diagDir, { recursive: true, force: true });
+    const exported = {
+      name: file.name,
+      size: file.bytes.length,
+      requests: exports,
+      refusedExport,
+      diagFiles: diagFiles.length,
+      diagHasExportStep:
+        diagText.includes('find.inbox/excel') || diagText.includes('find.outbox/excel'),
+      diagLeaked: [KEY, '1700000001', 'MT2610007'].filter((v) => diagText.includes(v)),
+    };
     const cookiesAfterClose = await closeDvxPortal();
     const afterClose = await dvxDiagnose(tmpdir(), 'smoke').then(
       () => 'saxlandı',
@@ -138,6 +199,7 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
       leftovers,
       cookiesAfterClose,
       ownWindow,
+      exported,
       statesAfterClose: await js('window.__dvx.states'),
       api: {
         portalAsked,

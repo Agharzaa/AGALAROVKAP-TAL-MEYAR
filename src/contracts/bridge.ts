@@ -46,6 +46,12 @@ export interface MeyarBridge {
    * fails when nobody is signed in to the cabinet.
    */
   dvxDiagnose?(): Promise<Outcome<{ file: string; requests: number; replayed: number }>>;
+  /** Stage 6b: the cabinet's own Excel export of one box for a period (ISO days). */
+  dvxExport?(
+    direction: 'sale' | 'purchase',
+    from: string,
+    to: string,
+  ): Promise<Outcome<{ name: string; bytes: Uint8Array }>>;
   /** Stage 6a: whether the cabinet is signed in now. */
   dvxConnected?(): Promise<Outcome<boolean>>;
   /** Stage 6a: signed in to the cabinet (its session key seen) or not any more. */
