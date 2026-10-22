@@ -301,7 +301,8 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   assert.equal(reconciled.months.length, 1);
   // K5: 500 cash orders, one command each (the negative-cash guard runs on every save), then the
   // cash book of the year and the order journal. An order costs what a manual operation costs
-  // on this base (~2 ms on a PC); the budget is 20 ms an order, on the CI runner too.
+  // on this base (~2 ms on a PC); the budget is 20 ms an order — 80 ms on the CI runner, whose
+  // disk writes each order slowly (11–32 s in 4 of 5 runs, 1 s on a PC; decision of 22.10.2026).
   const box = String(db.get('SELECT id FROM cashboxes WHERE company_id=?', companyId)!.id);
   const founder = String(
     db.get('SELECT id FROM partners WHERE company_id=? LIMIT 1', companyId)!.id,
@@ -313,33 +314,37 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   const capitalIn = item('capitalChange');
   const expense = item('expenseItem');
   const stamp3 = Date.now();
-  time('Kassa orderləri (500, hər biri ayrıca, mənfi qalıq yoxlaması ilə)', 10000, () => {
-    for (let i = 0; i < 500; i++) {
-      const incoming = i % 2 === 0;
-      ledger.execute(
-        {
-          key: `perf-cash-${stamp3}-${i}`,
-          type: 'cash.save',
-          companyId,
-          direction: incoming ? 'in' : 'out',
-          date: `2026-${String((Math.floor(i / 2) % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
-          cashboxId: box,
-          lines: [
-            incoming
-              ? {
-                  account: '301',
-                  sk: [founder, capitalIn],
-                  amount: '100',
-                  cashFlowItem: '',
-                  memo: '',
-                }
-              : { account: '721', sk: [expense], amount: '40', cashFlowItem: '', memo: '' },
-          ],
-        },
-        { actor: 'perf', correlationId: 'perf' },
-      );
-    }
-  });
+  time(
+    'Kassa orderləri (500, hər biri ayrıca, mənfi qalıq yoxlaması ilə)',
+    process.env.GITHUB_ACTIONS ? 40000 : 10000,
+    () => {
+      for (let i = 0; i < 500; i++) {
+        const incoming = i % 2 === 0;
+        ledger.execute(
+          {
+            key: `perf-cash-${stamp3}-${i}`,
+            type: 'cash.save',
+            companyId,
+            direction: incoming ? 'in' : 'out',
+            date: `2026-${String((Math.floor(i / 2) % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+            cashboxId: box,
+            lines: [
+              incoming
+                ? {
+                    account: '301',
+                    sk: [founder, capitalIn],
+                    amount: '100',
+                    cashFlowItem: '',
+                    memo: '',
+                  }
+                : { account: '721', sk: [expense], amount: '40', cashFlowItem: '', memo: '' },
+            ],
+          },
+          { actor: 'perf', correlationId: 'perf' },
+        );
+      }
+    },
+  );
   const cashYear = time('Kassa kitabı, il (500 order)', 1500, () =>
     q({ type: 'cashBook', cashboxId: box, from: '2026-01-01', to: '2026-12-31' }),
   ) as { closing: string };
