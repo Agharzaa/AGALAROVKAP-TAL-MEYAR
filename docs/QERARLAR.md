@@ -363,3 +363,14 @@ Real 1C bazasına (iş kompüteri, "1C Mühasibat AzStandart 2.0 V1.3", 320 hesa
 - **Açıq və tünd mövzu**, Parametrlər → Görünüş (istifadəçinin seçimi: "ikisi, seçim ilə"); açıq — əsas.
 - **Vəziyyət yalnız rənglə göstərilmir:** ● uçotda, ○ qaralama, ✕ ləğv; ləğv olunmuş sənədin məbləğləri üstündən xətlə (auditorun tələbi).
 - **Rəy üsulu:** dizayn mühasib, dizayner və auditor baxışı ilə real ekran şəkilləri üzərində yoxlanır.
+
+## 2026-10-22 — Mərhələ 6: DVX e-qaimələrinin avtomatik gəlməsi
+
+Plan: `docs/MERHELE-6-DVX-AVTOMAT.md`. İstifadəçi sualı: "DVX-dən e-qaiməni necə yükləyib uçota alacaq sistemim?" — cavab: indiki yol (kabinetdə əl ilə ixrac) işləyir, mərhələ 6 ixracı da avtomatlaşdırır.
+
+1. **Rəsmi açıq API yoxdur;** portalın öz daxili sorğularından istifadə olunur. Əsas yol — kabinetin "Excel-ə ixrac" düyməsinin göndərdiyi sorğunu Meyar özü göndərir, gələn `.xlsx` mövcud oxuyucudan keçir (real fayllarla yoxlanıb). Interfeys dəyişsə, "DVX-dən yenilə" dayanır, Excel ixracı ilə davam edilir (istifadəçi qəbul etdi).
+2. **Sessiya açarı (JWT) oxunur** — mərhələ 4 §7-nin "heç nə oxunmur" qaydası bu qədər dəyişir: yalnız portalın özünün göndərdiyi `x-authorization` başlığı, yalnız yaddaşda, yalnız `new.e-taxes.gov.az/api/po/…` sorğularına, kabinet pəncərəsi bağlananda unudulur. PIN, parol, səhifə sahələri əvvəlki kimi oxunmur (istifadəçi qəbul etdi).
+3. **Dövr — yalnız açıq dövr** (bağlanmamış ilk aydan bu günədək; istifadəçinin seçimi, tövsiyə "+ 3 ay" idi).
+4. **Yeniləmədən dərhal sonra "avtomatik" uyğunluqlar tətbiq olunur;** qalanları "Təklif"də.
+5. **Real yoxlama:** 6a-dan sonra istifadəçi bir dəfə ASAN İmza ilə daxil olub diaqnostika faylını (yalnız quruluş, dəyərsiz) göndərir; ixrac sorğusu ondan sonra yazılır.
+6. Mərhələ yalnız oxuyur (e-qaimə göndərmək yoxdur); "yenilənməyib" xəbərdarlığı tövsiyə ilə — hər ikisi 6c-dən əvvəl istifadəçiyə yenidən göstəriləcək.

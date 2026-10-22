@@ -1,6 +1,6 @@
 # Mərhələ 6 — DVX e-qaimələrinin avtomatik gəlməsi (dizayn)
 
-Status: **layihə** (22.10.2026). Açıq suallar §11-dədir; təsdiqdən əvvəl kod yazılmır.
+Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERARLAR.md`-də (2026-10-22, mərhələ 6) yazılıb. Fərq: dövr — yalnız açıq dövr (tövsiyə "+ 3 ay" idi).
 
 Əsas: `docs/MERHELE-4-EQAIME.md` (§2 — kabinet səhifəsinin "oxunması" götürülmür, §7 — kabinetə giriş və təhlükəsizlik qaydaları, §11 sual 10 — DVX API), `docs/QERARLAR.md` 2026-10-15 / 2026-10-16 (mərhələ 4; kabinet sessiyası yaddaşdadır, bağlananda silinir), `PROJECT_STATE.md` "Real DVX faylları ilə yoxlama (17.10.2026)".
 
@@ -13,8 +13,8 @@ Status: **layihə** (22.10.2026). Açıq suallar §11-dədir; təsdiqdən əvvə
 **Mərhələyə daxildir:**
 
 1. Kabinet sessiyasından istifadə: giriş edildikdən sonra Meyar portalın öz e-qaimə siyahısı sorğularını (§3) əsas prosesdən göndərir. Yalnız oxuma, yalnız siyahıda olan ünvanlar.
-2. Cavabın sərt yoxlanması (zod) və indiki `EqDocumentInput`-a çevrilməsi — Excel oxuyucusu ilə eyni nəticə, eyni bir dəfəlik açar (istiqamət + VÖEN + nömrə).
-3. Mal sətirləri ("Mallar üzrə" Excel faylı daha lazım deyil) və statusların yenilənməsi (açıq dövr + əvvəlki aylar).
+2. Kabinetin öz Excel ixracının Meyar tərəfindən istənməsi (§2): eyni fayl, eyni oxuyucu, eyni bir dəfəlik açar (istiqamət + VÖEN + nömrə).
+3. Hər iki hesabat ("Qaimələr üzrə" və "Mallar üzrə" — mal sətirləri) və statusların yenilənməsi (açıq dövr).
 4. "DVX-dən yenilə" axını: gedişat, ləğv, xəta olanda nə alındığı və Excel-ə keçid; son yeniləmə vaxtı qutuda və İş masasında.
 5. Diaqnostika: cavabların **quruluşu** (sahə adları və tipləri, dəyərsiz) faylına yazılması — real cavabla ilk yoxlama üçün.
 
@@ -43,6 +43,10 @@ Status: **layihə** (22.10.2026). Açıq suallar §11-dədir; təsdiqdən əvvə
 | Səlahiyyət                | başlıq `x-authorization: Bearer <JWT>`; JWT girişdə cavab başlığında gəlir |
 | Səhifələmə                | sorğu gövdəsində `offset`, `maxCount`; filtrlər (tarix, status) gövdədə  |
 
+- **Kabinetin "Excel-ə ixrac" düyməsi faylı serverdə hazırladır:** `POST /api/po/invoice/public/{v1|v2}/invoice/find.{inbox|outbox}/<hesabat növü>` (gövdə — siyahının filtrləri) → faylın id-si → `GET /api/po/filestorage/public/v1/download/{id}?type=lk` → `.xlsx`. Bu, mərhələ 4-də real fayllarla yoxlanmış ixracın eynisidir.
+
+**Əsas yol — Excel ixracının özü.** Meyar JSON-u öz çeviricisi ilə oxumur. Kabinetin düyməsinin göndərdiyi ixrac sorğusunu özü göndərir və gələn `.xlsx`-i mövcud oxuyucuya (`readEqTable`) verir. Oxuyucu, istiqamət və VÖEN qoruması, bir dəfəlik açar, statuslar, "Qaimələr üzrə" / "Mallar üzrə" — hamısı dəyişmir. Riskli yeni hissə yalnız sorğunun özüdür. `find.*` JSON siyahısı yalnız diaqnostika (6a) və səhifə sayının yoxlanması üçündür.
+
 **Nəticə:** bu, DVX-in **sənədləşdirilməmiş daxili** interfeysidir. Portalın özü istifadə etdiyi üçün işləyir, amma DVX onu xəbərsiz dəyişə bilər. Ona görə §6-dakı qaydalar var: tanınmayan cavab heç vaxt "təxmin" edilmir, yeniləmə dayanır və Excel yolu təklif olunur. Gövdənin dəqiq sahələri və cavabın quruluşu yalnız real girişlə görünəcək (6a-nın diaqnostikası).
 
 ## 3. Sessiya: açar haradan gəlir
@@ -53,8 +57,9 @@ Status: **layihə** (22.10.2026). Açıq suallar §11-dədir; təsdiqdən əvvə
   → Meyar pəncərənin öz sessiyasında portalın getdiyi sorğulara baxır
       (session.webRequest.onBeforeSendHeaders, yalnız https://new.e-taxes.gov.az/api/po/…):
       portalın göndərdiyi "x-authorization" başlığı yaddaşda saxlanır
-  → açar tapılan kimi qutuda "DVX ilə əlaqə var" görünür; pəncərəni bağlamaq olar
-  → yeniləmə bitəndə (və ya Meyar bağlananda, kabinetdən çıxanda, 401 cavabında) açar unudulur
+  → açar tapılan kimi qutuda "DVX ilə əlaqə var" görünür; Meyar-ın sorğuları kabinet pəncərəsinin
+      öz sessiyası ilə gedir (eyni kukilər), ona görə pəncərə yeniləmə bitənədək açıq qalır (kiçildilə bilər)
+  → kabinet pəncərəsi bağlananda (və ya Meyar bağlananda, 401 cavabında) açar unudulur
 ```
 
 | Qayda                                   | Necə                                                                                                                                                         |
@@ -69,13 +74,12 @@ Status: **layihə** (22.10.2026). Açıq suallar §11-dədir; təsdiqdən əvvə
 
 ## 4. Məlumat axını
 
-1. Dövr: standart olaraq bağlanmamış ilk aydan bu günədək + statuslar üçün ondan əvvəlki 3 ay (§11 sual 3). Qutuda dəyişmək olar.
-2. Hər istiqamət üçün `find.*` səhifə-səhifə → hər e-qaimə zod sxemi ilə yoxlanır → `EqDocumentInput` (`src/domain/eqaime.ts`: nömrə, tarix, VÖEN-lər, ad, növ, tip ("Cari" / "Düzəliş"), status, ƏDV-li / ƏDV-siz / ƏDV 0 / cəlb olunmayan bazalar, ƏDV, aksiz, yol vergisi).
-3. Mal sətirləri: `byProducts` (və ya `invoice/{id}`) → `EqLine` (kod, ad, ölçü vahidi, miqdar, qiymət, məbləğ, ƏDV). Excel-in "Mallar üzrə" faylı ilə eyni nəticə.
-4. Hamısı **bir** `eq.import` əmri kimi gedir (yeni mənbə növü `dvx`, `eq_imports.source`): eyni bir dəfəlik açar, eyni status tarixçəsi, eyni ziddiyyət qaydaları. Eyni dövrü Excel ilə də, API ilə də yükləmək olar — təkrar yaranmır.
-5. Sonra, əvvəlki kimi: "Avtomatik uyğunluqları tətbiq et" (istəyə görə yeniləmədən dərhal sonra — §11 sual 5).
+1. Dövr: bağlanmamış ilk aydan bu günədək (§11 sual 3 — yalnız açıq dövr). Qutuda dəyişmək olar. Bağlı dövrdə DVX statusu dəyişsə, bunu yalnız əl ilə yüklənən fayl və ya dövrü dəyişən yeniləmə göstərər.
+2. Hər istiqamət (Gələnlər, Göndərilənlər) × hesabat növü ("Qaimələr üzrə", "Mallar üzrə") üçün kabinetin ixrac sorğusu (§2) → `.xlsx` (50 MB həddi, mərhələ 4 kimi) → `readEqTable` → indiki ilkin baxış və idxal.
+3. Hamısı mövcud `eq.import` əmri ilə gedir (yeni mənbə növü `dvx`, `eq_imports.source`): eyni bir dəfəlik açar, eyni status tarixçəsi, eyni ziddiyyət qaydaları. Eyni dövrü əl ilə ixracla da, "DVX-dən yenilə" ilə də yükləmək olar — təkrar yaranmır.
+4. Sonra "avtomatik" rejimli uyğunluqlar özü tətbiq olunur (§11 sual 5); qalanlar "Təklif"də.
 
-Status və növ sözləri Excel-dən fərqli kodlarla gələ bilər (məs. `APPROVED`). Onların cədvəli real cavabdan tutulacaq. Tanınmayan kod `unknown`-dur, e-qaimə yüklənir, amma avtomatik keçmir (mərhələ 4 E1 kimi).
+İxrac sorğusunun gövdəsi (filtrlərin adları, tarix formatı, statuslar) 6a-nın diaqnostikası ilə real girişdən tutulur; ondan əvvəl təxmin edilmir.
 
 ## 5. Məlumat modeli (sxem v14)
 
@@ -87,7 +91,7 @@ Status və növ sözləri Excel-dən fərqli kodlarla gələ bilər (məs. `APPR
 
 | Hal                                                       | Davranış                                                                                                                         |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Cavab sxemə uyğun deyil (sahə yoxdur, tip dəyişib)        | Həmin istiqamət üzrə heç nə yazılmır; mesaj: "DVX cavabının quruluşu dəyişib — Excel ixracı ilə davam edin"; diaqnostika təklifi |
+| İxrac sorğusu rədd olunur və ya gələn fayl Excel deyil    | Həmin istiqamət üzrə heç nə yazılmır; mesaj: "DVX sorğusu dəyişib — Excel ixracı ilə davam edin"; diaqnostika təklifi          |
 | Bir e-qaimə oxunmur (məs. naməlum ölçü vahidi)            | Excel-dəki kimi: e-qaimə bütövlükdə yüklənmir, problem siyahısında adı ilə; digərləri gedir                                      |
 | 401 / açarın vaxtı bitib                                  | Dayanır, alınanlar saxlanır; "Kabinetə yenidən daxil olun"                                                                       |
 | Şəbəkə, 5xx, 429                                          | 3 dəfə fasilə ilə təkrar, sonra `partial`                                                                                        |
@@ -100,7 +104,7 @@ Status və növ sözləri Excel-dən fərqli kodlarla gələ bilər (məs. `APPR
 - Qutu başlığında: "Son yeniləmə: 22.10.2026 14:05 — 12 yeni, 3 status dəyişdi" və ya `partial` / `failed` səbəbi.
 - İş masası və ay bağlanışının xəbərdarlıqları: "DVX 7 gündən çoxdur yenilənməyib" (yalnız DVX ilə işləyən şirkətdə; §11 sual 6).
 - "Excel faylı yüklə" və "DVX kabinetini aç" yerində qalır.
-- Diaqnostika: Parametrlər → "DVX cavabının quruluşunu saxla" — `Sənədlər\Meyar-DVX-quruluş-<tarix>.json` (yalnız sahə adları, tiplər, statusların kodları və sayları; nömrə, VÖEN, ad, məbləğ yoxdur).
+- Diaqnostika (qutuda, "DVX kabinetini aç"ın yanında): "DVX sorğularının quruluşunu saxla" — `Sənədlər\Meyar-DVX-quruluş-<tarix>.json`. İçində kabinetin öz API sorğuları (yol — rəqəmli hissələr `{id}`, metod, cavab kodu və tipi, gövdənin sahə adları və tipləri) və Meyar-ın təkrar etdiyi `find.*` siyahısının cavab quruluşu var. Statusların kodları və sayları da yazılır. Nömrə, VÖEN, ad, məbləğ və açar yazılmır.
 
 ## 8. Qəbul testləri
 
@@ -108,7 +112,7 @@ Status və növ sözləri Excel-dən fərqli kodlarla gələ bilər (məs. `APPR
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
 | D1  | Saxta yerli server (portalın sorğularını təqlid edir): kabinet pəncərəsindən gələn `x-authorization` tutulur, yalnız siyahıdakı yollara göndərilir           | Electron smoke, `tests/domain`           |
 | D2  | Açar renderer-ə, loqa, audit jurnalına, bazaya, diaqnostika faylına düşmür (bütün çıxışlarda axtarış)                                                         | integration, smoke                       |
-| D3  | JSON → `EqDocumentInput`: real quruluşda uydurma cavab (`tests/domain/dvx-api-fixture.ts`) Excel oxuyucusunun eyni e-qaimə üçün nəticəsi ilə eynidir        | `tests/domain`                           |
+| D3  | Saxta serverin ixrac sorğusu ilə verdiyi `.xlsx` (real quruluşda uydurma, `tests/domain/dvx-fixture.ts`) əl ilə yüklənən eyni faylla eyni nəticəni verir | integration                              |
 | D4  | Eyni dövr: əvvəl Excel, sonra API (və tərsinə) — 0 yeni; status dəyişən e-qaimə — tarixçədə bir qeyd                                                         | integration                              |
 | D5  | Sxem dəyişib (sahə yoxdur, tip fərqlidir) — heç nə yazılmır, mesaj; naməlum status — `unknown`, avtomatik keçmir                                            | `tests/domain`, integration              |
 | D6  | 401 ortada, 5xx, 429, şəbəkə kəsilir — alınanlar qalır, `partial`, təkrar yeniləmə qalanını alır                                                             | integration (saxta server)               |
@@ -123,18 +127,20 @@ Status və növ sözləri Excel-dən fərqli kodlarla gələ bilər (məs. `APPR
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `src/main/dvx-portal.ts` (pəncərə, yaddaşdakı sessiya)     | Dəyişməz qalır; yalnız `webRequest` ilə başlığın tutulması əlavə olunur                                        |
 | `src/main/dvx-policy.ts` (ünvan siyahısı)                  | API yolları üçün ayrıca, daha dar siyahı                                                                      |
-| `src/domain/eqaime.ts` (`EqDocumentInput`, status / növ)   | API çeviricisi eyni tipləri qaytarır; status / növ sözləri cədvəli genişlənir                                 |
+| `src/domain/eqaime.ts` (`readEqTable`, status / növ)        | Dəyişməz: API ixracı eyni Excel faylıdır                                                                      |
 | `src/application/eqaime.ts` (idxal, bir dəfəlik açar)      | Dəyişməz; yalnız `source` sütunu                                                                              |
 | `MEYAR_SMOKE_DVX` yerli sınaq serveri                      | Portalın JSON sorğularını da təqlid edir                                                                      |
 
 ## 10. İcra ardıcıllığı
 
-1. **6a — sessiya və oxu kanalı.** Başlığın tutulması (yaddaşda), dar ünvan siyahısı, əsas prosesdə yalnız oxuyan müştəri (`src/main/dvx-api.ts`), səhifələmə, xəta / təkrar, diaqnostika faylı (yalnız quruluş). Saxta serverlə D1, D2, D6. **Bitəndə:** istifadəçi real girişlə diaqnostika faylını göndərir (D10-un birinci yarısı).
-2. **6b — çevirici və idxal.** Real quruluş əsasında zod sxemləri, JSON → `EqDocumentInput` / `EqLine`, sxem v14, `eq.import` `dvx` mənbəyi ilə. D3, D4, D5, D7.
+1. **6a — sessiya və diaqnostika.** Kabinet sessiyasında portalın API sorğularının qeydi (yaddaşda): açar, yol, gövdənin quruluşu, cavab kodu. Saf qaydalar (`src/main/dvx-api-policy.ts`: API ünvanı, açarın başlıqdan alınması, yolun maskalanması, dəyərsiz quruluş). Yalnız `find.*` siyahısını təkrar edən oxu müştərisi (`src/main/dvx-api.ts`, kabinetin öz sessiyası ilə). Diaqnostika faylı. Saxta serverlə D1, D2. **Bitəndə:** istifadəçi real girişlə (siyahını açıb bir dəfə "Excel-ə ixrac" basaraq) diaqnostika faylını göndərir — D10-un birinci yarısı.
+2. **6b — ixracın təkrarı və idxal.** Real quruluş əsasında ixrac sorğusu (dövr, istiqamət, hesabat növü), `.xlsx` → `readEqTable`, sxem v14 (`eq_imports.source`, `dvx_syncs`), xəta / təkrar / 401. D3 (API ixracı = əl ilə ixrac), D4, D5, D6, D7.
 3. **6c — "DVX-dən yenilə" axını.** Qutuda düymə, gedişat, ləğv, son yeniləmə, İş masası xəbərdarlığı, yeniləmədən sonra avtomatik uyğunluqlar. D8, D9.
 4. **Müstəqil audit** (kodu yazmayan sessiya), D10 — istifadəçi ilə real yeniləmə.
 
 ## 11. Açıq suallar (istifadəçi)
+
+**Cavablar (22.10.2026):** 1 — qəbul; 2 — qəbul; 3 — **yalnız açıq dövr**; 5 — bəli, yeniləmədən dərhal sonra; 7 — bəli, istifadəçi diaqnostika faylını göndərəcək. 4 (yalnız oxuma) və 6 (xəbərdarlıq) ayrıca soruşulmayıb: tövsiyə ilə gedilir, 6c-dən əvvəl istifadəçiyə yenidən göstəriləcək.
 
 1. **Sessiya açarının oxunması.** Mərhələ 4 §7 deyir: "sahələr oxunmur, heç nə saxlanmır". Bu mərhələ onu dəyişir: Meyar portalın öz sorğularının başlığından sessiya açarını (JWT) **oxuyur**. Açar yalnız yaddaşda qalır, yalnız e-qaimə siyahısı sorğularına gedir və yeniləmə bitəndə unudulur. PIN və parol əvvəlki kimi oxunmur. Tövsiyə: qəbul.
 2. **Sənədləşdirilməmiş interfeys.** DVX bu sorğuları xəbərsiz dəyişə bilər. O gün "DVX-dən yenilə" dayanacaq ("quruluş dəyişib") və Excel ixracı ilə davam ediləcək, düzəliş isə yeni versiya ilə gələcək. Tövsiyə: qəbul. Paralel olaraq 195-1-dən ERP-lər üçün rəsmi qoşulma imkanını soruşmağınız faydalıdır.
