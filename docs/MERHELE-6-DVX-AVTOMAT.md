@@ -108,18 +108,19 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 
 ## 8. Qəbul testləri
 
-| #   | Ssenari                                                                                                                                                  | Növ                            |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| D1  | Saxta yerli server (portalın sorğularını təqlid edir): kabinet pəncərəsindən gələn `x-authorization` tutulur, yalnız siyahıdakı yollara göndərilir       | Electron smoke, `tests/domain` |
-| D2  | Açar renderer-ə, loqa, audit jurnalına, bazaya, diaqnostika faylına düşmür (bütün çıxışlarda axtarış)                                                    | integration, smoke             |
-| D3  | Saxta serverin ixrac sorğusu ilə verdiyi `.xlsx` (real quruluşda uydurma, `tests/domain/dvx-fixture.ts`) əl ilə yüklənən eyni faylla eyni nəticəni verir | integration                    |
-| D4  | Eyni dövr: əvvəl Excel, sonra API (və tərsinə) — 0 yeni; status dəyişən e-qaimə — tarixçədə bir qeyd                                                     | integration                    |
-| D5  | Sxem dəyişib (sahə yoxdur, tip fərqlidir) — heç nə yazılmır, mesaj; naməlum status — `unknown`, avtomatik keçmir                                         | `tests/domain`, integration    |
-| D6  | 401 ortada, 5xx, 429, şəbəkə kəsilir — alınanlar qalır, `partial`, təkrar yeniləmə qalanını alır                                                         | integration (saxta server)     |
-| D7  | Başqa şirkətin VÖEN-i cavabda — bütün yeniləmə rədd; iki şirkətin qutusu açıq — açar yalnız birinə                                                       | integration, `tests/ui`        |
-| D8  | UI: "DVX-dən yenilə" → giriş → gedişat → yeni e-qaimələr "Təklif"də; son yeniləmə sətri; F5                                                              | `tests/ui`                     |
-| D9  | Yük: 5 000 e-qaimə / 50 000 mal sətri saxta serverdən 50 səhifə ilə ≤ 10 s (CI 20 s)                                                                     | `npm run test:perf`            |
-| D10 | Real giriş: istifadəçi bir dəfə ASAN İmza ilə daxil olur — diaqnostika faylı, sonra real yeniləmə Excel faylları ilə eyni say və cəmi verir              | istifadəçi (əl ilə)            |
+| #   | Ssenari                                                                                                                                                                                                                                    | Növ                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| D1  | Saxta yerli server (portalın sorğularını təqlid edir): kabinet pəncərəsindən gələn `x-authorization` tutulur, yalnız siyahıdakı yollara göndərilir                                                                                         | Electron smoke, `tests/domain` |
+| D2  | Açar renderer-ə, loqa, audit jurnalına, bazaya, diaqnostika faylına düşmür (bütün çıxışlarda axtarış)                                                                                                                                      | integration, smoke             |
+| D3  | Saxta serverin ixrac sorğusu ilə verdiyi `.xlsx` (real quruluşda uydurma, `tests/domain/dvx-fixture.ts`) əl ilə yüklənən eyni faylla eyni nəticəni verir                                                                                   | integration                    |
+| D4  | Eyni dövr: əvvəl Excel, sonra API (və tərsinə) — 0 yeni; status dəyişən e-qaimə — tarixçədə bir qeyd                                                                                                                                       | integration                    |
+| D5  | Sxem dəyişib (sahə yoxdur, tip fərqlidir) — heç nə yazılmır, mesaj; naməlum status — `unknown`, avtomatik keçmir                                                                                                                           | `tests/domain`, integration    |
+| D6  | 401 ortada, 5xx, 429, şəbəkə kəsilir — alınanlar qalır, `partial`, təkrar yeniləmə qalanını alır                                                                                                                                           | integration (saxta server)     |
+| D7  | Başqa şirkətin VÖEN-i cavabda — bütün yeniləmə rədd; iki şirkətin qutusu açıq — açar yalnız birinə                                                                                                                                         | integration, `tests/ui`        |
+| D8  | UI: "DVX-dən yenilə" → giriş → gedişat → yeni e-qaimələr "Təklif"də; son yeniləmə sətri; F5                                                                                                                                                | `tests/ui`                     |
+| D9  | Yük: 5 000 e-qaimə / 50 000 mal sətri saxta serverdən 50 səhifə ilə ≤ 10 s (CI 20 s)                                                                                                                                                       | `npm run test:perf`            |
+| D10 | Real giriş: istifadəçi bir dəfə ASAN İmza ilə daxil olur — diaqnostika faylı, sonra real yeniləmə Excel faylları ilə eyni say və cəmi verir                                                                                                | istifadəçi (əl ilə)            |
+| D11 | Qarışmama (QERARLAR 2026-10-22 §7): inbox yalnız alışa, outbox yalnız satışa; eyni nömrə hər iki istiqamətdə və iki malsatanda — ayrı e-qaimələr; yeniləmə iki dəfə və əl ilə ixracla birlikdə — 0 yeni; səhv tərəfdə şirkət VÖEN-i — rədd | integration (saxta server)     |
 
 ## 9. Mövcud koddan nə götürülür
 

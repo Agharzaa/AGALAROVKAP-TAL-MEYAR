@@ -374,3 +374,9 @@ Plan: `docs/MERHELE-6-DVX-AVTOMAT.md`. İstifadəçi sualı: "DVX-dən e-qaimən
 4. **Yeniləmədən dərhal sonra "avtomatik" uyğunluqlar tətbiq olunur;** qalanları "Təklif"də.
 5. **Real yoxlama:** 6a-dan sonra istifadəçi bir dəfə ASAN İmza ilə daxil olub diaqnostika faylını (yalnız quruluş, dəyərsiz) göndərir; ixrac sorğusu ondan sonra yazılır.
 6. Mərhələ yalnız oxuyur (e-qaimə göndərmək yoxdur); "yenilənməyib" xəbərdarlığı tövsiyə ilə — hər ikisi 6c-dən əvvəl istifadəçiyə yenidən göstəriləcək.
+7. **E-qaimələr qarışmır, təkrarlanmır, gələn və göndərilən üst-üstə düşmür** (istifadəçi, 22.10.2026). Mərhələ 4-ün qaydaları "DVX-dən yenilə"yə də tam aiddir:
+   - bir e-qaimə bir dəfə: açar şirkət + istiqamət + VÖEN + nömrə (bazada unikal indeks); eyni dövrü əl ilə ixracla və avtomatik yeniləmə ilə yükləmək, yeniləməni təkrarlamaq yeni qeyd yaratmır, yalnız statusu yeniləyir;
+   - Gələnlər yalnız alışa (`find.inbox` → alış qutusu), Göndərilənlər yalnız satışa (`find.outbox` → satış qutusu) düşür; faylda şirkətin VÖEN-i səhv tərəfdədirsə və ya başqa şirkətin faylıdırsa — bütün yeniləmə rədd;
+   - eyni nömrə gələn və göndərilən tərəfdə və ya iki malsatanda — ayrı-ayrı e-qaimələrdir (açarda istiqamət və VÖEN var), bir-birini əvəz etmir;
+   - bir e-qaimədən bir qaimə: e-qaimə nömrəsi uçotda bir qaimədə ola bilər (satışda şirkət üzrə, alışda malsatan üzrə unikal);
+   - DVX eyni e-qaiməni fərqli məbləğlə göndərsə — "Ziddiyyət", mövcud qeyd və uçot toxunulmaz.
