@@ -208,35 +208,24 @@ export function diagnosticReport(
 // (new.e-taxes.gov.az/eportal, read from the public code 22.10.2026): POST the list filter to
 // …/invoice/find.<box>/excel, then GET /api/po/filestorage/public/v1/download/{id}?type=lk.
 
-/** Every status of the portal but drafts and deleted ones: Meyar tracks cancellations too. */
+/**
+ * The statuses the portal's own e-qaimə list sends (seen in a real session, 22.10.2026; a longer
+ * list of every status was refused with 400). "deactivated" is the annulled e-qaimə.
+ */
 const EXPORT_STATUSES = [
   'approved',
   'onApproval',
   'updateApproval',
-  'approvedAttachment',
-  'partiallyReturned',
   'updateRequested',
   'cancelRequested',
-  'canceled',
-  'returned',
-  'corrected',
   'approvedBySystem',
-  'refunded',
-  'cancelRequestedForUnapproved',
-  'receiverChangeRequested',
-  'cancelationRefused',
-  'correctionRefused',
   'onApprovalEdited',
   'deactivated',
-  'waitingForSellerApproval',
-  'waitingForBuyerApproval',
-  'waitingForSellerCancelApproval',
-  'waitingForBuyerCancelApproval',
-  'waitingForSellerCorrectionApproval',
-  'waitingForBuyerCorrectionApproval',
-  'returnedForCorrection',
-  'cancellationRefused',
+  'cancelationRefused',
+  'correctionRefused',
 ];
+/** One export page: the portal pages its list too (its own export asks one small page). */
+export const EXPORT_PAGE = 100;
 /** The portal's own list of e-qaimə kinds (its default filter). */
 const EXPORT_KINDS = [
   'defaultInvoice',
@@ -262,35 +251,68 @@ function isoDay(text: string): Date {
 const portalDay = (d: Date) =>
   `${String(d.getUTCDate()).padStart(2, '0')}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${d.getUTCFullYear()} 00:00`;
 
-/** The export request for one box (purchase: Gələnlər, sale: Göndərilənlər) and period. */
+/** The portal's e-qaimə list of one box (its answer tells whether more pages follow). */
+export function listPath(direction: 'sale' | 'purchase'): string {
+  return `/api/po/invoice/public/v2/invoice/find.${direction === 'purchase' ? 'inbox' : 'outbox'}`;
+}
+
+/** The list answer's "hasMore": another page follows. */
+export function hasMore(answer: unknown): boolean {
+  return (
+    !!answer && typeof answer === 'object' && (answer as { hasMore?: unknown }).hasMore === true
+  );
+}
+
+/**
+ * The export request for one box (purchase: Gələnlər, sale: Göndərilənlər), period and page. The
+ * portal's own list filter, when seen in this session, is the template (DVX knows it); without it,
+ * the filter as the portal's code builds it. The user's narrowing (partner, number, amount) is
+ * dropped: the update takes the whole period.
+ */
 export function exportRequest(
   direction: 'sale' | 'purchase',
   from: string,
   to: string,
+  page = 0,
+  template?: unknown,
 ): { path: string; body: Record<string, unknown> } {
   const start = isoDay(from);
   const end = isoDay(to);
   if (end < start) throw new Error(`DVX dövrü düzgün deyil: ${from} – ${to}`);
   end.setUTCDate(end.getUTCDate() + 1);
+  const seen =
+    template && typeof template === 'object' && !Array.isArray(template)
+      ? (template as Record<string, unknown>)
+      : undefined;
+  const narrowing = {
+    serialNumber: null,
+    senderTin: null,
+    senderName: null,
+    productName: null,
+    productCode: null,
+    receiverTin: null,
+    receiverName: null,
+    amountFrom: null,
+    amountTo: null,
+  };
+  const period = {
+    creationDateFrom: portalDay(start),
+    creationDateTo: portalDay(end),
+    offset: page * EXPORT_PAGE,
+    maxCount: EXPORT_PAGE,
+  };
+  if (seen)
+    return { path: `${listPath(direction)}/excel`, body: { ...seen, ...narrowing, ...period } };
   return {
-    path: `/api/po/invoice/public/v2/invoice/find.${direction === 'purchase' ? 'inbox' : 'outbox'}/excel`,
+    path: `${listPath(direction)}/excel`,
     body: {
       statuses: EXPORT_STATUSES,
       types: ['current', 'corrected'],
       kinds: EXPORT_KINDS,
-      serialNumber: null,
-      senderTin: null,
-      senderName: null,
-      productName: null,
-      productCode: null,
-      receiverTin: null,
-      receiverName: null,
-      creationDateFrom: portalDay(start),
-      creationDateTo: portalDay(end),
-      amountFrom: null,
-      amountTo: null,
-      offset: 0,
-      maxCount: 100000,
+      ...narrowing,
+      ...period,
+      sortBy: 'creationDate',
+      sortAsc: false,
       actionOwner: null,
     },
   };

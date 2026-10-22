@@ -2294,7 +2294,7 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
     assert.equal(h.dvxExports.length, 0);
     h.setDvxExport({
       ok: true,
-      value: { name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) },
+      value: { files: [{ name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) }] },
     });
     act(() => h.dvxState({ connected: true }));
     await page.findByText(/DVX-dən yeniləndi .*yeni 1 e-qaimə/);

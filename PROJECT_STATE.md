@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 22.10.2026 (0.7.5, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 22.10.2026 (0.7.6, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -467,6 +467,10 @@ Testlər: `npm test` 168, `npm run test:ui` 36, `npm run test:perf`, Electron sm
 | 401/403 — "sessiyanın vaxtı bitib"; başqa cavab — "ixrac alınmadı (cavab N)", Excel yolu təklif olunur; hər uğursuzluqda diaqnostika (dəyərsiz) `userData/dvx-diagnostics`-ə özü yazılır                                                                                                                                 | smoke: 500 → mesaj, 1 diaqnostika faylı, sızma yoxdur                             |
 
 Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron smoke — keçir. **Real DVX ilə yoxlanmayıb:** sorğu portalın kodundan oxunub; ilk real yeniləmə uğursuz olsa, səbəb `%APPDATA%\Meyar\dvx-diagnostics`-dədir (məlumat qovluğu).
+
+**0.7.6 — ilk real "DVX-dən yenilə" (22.10.2026):** DVX ixrac sorğusunu **400** ilə rədd etdi; səbəb Meyar-ın özü yazdığı diaqnostikadan (`%APPDATA%\Meyar\dvx-diagnostics`) oxundu, istifadəçidən heç nə soruşulmadı. Portalın öz siyahı sorğusu 10 status göndərir (Meyar 26 göndərirdi), `sortBy` / `sortAsc` var, siyahı səhifə-səhifədir (`hasMore`). Düzəliş: sessiyada portalın öz `find.<qutu>` gövdəsi görünübsə o şablondur (yalnız dövr, səhifə və istifadəçinin daraltması — malsatan, nömrə, məbləğ — dəyişir), yoxdursa portalın 10 statusu + sıralama; ixrac 100-lük səhifələrlə, hər səhifədən sonra siyahının `hasMore`-u; hər səhifə ayrıca idxal (bir dəfəlik açar). Testlər: `dvx-export.test.ts` (6), `tests/ui`, Electron smoke (şablon, 2 səhifə). `npm test` 174, `npm run test:ui` 37, `npm run test:perf`. **Push edilməyib** (main-ə push bu dəfə icazə yoxlamasında bloklandı; istifadəçinin qərarı gözlənilir).
+
+**MG Transport (istifadəçinin real şirkəti, VÖEN 4600468301):** "Agalarov / 1234567899" sınaq şirkəti idi; istifadəçi Meyar-da ayrıca şirkət yaratdı. 226 gələn e-qaimə ("Exceli endir" ilə) yükləndi, 47 malsatan. İstifadəçinin qərarı: hamısı **721**, xərc maddələri qruplar üzrə (daşıma, yanacaq, icarə və kommunal, sığorta, yol və icazə haqları, konsaltinq/audit/kadr, rabitə, reklam və çap, taksi və avtoservis, digər); Marsol və Naib Yusifov — daşıma. Uçot istifadəçinin açıq icazəsi ilə Meyar-ın öz əmrləri ilə aparılır (item.save, product.save, eqMap.bulk auto, eqaime.apply; əvvəl bazanın ehtiyat nüsxəsi `backups/before-dvx-groups-*`).
 
 ## Açıq məsələlər
 

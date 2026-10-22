@@ -6,7 +6,14 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { downloadPath, exportRequest, fileIdOf, isXlsx } from '../../src/main/dvx-api-policy.js';
+import {
+  downloadPath,
+  exportRequest,
+  fileIdOf,
+  hasMore,
+  isXlsx,
+  listPath,
+} from '../../src/main/dvx-api-policy.js';
 import { openPeriod } from '../../src/domain/eqaime.js';
 
 test('6b: Gələnlər are the inbox, Göndərilənlər the outbox; the whole period, every status', () => {
@@ -20,20 +27,25 @@ test('6b: Gələnlər are the inbox, Göndərilənlər the outbox; the whole per
   // The portal's date format; the end is the next midnight, so the last day is whole.
   assert.equal(b.creationDateFrom, '01-10-2026 00:00');
   assert.equal(b.creationDateTo, '23-10-2026 00:00');
+  // Page by page, as the portal asks (the first real export refused one huge page: 400).
   assert.equal(b.offset, 0);
-  assert.ok((b.maxCount as number) >= 10000);
-  // Cancelled and corrected e-qaimələr come too: Meyar tracks their status (stage 4c).
-  for (const s of [
+  assert.equal(b.maxCount, 100);
+  assert.equal(exportRequest('purchase', '2026-10-01', '2026-10-22', 2).body.offset, 200);
+  assert.equal(b.sortBy, 'creationDate');
+  assert.equal(b.sortAsc, false);
+  // Exactly the statuses the portal's own list sends (seen in a real session, 22.10.2026).
+  assert.deepEqual(b.statuses, [
     'approved',
-    'approvedBySystem',
     'onApproval',
-    'canceled',
-    'corrected',
+    'updateApproval',
+    'updateRequested',
+    'cancelRequested',
+    'approvedBySystem',
+    'onApprovalEdited',
     'deactivated',
-  ])
-    assert.ok((b.statuses as string[]).includes(s), s);
-  for (const s of ['draft', 'deleted', 'deletedBySystem'])
-    assert.equal((b.statuses as string[]).includes(s), false, s);
+    'cancelationRefused',
+    'correctionRefused',
+  ]);
   assert.deepEqual(b.types, ['current', 'corrected']);
   assert.ok((b.kinds as string[]).includes('defaultInvoice'));
   assert.ok((b.kinds as string[]).includes('advanceInvoice'));
@@ -103,4 +115,41 @@ test('6b: only an .xlsx file (a zip) is taken from the download', () => {
   assert.equal(isXlsx(new TextEncoder().encode('{"error":"x"}')), false);
   assert.equal(isXlsx(new TextEncoder().encode('<html>')), false);
   assert.equal(isXlsx(new Uint8Array([0x50, 0x4b])), false);
+});
+
+test("6b: the portal's own list filter seen in the session is the template; only period and page change", () => {
+  const seen = {
+    statuses: ['approved', 'approvedBySystem'],
+    types: ['current'],
+    kinds: ['defaultInvoice'],
+    senderTin: '1700000001',
+    creationDateFrom: '01-01-2026 00:00',
+    creationDateTo: '23-10-2026 00:00',
+    offset: 40,
+    maxCount: 10,
+    sortBy: 'creationDate',
+    sortAsc: true,
+    newField: 'x',
+  };
+  const b = exportRequest('purchase', '2026-10-01', '2026-10-22', 1, seen).body;
+  assert.deepEqual(b.statuses, ['approved', 'approvedBySystem']);
+  assert.deepEqual(b.types, ['current']);
+  assert.equal(b.newField, 'x');
+  // The user's own narrowing in the cabinet does not narrow Meyar's update.
+  assert.equal(b.senderTin, null);
+  assert.equal(b.creationDateFrom, '01-10-2026 00:00');
+  assert.equal(b.creationDateTo, '23-10-2026 00:00');
+  assert.equal(b.offset, 100);
+  assert.equal(b.maxCount, 100);
+  // A template that is not an object is ignored.
+  assert.equal(exportRequest('purchase', '2026-10-01', '2026-10-22', 0, 'x').body.maxCount, 100);
+});
+
+test('6b: the list answer says whether another page follows', () => {
+  assert.equal(hasMore({ hasMore: true, invoices: [] }), true);
+  assert.equal(hasMore({ hasMore: false }), false);
+  assert.equal(hasMore({ invoices: [] }), false);
+  assert.equal(hasMore(null), false);
+  assert.equal(listPath('purchase'), '/api/po/invoice/public/v2/invoice/find.inbox');
+  assert.equal(listPath('sale'), '/api/po/invoice/public/v2/invoice/find.outbox');
 });

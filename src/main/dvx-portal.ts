@@ -28,7 +28,9 @@ import {
   DVX_API_HOST,
   exportRequest,
   fileIdOf,
+  hasMore,
   isXlsx,
+  listPath,
   replayable,
   replayBody,
   type Replay,
@@ -241,6 +243,9 @@ export async function dvxDiagnose(
   return { file, requests: report.requests.length, replayed: replays.length };
 }
 
+/** At most 100 pages of 100 e-qaimələr in one update. */
+const MAX_PAGES = 100;
+
 class ExportError extends Error {
   constructor(
     message: string,
@@ -264,7 +269,7 @@ export async function dvxExport(
   to: string,
   diagDir: string,
   version: string,
-): Promise<{ name: string; bytes: Uint8Array }> {
+): Promise<{ files: { name: string; bytes: Uint8Array }[] }> {
   const state = current;
   const token = state && !state.window.isDestroyed() ? state.api.token() : '';
   if (!state || !token)
@@ -272,7 +277,13 @@ export async function dvxExport(
       'DVX ilə əlaqə yoxdur: "DVX kabinetini aç" ilə daxil olun və yenidən yoxlayın.',
     );
   const origin = testOrigin || `https://${DVX_API_HOST}`;
-  const request = exportRequest(direction, from, to);
+  // The portal's own filter of this box, when its list was opened in this session.
+  const list = listPath(direction);
+  const template = state.api
+    .seen()
+    .filter((r) => r.method === 'POST' && maskPath(r.url).split('?')[0] === list)
+    .at(-1)?.body;
+  let request = exportRequest(direction, from, to, 0, template);
   const ask = (url: string, init: { method: string; body?: string }) =>
     state.ses.fetch(url, {
       ...init,
@@ -297,45 +308,54 @@ export async function dvxExport(
           step,
           status,
         );
+  const box = direction === 'purchase' ? 'Gelenler' : 'Gonderilenler';
+  const files: { name: string; bytes: Uint8Array }[] = [];
   try {
-    const res = await ask(origin + request.path, {
-      method: 'POST',
-      body: JSON.stringify(request.body),
-    });
-    if (!res.ok) throw refused('export', res.status);
-    const type = res.headers.get('content-type') ?? '';
-    let bytes: Uint8Array;
-    if (/json|text/i.test(type)) {
-      const text = await res.text();
-      let answer: unknown = text;
-      try {
-        answer = JSON.parse(text);
-      } catch {
-        // A plain-text id.
+    for (let page = 0; page < MAX_PAGES; page++) {
+      request = exportRequest(direction, from, to, page, template);
+      const res = await ask(origin + request.path, {
+        method: 'POST',
+        body: JSON.stringify(request.body),
+      });
+      if (!res.ok) throw refused('export', res.status);
+      const type = res.headers.get('content-type') ?? '';
+      let bytes: Uint8Array;
+      if (/json|text/i.test(type)) {
+        const text = await res.text();
+        let answer: unknown = text;
+        try {
+          answer = JSON.parse(text);
+        } catch {
+          // A plain-text id.
+        }
+        const id = fileIdOf(answer);
+        if (!id)
+          throw new ExportError(
+            'DVX ixracı gözlənilməyən cavab verdi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
+            'export-answer',
+            res.status,
+          );
+        const file = await ask(origin + downloadPath(id), { method: 'GET' });
+        if (!file.ok) throw refused('download', file.status);
+        bytes = new Uint8Array(await file.arrayBuffer());
+      } else {
+        // The file itself, without an id.
+        bytes = new Uint8Array(await res.arrayBuffer());
       }
-      const id = fileIdOf(answer);
-      if (!id)
+      if (bytes.length > MAX_DOWNLOAD)
+        throw new ExportError('DVX faylı 50 MB-dan böyükdür.', 'download-size');
+      if (!isXlsx(bytes))
         throw new ExportError(
-          'DVX ixracı gözlənilməyən cavab verdi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
-          'export-answer',
-          res.status,
+          'DVX-dən Excel faylı gəlmədi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
+          'download-type',
         );
-      const file = await ask(origin + downloadPath(id), { method: 'GET' });
-      if (!file.ok) throw refused('download', file.status);
-      bytes = new Uint8Array(await file.arrayBuffer());
-    } else {
-      // The file itself, without an id.
-      bytes = new Uint8Array(await res.arrayBuffer());
+      files.push({ name: `DVX-${box}-${from}_${to}-${page + 1}.xlsx`, bytes });
+      // The same page of the list says whether another one follows. If the list cannot say,
+      // the pages taken so far stand (a repeated update takes the rest: one e-qaimə, once).
+      const more = await ask(origin + list, { method: 'POST', body: JSON.stringify(request.body) });
+      if (!more.ok || !hasMore(await more.json().catch(() => null))) break;
     }
-    if (bytes.length > MAX_DOWNLOAD)
-      throw new ExportError('DVX faylı 50 MB-dan böyükdür.', 'download-size');
-    if (!isXlsx(bytes))
-      throw new ExportError(
-        'DVX-dən Excel faylı gəlmədi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
-        'download-type',
-      );
-    const box = direction === 'purchase' ? 'Gelenler' : 'Gonderilenler';
-    return { name: `DVX-${box}-${from}_${to}.xlsx`, bytes };
+    return { files };
   } catch (error) {
     const e =
       error instanceof ExportError

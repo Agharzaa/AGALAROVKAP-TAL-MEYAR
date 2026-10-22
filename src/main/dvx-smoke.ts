@@ -61,7 +61,17 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
   const repeats: { key: boolean; ownHeader: boolean; body: unknown }[] = [];
   let portalAsked = 0;
   // Stage 6b: the cabinet's Excel export (POST the filter → a file id → GET the file).
-  const exports: { key: boolean; ownHeader: boolean; from: unknown; to: unknown }[] = [];
+  const exports: {
+    key: boolean;
+    ownHeader: boolean;
+    from: unknown;
+    to: unknown;
+    offset: unknown;
+    statuses: unknown;
+    senderTin: unknown;
+  }[] = [];
+  /** Meyar's page checks on the list (two pages: the first says "hasMore"). */
+  const pageChecks: unknown[] = [];
   let exportFails = false;
   const server = createServer((req, res) => {
     if (req.url === `${LIST}/excel`) {
@@ -69,15 +79,15 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
       req.on('data', (c: Buffer) => (text += c.toString('utf8')));
       req.on('end', () => {
         const key = req.headers['x-authorization'] === `Bearer ${KEY}`;
-        const body = JSON.parse(text || '{}') as {
-          creationDateFrom?: string;
-          creationDateTo?: string;
-        };
+        const body = JSON.parse(text || '{}') as Record<string, unknown>;
         exports.push({
           key,
           ownHeader: 'x-meyar-own' in req.headers,
           from: body.creationDateFrom,
           to: body.creationDateTo,
+          offset: body.offset,
+          statuses: body.statuses,
+          senderTin: body.senderTin,
         });
         if (exportFails) {
           res.writeHead(500, { 'content-type': 'application/json' });
@@ -96,15 +106,17 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
       req.on('data', (c: Buffer) => (text += c.toString('utf8')));
       req.on('end', () => {
         const key = req.headers['x-authorization'] === `Bearer ${KEY}`;
-        const body = JSON.parse(text || '{}') as { maxCount?: number };
-        // The page's own request asks for 50; Meyar's repeat for one small page.
+        const body = JSON.parse(text || '{}') as { maxCount?: number; offset?: number };
+        // The page's own request asks for 50; Meyar's repeat for one small page (10); the
+        // export's page check asks a page of 100: the first one has more.
         if (body.maxCount === 50) portalAsked++;
+        else if (body.maxCount === 100) pageChecks.push(body.offset);
         else repeats.push({ key, ownHeader: 'x-meyar-own' in req.headers, body });
         res.writeHead(key ? 200 : 401, { 'content-type': 'application/json' });
         res.end(
           JSON.stringify({
             invoices: [{ serialNumber: 'MT2610007', senderTin: '1700000001', status: 'APPROVED' }],
-            total: 1,
+            hasMore: body.maxCount === 100 && body.offset === 0,
           }),
         );
       });
@@ -180,8 +192,8 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
       : '';
     await rm(diagDir, { recursive: true, force: true });
     const exported = {
-      name: file.name,
-      size: file.bytes.length,
+      files: file.files.map((f) => `${f.name} ${f.bytes.length}`),
+      pageChecks,
       requests: exports,
       refusedExport,
       diagFiles: diagFiles.length,

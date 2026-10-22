@@ -229,30 +229,51 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const { from, to } = openPeriod(company?.closedThrough ?? '', today);
-      const f = await api.dvxExport(direction, from, to);
-      const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
+      const { files } = await api.dvxExport(direction, from, to);
       const period = `${day(from)}–${day(to)}`;
-      if (!read.report || !read.documents.length) {
-        if (read.problems.length) setReadError(read.problems[0]!.message);
-        else setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
+      // DVX gives the period page by page; each page is one import (one e-qaimə, once).
+      const total: CommandResult = { id: '' };
+      const add = (k: 'added' | 'updated' | 'same' | 'conflicts' | 'posted', n?: number) =>
+        n && (total[k] = (total[k] ?? 0) + n);
+      let loaded = 0;
+      for (const f of files) {
+        const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
+        if (!read.report || !read.documents.length) {
+          if (read.problems.length) {
+            setReadError(read.problems[0]!.message);
+            return;
+          }
+          continue;
+        }
+        const r = await m.run({
+          type: 'eqaime.import',
+          companyId: win.companyId,
+          direction,
+          ...(read.directionHint ? { fileDirection: read.directionHint } : {}),
+          ...(read.ownerTaxId ? { fileOwnerTaxId: read.ownerTaxId } : {}),
+          // The box was chosen by Meyar itself: Gələnlər for purchases, Göndərilənlər for sales.
+          directionConfirmed: true,
+          report: read.report,
+          source: 'portal',
+          fileName: f.name,
+          fileHash: await sha256(f.bytes),
+          documents: read.documents,
+        });
+        if (!r) return;
+        loaded++;
+        add('added', r.added);
+        add('updated', r.updated);
+        add('same', r.same);
+        add('conflicts', r.conflicts);
+        add('posted', r.posted);
+        total.rejected = [...(total.rejected ?? []), ...(r.rejected ?? [])];
+        total.failed = [...(total.failed ?? []), ...(r.failed ?? [])];
+      }
+      if (!loaded) {
+        setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
         return;
       }
-      const r = await m.run({
-        type: 'eqaime.import',
-        companyId: win.companyId,
-        direction,
-        ...(read.directionHint ? { fileDirection: read.directionHint } : {}),
-        ...(read.ownerTaxId ? { fileOwnerTaxId: read.ownerTaxId } : {}),
-        // The box was chosen by Meyar itself: Gələnlər for purchases, Göndərilənlər for sales.
-        directionConfirmed: true,
-        report: read.report,
-        source: 'portal',
-        fileName: f.name,
-        fileHash: await sha256(f.bytes),
-        documents: read.documents,
-      });
-      if (!r) return;
-      setMessage(`DVX-dən yeniləndi (${period}): ${importSummary(r)}`);
+      setMessage(`DVX-dən yeniləndi (${period}): ${importSummary(total)}`);
       imports.reload();
     } catch (e) {
       setReadError(e instanceof SheetError ? e.message : (e as Error).message);
