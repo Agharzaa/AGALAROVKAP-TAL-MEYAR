@@ -3290,3 +3290,15 @@ button.step:active {
   vertical-align: 3px;
   background: var(--mark);
 }
+
+/* Stage 6a: the DVX cabinet's sign-in state in the e-qaimə box (shape and word, not colour only). */
+.dvx-state {
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dvx-state.on {
+  color: var(--ok);
+  font-weight: 600;
+}

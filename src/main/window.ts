@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { Outcome, Zoom } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
-import { dvxDiagnose, openDvxPortal } from './dvx-portal.js';
+import { dvxConnected, dvxDiagnose, openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
 import { fitZoom } from './fit-zoom.js';
 
@@ -192,9 +192,15 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     openDvxPortal(window, direction, {
       onFile: (file) => !window.isDestroyed() && contents.send('meyar:dvx-file', file),
       onRefused: (message) => !window.isDestroyed() && contents.send('meyar:dvx-refused', message),
+      onConnected: (connected) =>
+        !window.isDestroyed() && contents.send('meyar:dvx-state', { connected }),
     });
     return { ok: true, value: null } satisfies Outcome<null>;
   });
+  handle(
+    'meyar:dvx-connected',
+    () => ({ ok: true, value: dvxConnected() }) satisfies Outcome<boolean>,
+  );
   // Stage 6a: the shape of the cabinet's API requests, to the user's Documents folder.
   handle('meyar:dvx-diagnose', async () => {
     try {

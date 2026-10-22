@@ -40,6 +40,8 @@ export interface DvxEvents {
   onFile: (file: DvxFile) => void;
   /** A download or a navigation was refused (shown to the user in the box). */
   onRefused: (message: string) => void;
+  /** Signed in to the cabinet (its session key seen) or not any more (stage 6a). */
+  onConnected?: (connected: boolean) => void;
 }
 
 let current:
@@ -50,9 +52,11 @@ export function setDvxTestOrigin(origin: string) {
   testOrigin = origin;
 }
 
-export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxEvents): Win {
+export function openDvxPortal(owner: Win, direction: DvxDirection, events: DvxEvents): Win {
   if (current && !current.window.isDestroyed()) {
     current.direction = direction;
+    if (current.window.isMinimized()) current.window.restore();
+    current.window.show();
     current.window.focus();
     return current.window;
   }
@@ -60,8 +64,9 @@ export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxE
   const ses = sessions.fromPartition(`dvx-${randomUUID()}`);
   ses.setPermissionRequestHandler((_w, _p, callback) => callback(false));
   ses.setPermissionCheckHandler(() => false);
+  // A window of its own (no parent): its own taskbar button, and it does not vanish with a
+  // minimized Meyar — as an owned window it did, and the user could not find it again.
   const window = new BrowserWindow({
-    parent,
     width: 1280,
     height: 900,
     title: 'DVX kabineti — e-taxes.gov.az',
@@ -76,7 +81,15 @@ export function openDvxPortal(parent: Win, direction: DvxDirection, events: DvxE
     },
   });
   window.removeMenu();
-  const api = recordDvxApi(ses, () => testOrigin);
+  // Not owned, so closed with Meyar by hand (the sign-in must not outlive the program).
+  const closeWithOwner = () => !window.isDestroyed() && window.close();
+  owner.once('closed', closeWithOwner);
+  window.once('closed', () => !owner.isDestroyed() && owner.off('closed', closeWithOwner));
+  const api = recordDvxApi(
+    ses,
+    () => testOrigin,
+    (connected) => events.onConnected?.(connected),
+  );
   const state = { window, direction, ses, api };
   current = state;
   const contents = window.webContents;
@@ -219,4 +232,14 @@ export async function dvxDiagnose(
   const file = path.join(dir, `Meyar-DVX-quruluş-${stamp}.json`);
   await writeFile(file, JSON.stringify(report, null, 2), 'utf8');
   return { file, requests: report.requests.length, replayed: replays.length };
+}
+
+/** Signed in to the cabinet now: its window is open and the portal's session key was seen. */
+export function dvxConnected(): boolean {
+  return !!current && !current.window.isDestroyed() && !!current.api.token();
+}
+
+/** Smoke test only: the cabinet window, when open. */
+export function dvxPortalWindow(): Win | undefined {
+  return current && !current.window.isDestroyed() ? current.window : undefined;
 }

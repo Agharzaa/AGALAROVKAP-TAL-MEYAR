@@ -32,6 +32,8 @@ export function harness(
   // cbar.az: the AMB files a test hands out, by ISO date; asked dates are recorded.
   const ambFiles = new Map<string, string>();
   const ambAsked: string[] = [];
+  let dvxConnected = false;
+  const dvxStateListeners = new Set<(state: { connected: boolean }) => void>();
   const dvxListeners = new Set<
     (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void
   >();
@@ -109,6 +111,13 @@ export function harness(
       dvxDiagnoses.push(1);
       return dvxDiagnosis;
     },
+    async dvxConnected() {
+      return { ok: true, value: dvxConnected };
+    },
+    onDvxState(listener) {
+      dvxStateListeners.add(listener);
+      return () => dvxStateListeners.delete(listener);
+    },
     onDvxFile(listener) {
       dvxListeners.add(listener);
       return () => dvxListeners.delete(listener);
@@ -139,6 +148,11 @@ export function harness(
     refit: (fit: number) => setZoom({ ...zoom, fit }),
     dvxOpened,
     dvxDiagnoses,
+    /** As if the user signed in to (or closed) the cabinet window. */
+    dvxState(state: { connected: boolean }) {
+      dvxConnected = state.connected;
+      for (const l of dvxStateListeners) l(state);
+    },
     /** What the next diagnostics request answers. */
     setDvxDiagnosis(answer: typeof dvxDiagnosis) {
       dvxDiagnosis = answer;

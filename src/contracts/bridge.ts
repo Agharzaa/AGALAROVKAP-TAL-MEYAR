@@ -46,6 +46,10 @@ export interface MeyarBridge {
    * fails when nobody is signed in to the cabinet.
    */
   dvxDiagnose?(): Promise<Outcome<{ file: string; requests: number; replayed: number }>>;
+  /** Stage 6a: whether the cabinet is signed in now. */
+  dvxConnected?(): Promise<Outcome<boolean>>;
+  /** Stage 6a: signed in to the cabinet (its session key seen) or not any more. */
+  onDvxState?(listener: (state: { connected: boolean }) => void): () => void;
   /** A download or address the cabinet window refused. */
   onDvxRefused?(listener: (message: string) => void): () => void;
   /** One day's AMB rates file from cbar.az (desktop app only); null when there is none. */

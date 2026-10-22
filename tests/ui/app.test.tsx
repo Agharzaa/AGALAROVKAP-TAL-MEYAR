@@ -2,7 +2,7 @@ import './setup';
 import React from 'react';
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../src/renderer/App';
 import type {
@@ -2246,6 +2246,27 @@ test('stage 6a: the box saves the shape of the DVX requests; without a sign-in i
     await page.findByText(/Meyar-DVX-quruluş-2026-10-22-1200\.json/);
     await page.findByText(/7 sorğu, 2 siyahı/);
     assert.equal(h.dvxDiagnoses.length, 2);
+  } finally {
+    h.close();
+  }
+});
+
+test('stage 6a: the box shows whether the DVX cabinet is signed in', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Satış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Göndərilən e-qaimələr (DVX)' }));
+    const page = within(pane());
+    const status = await page.findByRole('status', { name: 'DVX ilə əlaqə' });
+    assert.match(status.textContent ?? '', /daxil olunmayıb/);
+    act(() => h.dvxState({ connected: true }));
+    await waitFor(() => assert.match(status.textContent ?? '', /DVX: daxil olunub/));
+    act(() => h.dvxState({ connected: false }));
+    await waitFor(() => assert.match(status.textContent ?? '', /daxil olunmayıb/));
   } finally {
     h.close();
   }

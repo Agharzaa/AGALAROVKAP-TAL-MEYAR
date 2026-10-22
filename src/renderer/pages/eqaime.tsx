@@ -156,6 +156,21 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
+  // Stage 6a: whether the cabinet window is signed in (its session key seen by Meyar).
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.dvxConnected().then(
+      (c) => live && setConnected(c),
+      () => {},
+    );
+    const off = api.onDvxState((s) => setConnected(s.connected));
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+
   // Stage 6a: the shape of the cabinet's API requests, for the automatic update (§7).
   async function diagnose() {
     setReadError('');
@@ -548,6 +563,20 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             <button type="button" className="button secondary" onClick={() => void diagnose()}>
               DVX sorğularının quruluşunu saxla
             </button>
+          )}
+          {api.hasDvx && (
+            <span
+              role="status"
+              aria-label="DVX ilə əlaqə"
+              className={connected ? 'dvx-state on' : 'dvx-state'}
+              title={
+                connected
+                  ? 'Kabinet pəncərəsində daxil olunub; pəncərə bağlananda Meyar sessiyanı unudur.'
+                  : 'DVX kabinetini açın və ASAN İmza, SİMA və ya PIN ilə daxil olun.'
+              }
+            >
+              {connected ? '● DVX: daxil olunub' : '○ DVX: daxil olunmayıb'}
+            </span>
           )}
         </>
       }

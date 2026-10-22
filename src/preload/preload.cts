@@ -43,6 +43,15 @@ contextBridge.exposeInMainWorld('meyar', {
     return () => ipcRenderer.removeListener('meyar:dvx-file', handler);
   },
   dvxDiagnose: () => ipcRenderer.invoke('meyar:dvx-diagnose'),
+  dvxConnected: () => ipcRenderer.invoke('meyar:dvx-connected'),
+  onDvxState: (listener: (state: { connected: boolean }) => void) => {
+    const handler = (_event: IpcRendererEvent, state: unknown) => {
+      const s = state as { connected?: unknown };
+      if (typeof s?.connected === 'boolean') listener({ connected: s.connected });
+    };
+    ipcRenderer.on('meyar:dvx-state', handler);
+    return () => ipcRenderer.removeListener('meyar:dvx-state', handler);
+  },
   onDvxRefused: (listener: (message: string) => void) => {
     const handler = (_event: IpcRendererEvent, message: unknown) => {
       if (typeof message === 'string') listener(message);

@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 22.10.2026 (0.7.3, mərhələ 6a). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 22.10.2026 (0.7.4, mərhələ 6a). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -445,6 +445,20 @@ Plan: `docs/MERHELE-6-DVX-AVTOMAT.md` (təsdiqlənib 22.10.2026); qərarlar `doc
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 168, `npm run test:ui` 35, `npm run test:perf` keçir. Real Electron (`MEYAR_SMOKE` + `MEYAR_SMOKE_DVX=1`): ok (4d yoxlamaları da: fayl gəldi, .exe / 52 MB / kənar ünvan rədd, müvəqqəti fayl yox, 0 kuki).
 
+**0.7.4 — istifadəçinin real sınağında tapılan iki qüsur (22.10.2026), hər biri əvvəl uğursuz testlə:**
+
+| Qüsur                                                                                                                                                                                                                       | Düzəliş                                                                                                                                                                      | Sübut                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Kabinet Meyar-ın "uşaq" pəncərəsi idi: tapşırıqlar zolağında düyməsi yox idi, Meyar kiçiləndə onunla gizlənirdi; ikinci "DVX kabinetini aç" kiçilmiş pəncərəni qaytarmırdı (yalnız ). İstifadəçi kabineti açıb tapa bilmədi | Ayrıca pəncərə ( yox), Meyar bağlananda o da bağlanır; ikinci basış +                                                                                                        | Electron smoke: , Meyar kiçiləndə görünür, ikinci basışla qayıdır |
+| Qutuda kabinetə daxil olunub-olunmadığını göstərən heç nə yox idi                                                                                                                                                           | "● DVX: daxil olunub" / "○ DVX: daxil olunmayıb" (açar görünəndə; pəncərə bağlananda, portalın öz sorğusu 401 alanda — yox); qutu açılanda vəziyyət əsas prosesdən soruşulur | ("signed in"), smoke:                                             |
+
+Testlər: Unknown command: "test"
+
+Did you mean this?
+npm test # Test a package
+To see a list of supported npm commands, run:
+npm help 168, 36, , Electron smoke — keçir.
+
 **Gözlənilir (istifadəçidən, QERARLAR 2026-10-22 §5):** 0.7.3-də kabinetə ASAN İmza ilə daxil olmaq → Gələnlər və Göndərilənlər siyahısını açmaq → hər birində bir dəfə "Excel-ə ixrac" → qutuda "DVX sorğularının quruluşunu saxla" → faylı göndərmək. 6b-nin ixrac sorğusu (yol, gövdənin filtrləri, tarix formatı) bu fayldan yazılacaq; ondan əvvəl təxmin edilmir.
 
 ## Açıq məsələlər
@@ -460,7 +474,7 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 168, `npm run test:ui` 35, 
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
-6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3). **Növbəti:** istifadəçinin diaqnostika faylı → 6b ixracın təkrarı və idxal → 6c "DVX-dən yenilə" axını (əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
+6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4). **Növbəti:** istifadəçinin diaqnostika faylı → 6b ixracın təkrarı və idxal → 6c "DVX-dən yenilə" axını (əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
 
 ## Əmrlər
 

@@ -23,8 +23,21 @@ export interface DvxRecorder {
   forget(): void;
 }
 
-export function recordDvxApi(ses: Electron.Session, testOrigin: () => string): DvxRecorder {
+export function recordDvxApi(
+  ses: Electron.Session,
+  testOrigin: () => string,
+  /** Signed in (a key seen) or not any more (window closed, the portal answered 401). */
+  onConnected: (connected: boolean) => void = () => {},
+): DvxRecorder {
   let token = '';
+  const setToken = (next: string) => {
+    if (!!next === !!token) {
+      token = next;
+      return;
+    }
+    token = next;
+    onConnected(!!next);
+  };
   let seen: SeenRequest[] = [];
   const pending = new Map<number, SeenRequest>();
   const own = new Set<number>();
@@ -53,7 +66,7 @@ export function recordDvxApi(ses: Electron.Session, testOrigin: () => string): D
       own.add(details.id);
       pending.delete(details.id);
     } else if (api(details.url)) {
-      token = bearerOf(headers) || token;
+      setToken(bearerOf(headers) || token);
     }
     callback({ requestHeaders: headers });
   });
@@ -63,6 +76,8 @@ export function recordDvxApi(ses: Electron.Session, testOrigin: () => string): D
     if (!entry) return;
     pending.delete(id);
     entry.status = status;
+    // The portal's own request refused: its session has ended (signed out or expired).
+    if (status === 401) setToken('');
     const type = Object.entries(headers ?? {}).find(([h]) => h.toLowerCase() === 'content-type');
     if (type?.[1]?.[0]) entry.contentType = type[1][0];
     seen.push(entry);
@@ -75,7 +90,7 @@ export function recordDvxApi(ses: Electron.Session, testOrigin: () => string): D
     token: () => token,
     seen: () => [...seen],
     forget() {
-      token = '';
+      setToken('');
       seen = [];
       pending.clear();
       own.clear();

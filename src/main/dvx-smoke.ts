@@ -14,7 +14,13 @@ import type { BrowserWindow } from 'electron';
 import { createServer } from 'node:http';
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { closeDvxPortal, dvxDiagnose, setDvxTestOrigin } from './dvx-portal.js';
+import {
+  closeDvxPortal,
+  dvxConnected,
+  dvxDiagnose,
+  dvxPortalWindow,
+  setDvxTestOrigin,
+} from './dvx-portal.js';
 
 const KEY = 'smoke-secret-key.abc';
 const LIST = '/api/po/invoice/public/v2/invoice/find.inbox';
@@ -94,11 +100,28 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
   setDvxTestOrigin(`http://127.0.0.1:${port}`);
   const js = (code: string) => window.webContents.executeJavaScript(code);
   try {
-    await js(`window.__dvx = { files: [], refused: [] };
+    await js(`window.__dvx = { files: [], refused: [], states: [] };
+      window.meyar.onDvxState((s) => window.__dvx.states.push(s.connected));
       window.meyar.onDvxFile((f) => window.__dvx.files.push({ direction: f.direction, name: f.name, size: f.bytes.length }));
       window.meyar.onDvxRefused((m) => window.__dvx.refused.push(m));
       window.meyar.dvxOpen('purchase')`);
     await new Promise((r) => setTimeout(r, 8000));
+    // The cabinet is a window of its own: it stays on screen when Meyar is minimized, and a
+    // second "DVX kabinetini aç" brings a minimized cabinet back.
+    const cabinet = dvxPortalWindow()!;
+    window.minimize();
+    await new Promise((r) => setTimeout(r, 800));
+    const ownWindow = {
+      parent: cabinet.getParentWindow() ? 'var' : 'yox',
+      visibleWithMeyarMinimized: cabinet.isVisible() && !cabinet.isMinimized(),
+      connected: dvxConnected(),
+    };
+    window.restore();
+    cabinet.minimize();
+    await new Promise((r) => setTimeout(r, 800));
+    await js("window.meyar.dvxOpen('purchase')");
+    await new Promise((r) => setTimeout(r, 800));
+    Object.assign(ownWindow, { restoredByOpen: !cabinet.isMinimized() && cabinet.isVisible() });
     const seen = (await js('window.__dvx')) as { files: unknown[]; refused: string[] };
     const leftovers = (await readdir(tmpdir())).filter((f) => f.startsWith('meyar-dvx-'));
     const diagnosis = await dvxDiagnose(tmpdir(), 'smoke');
@@ -114,6 +137,8 @@ export async function dvxSmoke(window: BrowserWindow): Promise<Record<string, un
       ...seen,
       leftovers,
       cookiesAfterClose,
+      ownWindow,
+      statesAfterClose: await js('window.__dvx.states'),
       api: {
         portalAsked,
         repeats,

@@ -123,6 +123,14 @@ export const api = {
     if (!b.dvxDiagnose) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
     return unwrap(await b.dvxDiagnose());
   },
+  async dvxConnected(): Promise<boolean> {
+    const b = override ?? window.meyar;
+    return b?.dvxConnected ? unwrap(await b.dvxConnected()) : false;
+  },
+  onDvxState(listener: (state: { connected: boolean }) => void): () => void {
+    const b = override ?? window.meyar;
+    return b?.onDvxState ? b.onDvxState(listener) : () => {};
+  },
   onDvxRefused(listener: (message: string) => void): () => void {
     const b = override ?? window.meyar;
     return b?.onDvxRefused ? b.onDvxRefused(listener) : () => {};
