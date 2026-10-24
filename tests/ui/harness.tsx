@@ -35,10 +35,11 @@ export function harness(
   let dvxConnected = false;
   // Stage 6b: what the cabinet's Excel export answers, and what was asked.
   const dvxExports: { direction: string; from: string; to: string }[] = [];
-  let dvxExportFile: Outcome<{ files: { name: string; bytes: Uint8Array }[] }> = {
-    ok: false,
-    error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
-  };
+  let dvxExportFile: Outcome<{ files: { name: string; bytes: Uint8Array }[]; partial?: boolean }> =
+    {
+      ok: false,
+      error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
+    };
   const dvxStateListeners = new Set<(state: { connected: boolean }) => void>();
   const dvxListeners = new Set<
     (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void

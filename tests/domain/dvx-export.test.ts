@@ -13,6 +13,7 @@ import {
   hasMore,
   isXlsx,
   listPath,
+  samePage,
 } from '../../src/main/dvx-api-policy.js';
 import { openPeriod } from '../../src/domain/eqaime.js';
 
@@ -132,8 +133,12 @@ test("6b: the portal's own list filter seen in the session is the template; only
     newField: 'x',
   };
   const b = exportRequest('purchase', '2026-10-01', '2026-10-22', 1, seen).body;
-  assert.deepEqual(b.statuses, ['approved', 'approvedBySystem']);
-  assert.deepEqual(b.types, ['current']);
+  // audit 2026-10-25: the user's own narrowing of statuses, kinds and types in the cabinet does
+  // not narrow the update — cancelled e-qaimələr must come, their status is tracked.
+  assert.equal((b.statuses as string[]).length, 10);
+  assert.ok((b.statuses as string[]).includes('deactivated'));
+  assert.deepEqual(b.types, ['current', 'corrected']);
+  assert.ok((b.kinds as string[]).includes('advanceInvoice'));
   assert.equal(b.newField, 'x');
   // The user's own narrowing in the cabinet does not narrow Meyar's update.
   assert.equal(b.senderTin, null);
@@ -152,4 +157,11 @@ test('6b: the list answer says whether another page follows', () => {
   assert.equal(hasMore(null), false);
   assert.equal(listPath('purchase'), '/api/po/invoice/public/v2/invoice/find.inbox');
   assert.equal(listPath('sale'), '/api/po/invoice/public/v2/invoice/find.outbox');
+});
+
+test('audit 2026-10-25: a page equal to the one before is the same file — the export ignores paging', () => {
+  const a = new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3]);
+  assert.equal(samePage(a, new Uint8Array(a)), true);
+  assert.equal(samePage(a, new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 4])), false);
+  assert.equal(samePage(undefined, a), false);
 });

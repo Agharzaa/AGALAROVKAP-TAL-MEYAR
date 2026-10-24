@@ -399,8 +399,8 @@ function vatStep(
     if (!inv) continue;
     const label = `${String(inv.number)} · ${dmy(String(inv.date))} · ${String(inv.partner_name)}`;
     const confirmed = db.get(
-      `SELECT 1 FROM eq_documents WHERE company_id=? AND direction='purchase' AND invoice_id=?
-         AND status='accepted' LIMIT 1`,
+      `SELECT SUM(vat) AS vat FROM eq_documents WHERE company_id=? AND direction='purchase'
+         AND invoice_id=? AND status='accepted' HAVING COUNT(*) > 0`,
       companyId,
       String(inv.id),
     );
@@ -457,6 +457,15 @@ function vatStep(
       }
     }
     if (paid > debit) paid = debit;
+    // Never more than DVX confirmed: an invoice saved with other VAT than its e-qaimə (a warning
+    // since 25.10.2026) offsets only the e-qaimə's VAT; the rest waits on 241 for the accountant.
+    const dvxVat = confirmed.vat as bigint;
+    if (paid > dvxVat) {
+      paid = dvxVat;
+      notes.push(
+        `${label}: qaimədə ƏDV ${show(debit)}, DVX-də ƏDV ${show(dvxVat)} — yalnız DVX-dəki əvəzləşdirilir, fərq 241-də qalır.`,
+      );
+    }
     const due = paid - credit;
     let offset = due < open ? due : open;
     if (offset < open) {

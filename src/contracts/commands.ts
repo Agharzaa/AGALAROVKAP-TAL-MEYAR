@@ -611,6 +611,8 @@ export interface CommandResult {
   number?: string;
   /** True when the same request was already applied; nothing changed. */
   replayed?: boolean;
+  /** Saved, but differs from its DVX e-qaimə: shown to the accountant at once (25.10.2026). */
+  warning?: string;
   /** Statement import: new rows, rows already loaded before, rows refused with the reason. */
   added?: number;
   duplicates?: number;

@@ -31,6 +31,7 @@ import {
   hasMore,
   isXlsx,
   listPath,
+  samePage,
   replayable,
   replayBody,
   type Replay,
@@ -269,7 +270,7 @@ export async function dvxExport(
   to: string,
   diagDir: string,
   version: string,
-): Promise<{ files: { name: string; bytes: Uint8Array }[] }> {
+): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial: boolean }> {
   const state = current;
   const token = state && !state.window.isDestroyed() ? state.api.token() : '';
   if (!state || !token)
@@ -310,6 +311,8 @@ export async function dvxExport(
         );
   const box = direction === 'purchase' ? 'Gelenler' : 'Gonderilenler';
   const files: { name: string; bytes: Uint8Array }[] = [];
+  // DVX could not say whether more pages follow: the update says it is partial (audit 2026-10-25).
+  let partial = false;
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
       request = exportRequest(direction, from, to, page, template);
@@ -349,13 +352,20 @@ export async function dvxExport(
           'DVX-dən Excel faylı gəlmədi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
           'download-type',
         );
+      // The same file as the page before: the export ignores paging — it is all there.
+      if (samePage(files.at(-1)?.bytes, bytes)) break;
       files.push({ name: `DVX-${box}-${from}_${to}-${page + 1}.xlsx`, bytes });
       // The same page of the list says whether another one follows. If the list cannot say,
       // the pages taken so far stand (a repeated update takes the rest: one e-qaimə, once).
       const more = await ask(origin + list, { method: 'POST', body: JSON.stringify(request.body) });
-      if (!more.ok || !hasMore(await more.json().catch(() => null))) break;
+      const answer: unknown = more.ok ? await more.json().catch(() => undefined) : undefined;
+      if (answer === undefined) {
+        partial = true;
+        break;
+      }
+      if (!hasMore(answer)) break;
     }
-    return { files };
+    return { files, partial };
   } catch (error) {
     const e =
       error instanceof ExportError

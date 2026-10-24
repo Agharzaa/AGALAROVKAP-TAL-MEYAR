@@ -231,7 +231,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const { from, to } = openPeriod(company?.closedThrough ?? '', today);
-      const { files } = await api.dvxExport(direction, from, to);
+      const { files, partial } = await api.dvxExport(direction, from, to);
       const period = `${day(from)}–${day(to)}`;
       // DVX gives the period page by page; each page is one import (one e-qaimə, once).
       const total: CommandResult = { id: '' };
@@ -275,7 +275,9 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
         return;
       }
-      setMessage(`DVX-dən yeniləndi (${period}): ${importSummary(total)}`);
+      setMessage(
+        `DVX-dən yeniləndi (${period}${partial ? ', yarımçıq: DVX növbəti səhifəni demədi — yenidən basın' : ''}): ${importSummary(total)}`,
+      );
       imports.reload();
     } catch (e) {
       setReadError(e instanceof SheetError ? e.message : (e as Error).message);

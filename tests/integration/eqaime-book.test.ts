@@ -571,6 +571,8 @@ test('booking by hand from the box: an invoice other than DVX wrote is saved wit
     );
   // The accountant books what they decide; Meyar only warns (the user's decision of 25.10.2026).
   const first = save('99');
+  // Said at once, on saving: the accountant sees the difference before anything else.
+  assert.match(first.warning ?? '', /DVX-dən fərqlidir: cəmi 1168.20, DVX-də 1180.00/);
   const warned = byNumber(f, 'MT2609001');
   assert.equal(warned.bucket, 'conflict');
   assert.match(warned.conflict, /^Uçot: .*cəmi 1168\.20, DVX-də 1180\.00/);

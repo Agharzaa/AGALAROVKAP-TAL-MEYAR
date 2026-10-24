@@ -128,7 +128,7 @@ export const api = {
     direction: 'sale' | 'purchase',
     from: string,
     to: string,
-  ): Promise<{ files: { name: string; bytes: Uint8Array }[] }> {
+  ): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial?: boolean }> {
     const b = bridge();
     if (!b.dvxExport) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
     return unwrap(await b.dvxExport(direction, from, to));

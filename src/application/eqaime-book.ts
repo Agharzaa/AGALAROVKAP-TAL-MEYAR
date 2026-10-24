@@ -686,14 +686,14 @@ export function bindEq(
   requested: string | undefined,
   postedBy: 'auto' | 'hand' = 'hand',
   usedMaps = '',
-): void {
+): string {
   const previous = tx.db.get(
     'SELECT * FROM eq_documents WHERE company_id=? AND invoice_id=?',
     companyId,
     invoiceId,
   );
   const docId = requested ?? (previous ? String(previous.id) : undefined);
-  if (!docId) return;
+  if (!docId) return '';
   const doc = eqRow(tx, companyId, docId);
   const orig = corrected(tx, companyId, doc);
   // The invoice books another e-qaimə: allowed only for the correction of that very one.
@@ -758,6 +758,10 @@ export function bindEq(
       `Qaimə e-qaimə ${String(doc.eq_number)} ilə uyğun deyil: ${why.text}.`,
       'eqDocumentId',
     );
+  // Said to the accountant at once, on saving (the box shows it under "Ziddiyyət" too).
+  const said = why.text
+    ? `Qaimə saxlanıldı, amma DVX-dən fərqlidir: ${why.text}. E-qaimə “Ziddiyyət”də görünür.`
+    : '';
   const warning = why.text
     ? `${BOOKING_CONFLICT}${String(inv.number)} qaiməsi ilə fərq: ${why.text}`
     : '';
@@ -780,7 +784,7 @@ export function bindEq(
         tx.clock.now(),
         docId,
       );
-    return;
+    return said;
   }
   // The corrected e-qaimə steps aside: its correction now books (or replaces) it.
   if (orig && orig.state !== 'ignored')
@@ -808,6 +812,7 @@ export function bindEq(
     companyId,
     invoiceId,
   );
+  return said;
 }
 
 /** Called when an invoice is cancelled: its e-qaimə waits again (or stays aside, if DVX cancelled it). */

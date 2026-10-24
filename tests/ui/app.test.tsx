@@ -18,6 +18,7 @@ import type {
 } from '../../src/contracts/queries';
 import { monthEnd } from '../../src/domain/rates';
 import { harness } from './harness';
+import { readSheet } from '../../src/renderer/sheet-reader';
 
 afterEach(() => cleanup());
 const azMonths = [
@@ -196,6 +197,15 @@ test('trial balance: drill into bank accounts and partners, export to Excel', as
     const file = h.saved.at(-1)!;
     assert.match(file.name, /^DBC .*\.xlsx$/);
     assert.equal(String.fromCharCode(file.bytes[0]!, file.bytes[1]!), 'PK');
+    // audit 2026-10-25: the file says what the screen says (1C's names).
+    globalThis.DOMParser ??= window.DOMParser;
+    const sheet = await readSheet(file.name, file.bytes);
+    assert.ok(
+      sheet.some(
+        (r) => r.includes('Dövrün əvvəlinə saldo Dt') && r.includes('Dövrün sonuna saldo Kt'),
+      ),
+      JSON.stringify(sheet.slice(0, 4)),
+    );
   } finally {
     h.close();
   }
@@ -2315,6 +2325,16 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
     await page.findByText(/DVX-dən yeniləndi .*yeni 0 e-qaimə/);
     assert.equal(h.dvxExports.length, 2);
     assert.deepEqual(h.dvxOpened, ['purchase']);
+    // audit 2026-10-25: DVX could not say whether more pages follow — the update says it is partial.
+    h.setDvxExport({
+      ok: true,
+      value: {
+        files: [{ name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) }],
+        partial: true,
+      },
+    });
+    await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText(/yarımçıq/);
     // A refused export says why, nothing is loaded.
     h.setDvxExport({ ok: false, error: { message: 'DVX sessiyasının vaxtı bitib.', code: 'dvx' } });
     await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
@@ -2519,6 +2539,101 @@ test('2026-10-25: trial balance and account card as in 1C (the user chose varian
     assert.match(line.textContent ?? '', /223\.01/);
     assert.match(line.textContent ?? '', /301/);
     assert.match(line.textContent ?? '', /D\s*30\s000,00/);
+  } finally {
+    h.close();
+  }
+});
+
+test('audit 2026-10-25: an invoice saved other than DVX wrote shows the warning at once and stays open', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Kaan',
+    taxId: '1700000003',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'K-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  });
+  const product = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Yanacaq',
+    unit: 'xidmət',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  const expense = (
+    h.ledger.query({ type: 'catalog', companyId: s.companyId }) as {
+      items: { id: string; kind: string }[];
+    }
+  ).items.find((i) => i.kind === 'expenseItem')!.id;
+  h.run({
+    type: 'eqMap.bulk',
+    companyId: s.companyId,
+    direction: 'purchase',
+    taxIds: ['1700000003'],
+    productId: product,
+    account: '721',
+    expenseItemId: expense,
+    incomeTypeId: '',
+    vatTreatment: '',
+    mode: 'suggest',
+  });
+  h.run({
+    type: 'eqaime.import',
+    directionConfirmed: true,
+    companyId: s.companyId,
+    direction: 'purchase',
+    report: 'invoices',
+    source: 'file',
+    fileName: 'gelenler.xlsx',
+    fileHash: 'e'.repeat(64),
+    documents: [
+      {
+        row: 2,
+        number: 'MT1',
+        date: '2026-09-30',
+        taxId: '1700000003',
+        name: 'Kaan',
+        status: 'Təsdiqləndi',
+        net: '1091.53',
+        vat: '196.47',
+        base18: '1091.53',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(await page.findByRole('button', { name: 'MT1: uçota al' }));
+    const price = (await screen.findByRole('textbox', {
+      name: 'Sətir 1 qiymət',
+    })) as HTMLInputElement;
+    await user.clear(price);
+    await user.type(price, '1300');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+    await screen.findByText(/Qaimə saxlanıldı, amma DVX-dən fərqlidir/);
+    // Ctrl+Enter did not close the window: the warning is read first.
+    screen.getByRole('checkbox', { name: /ƏDV daxildir/ });
   } finally {
     h.close();
   }

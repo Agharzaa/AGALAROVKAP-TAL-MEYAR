@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.11, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.12, mərhələ 6b auditi). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -483,6 +483,8 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 **0.7.10 — başlıqda ümumi dövr yoxdur (25.10.2026, QERARLAR 2026-10-25 §15):** "Dövr: Oktyabr 2026" seçicisi (`PeriodSwitch`, `setPeriod`) çıxarıldı; səhifələrin öz dövr sahələri qalır (ilkin — cari ay); "DVX ↔ uçot"un öz "Ay" seçicisi var. Testlər: `tests/ui` ("no common period"). `npm test` 176, `npm run test:ui` 39, `npm run test:perf`. 0.7.9 CI-dan keçib.
 
 **0.7.11 — dövriyyə balansı və hesab kartı 1C klassik görünüşdə (25.10.2026, QERARLAR 2026-10-25 §16):** istifadəçi 0.7.9-un bölmə başlıqlarını rədd etdi ("1C kimi et"); 6 maket (A–F) göstərildi, A (1C klassik) seçildi. Başlıqlar çıxarıldı; DBC — hesabat vərəqi, xətli xanalar, ⊞ / ⊟, 1C sütun adları; hesab kartı — Debet / Kredit (hesab, subkonto), Cari saldo D / K, saldo sətirləri, Excel eyni sütunlarla; kart sətrinə öz (yarpaq) hesabı əlavə olundu (`CardLine.account`). Testlər: `ledger.test.ts` (başlıq yoxdur), `tests/ui` ("as in 1C"). `npm test` 176, `npm run test:ui` 40, `npm run test:perf`. **Real Electron ekran şəkli yoxdur:** istifadəçinin kompüterində pəncərə açmaq qadağandır (oyunu kəsdi) — yalnız jsdom testləri.
+
+**0.7.12 — audit (25.10.2026, QERARLAR 2026-10-25 §17):** 6a–0.7.11 proqramçı və baş mühasib gözü ilə yoxlandı. | # | Ağırlıq | Tapıntı | Düzəliş | — 1 Yüksək: bağlanışda ƏDV əvəzləşdirməsi DVX ƏDV-si ilə məhdud deyildi → məhdud, fərq 241-də (closing.test.ts); 2 Orta: fərqli qaimə saxlananda xəbərdarlıq görünmürdü → CommandResult.warning, redaktorda bildiriş (tests/ui); 3 Orta: yeniləmə kabinetin filtrini götürürdü → bütün status/növ (dvx-export.test.ts); 4 Orta: yarımçıq yeniləmə tam sayılırdı → partial (tests/ui); 5 Aşağı: səhifələməni nəzərə almayan ixrac təkrar səhifə → samePage; 6 Aşağı: DBC Excel başlıqları ekrandan fərqli → 1C adları. Qüsur tapılmadı: JWT (yalnız yaddaş, 401/bağlananda silinir), host siyahısı, IPC göndərən yoxlaması, xlsx yoxlaması, diaqnostikanın gizliliyi, pennyOff hədləri, eynilik rəddləri, DBC cəmləri, kart tərəfləri. Tövsiyə (kod yox): MG Transport-un "Digər" kimi avtomatik qaydaları gələcək əsas vəsaitləri də 721-ə yaza bilər — təklif rejimi düşünülsün. dvx-smoke işlədilmədi (pəncərə açır). npm test 178, test:ui 41, test:perf.
 
 ## Açıq məsələlər
 

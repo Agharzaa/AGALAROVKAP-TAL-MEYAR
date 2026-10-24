@@ -295,6 +295,13 @@ export function exportRequest(
     amountFrom: null,
     amountTo: null,
   };
+  // The whole box, whatever the cabinet was narrowed to: every status (cancellations are tracked),
+  // every kind and type (audit 2026-10-25).
+  const whole = {
+    statuses: EXPORT_STATUSES,
+    types: ['current', 'corrected'],
+    kinds: EXPORT_KINDS,
+  };
   const period = {
     creationDateFrom: portalDay(start),
     creationDateTo: portalDay(end),
@@ -302,13 +309,14 @@ export function exportRequest(
     maxCount: EXPORT_PAGE,
   };
   if (seen)
-    return { path: `${listPath(direction)}/excel`, body: { ...seen, ...narrowing, ...period } };
+    return {
+      path: `${listPath(direction)}/excel`,
+      body: { ...seen, ...whole, ...narrowing, ...period },
+    };
   return {
     path: `${listPath(direction)}/excel`,
     body: {
-      statuses: EXPORT_STATUSES,
-      types: ['current', 'corrected'],
-      kinds: EXPORT_KINDS,
+      ...whole,
       ...narrowing,
       ...period,
       sortBy: 'creationDate',
@@ -343,4 +351,11 @@ export function isXlsx(bytes: Uint8Array): boolean {
   return (
     bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4
   );
+}
+
+/** The export answered the same file as for the page before: it ignores paging, stop asking. */
+export function samePage(before: Uint8Array | undefined, page: Uint8Array): boolean {
+  if (!before || before.length !== page.length) return false;
+  for (let i = 0; i < page.length; i++) if (before[i] !== page[i]) return false;
+  return true;
 }

@@ -200,6 +200,8 @@ export function InvoiceEditor({
   const resync = useRef(false);
   const m = useMutation();
   const [message, setMessage] = useState('');
+  // Saved, but other than DVX wrote: said at once (QERARLAR 2026-10-25 §13).
+  const [warning, setWarning] = useState('');
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
   const doc = detail.data;
@@ -308,7 +310,9 @@ export function InvoiceEditor({
       ...(eqDocumentId ? { eqDocumentId } : {}),
     });
     if (!r) return;
-    if (close) {
+    setWarning(r.warning ?? '');
+    // A warning keeps the window open, so it is read.
+    if (close && !r.warning) {
       ws.discard(win.id);
       return;
     }
@@ -441,6 +445,11 @@ export function InvoiceEditor({
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
               {message}
+            </Notice>
+          )}
+          {warning && (
+            <Notice kind="warning" onClose={() => setWarning('')}>
+              {warning}
             </Notice>
           )}
         </>

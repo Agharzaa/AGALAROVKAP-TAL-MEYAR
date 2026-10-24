@@ -734,8 +734,8 @@ export function saveInvoice(
       existing.version as bigint,
     );
     if (last && String(last.payload) === JSON.stringify(data)) {
-      bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
-      return { id, version: Number(existing.version), number };
+      const warning = bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
+      return { id, version: Number(existing.version), number, ...(warning ? { warning } : {}) };
     }
     tx.open(cmd.companyId, String(existing.date));
   }
@@ -824,8 +824,8 @@ export function saveInvoice(
     `${number} · ${n.header.date} · ${String(n.partner.name)} · ${money(n.totals.total)} ${n.currency}`,
   );
   // A DVX e-qaimə booked by this invoice must match it (also on every later correction).
-  bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
-  return { id, version, number };
+  const warning = bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
+  return { id, version, number, ...(warning ? { warning } : {}) };
 }
 
 export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): CommandResult {

@@ -641,3 +641,43 @@ test('the closing form opens on the first month not closed: the first posting af
   cancel(f, '2026-09');
   assert.equal(next(), '2026-09');
 });
+
+test('audit 2026-10-25: the VAT offset never exceeds the VAT of the confirmed e-qaimə', (t) => {
+  const f = fixture(t);
+  const kapital = f.partner('Kapital Bank ASC', '9900003611');
+  const founder = f.partner('Ağarza Ağalarov', '', 'individual');
+  const capitalIn = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
+  const bankK = f.bankAccount(kapital, 'AZ12AIIB38060019441234567890', '223.01', 'AZN', 'Kapital');
+  const deposit = f.bankAccount(kapital, 'AZ77AIIB38060019449999999999', '224.04', 'AZN', 'ƏDV');
+  const supplier = f.partner('Təchizat ASC', '1700000002');
+  const c1 = f.contract(supplier, 'P-1', 'purchase');
+  const paper = f.product('Kağız A4', 'qutu');
+  const L = f.line;
+  f.operation('2026-08-31', [
+    L('223.01', [bankK], '301', [founder, capitalIn], '30000'),
+    L('224.04', [deposit], '301', [founder, capitalIn], '3000'),
+  ]);
+  close(f, '2026-08');
+  // The invoice says 180.00 VAT; DVX's e-qaimə only 170.00 (the accountant saved it anyway:
+  // since 25.10.2026 a difference from DVX is a warning, not a refusal).
+  const inv = f.invoice(
+    'purchase',
+    '2026-09-05',
+    supplier,
+    c1,
+    [{ productId: paper, quantity: '10', price: '100' }],
+    { eqNumber: 'MT2609001' },
+  );
+  confirm(f, [
+    { number: 'MT2609001', date: '2026-09-05', taxId: '1700000002', net: '1000.00', vat: '170.00' },
+  ]);
+  const B = f.bankLine;
+  f.bank('out', '2026-09-10', bankK, [B('531.01', [supplier, c1], '1000')]);
+  f.bank('out', '2026-09-10', deposit, [B('531.01', [supplier, c1], '180')]);
+  const v = view(f, '2026-09');
+  assert.deepEqual(
+    step(v, 'vat').postings.map((p) => [p.ktSk[1], p.amount]),
+    [[`invoice:${inv.id}`, '170.00']],
+  );
+  assert.match(step(v, 'vat').notes.join(), /DVX-də ƏDV 170,00/);
+});
