@@ -11,8 +11,6 @@ import {
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CircleAlert,
   Plus,
   type LucideIcon,
@@ -53,7 +51,6 @@ import { day } from './format';
 import {
   WindowContext,
   WorkspaceProvider,
-  monthOf,
   useLayout,
   useWorkspace,
   type Geom,
@@ -218,53 +215,6 @@ function CompanyForm({
         </button>
       </div>
     </form>
-  );
-}
-
-const monthNames = [
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'İyun',
-  'İyul',
-  'Avqust',
-  'Sentyabr',
-  'Oktyabr',
-  'Noyabr',
-  'Dekabr',
-];
-
-function PeriodSwitch() {
-  const ws = useWorkspace();
-  const [y, m] = ws.period.from.split('-').map(Number) as [number, number];
-  const shift = (d: number) => {
-    const date = new Date(Date.UTC(y, m - 1 + d, 1));
-    ws.setPeriod(monthOf(date.toISOString().slice(0, 10)));
-  };
-  return (
-    <div className="period-switch" role="group" aria-label="İş dövrü">
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="Əvvəlki ay"
-        onClick={() => shift(-1)}
-      >
-        <ChevronLeft size={14} />
-      </button>
-      <span title="Hesabatların və yeni sənədlərin standart dövrü">
-        Dövr: {monthNames[m - 1]} {y}
-      </span>
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="Növbəti ay"
-        onClick={() => shift(1)}
-      >
-        <ChevronRight size={14} />
-      </button>
-    </div>
   );
 }
 
@@ -707,7 +657,6 @@ function Shell({
             <option value="__new">+ Yeni şirkət…</option>
           </select>
         </label>
-        <PeriodSwitch />
         <span className="caption-space" aria-hidden="true" />
       </header>
       <div className="menubar">

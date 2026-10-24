@@ -158,7 +158,6 @@ export interface Period {
 interface Workspace {
   companyId: string;
   period: Period;
-  setPeriod: (p: Period) => void;
   setCompany: (id: string) => void;
   windows: Win[];
   activeId: string;
@@ -223,7 +222,8 @@ export function WorkspaceProvider({
   children: ReactNode;
 }) {
   const [companyId, setCompanyId] = useState(initialCompany);
-  const [period, setPeriod] = useState<Period>(() => monthOf(todayIso()));
+  // The default period of reports and new documents: this month (each page has its own field).
+  const [period] = useState<Period>(() => monthOf(todayIso()));
   const [windows, setWindows] = useState<Win[]>([]);
   const [activeId, setActiveId] = useState('home');
   const [pendingClose, setPendingClose] = useState<Win | null>(null);
@@ -356,7 +356,6 @@ export function WorkspaceProvider({
   const value: Workspace = {
     companyId,
     period,
-    setPeriod,
     setCompany: setCompanyId,
     windows,
     activeId,

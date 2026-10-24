@@ -696,7 +696,6 @@ textarea:focus-visible {
 .titlebar label,
 .titlebar input,
 .titlebar select,
-.titlebar .period-switch,
 .titlebar .quick-search {
   -webkit-app-region: no-drag;
 }
@@ -771,27 +770,6 @@ textarea:focus-visible {
 .company-text small {
   font-size: 12px;
   color: var(--muted);
-}
-.period-switch {
-  display: flex;
-  align-items: center;
-  height: 30px;
-  padding: 0 2px;
-  border: 1px solid var(--button-line);
-  border-radius: var(--radius);
-  background: linear-gradient(var(--button-top), var(--button));
-  box-shadow: var(--raised);
-}
-.period-switch .icon-button {
-  width: 24px;
-  height: 24px;
-}
-.period-switch span {
-  padding: 0 6px;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
 }
 .quick-search {
   position: relative;

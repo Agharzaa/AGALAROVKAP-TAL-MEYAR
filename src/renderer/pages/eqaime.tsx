@@ -23,6 +23,8 @@ import { ModuleFrame } from '../frame';
 import { addAmounts, day, money, qty } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
+import { MonthFilter } from '../filters';
+import { monthEnd } from '../../domain/rates';
 import { readSheet, SheetError } from '../sheet-reader';
 import { Amount, Confirm, DataTable, Empty, Field, Modal, Notice, type Column } from '../ui';
 import { accountOptions, Picker, type Option } from '../picker';
@@ -806,7 +808,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               aria-expanded={reconcileOpen}
               onClick={() => setReconcileOpen(!reconcileOpen)}
             >
-              DVX ↔ uçot ({day(ws.period.from)}–{day(ws.period.to)})
+              DVX ↔ uçot (aylar üzrə)
             </button>
           </p>
           {reconcileOpen && <Reconcile direction={direction} />}
@@ -1102,19 +1104,33 @@ export function EqaimePage({ direction }: { direction: Direction }) {
 function Reconcile({ direction }: { direction: Direction }) {
   const win = useWindow();
   const ws = useWorkspace();
+  // Its own month (no common period in the header since 25.10.2026).
+  const [month, setMonth] = useState(ws.period.from.slice(0, 7));
   const r = useQuery<EqReconcileView>({
     type: 'eqReconcile',
     companyId: win.companyId,
     direction,
-    from: ws.period.from,
-    to: ws.period.to,
+    from: `${month}-01`,
+    to: monthEnd(month),
   });
   const v = r.data;
   const open = (id: string) => ws.open({ type: 'invoice', direction, id }, win.companyId);
-  if (!v) return <p className="doc-hint">{r.error || 'Hesablanır…'}</p>;
   return (
     <section className="history" aria-label="DVX ilə uçotun tutuşdurulması">
       <h2>DVX ↔ uçot</h2>
+      <MonthFilter value={month} onChange={setMonth} />
+      {!v ? (
+        <p className="doc-hint">{r.error || 'Hesablanır…'}</p>
+      ) : (
+        <ReconcileBody v={v} open={open} />
+      )}
+    </section>
+  );
+}
+
+function ReconcileBody({ v, open }: { v: EqReconcileView; open: (id: string) => void }) {
+  return (
+    <>
       <p className="doc-hint">
         Yüklənmiş DVX dövrləri:{' '}
         {v.covered.length
@@ -1177,6 +1193,6 @@ function Reconcile({ direction }: { direction: Direction }) {
           ))}
         </li>
       </ul>
-    </section>
+    </>
   );
 }

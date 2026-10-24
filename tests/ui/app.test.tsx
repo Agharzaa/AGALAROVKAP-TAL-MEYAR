@@ -2413,3 +2413,49 @@ test('2026-10-22: a VAT-inclusive DVX e-qaimə opens as an invoice with "ƏDV da
     h.close();
   }
 });
+
+test('2026-10-25: no common period in the header; each page keeps its own (DVX ↔ uçot has a month field)', async () => {
+  const h = harness();
+  const s = seed(h);
+  h.run({
+    type: 'eqaime.import',
+    directionConfirmed: true,
+    companyId: s.companyId,
+    direction: 'purchase',
+    report: 'invoices',
+    source: 'file',
+    fileName: 'gelenler.xlsx',
+    fileHash: 'f'.repeat(64),
+    documents: [
+      {
+        row: 2,
+        number: 'MT1',
+        date: '2026-09-30',
+        taxId: '1700000003',
+        name: 'Rabitə ASC',
+        status: 'Təsdiqləndi',
+        net: '50.00',
+        vat: '9.00',
+        base18: '50.00',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    assert.ok(!screen.queryByRole('group', { name: 'İş dövrü' }), 'header period');
+    assert.ok(!document.querySelector('.period-switch'), 'header period');
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(await page.findByRole('button', { name: /DVX ↔ uçot/ }));
+    const panel = await page.findByRole('region', { name: 'DVX ilə uçotun tutuşdurulması' });
+    const month = within(panel).getByRole('group', { name: 'Ay' });
+    await user.click(within(month).getByRole('button', { name: 'Əvvəlki ay' }));
+    // The month moved: the panel shows the month before.
+    await within(panel).findByRole('table', { name: 'Aylar üzrə ƏDV' });
+  } finally {
+    h.close();
+  }
+});

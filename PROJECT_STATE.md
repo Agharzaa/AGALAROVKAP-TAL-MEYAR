@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.9, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.10, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -479,6 +479,8 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 **0.7.8 — qəpik fərqi və xəbərdarlıq (25.10.2026, QERARLAR 2026-10-25 §12–§13):** DVX-in yekunu ƏDV-siz + ƏDV-dən 1 qəpik fərqlənəndə (aksiz / yol vergisi yoxdursa) qaimə DVX-in ƏDV-si və yekunu ilə yazılır, ƏDV-siz = yekun − ƏDV (`pennyOff`); avtomatik də. E-qaiməni uçota alan / ona bağlanan qaimə DVX-dən məbləğ, ƏDV və ya tarixlə fərqlənəndə **qadağa yox, xəbərdarlıq**: saxlanır, e-qaimə "Ziddiyyət"də "Uçot: … fərq" ilə; DVX-ə uyğun düzəldiləndə xəbərdarlıq gedir; başqa kontragent / nömrə / istiqamət — rədd. Testlər: `eqaime-book.test.ts` (946,00 → 801,69; 2 qəpik və yol vergisi uçota düşmür; əl ilə uçot və nömrəsiz qaimənin bağlanması xəbərdarlıqla). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
 
 **0.7.9 — dövriyyə balansı 1C kimi hesab qrupları ilə (25.10.2026, QERARLAR 2026-10-25 §14):** istifadəçi: "dövriyyə balansı çox axmaqca qurulub" → seçim "1C kimi hesab qrupları". Hesablar bölmə (1 rəqəm) və maddə (2 rəqəm) başlıqları altında, başlıqlar öz hesablarının cəmi ilə (rəsmi adlar `chartSections` / `chartGroups`, İ-38); başlıqlar açılmır, kart açmır, Excel-ə düşür; ümumi cəm dəyişmir. Real MG Transport məlumatının surəti ilə ekran şəkli yoxlanıb (2 → 24 → 241, 5 → 53 → 531, 7 → 72 → 721). Testlər: `ledger.test.ts` (Sentyabr misalı: başlıqlar, sıra, 22-nin cəmi, ümumi cəm), `tests/ui`. `npm test` 176, `npm run test:ui` 38, `npm run test:perf` (DBC il 413 ms).
+
+**0.7.10 — başlıqda ümumi dövr yoxdur (25.10.2026, QERARLAR 2026-10-25 §15):** "Dövr: Oktyabr 2026" seçicisi (`PeriodSwitch`, `setPeriod`) çıxarıldı; səhifələrin öz dövr sahələri qalır (ilkin — cari ay); "DVX ↔ uçot"un öz "Ay" seçicisi var. Testlər: `tests/ui` ("no common period"). `npm test` 176, `npm run test:ui` 39, `npm run test:perf`. 0.7.9 CI-dan keçib.
 
 ## Açıq məsələlər
 
