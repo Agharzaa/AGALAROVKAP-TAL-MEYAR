@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.7, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.8, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -475,6 +475,8 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 **MG Transport-un uçotu (22.10.2026, istifadəçinin icazəsi ilə, Meyar-ın öz əmrləri ilə):** 10 xərc maddəsi və 10 xidmət yaradıldı, 47 malsatana "bütün qaimə" uyğunluğu (721 + maddə, avtomatik); **207 e-qaimə uçota alındı (369 288,52 ₼)**, xəta yoxdur. Kənarda: 5 DVX-də ləğv edilmiş (Marsol 4, MyPromo 1), 1 DVX-də gözləyən (Bolt), 14 qəpik fərqi ilə təklif. 0.7.6 CI-dan keçib (yük testinin CI həddi 40 s ilə).
 
 **0.7.7 — ƏDV ümumi məbləğdən (QERARLAR 2026-10-22 §11):** DVX-in ƏDV-si 18% ilə yox, (baza + ƏDV) × 18/118 ilə tutursa (`vatFromGross`), təklif və avtomatik qaimə "ƏDV daxildir" rejimindədir (qiymət = baza + ƏDV), qaimə forması da həmin rejimlə açılır. DVX-in öz yekunu tutmayanlar təklif qalır. Testlər: `eqaime-book.test.ts` (Kaan 1 091,53 / 196,47; adi 1 000 / 180; 801,70 + 144,31 ≠ 946), `tests/ui` (forma "ƏDV daxildir" ilə). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
+
+**0.7.8 — qəpik fərqi və xəbərdarlıq (25.10.2026, QERARLAR 2026-10-25 §12–§13):** DVX-in yekunu ƏDV-siz + ƏDV-dən 1 qəpik fərqlənəndə (aksiz / yol vergisi yoxdursa) qaimə DVX-in ƏDV-si və yekunu ilə yazılır, ƏDV-siz = yekun − ƏDV (`pennyOff`); avtomatik də. E-qaiməni uçota alan / ona bağlanan qaimə DVX-dən məbləğ, ƏDV və ya tarixlə fərqlənəndə **qadağa yox, xəbərdarlıq**: saxlanır, e-qaimə "Ziddiyyət"də "Uçot: … fərq" ilə; DVX-ə uyğun düzəldiləndə xəbərdarlıq gedir; başqa kontragent / nömrə / istiqamət — rədd. Testlər: `eqaime-book.test.ts` (946,00 → 801,69; 2 qəpik və yol vergisi uçota düşmür; əl ilə uçot və nömrəsiz qaimənin bağlanması xəbərdarlıqla). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
 
 ## Açıq məsələlər
 

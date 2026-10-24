@@ -263,6 +263,18 @@ export function vatFromGross(base18: Minor, vat: Minor): boolean {
   return roundHalfAwayFromZero((base18 + vat) * 18n, 118n) === vat;
 }
 
+/**
+ * DVX's total is a qəpik off its net + VAT and holds nothing else (no excise, no road tax): DVX's
+ * rounding. The invoice then keeps DVX's VAT and total, its net is total − VAT (Kaan, 12.01.2026:
+ * 801,70 + 144,31 ≠ 946,00 → 801,69; QERARLAR 2026-10-25 §12). 0 when it is not that case.
+ */
+export function pennyOff(doc: Row): bigint {
+  const off = (doc.total as bigint) - (doc.net as bigint) - (doc.vat as bigint);
+  if (off !== 1n && off !== -1n) return 0n;
+  if (BigInt(doc.excise ?? 0n) !== 0n || BigInt(doc.road_tax ?? 0n) !== 0n) return 0n;
+  return off;
+}
+
 const dvxLine = (doc: Row): EqLineView[] =>
   String(doc.lines) ? (JSON.parse(String(doc.lines)) as EqLineView[]) : [];
 
@@ -393,10 +405,12 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
 
   // Lines. DVX derived the VAT from the gross amount (× 18/118) when 18% of the base does not give
   // it and that does: the invoice then takes prices including VAT (QERARLAR 2026-10-22 §11).
-  const inclusive = vatFromGross(doc.base_18 as bigint, doc.vat as bigint);
+  const goods = dvxLine(doc);
+  // DVX's own qəpik of rounding in the total (header e-qaimələr only: goods lines are DVX's).
+  const off = goods.length ? 0n : pennyOff(doc);
+  const inclusive = vatFromGross((doc.base_18 as bigint) + off, doc.vat as bigint);
   if (inclusive) out.pricesIncludeVat = true;
   let linesAuto = true;
-  const goods = dvxLine(doc);
   if (goods.length) {
     goods.forEach((g, i) => {
       const where = `Sətir ${i + 1} (${g.name})`;
@@ -447,7 +461,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     known = true;
     // The whole e-qaimə on one product (services, expenses): one line per VAT base.
     const bases: [VatRate, bigint][] = [
-      ['18', doc.base_18 as bigint],
+      ['18', (doc.base_18 as bigint) + off],
       ['0', doc.base_0 as bigint],
       ['exempt', doc.base_exempt as bigint],
       ['nontaxable', doc.base_nontaxable as bigint],
@@ -455,9 +469,9 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     const used = bases.filter(([, v]) => v !== 0n);
     // No VAT base printed at all (a supplier outside VAT prints none): without VAT the whole amount
     // is outside VAT; with VAT it is checked as 18% below.
-    if (!used.length) used.push([doc.vat === 0n ? 'nontaxable' : '18', doc.net as bigint]);
+    if (!used.length) used.push([doc.vat === 0n ? 'nontaxable' : '18', (doc.net as bigint) + off]);
     const baseSum = used.reduce((s, [, v]) => s + v, 0n);
-    if (baseSum !== doc.net) {
+    if (baseSum !== (doc.net as bigint) + off) {
       linesAuto = false;
       reasons.push(
         `ƏDV bazalarının cəmi (${money(baseSum)}) ƏDV-siz məbləğə (${money(doc.net as bigint)}) bərabər deyil.`,
@@ -505,7 +519,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
       reasons.push('Mal sətirlərinin cəmi e-qaimənin məbləğinə bərabər deyil.');
     }
   }
-  if (doc.total !== (doc.net as bigint) + (doc.vat as bigint)) {
+  if (doc.total !== (doc.net as bigint) + (doc.vat as bigint) + off) {
     linesAuto = false;
     reasons.push(
       `Yekun məbləğ (${money(doc.total as bigint)}) ƏDV-siz məbləğ + ƏDV-yə bərabər deyil.`,
@@ -637,7 +651,8 @@ function check(
       `e-qaimə nömrəsi ${String(inv.eq_number) || 'yazılmayıb'}, DVX-də ${String(doc.eq_number)}`,
     );
   const gross = (doc.net as bigint) + (doc.vat as bigint);
-  if (inv.total_azn !== gross)
+  // DVX's own qəpik of rounding: its total is right as well (QERARLAR 2026-10-25 §12).
+  if (inv.total_azn !== gross && !(pennyOff(doc) && inv.total_azn === doc.total))
     return differs(`cəmi ${money(inv.total_azn as bigint)}, DVX-də ${money(gross)}`);
   if (inv.currency === 'AZN' && inv.vat !== doc.vat)
     return differs(`ƏDV ${money(inv.vat as bigint)}, DVX-də ${money(doc.vat as bigint)}`);
@@ -647,8 +662,6 @@ function check(
     return differs(`tarix ${String(inv.date)}, DVX-də ${String(doc.date)}`);
   return differs('');
 }
-const mismatch = (tx: Tx, companyId: string, doc: Row, inv: Row, days: number, alsoDate = '') =>
-  check(tx, companyId, doc, inv, days, alsoDate).text;
 
 /** The e-qaimə a correction refers to (same direction and VÖEN). */
 function corrected(tx: Tx, companyId: string, doc: Row): Row | undefined {
@@ -737,24 +750,31 @@ export function bindEq(
   // A linked hand-typed invoice may lie a few days apart; a booked one keeps DVX's date. A
   // correction applied to a linked invoice keeps that leeway around the corrected e-qaimə's date.
   const linked = (current ?? superseded)?.posted_by === 'link';
-  const why = mismatch(
-    tx,
-    companyId,
-    doc,
-    inv,
-    linked ? LINK_DAYS : 0,
-    orig ? String(orig.date) : '',
-  );
-  if (why)
+  const why = check(tx, companyId, doc, inv, linked ? LINK_DAYS : 0, orig ? String(orig.date) : '');
+  // Another document (partner, number, direction): refused. Other amounts or date: the accountant
+  // books what they decide, the e-qaimə shows the difference in "Ziddiyyət" (QERARLAR 2026-10-25).
+  if (why.identity)
     throw new DomainError(
-      `Qaimə e-qaimə ${String(doc.eq_number)} ilə uyğun deyil: ${why}.`,
+      `Qaimə e-qaimə ${String(doc.eq_number)} ilə uyğun deyil: ${why.text}.`,
       'eqDocumentId',
     );
+  const warning = why.text
+    ? `${BOOKING_CONFLICT}${String(inv.number)} qaiməsi ilə fərq: ${why.text}`
+    : '';
   if (current) {
     // The invoice now is what DVX wrote: an amount conflict of the link is settled. (An ordinary
     // invoice for what DVX calls a correction, return, advance or excise e-qaimə still is not.)
     const ordinary = doc.kind === 'main' && doc.excise === 0n && doc.road_tax === 0n;
-    if (ordinary && String(current.conflict).startsWith(BOOKING_CONFLICT))
+    const own = String(current.conflict).startsWith(BOOKING_CONFLICT);
+    if (warning && (own || !String(current.conflict)))
+      tx.db.run(
+        'UPDATE eq_documents SET conflict=?, resolved=?, version=version+1, updated_at=? WHERE id=?',
+        warning,
+        '',
+        tx.clock.now(),
+        docId,
+      );
+    else if (!warning && ordinary && own)
       tx.db.run(
         "UPDATE eq_documents SET conflict='', version=version+1, updated_at=? WHERE id=?",
         tx.clock.now(),
@@ -773,10 +793,12 @@ export function bindEq(
     );
   tx.db.run(
     `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by=?, used_maps=?, auto_note='',
-       version=version+1, updated_at=? WHERE id=?`,
+       conflict=CASE WHEN ?<>'' THEN ? ELSE conflict END, version=version+1, updated_at=? WHERE id=?`,
     invoiceId,
     linked ? 'link' : postedBy,
     usedMaps,
+    warning,
+    warning,
     tx.clock.now(),
     docId,
   );
@@ -837,8 +859,12 @@ export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
   if (inv.eq_key === '') {
     // The e-qaimə number is written into the invoice; its postings do not change.
     const probe: Row = { ...inv, eq_key: String(doc.eq_key), eq_number: String(doc.eq_number) };
-    const why = mismatch(tx, cmd.companyId, doc, probe, LINK_DAYS);
-    if (why) throw new DomainError(`Qaimə e-qaiməyə uyğun deyil: ${why}.`, 'invoiceId');
+    const why = check(tx, cmd.companyId, doc, probe, LINK_DAYS);
+    if (why.identity)
+      throw new DomainError(`Qaimə e-qaiməyə uyğun deyil: ${why.text}.`, 'invoiceId');
+    // Other amounts or date: linked, flagged (QERARLAR 2026-10-25).
+    if (why.text)
+      conflict = `${BOOKING_CONFLICT}${String(inv.number)} qaiməsi ilə fərq: ${why.text}`;
     // The number is booked once (as in invoice.save): not when another invoice carries it.
     const sale = inv.direction === 'sale';
     const dup = tx.db.get(

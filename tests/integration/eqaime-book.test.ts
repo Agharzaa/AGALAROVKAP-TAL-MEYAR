@@ -462,6 +462,19 @@ test('E13: an invoice typed by hand is linked, never booked a second time', (t) 
       }),
     /kontragentin VÖEN-i 1700000003/,
   );
+  // A numberless invoice of the same partner with other amounts: linked, flagged (2026-10-25).
+  const differs = f.invoice('purchase', '2026-09-08', s.supplier, s.supplierContract, [
+    { productId: s.paper, quantity: '1', price: '9.99' },
+  ]);
+  f.exec({
+    type: 'eqaime.link',
+    companyId: f.companyId,
+    documentId: byNumber(f, 'MT2609003').id,
+    invoiceId: differs.id,
+  });
+  const linked = byNumber(f, 'MT2609003');
+  assert.equal(linked.bucket, 'conflict');
+  assert.match(linked.conflict, /^Uçot: .*cəmi 11\.79, DVX-də 11\.80/);
 });
 
 test('E13: the same number with other amounts is linked and flagged', (t) => {
@@ -538,7 +551,7 @@ test('E15: one e-qaimə that cannot be booked does not stop the others', (t) => 
   assert.match(byNumber(f, 'MT3', 'sale').proposal!.reasons.join(' '), /bağlanıb/);
 });
 
-test('booking by hand from the box: the invoice must be what DVX wrote, also when corrected later', (t) => {
+test('booking by hand from the box: an invoice other than DVX wrote is saved with a warning (2026-10-25)', (t) => {
   const f = fixture(t);
   const s = setup(f);
   load(f, 'purchase', [
@@ -556,25 +569,41 @@ test('booking by hand from the box: the invoice must be what DVX wrote, also whe
       [{ productId: s.paper, quantity: '10', price }],
       { eqNumber: 'MT2609001', eqDocumentId: d.id, ...extra },
     );
-  assert.throws(
-    () => save('99'),
-    /e-qaimə MT2609001 ilə uyğun deyil: cəmi 1168\.20, DVX-də 1180\.00/,
+  // The accountant books what they decide; Meyar only warns (the user's decision of 25.10.2026).
+  const first = save('99');
+  const warned = byNumber(f, 'MT2609001');
+  assert.equal(warned.bucket, 'conflict');
+  assert.match(warned.conflict, /^Uçot: .*cəmi 1168\.20, DVX-də 1180\.00/);
+  // Saved again as DVX wrote it: the warning goes.
+  const r = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '100' }],
+    { id: first.id, version: first.version, eqNumber: 'MT2609001' },
   );
-  const r = save('100');
   assert.equal(byNumber(f, 'MT2609001').bucket, 'posted');
-  // A later correction that departs from DVX is refused.
-  assert.throws(
-    () =>
-      f.invoice(
-        'purchase',
-        '2026-09-05',
-        s.supplier,
-        s.supplierContract,
-        [{ productId: s.paper, quantity: '10', price: '101' }],
-        { id: r.id, version: r.version, eqNumber: 'MT2609001' },
-      ),
-    /uyğun deyil/,
+  // A later correction that departs from DVX is saved, with the warning again.
+  const later = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '101' }],
+    { id: r.id, version: r.version, eqNumber: 'MT2609001' },
   );
+  assert.equal(byNumber(f, 'MT2609001').bucket, 'conflict');
+  // Back to DVX's amounts for the rest of the story.
+  const back = f.invoice(
+    'purchase',
+    '2026-09-05',
+    s.supplier,
+    s.supplierContract,
+    [{ productId: s.paper, quantity: '10', price: '100' }],
+    { id: later.id, version: later.version, eqNumber: 'MT2609001' },
+  );
+  r.version = back.version;
   // DVX cancels it later: a conflict in the box; cancelling the invoice sets it aside.
   load(f, 'purchase', [
     {
@@ -1566,17 +1595,33 @@ test('2026-10-22: a VAT-inclusive DVX e-qaimə (VAT = gross × 18/118) books its
         total: '1180.00',
         base18: '1000.00',
       }),
-      // DVX's own total is a qəpik off (801,70 + 144,31 ≠ 946,00): the accountant decides.
+      // DVX's own total is a qəpik off (801,70 + 144,31 ≠ 946,00, Kaan 12.01.2026): VAT and the
+      // total as DVX has them, the net a qəpik less (the user's decision of 25.10.2026).
       doc('MT3', '2026-09-12', TELECOM, {
         net: '801.70',
         vat: '144.31',
         total: '946.00',
         base18: '801.70',
       }),
+      // Two qəpik off is not rounding: the accountant decides.
+      doc('MT4', '2026-09-13', TELECOM, {
+        net: '801.70',
+        vat: '144.31',
+        total: '945.99',
+        base18: '801.70',
+      }),
+      // A qəpik off with road tax in the total (diesel): booked by hand.
+      doc('MT5', '2026-09-14', TELECOM, {
+        net: '305.51',
+        vat: '54.99',
+        total: '385.00',
+        base18: '305.51',
+        roadTax: '24.51',
+      }),
     ],
     'invoices',
   );
-  assert.equal(res.posted, 2);
+  assert.equal(res.posted, 3);
   const inv = (n: string) =>
     f.query<InvoiceDetail>({
       type: 'invoice',
@@ -1590,7 +1635,13 @@ test('2026-10-22: a VAT-inclusive DVX e-qaimə (VAT = gross × 18/118) books its
     [['1091.53', '196.47']],
   );
   assert.equal(inv('MT2').pricesIncludeVat, false);
-  const mt3 = byNumber(f, 'MT3');
-  assert.equal(mt3.bucket, 'proposal');
-  assert.match(mt3.proposal!.reasons.join(' '), /Yekun məbləğ/);
+  const mt3 = inv('MT3');
+  assert.deepEqual(
+    [mt3.lines.map((l) => [l.net, l.vat]), mt3.total],
+    [[['801.69', '144.31']], '946.00'],
+  );
+  // Neither is booked by Meyar.
+  for (const n of ['MT4', 'MT5']) assert.equal(byNumber(f, n).invoiceId, '', n);
+  assert.equal(byNumber(f, 'MT4').bucket, 'proposal');
+  assert.match(byNumber(f, 'MT4').proposal!.reasons.join(' '), /Yekun məbləğ/);
 });
