@@ -732,44 +732,17 @@ UPDATE items SET name='Mal satışı' WHERE id='i1';`);
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('2026-10-25: the trial balance groups accounts by section and group of the chart, as 1C does', (t) => {
+test('2026-10-25: the trial balance lists the accounts themselves, as in 1C (no section headings)', (t) => {
   const f = fixture(t);
   september(f);
-  const tb = f.trial('2026-09-01', '2026-09-30');
-  const shown = tb.rows.map((r) => [r.level, r.kind, r.account, r.label]);
-  // Section 2 → group 22 → 223, 224 … ; section 5 → groups 52, 53, 54 …; names of the chart
-  // of the Ministry of Finance (order İ-38 of 18.04.2006).
-  const at = (account: string) => shown.find((r) => r[2] === account)!;
-  assert.deepEqual(at('2'), [0, 'section', '2', 'Qısamüddətli aktivlər']);
-  assert.deepEqual(at('22'), [1, 'group', '22', 'Pul vəsaitləri və onların ekvivalentləri']);
-  assert.deepEqual(at('223').slice(0, 3), [2, 'account', '223']);
-  assert.deepEqual(at('24'), [1, 'group', '24', 'Sair qısamüddətli aktivlər']);
-  assert.deepEqual(at('53'), [1, 'group', '53', 'Qısamüddətli kreditor borcları']);
-  assert.deepEqual(at('6'), [0, 'section', '6', 'Gəlirlər']);
-  // Each heading comes before its accounts, in code order.
-  const order = shown.map((r) => r[2]);
-  assert.ok(order.indexOf('2') < order.indexOf('22') && order.indexOf('22') < order.indexOf('223'));
-  assert.ok(
-    order.indexOf('223') < order.indexOf('24') && order.indexOf('24') < order.indexOf('241'),
-  );
-  // A heading sums its accounts' debit and credit sides (open, turnover, close).
-  const sum = (codes: string[], k: 'openDt' | 'turnDt' | 'turnKt' | 'closeDt' | 'closeKt') =>
-    codes
-      .map((c) => Number(f.row(tb, `a:${c}`)?.[k] || 0))
-      .reduce((a, b) => a + b, 0)
-      .toFixed(2);
-  const group22 = f.row(tb, 'g:22')!;
+  const tb = f.trial('2026-09-01', '2026-09-30', ['a:223']);
+  for (const r of tb.rows) assert.ok(r.kind === 'account' || r.kind === 'subkonto', r.key);
+  const top = tb.rows.filter((r) => r.level === 0).map((r) => r.account);
   assert.deepEqual(
-    [group22.openDt, group22.turnDt, group22.turnKt, group22.closeDt],
-    [
-      sum(['223', '224'], 'openDt'),
-      sum(['223', '224'], 'turnDt'),
-      sum(['223', '224'], 'turnKt'),
-      sum(['223', '224'], 'closeDt'),
-    ],
+    top,
+    [...top].sort((x, y) => x.localeCompare(y)),
   );
-  // The total stays the accounts' total; headings are not counted twice.
-  assert.equal(tb.totals.turnDt, '65891.14');
-  // Headings are not accounts: not expandable, no card.
-  assert.equal(group22.expandable, false);
+  assert.ok(top.includes('223') && top.includes('531'));
+  // 223's own lines one level below.
+  assert.equal(f.row(tb, 'a:223.01')!.level, 1);
 });

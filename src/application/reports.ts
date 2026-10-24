@@ -10,7 +10,6 @@ import {
   type Chart,
   type SubkontoKind,
 } from '../domain/chart.js';
-import { chartGroups, chartSections } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import { displayMinor, formatMinor, parseMoney } from '../domain/money.js';
 import { formatPrice, formatQty } from '../domain/quantity.js';
@@ -557,32 +556,7 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
     }
   };
   const tops = [...byAccount.keys()].filter((c) => !chart.get(c)?.parentCode).sort(compareCodes);
-  // As in 1C: section (2) → group (24) → account (241), each heading with its accounts' sums.
-  const sumOf = (codes: string[]) =>
-    codes.reduce((s, c) => addAgg(s, byAccount.get(c)!), emptyAgg());
-  const heading = (kind: 'section' | 'group', code: string, level: number, codes: string[]) =>
-    push(
-      `${kind === 'section' ? 's' : 'g'}:${code}`,
-      level,
-      kind,
-      code,
-      (kind === 'section' ? chartSections : chartGroups)[code] ?? '',
-      code,
-      false,
-      [],
-      sumOf(codes),
-      false,
-      '',
-    );
-  for (const section of [...new Set(tops.map((c) => c.slice(0, 1)))]) {
-    const inSection = tops.filter((c) => c.startsWith(section));
-    heading('section', section, 0, inSection);
-    for (const group of [...new Set(inSection.map((c) => c.slice(0, 2)))]) {
-      const inGroup = inSection.filter((c) => c.startsWith(group));
-      heading('group', group, 1, inGroup);
-      accountRows(inGroup, 2);
-    }
-  }
+  accountRows(tops, 0);
   const total = tops.reduce((s, c) => addAgg(s, byAccount.get(c)!), emptyAgg());
   return {
     from,
@@ -679,6 +653,7 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
       number: str(r.source_number),
       storno: flag(r.storno),
       memo: str(r.memo) || str(r.doc_memo),
+      account: str(r[`${side}_account`]),
       sk: skNames(str(r[`${side}_account`]), own),
       corrAccount: str(r[`${other}_account`]),
       corrSk: skNames(str(r[`${other}_account`]), corr),

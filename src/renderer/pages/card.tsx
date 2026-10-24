@@ -54,47 +54,63 @@ export function CardPage({
       name: `Hesab kartı ${c.account}`,
       title: [
         `${catalog?.company.name ?? ''}`,
-        `Hesab kartı ${c.account} ${c.name}${c.filter ? ` · ${c.filter}` : ''}`,
+        `${c.account} hesabının kartı · ${c.name}${c.filter ? ` · ${c.filter}` : ''}`,
         `${day(range.applied.from)} – ${day(range.applied.to)}`,
       ],
       header: [
         'Tarix',
         'Sənəd',
         'Məzmun',
-        'Subkonto',
-        'Müxabir hesab',
-        'Müxabir subkonto',
-        'Debet',
-        'Kredit',
+        'Debet (hesab, subkonto)',
+        'Kredit (hesab, subkonto)',
+        'Dövriyyə Debet',
+        'Dövriyyə Kredit',
         'Miqdar',
-        'Qalıq',
+        'Saldo',
+        'Cari saldo',
       ],
-      widths: [11, 14, 30, 34, 10, 34, 15, 15, 10, 16],
+      widths: [11, 16, 30, 40, 40, 15, 15, 10, 6, 16],
       rows: [
-        ['', '', 'Dövrün əvvəlinə qalıq', '', '', '', '', '', '', { money: c.opening }],
-        ...c.lines.map((l) => [
-          day(l.date),
-          `${l.number}${l.storno ? ' (storno)' : ''}`,
-          l.memo,
-          l.sk,
-          l.corrAccount,
-          l.corrSk,
-          { money: l.debit },
-          { money: l.credit },
-          { qty: l.qty },
-          { money: l.balance },
-        ]),
         [
           '',
           '',
-          'Dövriyyə və sona qalıq',
+          'Dövrün əvvəlinə saldo',
           '',
           '',
           '',
-          { money: c.turnDt },
-          { money: c.turnKt },
           '',
-          { money: c.closing },
+          '',
+          side(c.opening),
+          { money: c.opening.replace('-', '') },
+        ],
+        ...c.lines.map((l) => {
+          const own = `${l.account} ${l.sk}`.trim();
+          const corr = `${l.corrAccount} ${l.corrSk}`.trim();
+          return [
+            day(l.date),
+            `${l.number}${l.storno ? ' (storno)' : ''}`,
+            l.memo,
+            l.debit ? own : corr,
+            l.debit ? corr : own,
+            { money: l.debit },
+            { money: l.credit },
+            { qty: l.qty },
+            side(l.balance),
+            { money: l.balance.replace('-', '') },
+          ];
+        }),
+        ['', '', 'Dövriyyə', '', '', { money: c.turnDt }, { money: c.turnKt }, '', '', ''],
+        [
+          '',
+          '',
+          'Dövrün sonuna saldo',
+          '',
+          '',
+          '',
+          '',
+          '',
+          side(c.closing),
+          { money: c.closing.replace('-', '') },
         ],
       ],
     });
@@ -105,10 +121,9 @@ export function CardPage({
       setMsg((e as Error).message);
     }
   };
-  const balance = (v: string) => {
-    if (!v || v === '0.00') return '0,00';
-    return v.startsWith('-') ? `${money(v.slice(1))} Kt` : `${money(v)} Dt`;
-  };
+  // Cari saldo as in 1C: the side (D / K) and the amount apart.
+  const side = (v: string) => (!v || v === '0.00' ? '' : v.startsWith('-') ? 'K' : 'D');
+  const amount = (v: string) => (!v || v === '0.00' ? '0,00' : money(v.replace('-', '')));
   return (
     <ModuleFrame
       title={c ? `Hesab kartı ${c.account}` : pages.card.title}
@@ -191,71 +206,115 @@ export function CardPage({
       {!account && <p className="panel-empty">Hesab seçin (məsələn 223.01 və ya 211).</p>}
       {c && (
         <div className="table-scroll">
-          <table className="grid card">
+          {/* As in 1C: the report sheet with the company, the title, the period and the filter. */}
+          <div className="report-head">
+            <b>{catalog?.company.name}</b>
+            <h2>{c.account} hesabının kartı</h2>
+            <p>
+              Dövr: {day(range.applied.from)} – {day(range.applied.to)}
+              {c.filter ? ` · ${c.filter}` : ''}
+            </p>
+          </div>
+          <table className="grid card onec">
             <thead>
               <tr>
-                <th scope="col">Tarix</th>
-                <th scope="col">Sənəd</th>
-                <th scope="col">Məzmun</th>
-                <th scope="col">Subkonto</th>
-                <th scope="col">Müxabir hesab</th>
+                <th scope="col" rowSpan={2}>
+                  Tarix
+                </th>
+                <th scope="col" rowSpan={2}>
+                  Sənəd
+                </th>
+                <th scope="colgroup" colSpan={2}>
+                  Əməliyyat
+                </th>
+                <th scope="colgroup" colSpan={2}>
+                  Dövriyyə
+                </th>
+                <th scope="colgroup" colSpan={2}>
+                  Cari saldo
+                </th>
+              </tr>
+              <tr>
+                <th scope="col">Debet (hesab, subkonto)</th>
+                <th scope="col">Kredit (hesab, subkonto)</th>
                 <th scope="col" className="num">
                   Debet
                 </th>
                 <th scope="col" className="num">
                   Kredit
                 </th>
+                <th scope="col" className="side" aria-label="Saldonun tərəfi" />
                 <th scope="col" className="num">
-                  Qalıq
+                  Məbləğ
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr className="opening">
-                <td colSpan={5}>Dövrün əvvəlinə qalıq</td>
-                <td />
-                <td />
-                <td className="num strong">{balance(c.opening)}</td>
+                <td colSpan={6}>Dövrün əvvəlinə saldo</td>
+                <td className="side">{side(c.opening)}</td>
+                <td className="num">{amount(c.opening)}</td>
               </tr>
-              {c.lines.map((l, i) => (
-                <tr
-                  key={i}
-                  className={l.storno ? 'storno' : ''}
-                  onDoubleClick={() => openSource(l)}
-                >
-                  <td>{day(l.date)}</td>
-                  <td>
-                    {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
-                      <button type="button" className="link" onClick={() => openSource(l)}>
-                        {l.number}
-                      </button>
-                    ) : (
-                      l.number
-                    )}
-                    {l.storno && <small className="storno-tag">storno</small>}
-                  </td>
-                  <td className="ellipsis" title={l.memo}>
-                    {l.memo}
-                  </td>
-                  <td className="ellipsis" title={l.sk}>
-                    {l.sk}
-                    {l.qty && <small> · {qty(l.qty)}</small>}
-                  </td>
-                  <td className="ellipsis" title={`${l.corrAccount} ${l.corrSk}`}>
-                    <span className="code">{l.corrAccount}</span> {l.corrSk}
-                  </td>
-                  <td className="num">{l.debit ? money(l.debit) : ''}</td>
-                  <td className="num">{l.credit ? money(l.credit) : ''}</td>
-                  <td className="num">{balance(l.balance)}</td>
-                </tr>
-              ))}
+              {c.lines.map((l, i) => {
+                // This account on the side of the line's amount, the corresponding one opposite.
+                const own = (
+                  <>
+                    <span className="code">{l.account}</span>
+                    <small>{l.sk}</small>
+                  </>
+                );
+                const corr = (
+                  <>
+                    <span className="code">{l.corrAccount}</span>
+                    <small>{l.corrSk}</small>
+                  </>
+                );
+                return (
+                  <tr
+                    key={i}
+                    className={l.storno ? 'storno' : ''}
+                    onDoubleClick={() => openSource(l)}
+                  >
+                    <td>{day(l.date)}</td>
+                    <td>
+                      {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
+                        <button type="button" className="link" onClick={() => openSource(l)}>
+                          {l.number}
+                        </button>
+                      ) : (
+                        l.number
+                      )}
+                      {l.storno && <small className="storno-tag">storno</small>}
+                      {l.memo && <small className="memo">{l.memo}</small>}
+                    </td>
+                    <td className="entry">{l.debit ? own : corr}</td>
+                    <td className="entry">{l.debit ? corr : own}</td>
+                    <td className="num">
+                      {l.debit ? money(l.debit) : ''}
+                      {l.qty && l.debit && <small>{qty(l.qty)}</small>}
+                    </td>
+                    <td className="num">
+                      {l.credit ? money(l.credit) : ''}
+                      {l.qty && l.credit && <small>{qty(l.qty)}</small>}
+                    </td>
+                    <td className="side">{side(l.balance)}</td>
+                    <td className="num">{amount(l.balance)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5}>Dövriyyə və sona qalıq</td>
+                <td colSpan={4}>Dövriyyə</td>
                 <td className="num">{money(c.turnDt)}</td>
                 <td className="num">{money(c.turnKt)}</td>
-                <td className="num">{balance(c.closing)}</td>
+                <td />
+                <td />
+              </tr>
+              <tr>
+                <td colSpan={6}>Dövrün sonuna saldo</td>
+                <td className="side">{side(c.closing)}</td>
+                <td className="num">{amount(c.closing)}</td>
               </tr>
             </tfoot>
           </table>

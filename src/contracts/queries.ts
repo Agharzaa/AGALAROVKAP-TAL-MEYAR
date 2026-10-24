@@ -752,8 +752,8 @@ export interface StatementView extends StatementImportView {
 export interface TrialRow {
   key: string;
   level: number;
-  /** section (2) and group (24) headings of the chart, account, subkonto */
-  kind: 'section' | 'group' | 'account' | 'subkonto';
+  /** account | subkonto */
+  kind: 'account' | 'subkonto';
   account: string;
   label: string;
   /** Code shown for account rows, or the subkonto kind label for subkonto rows. */
@@ -801,6 +801,8 @@ export interface CardLine {
   number: string;
   storno: boolean;
   memo: string;
+  /** The line's own (leaf) account: 223.01 on the card of 223. */
+  account: string;
   /** This account's subkonto names on this line. */
   sk: string;
   corrAccount: string;

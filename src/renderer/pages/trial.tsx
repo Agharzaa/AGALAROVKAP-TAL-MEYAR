@@ -1,5 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { ChevronDown, ChevronRight, FileDown, FoldVertical } from '../icons';
+import { FileDown, FoldVertical } from '../icons';
 import type { TrialBalance, TrialRow } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';
@@ -48,10 +48,7 @@ export function TrialPage() {
         : [...list, r.key],
     );
   };
-  // A heading of the chart (section, group) is not an account: no card.
-  const heading = (r: TrialRow) => r.kind === 'section' || r.kind === 'group';
   const openCard = (r: TrialRow) =>
-    !heading(r) &&
     ws.open(
       {
         type: 'accountCard',
@@ -114,7 +111,7 @@ export function TrialPage() {
       widths: [10, 48, 16, 16, 16, 16, 16, 16, 12, 14],
       rows: [
         ...tb.rows.map((r) => [
-          r.kind === 'subkonto' ? '' : r.account,
+          r.kind === 'account' ? r.account : '',
           `${'   '.repeat(r.level)}${r.label}`,
           { money: r.openDt },
           { money: r.openKt },
@@ -236,67 +233,65 @@ export function TrialPage() {
         onKeyDown={onKey}
         aria-label="Dövriyyə balansı cədvəli"
       >
-        <table className="grid trial">
+        {/* As in 1C: the report sheet with the company, the title and the period. */}
+        <div className="report-head">
+          <b>{catalog?.company.name}</b>
+          <h2>Hesablar üzrə dövriyyə-saldo cədvəli</h2>
+          {tb && (
+            <p>
+              Dövr: {day(tb.from)} – {day(tb.to)}
+            </p>
+          )}
+        </div>
+        <table className="grid trial onec">
           <thead>
             <tr>
+              <th scope="col" rowSpan={2} className="gut" aria-label="Qruplama" />
               <th scope="col" rowSpan={2} className="trial-name">
-                Hesab / subkonto
+                Hesab
               </th>
               <th scope="colgroup" colSpan={2}>
-                Əvvələ qalıq
-              </th>
-              <th scope="colgroup" colSpan={2} className="turn">
-                Dövriyyə
+                Dövrün əvvəlinə saldo
               </th>
               <th scope="colgroup" colSpan={2}>
-                Sona qalıq
+                Dövr üzrə dövriyyə
+              </th>
+              <th scope="colgroup" colSpan={2}>
+                Dövrün sonuna saldo
               </th>
             </tr>
             <tr>
-              <th scope="col" className="num">
-                Debet
-              </th>
-              <th scope="col" className="num">
-                Kredit
-              </th>
-              <th scope="col" className="num turn">
-                Debet
-              </th>
-              <th scope="col" className="num turn">
-                Kredit
-              </th>
-              <th scope="col" className="num">
-                Debet
-              </th>
-              <th scope="col" className="num">
-                Kredit
-              </th>
+              {['Debet', 'Kredit', 'Debet', 'Kredit', 'Debet', 'Kredit'].map((t, i) => (
+                <th key={i} scope="col" className="num">
+                  {t}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr
                 key={r.key}
-                className={`lvl${Math.min(r.level, 6)} ${r.kind}${i === selected ? ' selected' : ''}`}
+                className={`lvl${Math.min(r.level, 4)} ${r.kind}${i === selected ? ' selected' : ''}`}
                 onClick={() => setSelected(i)}
                 onDoubleClick={() => openCard(r)}
               >
+                <td className="gut">
+                  {r.expandable && (
+                    <button
+                      type="button"
+                      className="group-mark"
+                      aria-label={`${r.expanded ? 'Bağla' : 'Aç'}: ${r.label}`}
+                      aria-expanded={r.expanded}
+                      onClick={(e) => (e.stopPropagation(), toggle(r))}
+                    >
+                      {r.expanded ? '⊟' : '⊞'}
+                    </button>
+                  )}
+                </td>
                 <td className="trial-name">
-                  <span className="tree-cell" style={{ paddingLeft: `${r.level * 18}px` }}>
-                    {r.expandable ? (
-                      <button
-                        type="button"
-                        className="tree-toggle"
-                        aria-label={`${r.expanded ? 'Bağla' : 'Aç'}: ${r.label}`}
-                        aria-expanded={r.expanded}
-                        onClick={(e) => (e.stopPropagation(), toggle(r))}
-                      >
-                        {r.expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      </button>
-                    ) : (
-                      <span className="tree-space" />
-                    )}
-                    {r.kind !== 'subkonto' && <span className="code">{r.account}</span>}
+                  <span className="tree-cell" style={{ paddingLeft: `${r.level * 16}px` }}>
+                    {r.kind === 'account' && <span className="code">{r.account}</span>}
                     <span
                       className="label"
                       title={r.kind === 'subkonto' ? `${r.hint}: ${r.label}` : r.label}
@@ -317,21 +312,21 @@ export function TrialPage() {
                 </td>
                 <td className="num">{cell(r.openDt)}</td>
                 <td className="num">{cell(r.openKt)}</td>
-                <td className="num turn">
+                <td className="num">
                   {cell(r.turnDt)}
                   {r.turnQtyDt && <small>{qty(r.turnQtyDt)}</small>}
                 </td>
-                <td className="num turn">
+                <td className="num">
                   {cell(r.turnKt)}
                   {r.turnQtyKt && <small>{qty(r.turnQtyKt)}</small>}
                 </td>
-                <td className="num strong">{cell(r.closeDt)}</td>
-                <td className="num strong">{cell(r.closeKt)}</td>
+                <td className="num">{cell(r.closeDt)}</td>
+                <td className="num">{cell(r.closeKt)}</td>
               </tr>
             ))}
             {tb && !rows.length && (
               <tr>
-                <td colSpan={7} className="panel-empty">
+                <td colSpan={8} className="panel-empty">
                   Bu dövrdə və seçilən filtrdə qalıq və dövriyyə yoxdur.
                 </td>
               </tr>
@@ -340,11 +335,12 @@ export function TrialPage() {
           {tb && (
             <tfoot>
               <tr>
+                <td className="gut" />
                 <td>Cəmi</td>
                 <td className="num">{money(tb.totals.openDt)}</td>
                 <td className="num">{money(tb.totals.openKt)}</td>
-                <td className="num turn">{money(tb.totals.turnDt)}</td>
-                <td className="num turn">{money(tb.totals.turnKt)}</td>
+                <td className="num">{money(tb.totals.turnDt)}</td>
+                <td className="num">{money(tb.totals.turnKt)}</td>
                 <td className="num">{money(tb.totals.closeDt)}</td>
                 <td className="num">{money(tb.totals.closeKt)}</td>
               </tr>

@@ -2459,3 +2459,67 @@ test('2026-10-25: no common period in the header; each page keeps its own (DVX �
     h.close();
   }
 });
+
+test('2026-10-25: trial balance and account card as in 1C (the user chose variant A)', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: iso,
+    memo: 'Başlanğıc',
+    lines: [
+      {
+        dtAccount: '223.01',
+        dtSk: [s.bankAccount],
+        ktAccount: '301',
+        ktSk: [s.founder, s.capitalIn],
+        amount: '30000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Dövriyyə balansı' })[0]!);
+    const page = within(pane());
+    // The report sheet: company, title, period; 1C's column groups; no section headings.
+    await page.findByText('Hesablar üzrə dövriyyə-saldo cədvəli');
+    for (const name of ['Dövrün əvvəlinə saldo', 'Dövr üzrə dövriyyə', 'Dövrün sonuna saldo'])
+      page.getByRole('columnheader', { name });
+    assert.ok(!/Qısamüddətli aktivlər/.test(pane().textContent ?? ''), 'no section headings');
+    // Grouping marks in the left margin, as 1C: ⊞ closed, ⊟ open.
+    const open = await page.findByRole('button', { name: 'Aç: Bank hesablaşma hesabları' });
+    assert.equal(open.textContent, '⊞');
+    await user.click(open);
+    assert.equal(
+      page.getByRole('button', { name: 'Bağla: Bank hesablaşma hesabları' }).textContent,
+      '⊟',
+    );
+    // The account card of 223: 1C's columns, the saldo rows.
+    const row = [...pane().querySelectorAll('tr')].find((r) =>
+      /^\s*⊟?\s*223\b/.test(r.textContent ?? ''),
+    )!;
+    await user.dblClick(row);
+    const card = within(pane());
+    await card.findByText('223 hesabının kartı');
+    for (const name of ['Debet (hesab, subkonto)', 'Kredit (hesab, subkonto)', 'Cari saldo'])
+      card.getByRole('columnheader', { name });
+    card.getByText('Dövrün əvvəlinə saldo');
+    card.getByText('Dövrün sonuna saldo');
+    // The posting: Dt 223.01 (the bank account), Kt 301; the saldo is debit.
+    const line = [...pane().querySelectorAll('tbody tr')].find((r) =>
+      /Başlanğıc/.test(r.textContent ?? ''),
+    )!;
+    assert.match(line.textContent ?? '', /223\.01/);
+    assert.match(line.textContent ?? '', /301/);
+    assert.match(line.textContent ?? '', /D\s*30\s000,00/);
+  } finally {
+    h.close();
+  }
+});

@@ -1860,19 +1860,53 @@ td.trial-name {
   font-size: 12px;
   line-height: 14px;
 }
-/* Headings of the chart, as in 1C: section (2) and group (24) above their accounts. */
-.trial tr.section td {
-  background: var(--head);
-  font-weight: 700;
+/* As in 1C (variant A, 25.10.2026): the report sheet, every cell ruled, grouping marks (⊞ ⊟) in
+   the left margin, accounts of the first level bold, subkonto in italics. */
+.report-head {
+  padding: 10px 2px 8px;
 }
-.trial tr.group td {
+.report-head h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+.report-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.trial.onec td,
+.trial.onec th {
+  border: 1px solid var(--line);
+}
+.trial.onec .gut {
+  width: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+}
+.group-mark {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.group-mark:hover,
+.group-mark:focus-visible {
+  color: var(--ink);
+}
+.trial.onec tr.account.lvl0 td:not(.gut) {
+  background: var(--hover);
   font-weight: 600;
 }
-.trial tr.account.lvl2 .code {
-  font-weight: 600;
+.trial.onec tr.subkonto .label {
+  font-style: italic;
 }
-.trial tr.lvl5 td,
-.trial tr.lvl6 td {
+.trial tr.lvl3 td,
+.trial tr.lvl4 td {
   color: var(--ink-2);
 }
 .tree-toggle {
@@ -3286,5 +3320,35 @@ button.step:active {
 }
 .dvx-state.on {
   color: var(--ok);
+  font-weight: 600;
+}
+
+/* The account card as in 1C: Debet / Kredit with account and subkonto, Cari saldo D / K. */
+.card.onec td,
+.card.onec th {
+  border: 1px solid var(--line);
+  vertical-align: top;
+}
+.card.onec th[scope='colgroup'] {
+  text-align: center;
+}
+.card.onec td.entry .code {
+  display: block;
+  font-weight: 600;
+}
+.card.onec td.entry small,
+.card.onec td small.memo {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.card.onec .side {
+  width: 28px;
+  text-align: center;
+  font-weight: 600;
+}
+.card.onec tr.opening td,
+.card.onec tfoot td {
+  background: var(--hover);
   font-weight: 600;
 }
