@@ -2323,3 +2323,93 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
     h.close();
   }
 });
+
+test('2026-10-22: a VAT-inclusive DVX e-qaimə opens as an invoice with "ƏDV daxildir" and DVX\'s VAT', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Kaan',
+    taxId: '1700000003',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'K-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  });
+  const product = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Yanacaq',
+    unit: 'xidmət',
+    kind: 'service',
+    groupId: '',
+    archived: false,
+  }).id;
+  const expense = (
+    h.ledger.query({ type: 'catalog', companyId: s.companyId }) as {
+      items: { id: string; kind: string }[];
+    }
+  ).items.find((i) => i.kind === 'expenseItem')!.id;
+  h.run({
+    type: 'eqMap.bulk',
+    companyId: s.companyId,
+    direction: 'purchase',
+    taxIds: ['1700000003'],
+    productId: product,
+    account: '721',
+    expenseItemId: expense,
+    incomeTypeId: '',
+    vatTreatment: '',
+    mode: 'suggest',
+  });
+  h.run({
+    type: 'eqaime.import',
+    directionConfirmed: true,
+    companyId: s.companyId,
+    direction: 'purchase',
+    report: 'invoices',
+    source: 'file',
+    fileName: 'gelenler.xlsx',
+    fileHash: 'e'.repeat(64),
+    documents: [
+      {
+        row: 2,
+        number: 'MT1',
+        date: '2026-09-30',
+        taxId: '1700000003',
+        name: 'Kaan',
+        status: 'Təsdiqləndi',
+        net: '1091.53',
+        vat: '196.47',
+        base18: '1091.53',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    await user.click(await page.findByRole('button', { name: 'MT1: uçota al' }));
+    const inclusive = await screen.findByRole('checkbox', { name: /ƏDV daxildir/ });
+    assert.equal((inclusive as HTMLInputElement).checked, true);
+    // The VAT is DVX's to the qəpik: no difference to warn about.
+    await screen.findAllByText(/196,47/);
+  } finally {
+    h.close();
+  }
+});

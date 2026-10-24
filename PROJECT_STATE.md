@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 22.10.2026 (0.7.6, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.7, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -468,9 +468,13 @@ Testlər: `npm test` 168, `npm run test:ui` 36, `npm run test:perf`, Electron sm
 
 Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron smoke — keçir. **Real DVX ilə yoxlanmayıb:** sorğu portalın kodundan oxunub; ilk real yeniləmə uğursuz olsa, səbəb `%APPDATA%\Meyar\dvx-diagnostics`-dədir (məlumat qovluğu).
 
-**0.7.6 — ilk real "DVX-dən yenilə" (22.10.2026):** DVX ixrac sorğusunu **400** ilə rədd etdi; səbəb Meyar-ın özü yazdığı diaqnostikadan (`%APPDATA%\Meyar\dvx-diagnostics`) oxundu, istifadəçidən heç nə soruşulmadı. Portalın öz siyahı sorğusu 10 status göndərir (Meyar 26 göndərirdi), `sortBy` / `sortAsc` var, siyahı səhifə-səhifədir (`hasMore`). Düzəliş: sessiyada portalın öz `find.<qutu>` gövdəsi görünübsə o şablondur (yalnız dövr, səhifə və istifadəçinin daraltması — malsatan, nömrə, məbləğ — dəyişir), yoxdursa portalın 10 statusu + sıralama; ixrac 100-lük səhifələrlə, hər səhifədən sonra siyahının `hasMore`-u; hər səhifə ayrıca idxal (bir dəfəlik açar). Testlər: `dvx-export.test.ts` (6), `tests/ui`, Electron smoke (şablon, 2 səhifə). `npm test` 174, `npm run test:ui` 37, `npm run test:perf`. **Push edilməyib** (main-ə push bu dəfə icazə yoxlamasında bloklandı; istifadəçinin qərarı gözlənilir).
+**0.7.6 — ilk real "DVX-dən yenilə" (22.10.2026):** DVX ixrac sorğusunu **400** ilə rədd etdi; səbəb Meyar-ın özü yazdığı diaqnostikadan (`%APPDATA%\Meyar\dvx-diagnostics`) oxundu, istifadəçidən heç nə soruşulmadı. Portalın öz siyahı sorğusu 10 status göndərir (Meyar 26 göndərirdi), `sortBy` / `sortAsc` var, siyahı səhifə-səhifədir (`hasMore`). Düzəliş: sessiyada portalın öz `find.<qutu>` gövdəsi görünübsə o şablondur (yalnız dövr, səhifə və istifadəçinin daraltması — malsatan, nömrə, məbləğ — dəyişir), yoxdursa portalın 10 statusu + sıralama; ixrac 100-lük səhifələrlə, hər səhifədən sonra siyahının `hasMore`-u; hər səhifə ayrıca idxal (bir dəfəlik açar). Testlər: `dvx-export.test.ts` (6), `tests/ui`, Electron smoke (şablon, 2 səhifə). `npm test` 174, `npm run test:ui` 37, `npm run test:perf`. Push edilib (istifadəçinin icazəsi ilə).
 
 **MG Transport (istifadəçinin real şirkəti, VÖEN 4600468301):** "Agalarov / 1234567899" sınaq şirkəti idi; istifadəçi Meyar-da ayrıca şirkət yaratdı. 226 gələn e-qaimə ("Exceli endir" ilə) yükləndi, 47 malsatan. İstifadəçinin qərarı: hamısı **721**, xərc maddələri qruplar üzrə (daşıma, yanacaq, icarə və kommunal, sığorta, yol və icazə haqları, konsaltinq/audit/kadr, rabitə, reklam və çap, taksi və avtoservis, digər); Marsol və Naib Yusifov — daşıma. Uçot istifadəçinin açıq icazəsi ilə Meyar-ın öz əmrləri ilə aparılır (item.save, product.save, eqMap.bulk auto, eqaime.apply; əvvəl bazanın ehtiyat nüsxəsi `backups/before-dvx-groups-*`).
+
+**MG Transport-un uçotu (22.10.2026, istifadəçinin icazəsi ilə, Meyar-ın öz əmrləri ilə):** 10 xərc maddəsi və 10 xidmət yaradıldı, 47 malsatana "bütün qaimə" uyğunluğu (721 + maddə, avtomatik); **207 e-qaimə uçota alındı (369 288,52 ₼)**, xəta yoxdur. Kənarda: 5 DVX-də ləğv edilmiş (Marsol 4, MyPromo 1), 1 DVX-də gözləyən (Bolt), 14 qəpik fərqi ilə təklif. 0.7.6 CI-dan keçib (yük testinin CI həddi 40 s ilə).
+
+**0.7.7 — ƏDV ümumi məbləğdən (QERARLAR 2026-10-22 §11):** DVX-in ƏDV-si 18% ilə yox, (baza + ƏDV) × 18/118 ilə tutursa (`vatFromGross`), təklif və avtomatik qaimə "ƏDV daxildir" rejimindədir (qiymət = baza + ƏDV), qaimə forması da həmin rejimlə açılır. DVX-in öz yekunu tutmayanlar təklif qalır. Testlər: `eqaime-book.test.ts` (Kaan 1 091,53 / 196,47; adi 1 000 / 180; 801,70 + 144,31 ≠ 946), `tests/ui` (forma "ƏDV daxildir" ilə). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
 
 ## Açıq məsələlər
 

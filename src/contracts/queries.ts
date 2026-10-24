@@ -949,6 +949,8 @@ export interface EqProposal {
   contractId: string;
   newPartner?: { name: string; taxId: string; kind: 'legal' | 'individual' };
   lines: EqProposalLine[];
+  /** DVX took the VAT out of the gross amount: the invoice's prices include VAT. */
+  pricesIncludeVat?: boolean;
   /** A posted invoice with this very e-qaimə number: the e-qaimə is linked to it, not booked again. */
   sameNumber?: { id: string; number: string; total: string };
   /** Numberless invoices of the same partner and total (±5 days): link by hand. */

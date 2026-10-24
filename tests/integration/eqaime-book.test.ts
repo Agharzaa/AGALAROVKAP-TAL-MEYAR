@@ -1543,3 +1543,54 @@ test('whole e-qaimə of many VÖENs to one service at once; a VÖEN with its own
     [['nontaxable', '120.00', '0.00']],
   );
 });
+
+test('2026-10-22: a VAT-inclusive DVX e-qaimə (VAT = gross × 18/118) books itself with prices including VAT', (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: TELECOM, productId: s.service, expenseItemId: s.rabite });
+  const res = load(
+    f,
+    'purchase',
+    [
+      // Kaan (real, 11.02.2026): 1 288,00 with VAT → 196,47 VAT; 1 091,53 × 18% would be 196,48.
+      doc('MT1', '2026-09-10', TELECOM, {
+        net: '1091.53',
+        vat: '196.47',
+        total: '1288.00',
+        base18: '1091.53',
+      }),
+      // An ordinary e-qaimə stays on prices without VAT.
+      doc('MT2', '2026-09-11', TELECOM, {
+        net: '1000.00',
+        vat: '180.00',
+        total: '1180.00',
+        base18: '1000.00',
+      }),
+      // DVX's own total is a qəpik off (801,70 + 144,31 ≠ 946,00): the accountant decides.
+      doc('MT3', '2026-09-12', TELECOM, {
+        net: '801.70',
+        vat: '144.31',
+        total: '946.00',
+        base18: '801.70',
+      }),
+    ],
+    'invoices',
+  );
+  assert.equal(res.posted, 2);
+  const inv = (n: string) =>
+    f.query<InvoiceDetail>({
+      type: 'invoice',
+      companyId: f.companyId,
+      id: byNumber(f, n).invoiceId,
+    });
+  const mt1 = inv('MT1');
+  assert.equal(mt1.pricesIncludeVat, true);
+  assert.deepEqual(
+    mt1.lines.map((l) => [l.net, l.vat]),
+    [['1091.53', '196.47']],
+  );
+  assert.equal(inv('MT2').pricesIncludeVat, false);
+  const mt3 = byNumber(f, 'MT3');
+  assert.equal(mt3.bucket, 'proposal');
+  assert.match(mt3.proposal!.reasons.join(' '), /Yekun məbləğ/);
+});

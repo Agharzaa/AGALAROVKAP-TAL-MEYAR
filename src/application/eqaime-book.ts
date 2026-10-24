@@ -218,28 +218,49 @@ function rateOf(line: EqLineView, doc: Row): VatRate | '' {
 
 /**
  * Quantity and price that make Meyar's line equal DVX's to the qəpik: DVX's own price first,
- * then the price derived from the amount (4 decimals). Empty price when neither does.
+ * then the price derived from the amount (4 decimals). Empty price when neither does. With
+ * `inclusive` the price includes VAT (net + VAT): DVX derived the VAT from the gross amount
+ * (gross × 18/118), which the price without VAT cannot repeat (QERARLAR 2026-10-22 §11).
  */
-function priced(net: Minor, vat: Minor, quantity: bigint, dvxPrice: string, rate: VatRate) {
+function priced(
+  net: Minor,
+  vat: Minor,
+  quantity: bigint,
+  dvxPrice: string,
+  rate: VatRate,
+  inclusive = false,
+) {
   const tries: bigint[] = [];
-  try {
-    tries.push(parsePrice(dvxPrice));
-  } catch {
-    /* more than 4 decimals or empty: derive it */
-  }
-  if (quantity > 0n && net > 0n)
-    tries.push(roundHalfAwayFromZero(net * (PRICE_SCALE / 100n) * QTY_SCALE, quantity));
+  if (!inclusive)
+    try {
+      tries.push(parsePrice(dvxPrice));
+    } catch {
+      /* more than 4 decimals or empty: derive it */
+    }
+  const amount = inclusive ? net + vat : net;
+  if (quantity > 0n && amount > 0n)
+    tries.push(roundHalfAwayFromZero(amount * (PRICE_SCALE / 100n) * QTY_SCALE, quantity));
   for (const price of tries) {
     if (price <= 0n) continue;
-    const a = lineAmounts(quantity, price, rate, false);
+    const a = lineAmounts(quantity, price, rate, inclusive);
     if (a.net === net && a.vat === vat) return { price: formatPrice(price), fits: true };
   }
-  const a = tries.length ? lineAmounts(quantity, tries[tries.length - 1]!, rate, false) : null;
+  const a = tries.length ? lineAmounts(quantity, tries[tries.length - 1]!, rate, inclusive) : null;
   return {
     price: tries.length ? formatPrice(tries[tries.length - 1]!) : '',
     fits: false,
     got: a,
   };
+}
+
+/**
+ * DVX took the VAT out of the gross amount: 18% of the base does not give it, (base + VAT) × 18/118
+ * does (Kaan, 11.02.2026: 1 091,53 + 196,47 = 1 288,00; 18% of 1 091,53 is 196,48).
+ */
+export function vatFromGross(base18: Minor, vat: Minor): boolean {
+  if (base18 <= 0n || vat <= 0n) return false;
+  if (roundHalfAwayFromZero(base18 * 18n, 100n) === vat) return false;
+  return roundHalfAwayFromZero((base18 + vat) * 18n, 118n) === vat;
 }
 
 const dvxLine = (doc: Row): EqLineView[] =>
@@ -370,7 +391,10 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
     }
   }
 
-  // Lines.
+  // Lines. DVX derived the VAT from the gross amount (× 18/118) when 18% of the base does not give
+  // it and that does: the invoice then takes prices including VAT (QERARLAR 2026-10-22 §11).
+  const inclusive = vatFromGross(doc.base_18 as bigint, doc.vat as bigint);
+  if (inclusive) out.pricesIncludeVat = true;
   let linesAuto = true;
   const goods = dvxLine(doc);
   if (goods.length) {
@@ -403,7 +427,16 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
         });
         if (found.mode === 'suggest') line.problem = 'uyğunluq təklif rejimindədir';
       }
-      fill(ctx, line, g.quantity, g.price, parseMoney(g.net.replace('-', '')), g.net, g.vat);
+      fill(
+        ctx,
+        line,
+        g.quantity,
+        g.price,
+        parseMoney(g.net.replace('-', '')),
+        g.net,
+        g.vat,
+        inclusive,
+      );
       if (line.problem) {
         linesAuto = false;
         reasons.push(`${where}: ${line.problem}.`);
@@ -446,7 +479,7 @@ export function propose(ctx: EqContext, doc: Row): EqProposal {
         mapMode: header.mode,
         problem: header.mode === 'suggest' ? 'uyğunluq təklif rejimindədir' : '',
       };
-      fill(ctx, line, '1', '', base, money(base), money(vat));
+      fill(ctx, line, '1', '', base, money(base), money(vat), inclusive);
       if (line.problem) {
         linesAuto = false;
         reasons.push(`Bütün qaimə (${rate === '18' ? '18%' : rate}): ${line.problem}.`);
@@ -516,6 +549,7 @@ function fill(
   net: Minor,
   netText: string,
   vatText: string,
+  inclusive = false,
 ) {
   const problem = (p: string) => {
     if (!line.problem) line.problem = p;
@@ -553,7 +587,7 @@ function fill(
   line.quantity = qty ? formatQty(qty) : '';
   if (!qty) return;
   const vat = vatText ? parseMoney(vatText.replace('-', '')) : 0n;
-  const p = priced(net, vat, qty, dvxPrice, line.vatRate);
+  const p = priced(net, vat, qty, dvxPrice, line.vatRate, inclusive);
   line.price = p.price;
   if (!p.fits)
     problem(
@@ -873,7 +907,7 @@ function draftCommand(
     partnerId: p.partnerId,
     contractId: p.contractId,
     rate: '',
-    pricesIncludeVat: false,
+    pricesIncludeVat: !!p.pricesIncludeVat,
     eqSeries: '',
     eqNumber: String(doc.eq_number),
     memo: parseText(String(doc.note).slice(0, 500), 'Məzmun', 500, false),

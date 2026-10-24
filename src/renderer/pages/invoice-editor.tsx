@@ -113,7 +113,8 @@ function fromEq(e: EqDocumentDetail, base: Form, keepHeader = false): Form {
           partnerId: p?.partnerId ?? '',
           contractId: p?.contractId ?? '',
         }),
-    pricesIncludeVat: false,
+    // DVX took the VAT out of the gross amount: prices including VAT repeat it to the qəpik.
+    pricesIncludeVat: !!p?.pricesIncludeVat,
     eqNumber: e.number,
     memo: e.note.slice(0, 500),
     lines: p?.lines.length
