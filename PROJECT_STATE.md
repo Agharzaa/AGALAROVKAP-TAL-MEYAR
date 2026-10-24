@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.8, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.9, mərhələ 6b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -477,6 +477,8 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 **0.7.7 — ƏDV ümumi məbləğdən (QERARLAR 2026-10-22 §11):** DVX-in ƏDV-si 18% ilə yox, (baza + ƏDV) × 18/118 ilə tutursa (`vatFromGross`), təklif və avtomatik qaimə "ƏDV daxildir" rejimindədir (qiymət = baza + ƏDV), qaimə forması da həmin rejimlə açılır. DVX-in öz yekunu tutmayanlar təklif qalır. Testlər: `eqaime-book.test.ts` (Kaan 1 091,53 / 196,47; adi 1 000 / 180; 801,70 + 144,31 ≠ 946), `tests/ui` (forma "ƏDV daxildir" ilə). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
 
 **0.7.8 — qəpik fərqi və xəbərdarlıq (25.10.2026, QERARLAR 2026-10-25 §12–§13):** DVX-in yekunu ƏDV-siz + ƏDV-dən 1 qəpik fərqlənəndə (aksiz / yol vergisi yoxdursa) qaimə DVX-in ƏDV-si və yekunu ilə yazılır, ƏDV-siz = yekun − ƏDV (`pennyOff`); avtomatik də. E-qaiməni uçota alan / ona bağlanan qaimə DVX-dən məbləğ, ƏDV və ya tarixlə fərqlənəndə **qadağa yox, xəbərdarlıq**: saxlanır, e-qaimə "Ziddiyyət"də "Uçot: … fərq" ilə; DVX-ə uyğun düzəldiləndə xəbərdarlıq gedir; başqa kontragent / nömrə / istiqamət — rədd. Testlər: `eqaime-book.test.ts` (946,00 → 801,69; 2 qəpik və yol vergisi uçota düşmür; əl ilə uçot və nömrəsiz qaimənin bağlanması xəbərdarlıqla). `npm test` 175, `npm run test:ui` 38, `npm run test:perf`.
+
+**0.7.9 — dövriyyə balansı 1C kimi hesab qrupları ilə (25.10.2026, QERARLAR 2026-10-25 §14):** istifadəçi: "dövriyyə balansı çox axmaqca qurulub" → seçim "1C kimi hesab qrupları". Hesablar bölmə (1 rəqəm) və maddə (2 rəqəm) başlıqları altında, başlıqlar öz hesablarının cəmi ilə (rəsmi adlar `chartSections` / `chartGroups`, İ-38); başlıqlar açılmır, kart açmır, Excel-ə düşür; ümumi cəm dəyişmir. Real MG Transport məlumatının surəti ilə ekran şəkli yoxlanıb (2 → 24 → 241, 5 → 53 → 531, 7 → 72 → 721). Testlər: `ledger.test.ts` (Sentyabr misalı: başlıqlar, sıra, 22-nin cəmi, ümumi cəm), `tests/ui`. `npm test` 176, `npm run test:ui` 38, `npm run test:perf` (DBC il 413 ms).
 
 ## Açıq məsələlər
 

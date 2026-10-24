@@ -123,12 +123,14 @@ test('September example: trial balance by account and subkonto, to the qəpik', 
   // "Only arising in the period": the 543.01 advance and 205 stock arose in September; 223.01 existed.
   const arising = f
     .trial('2026-09-01', '2026-09-30', [], { onlyArising: true })
-    .rows.map((x) => x.account);
+    .rows.filter((x) => x.kind === 'account')
+    .map((x) => x.account);
   assert.ok(arising.includes('543') && arising.includes('205') && !arising.includes('223'));
   // Filter by partner.
   const byPartner = f
     .trial('2026-09-01', '2026-09-30', [], { partnerId: s.customer })
-    .rows.map((x) => x.account);
+    .rows.filter((x) => x.kind === 'account')
+    .map((x) => x.account);
   assert.deepEqual(byPartner, ['211', '543']);
   // A part of a month: registers for whole months + postings of the partial month.
   const mid = f.trial('2026-09-10', '2026-09-20');
@@ -728,4 +730,46 @@ UPDATE items SET name='Mal satışı' WHERE id='i1';`);
   assert.deepEqual(role('cogs'), ['Satılmış malların maya dəyəri']);
   db.close();
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('2026-10-25: the trial balance groups accounts by section and group of the chart, as 1C does', (t) => {
+  const f = fixture(t);
+  september(f);
+  const tb = f.trial('2026-09-01', '2026-09-30');
+  const shown = tb.rows.map((r) => [r.level, r.kind, r.account, r.label]);
+  // Section 2 → group 22 → 223, 224 … ; section 5 → groups 52, 53, 54 …; names of the chart
+  // of the Ministry of Finance (order İ-38 of 18.04.2006).
+  const at = (account: string) => shown.find((r) => r[2] === account)!;
+  assert.deepEqual(at('2'), [0, 'section', '2', 'Qısamüddətli aktivlər']);
+  assert.deepEqual(at('22'), [1, 'group', '22', 'Pul vəsaitləri və onların ekvivalentləri']);
+  assert.deepEqual(at('223').slice(0, 3), [2, 'account', '223']);
+  assert.deepEqual(at('24'), [1, 'group', '24', 'Sair qısamüddətli aktivlər']);
+  assert.deepEqual(at('53'), [1, 'group', '53', 'Qısamüddətli kreditor borcları']);
+  assert.deepEqual(at('6'), [0, 'section', '6', 'Gəlirlər']);
+  // Each heading comes before its accounts, in code order.
+  const order = shown.map((r) => r[2]);
+  assert.ok(order.indexOf('2') < order.indexOf('22') && order.indexOf('22') < order.indexOf('223'));
+  assert.ok(
+    order.indexOf('223') < order.indexOf('24') && order.indexOf('24') < order.indexOf('241'),
+  );
+  // A heading sums its accounts' debit and credit sides (open, turnover, close).
+  const sum = (codes: string[], k: 'openDt' | 'turnDt' | 'turnKt' | 'closeDt' | 'closeKt') =>
+    codes
+      .map((c) => Number(f.row(tb, `a:${c}`)?.[k] || 0))
+      .reduce((a, b) => a + b, 0)
+      .toFixed(2);
+  const group22 = f.row(tb, 'g:22')!;
+  assert.deepEqual(
+    [group22.openDt, group22.turnDt, group22.turnKt, group22.closeDt],
+    [
+      sum(['223', '224'], 'openDt'),
+      sum(['223', '224'], 'turnDt'),
+      sum(['223', '224'], 'turnKt'),
+      sum(['223', '224'], 'closeDt'),
+    ],
+  );
+  // The total stays the accounts' total; headings are not counted twice.
+  assert.equal(tb.totals.turnDt, '65891.14');
+  // Headings are not accounts: not expandable, no card.
+  assert.equal(group22.expandable, false);
 });

@@ -1882,11 +1882,19 @@ td.trial-name {
   font-size: 12px;
   line-height: 14px;
 }
-.trial tr.account.lvl0 .code {
+/* Headings of the chart, as in 1C: section (2) and group (24) above their accounts. */
+.trial tr.section td {
+  background: var(--head);
+  font-weight: 700;
+}
+.trial tr.group td {
   font-weight: 600;
 }
-.trial tr.lvl3 td,
-.trial tr.lvl4 td {
+.trial tr.account.lvl2 .code {
+  font-weight: 600;
+}
+.trial tr.lvl5 td,
+.trial tr.lvl6 td {
   color: var(--ink-2);
 }
 .tree-toggle {

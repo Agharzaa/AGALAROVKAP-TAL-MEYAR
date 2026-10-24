@@ -48,7 +48,10 @@ export function TrialPage() {
         : [...list, r.key],
     );
   };
+  // A heading of the chart (section, group) is not an account: no card.
+  const heading = (r: TrialRow) => r.kind === 'section' || r.kind === 'group';
   const openCard = (r: TrialRow) =>
+    !heading(r) &&
     ws.open(
       {
         type: 'accountCard',
@@ -111,7 +114,7 @@ export function TrialPage() {
       widths: [10, 48, 16, 16, 16, 16, 16, 16, 12, 14],
       rows: [
         ...tb.rows.map((r) => [
-          r.kind === 'account' ? r.account : '',
+          r.kind === 'subkonto' ? '' : r.account,
           `${'   '.repeat(r.level)}${r.label}`,
           { money: r.openDt },
           { money: r.openKt },
@@ -274,7 +277,7 @@ export function TrialPage() {
             {rows.map((r, i) => (
               <tr
                 key={r.key}
-                className={`lvl${Math.min(r.level, 4)} ${r.kind}${i === selected ? ' selected' : ''}`}
+                className={`lvl${Math.min(r.level, 6)} ${r.kind}${i === selected ? ' selected' : ''}`}
                 onClick={() => setSelected(i)}
                 onDoubleClick={() => openCard(r)}
               >
@@ -293,7 +296,7 @@ export function TrialPage() {
                     ) : (
                       <span className="tree-space" />
                     )}
-                    {r.kind === 'account' && <span className="code">{r.account}</span>}
+                    {r.kind !== 'subkonto' && <span className="code">{r.account}</span>}
                     <span
                       className="label"
                       title={r.kind === 'subkonto' ? `${r.hint}: ${r.label}` : r.label}
