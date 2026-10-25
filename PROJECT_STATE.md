@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.15, mərhələ 6c bitdi). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.16, mərhələ 6-nın müstəqil auditi). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
