@@ -63,7 +63,11 @@ import { HomePage } from './pages/home';
 import { OperationsPage } from './pages/operations';
 import { OperationEditor } from './pages/operation-editor';
 import { AssetEditor } from './pages/asset-editor';
-import { AssetDocumentsPage, FixedAssetsPage } from './pages/fixed-assets';
+import {
+  AssetDocumentsPage,
+  DepreciationSchedulePage,
+  FixedAssetsPage,
+} from './pages/fixed-assets';
 import { InvoiceEditor } from './pages/invoice-editor';
 import { InvoicesPage } from './pages/invoices';
 import { BankDocumentsPage } from './pages/bank-documents';
@@ -1116,6 +1120,8 @@ function Routed({ win }: { win: Win }) {
           return <AssetDocumentsPage kind="commission" />;
         case 'assetOpenings':
           return <AssetDocumentsPage kind="opening" />;
+        case 'depreciationSchedule':
+          return <DepreciationSchedulePage />;
         case 'lists':
           return <ListsPage />;
         case 'audit':

@@ -571,13 +571,17 @@ type Role =
   | 'goodsIncome'
   | 'serviceIncome'
   | 'fxIncome'
-  | 'fxExpense';
+  | 'fxExpense'
+  | 'depreciation'
+  | 'assetDisposal';
 /** Roles an element of each kind can take in the posting rules (invoices, revaluation). */
 const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
   paymentKind: [{ role: 'vatTax', label: 'Satışın ƏDV-si (Kt 521.01)' }],
   expenseItem: [
     { role: 'cogs', label: 'Satılmış malların maya dəyəri (Dt 701)' },
     { role: 'fxExpense', label: 'Məzənnə fərqi xərci (Dt 731)' },
+    { role: 'depreciation', label: 'Amortizasiya (Kt 112)' },
+    { role: 'assetDisposal', label: 'Əsas vəsaitlərin silinməsi (Dt 731)' },
   ],
   productGroup: [{ role: 'defaultProductGroup', label: 'Standart nomenklatura qrupu' }],
   incomeType: [

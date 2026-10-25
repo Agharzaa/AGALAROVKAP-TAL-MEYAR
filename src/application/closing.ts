@@ -43,6 +43,9 @@ import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import { depositPaid } from './money.js';
 import { checkMonth, revaluationStep, type RevaluationStep } from './revaluation.js';
 import { expectVersion, loadChart, rowToPosting, type Tx } from './tx.js';
+import { termsOf } from './assets.js';
+import { checkSideValues } from './subkonto.js';
+import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
 
 export const CLOSING = 'closing';
 
@@ -182,6 +185,122 @@ function negativeBalances(
           ),
         );
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Step 2a — depreciation of fixed assets (stage 7b; docs/MERHELE-7-ESAS-VESAITLER.md §4.2, §5)
+
+/**
+ * Straight-line depreciation of every asset in service by the terms of its document: what the
+ * schedule says is due through this month, less what 112 already holds above the opening
+ * balance — so a month closed without it (the lock alone, or before 7b) is made up here, and
+ * nothing goes beyond cost − salvage. Dt the asset's expense account / Kt 112, at month end.
+ */
+function depreciationStep(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  month: string,
+  name: (kind: string, id: string) => string,
+): Draft & { assets: number; blocking: Signal[]; warnings: Signal[] } {
+  const end = monthEnd(month);
+  const postings: Posting[] = [];
+  const notes: string[] = [];
+  const blocking: Signal[] = [];
+  const warnings: Signal[] = [];
+  const balances = new Map<string, { cost: bigint; dep: bigint }>();
+  for (const r of db.all(
+    `SELECT asset, SUM(cost) AS cost, SUM(dep) AS dep FROM (
+       SELECT dt_s1 AS asset, amount AS cost, 0 AS dep FROM postings WHERE company_id=?1 AND dt_account='111' AND date<=?2
+       UNION ALL SELECT kt_s1, -amount, 0 FROM postings WHERE company_id=?1 AND kt_account='111' AND date<=?2
+       UNION ALL SELECT kt_s1, 0, amount FROM postings WHERE company_id=?1 AND kt_account='112' AND date<=?2
+       UNION ALL SELECT dt_s1, 0, -amount FROM postings WHERE company_id=?1 AND dt_account='112' AND date<=?2)
+     GROUP BY asset`,
+    companyId,
+    end,
+  ))
+    balances.set(String(r.asset), { cost: r.cost as bigint, dep: r.dep as bigint });
+  const lines =
+    chart.get('111')?.subkonto[0] === 'fixedAsset'
+      ? db.all(
+          `SELECT l.*, d.date AS doc_date, a.name, a.inventory_no FROM asset_lines l
+             JOIN asset_documents d ON d.id=l.document_id JOIN fixed_assets a ON a.id=l.asset_id
+           WHERE l.company_id=? AND d.status='posted' AND d.date<=? ORDER BY a.inventory_no`,
+          companyId,
+          end,
+        )
+      : [];
+  for (const l of lines) {
+    const asset = String(l.asset_id);
+    const label = `${String(l.inventory_no)} ${String(l.name)}`;
+    const b = balances.get(asset) ?? { cost: 0n, dep: 0n };
+    if (b.dep > b.cost)
+      blocking.push(
+        signal(
+          'closing',
+          `${label}: yığılmış amortizasiya (${show(b.dep)}) ilkin dəyərdən (${show(b.cost)}) böyükdür — 111 / 112 yazılışlarını yoxlayın.`,
+          '112',
+          [asset],
+        ),
+      );
+    // Disposed (7c) or never on 111: nothing to depreciate.
+    if (b.cost <= 0n) continue;
+    const terms = termsOf(l, String(l.doc_date));
+    const due = terms.accumulated + depreciatedThrough(terms, month);
+    const room = b.cost - (l.salvage as bigint) - b.dep;
+    let amount = due - b.dep;
+    if (amount > room) amount = room;
+    if (amount <= 0n) continue;
+    const regular = depreciationFor(terms, month);
+    if (amount > regular)
+      notes.push(
+        `${label}: əvvəlki aylardan qalan amortizasiya da bu ayda yazılır (${show(amount - regular)}; bu ayın payı ${show(regular)}).`,
+      );
+    const account = chart.get(String(l.expense_account));
+    const sk = JSON.parse(String(l.expense_sk)) as string[];
+    try {
+      if (!account || !chart.postable(account.code))
+        throw new DomainError(
+          `${String(l.expense_account)} hesabı yoxdur və ya yazılış qəbul etmir.`,
+        );
+      checkSideValues(db, companyId, account, sk, 'expenseSk', '');
+    } catch (e) {
+      if (!(e instanceof DomainError)) throw e;
+      blocking.push(
+        signal(
+          'closing',
+          `${label}: amortizasiyanın xərci yazıla bilmir — ${e.message} İstismara vermə sənədində xərc hesabını düzəldin.`,
+        ),
+      );
+      continue;
+    }
+    postings.push({
+      dt: { account: account.code, sk },
+      kt: { account: '112', sk: [asset] },
+      amount,
+      memo: `Amortizasiya ${month}: ${label}`,
+    });
+  }
+  // 113 waiting for months: an asset bought but not put into service?
+  const since = monthEnd(previousMonth(previousMonth(previousMonth(month))));
+  for (const r of db.all(
+    `SELECT product, SUM(a) AS amount, MAX(d) AS last FROM (
+       SELECT dt_s1 AS product, amount AS a, date AS d FROM postings WHERE company_id=?1 AND dt_account='113' AND date<=?2
+       UNION ALL SELECT kt_s1, -amount, '' FROM postings WHERE company_id=?1 AND kt_account='113' AND date<=?2)
+     GROUP BY product HAVING SUM(a)>0 AND MAX(d)<=?3`,
+    companyId,
+    end,
+    since,
+  ))
+    warnings.push(
+      signal(
+        'closing',
+        `113-də "${name('product', String(r.product))}" ${dmy(String(r.last))} tarixindən qalır (${show(r.amount as bigint)}) — istismara verilməyib? Əsas vəsaitdirsə, "İstismara vermə" sənədi ilə 111-ə keçirin.`,
+        '113',
+        [String(r.product)],
+      ),
+    );
+  return { postings, notes, assets: postings.length, blocking, warnings };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -624,6 +743,7 @@ interface Plan {
   blocking: Signal[];
   warnings: Signal[];
   fifo: Draft & { products: number };
+  depreciation: Draft & { assets: number };
   revaluation: RevaluationStep | null;
   vat: Draft;
   out: CloseOut;
@@ -693,6 +813,12 @@ function buildPlan(
   const fifo = attempt<Plan['fifo']>('closing', { postings: [], notes: [], products: 0 }, () =>
     fifoStep(db, companyId, chart, month),
   );
+  const depreciation = attempt<ReturnType<typeof depreciationStep>>(
+    'closing',
+    { postings: [], notes: [], assets: 0, blocking: [], warnings: [] },
+    () => depreciationStep(db, companyId, chart, month, controls.name),
+  );
+  blocking.push(...depreciation.blocking);
   // A missing month-end rate or two currencies on one key: the revaluation cannot be computed.
   const revaluation = attempt<RevaluationStep | null>('rate', null, () =>
     revaluationStep(db, companyId, month),
@@ -702,6 +828,7 @@ function buildPlan(
   );
   const out = closeOut(db, companyId, chart, month, [
     ...fifo.postings,
+    ...depreciation.postings,
     ...(revaluation?.delta ?? []),
     ...vat.postings,
   ]);
@@ -709,8 +836,9 @@ function buildPlan(
     month,
     date: monthEnd(month),
     blocking,
-    warnings: [...controls.warnings(month), ...vat.waiting],
+    warnings: [...controls.warnings(month), ...depreciation.warnings, ...vat.waiting],
     fifo,
+    depreciation,
     revaluation,
     vat,
     out,
@@ -773,6 +901,15 @@ function steps(plan: Plan, posted: boolean): ClosingStep[] {
         ? `${plan.fifo.products} mal üzrə düzəliş · ${show(sum(plan.fifo.postings))}`
         : 'Maya dəyəri FIFO ilə uyğundur',
       plan.fifo.notes,
+    ),
+    step(
+      'depreciation',
+      'Əsas vəsaitlərin amortizasiyası',
+      plan.depreciation.postings,
+      plan.depreciation.postings.length
+        ? `${plan.depreciation.assets} əsas vəsait · ${show(sum(plan.depreciation.postings))}`
+        : 'Amortizasiya olunacaq əsas vəsait yoxdur',
+      plan.depreciation.notes,
     ),
     step(
       'revaluation',
@@ -892,6 +1029,7 @@ export function postClosing(
     }
   };
   post(plan.fifo.postings, { costAdjustment: true });
+  post(plan.depreciation.postings);
   const revaluation = plan.revaluation!.write(tx)?.id ?? plan.revaluation!.id;
   post(plan.vat.postings);
   // Steps 5–7 read the books after steps 2–4 (the same figures the plan showed).

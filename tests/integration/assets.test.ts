@@ -10,7 +10,11 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Db } from '../../src/infrastructure/sqlite/db.js';
 import { migrations } from '../../src/infrastructure/sqlite/schema.js';
-import type { FixedAssetRow } from '../../src/contracts/queries.js';
+import type {
+  ClosingView,
+  DepreciationSchedule,
+  FixedAssetRow,
+} from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 
 type F = ReturnType<typeof fixture>;
@@ -259,4 +263,187 @@ INSERT INTO registers VALUES('a','111','p','','','2026-09',100,0,1,0,0,0);`);
   assert.deepEqual(role('b', 'assetDisposal'), ['Əsas vəsaitlərin silinməsi']);
   db.close();
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Stage 7b — depreciation in the month closing (§4.2, §5; Ə2, Ə3)
+
+const closingView = (f: F, month: string) =>
+  f.query<ClosingView>({ type: 'closing', companyId: f.companyId, month });
+const closeMonth = (f: F, month: string) =>
+  run(f, { type: 'closing.post', companyId: f.companyId, month, acknowledged: true });
+const cancelMonth = (f: F, month: string) => {
+  const p = closingView(f, month).posted!;
+  return run(f, {
+    type: 'closing.cancel',
+    companyId: f.companyId,
+    id: p.id,
+    version: p.version,
+    reason: 'yoxlama',
+  });
+};
+/** The Actros of §9: 50 000, in service from 15.10.2026, 60 months to 701 "Amortizasiya". */
+function inService(f: F) {
+  const truck = bought(f);
+  const actros = asset(f, 'Mercedes Actros').id;
+  commission(f, [
+    {
+      assetId: actros,
+      productId: truck,
+      quantity: '1',
+      lifeMonths: 60,
+      expenseAccount: '701',
+      expenseSk: [
+        f.item('productGroup', 'Əsas nomenklatura qrupu'),
+        f.item('expenseItem', 'Amortizasiya'),
+      ],
+    },
+  ]);
+  return actros;
+}
+
+test('Ə2: the month closing depreciates from the month after; 701 goes to 801 with it', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  const october = closingView(f, '2026-10').steps.find((s) => s.key === 'depreciation')!;
+  assert.equal(october.state, 'empty');
+  closeMonth(f, '2026-10');
+  assert.equal(balance(f, '112', actros), 0n);
+  const plan = closingView(f, '2026-11').steps.find((s) => s.key === 'depreciation')!;
+  assert.equal(plan.title, 'Əsas vəsaitlərin amortizasiyası');
+  assert.deepEqual(
+    plan.postings.map((p) => [p.dt, p.kt, p.ktSk, p.amount]),
+    [['701', '112', [actros], '833.33']],
+  );
+  assert.match(plan.summary, /1 əsas vəsait · 833,33/);
+  closeMonth(f, '2026-11');
+  assert.equal(balance(f, '112', actros), -83_333n);
+  // 701 was closed into 801 by the same closing.
+  assert.equal(balance(f, '701'), 0n);
+  const [row] = list(f, '2026-11-30');
+  assert.deepEqual([row!.depreciated, row!.net, row!.monthsLeft], ['833.33', '49166.67', 59]);
+});
+
+test('Ə3: cancelling the closing takes the depreciation back; closing again posts the same', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  closeMonth(f, '2026-10');
+  closeMonth(f, '2026-11');
+  cancelMonth(f, '2026-11');
+  assert.equal(balance(f, '112', actros), 0n);
+  assert.equal(list(f, '2026-11-30')[0]!.monthsLeft, 60);
+  closeMonth(f, '2026-11');
+  assert.equal(balance(f, '112', actros), -83_333n);
+});
+
+test('7b: an opening balance depreciates over its months left; nothing beyond cost − salvage', (t) => {
+  const f = fixture(t);
+  const kamaz = asset(f, 'Kamaz').id;
+  const item = f.item('expenseItem', 'Amortizasiya');
+  run(f, {
+    type: 'asset.save',
+    companyId: f.companyId,
+    kind: 'opening',
+    date: '2026-09-30',
+    lines: [
+      {
+        assetId: kamaz,
+        cost: '1000',
+        accumulated: '900',
+        salvage: '50',
+        lifeMonths: 60,
+        remainingMonths: 2,
+        expenseAccount: '721',
+        expenseSk: [item],
+        counterAccount: '343',
+      },
+    ],
+  });
+  closeMonth(f, '2026-09');
+  closeMonth(f, '2026-10');
+  closeMonth(f, '2026-11');
+  // 50 left to depreciate over two months: 25 + 25, then nothing (salvage 50 stays).
+  assert.equal(balance(f, '112', kamaz), -95_000n);
+  const december = closingView(f, '2026-12').steps.find((s) => s.key === 'depreciation')!;
+  assert.deepEqual(december.postings, []);
+});
+
+test('7b: a month closed without depreciation is made up in the next one, with a note', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  // November closed by the period lock alone (before 7b, or by hand).
+  run(f, { type: 'period.close', companyId: f.companyId, through: '2026-11-30' });
+  const plan = closingView(f, '2026-12').steps.find((s) => s.key === 'depreciation')!;
+  assert.deepEqual(
+    plan.postings.map((p) => p.amount),
+    ['1666.66'],
+  );
+  assert.match(plan.notes.join(' '), /əvvəlki aylardan.*833,33/);
+  assert.equal(balance(f, '112', actros), 0n);
+});
+
+test('7b: an archived expense item stops the closing; a 113 balance left for months is a warning', (t) => {
+  const f = fixture(t);
+  inService(f);
+  // Another purchase waits on 113 since October.
+  const supplier = f.partner('Avadanlıq MMC', '1700000012');
+  const contract = f.contract(supplier, 'B-1', 'purchase');
+  const lift = f.product('Yük qaldırıcı', 'ədəd', 'asset');
+  f.invoice('purchase', '2026-08-03', supplier, contract, [
+    { productId: lift, quantity: '1', price: '7000' },
+  ]);
+  const w = closingView(f, '2026-11').warnings.map((s) => s.text);
+  assert.ok(
+    w.some((t) => /113.*Yük qaldırıcı.*istismara verilməyib/.test(t)),
+    w.join('\n'),
+  );
+  const item = f.catalog().items.find((i) => i.name === 'Amortizasiya')!;
+  run(f, {
+    type: 'item.save',
+    companyId: f.companyId,
+    id: item.id,
+    version: item.version,
+    kind: 'expenseItem',
+    name: item.name,
+    archived: true,
+  });
+  const blocking = closingView(f, '2026-11').blocking.map((s) => s.text);
+  assert.ok(
+    blocking.some((t) => /Mercedes Actros.*arxivdədir/.test(t)),
+    blocking.join('\n'),
+  );
+});
+
+test('7b: the depreciation schedule — posted months, then the forecast of the open ones', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  closeMonth(f, '2026-10');
+  closeMonth(f, '2026-11');
+  const s = f.query<DepreciationSchedule>({
+    type: 'depreciationSchedule',
+    companyId: f.companyId,
+    year: 2026,
+  });
+  assert.equal(s.months.length, 12);
+  const [row] = s.rows;
+  assert.equal(row!.assetId, actros);
+  assert.deepEqual(
+    row!.cells.slice(9).map((c) => [c.amount, c.forecast]),
+    [
+      ['0.00', false],
+      ['833.33', false],
+      ['833.33', true],
+    ],
+  );
+  assert.equal(row!.total, '1666.66');
+  assert.equal(s.totals[10], '833.33');
+  const next = f.query<DepreciationSchedule>({
+    type: 'depreciationSchedule',
+    companyId: f.companyId,
+    year: 2031,
+  });
+  assert.deepEqual(
+    next.rows[0]!.cells.slice(8, 11).map((c) => c.amount),
+    ['833.33', '833.53', '0.00'],
+  );
 });

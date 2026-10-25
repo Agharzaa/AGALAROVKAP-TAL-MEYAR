@@ -60,7 +60,13 @@ import { closingList, closingView, nextClosingMonth, type ClosingControls } from
 import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
-import { assetDocument, assetDocuments, fixedAssets, fixedAssetView } from './assets.js';
+import {
+  assetDocument,
+  assetDocuments,
+  depreciationSchedule,
+  fixedAssets,
+  fixedAssetView,
+} from './assets.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const money = (v: bigint) => formatMinor(v);
@@ -1461,6 +1467,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       return assetDocuments(db, q.companyId, q.kind);
     case 'assetDocument':
       return assetDocument(db, q.companyId, q.id);
+    case 'depreciationSchedule':
+      company(db, q.companyId);
+      return depreciationSchedule(db, q.companyId, q.year);
     case 'invoices': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);

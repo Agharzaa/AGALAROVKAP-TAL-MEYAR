@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 26.10.2026 (0.8.0, mərhələ 7a). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 26.10.2026 (0.8.1, mərhələ 7b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -534,6 +534,16 @@ Plan: `docs/MERHELE-7-ESAS-VESAITLER.md`, qərarlar — QERARLAR 2026-10-26 §1�
 - Testlər: `tests/domain/assets.test.ts` (Ə2, Ə6), `tests/integration/assets.test.ts` (Ə1, Ə6, v14 → v15 miqrasiyası), `tests/ui` (7a). `npm test` 196, `npm run test:ui` 45, `npm run test:perf`.
 - **Növbəti:** 7b — amortizasiya ay bağlanışının addımı (yoxlamalar, ləğv, amortizasiya cədvəli, vəsaitin kartı).
 
+## 0.8.1 — mərhələ 7b: amortizasiya ay bağlanışında (26.10.2026, QERARLAR 2026-10-26 §8)
+
+- **Ay bağlanışının yeni addımı "Əsas vəsaitlərin amortizasiyası"** (FIFO-dan sonra, valyuta yenidən qiymətləndirilməsindən əvvəl): hər istismardakı vəsait üzrə Dt xərc hesabı (sətrin şərtindəki 701 / 721 …, subkontosu ilə) / Kt 112 (vəsait), ayın son günü; 7xx elə həmin bağlanışda 801-ə bağlanır. Ləğv — storno (bütün bağlanış kimi), yenidən bağlanış eyni məbləği verir.
+- Məbləğ cədvəldən: bu aya qədər çatan − 112-də artıq olan; amortizasiyasız bağlanmış aylar növbəti bağlanışda tamamlanır (addımın qeydində), ilkin − ləğv dəyərindən çox yazılmır.
+- **Yoxlamalar:** xərc maddəsi arxivdə / hesab yazılış qəbul etmir — bloklayır; 112 > 111 — bloklayır; 113-də 3 aydan çox qalan qalıq — xəbərdarlıq ("istismara verilməyib?").
+- **Amortizasiya cədvəli** (yeni hesabat): vəsait × ay, il üzrə; bağlanmış aylar — ay bağlanışlarının yazdığı (storno ilə), açıq aylar — proqnoz (boz). Sətirdən vəsaitin 112 kartı açılır; vəsaitin pəncərəsində "111 kartı" / "112 kartı".
+- Xərc maddələrinin rolları Siyahılarda: "Amortizasiya (Kt 112)", "Əsas vəsaitlərin silinməsi (Dt 731)".
+- Testlər: `tests/integration/assets.test.ts` (Ə2 bağlanışda, Ə3, başlanğıc qalıq + ləğv dəyəri, buraxılmış ayın tamamlanması, arxiv / 113 yoxlamaları, cədvəl), `tests/ui` (cədvəl), perf — 200 vəsaitlə ay bağlanışı (baxış 2,0 s, bağlanış 1,9 s; hədd 10 s). `npm test` 202, `npm run test:ui` 45, `npm run test:perf`.
+- **Növbəti:** 7c — silinmə və satış (satışda 611 — əvvəl mühasibin təsdiqi), e-qaimə qoruması (əsas vəsait sətri "bütün qaimə 721" ilə avtomatik uçota düşməsin).
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -541,7 +551,7 @@ Plan: `docs/MERHELE-7-ESAS-VESAITLER.md`, qərarlar — QERARLAR 2026-10-26 §1�
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
-7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → 7b → 7c → müstəqil audit. Açıq suallar — §11.
+7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → 7c → müstəqil audit. Açıq suallar — §11.
 
 ## Əmrlər
 

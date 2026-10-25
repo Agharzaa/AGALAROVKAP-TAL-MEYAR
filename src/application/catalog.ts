@@ -542,6 +542,8 @@ const roleKind = {
   serviceIncome: 'incomeType',
   fxIncome: 'incomeType',
   fxExpense: 'expenseItem',
+  depreciation: 'expenseItem',
+  assetDisposal: 'expenseItem',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -551,6 +553,8 @@ const roleLabel = {
   serviceIncome: 'xidmət satışı',
   fxIncome: 'məzənnə fərqi gəliri (611)',
   fxExpense: 'məzənnə fərqi xərci (731)',
+  depreciation: 'amortizasiya (Kt 112)',
+  assetDisposal: 'əsas vəsaitlərin silinməsi (731)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

@@ -377,6 +377,48 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   // months before are locked by hand (a reused MEYAR_PERF_DB keeps its closing: skipped).
   if (!db.get("SELECT 1 FROM month_closings WHERE company_id=? AND month='2026-09'", companyId)) {
     const ctx = { actor: 'perf', correlationId: 'perf' };
+    // Ə9 (7b): 200 fixed assets from their opening balances, depreciated by the same closing.
+    const depItem = String(
+      db.get("SELECT id FROM items WHERE company_id=? AND role='depreciation'", companyId)!.id,
+    );
+    const assets = Array.from({ length: 200 }, (_, i) =>
+      String(
+        (
+          ledger.execute(
+            {
+              key: `perf-asset-${Date.now()}-${i}`,
+              type: 'fixedAsset.save',
+              companyId,
+              name: `Maşın ${i + 1}`,
+              group: 'transport',
+            },
+            ctx,
+          ) as { id: string }
+        ).id,
+      ),
+    );
+    time('Əsas vəsaitlərin başlanğıc qalığı (200 vəsait)', 3000, () =>
+      ledger.execute(
+        {
+          key: `perf-opening-${Date.now()}`,
+          type: 'asset.save',
+          companyId,
+          kind: 'opening',
+          date: '2026-08-31',
+          lines: assets.map((assetId) => ({
+            assetId,
+            cost: '60000',
+            accumulated: '12000',
+            lifeMonths: 60,
+            remainingMonths: 48,
+            expenseAccount: '721',
+            expenseSk: [depItem],
+            counterAccount: '343',
+          })),
+        },
+        ctx,
+      ),
+    );
     ledger.execute(
       { key: `perf-lock-${Date.now()}`, type: 'period.close', companyId, through: '2026-08-31' },
       ctx,
@@ -387,6 +429,9 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       () => q({ type: 'closing', month: '2026-09' }) as ClosingView,
     );
     assert.deepEqual(preview.blocking, []);
+    const dep = preview.steps.find((x) => x.key === 'depreciation')!;
+    assert.equal(dep.postings.length, 200);
+    assert.equal(dep.postings[0]!.amount, '1000.00');
     const closed = time('Ay bağlanışı (FIFO, ƏDV, 801, 341, kilid)', 10000, () =>
       ledger.execute(
         {

@@ -333,6 +333,8 @@ export const commandSchema = z.discriminatedUnion('type', [
         'serviceIncome',
         'fxIncome',
         'fxExpense',
+        'depreciation',
+        'assetDisposal',
       ])
       .optional(),
   }),

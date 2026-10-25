@@ -9,6 +9,7 @@
  */
 import {
   assetGroups,
+  depreciationFor,
   monthAfter,
   monthlyAmount,
   type AssetGroup,
@@ -25,6 +26,7 @@ import type {
   AssetDocumentDetail,
   AssetDocumentView,
   AssetLineView,
+  DepreciationSchedule,
   FixedAssetRow,
   FixedAssetView,
 } from '../contracts/queries.js';
@@ -699,6 +701,74 @@ export function assetDocument(db: Db, companyId: string, id: string): AssetDocum
   const r = db.get('SELECT * FROM asset_documents WHERE company_id=? AND id=?', companyId, id);
   if (!r) throw new DomainError('Sənəd tapılmadı.', 'id', 'not-found');
   return { ...documentView(db, r), postings: documentEntry(db, companyId, ASSET, id).postings };
+}
+
+/** Stage 7b: depreciation of a year by asset and month (posted, then forecast). */
+export function depreciationSchedule(
+  db: Db,
+  companyId: string,
+  year: number,
+): DepreciationSchedule {
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  const closedThrough = str(
+    db.get('SELECT closed_through FROM companies WHERE id=?', companyId)!.closed_through,
+  );
+  const closedMonth = closedThrough.slice(0, 7);
+  // What the month closings posted to 112 (their stornos included), by asset and month.
+  const posted = new Map<string, bigint>();
+  for (const r of db.all(
+    `SELECT p.kt_s1 AS asset, substr(p.date,1,7) AS month, SUM(p.amount) AS amount
+       FROM postings p JOIN entries e ON e.id=p.entry_id
+     WHERE p.company_id=? AND e.source_type='closing' AND p.kt_account='112' AND p.date>=? AND p.date<=?
+     GROUP BY asset, month`,
+    companyId,
+    `${year}-01-01`,
+    `${year}-12-31`,
+  ))
+    posted.set(`${str(r.asset)}|${str(r.month)}`, r.amount as bigint);
+  const terms = new Map<string, Row>();
+  for (const l of db.all(
+    `SELECT l.*, d.date AS doc_date FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
+     WHERE l.company_id=? AND d.status='posted' AND d.date<=?`,
+    companyId,
+    `${year}-12-31`,
+  ))
+    terms.set(str(l.asset_id), l);
+  const totals = months.map(() => 0n);
+  const rows: DepreciationSchedule['rows'] = [];
+  for (const a of db.all(
+    'SELECT * FROM fixed_assets WHERE company_id=? ORDER BY inventory_no',
+    companyId,
+  )) {
+    const id = str(a.id);
+    const l = terms.get(id);
+    const t = l ? termsOf(l, str(l.doc_date)) : undefined;
+    let sum = 0n;
+    const cells = months.map((m, i) => {
+      const forecast = m > closedMonth;
+      const amount = forecast ? (t ? depreciationFor(t, m) : 0n) : (posted.get(`${id}|${m}`) ?? 0n);
+      sum += amount;
+      totals[i] = totals[i]! + amount;
+      return { amount: formatMinor(amount), forecast };
+    });
+    if (!sum && !l) continue;
+    rows.push({
+      assetId: id,
+      inventoryNo: str(a.inventory_no),
+      name: str(a.name),
+      expenseAccount: l ? str(l.expense_account) : '',
+      cells,
+      total: formatMinor(sum),
+    });
+  }
+  return {
+    year,
+    months,
+    closedThrough,
+    rows,
+    totals: totals.map(formatMinor),
+    total: formatMinor(totals.reduce((s, x) => s + x, 0n)),
+  };
 }
 
 export const assetGroupName = (g: AssetGroup) => assetGroups.find((x) => x.id === g)!.name;

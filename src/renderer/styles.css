@@ -3398,3 +3398,8 @@ button.step:active {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Stage 7b: the forecast months of the depreciation schedule. */
+.schedule td.forecast {
+  color: var(--off);
+}

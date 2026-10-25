@@ -18,6 +18,12 @@ export const querySchema = z.discriminatedUnion('type', [
     kind: z.enum(['commission', 'opening']),
   }),
   z.object({ type: z.literal('assetDocument'), companyId: id, id }),
+  /** Stage 7b: depreciation by asset and month of a year — posted, then forecast. */
+  z.object({
+    type: z.literal('depreciationSchedule'),
+    companyId: id,
+    year: z.number().int().min(2000).max(2100),
+  }),
   z.object({
     type: z.literal('invoices'),
     companyId: id,
@@ -235,6 +241,28 @@ export interface FixedAssetRow extends FixedAssetView {
   expenseAccount: string;
   expenseSk: string[];
   expenseNames: string[];
+}
+/**
+ * Stage 7b: depreciation of a year by asset and month. Months up to the closed period show what
+ * the month closings posted; open months the forecast by the terms (the regular amount).
+ */
+export interface DepreciationSchedule {
+  year: number;
+  /** "YYYY-MM", January to December. */
+  months: string[];
+  /** The last closed day: months after it are forecast. */
+  closedThrough: string;
+  rows: {
+    assetId: string;
+    inventoryNo: string;
+    name: string;
+    expenseAccount: string;
+    cells: { amount: string; forecast: boolean }[];
+    total: string;
+  }[];
+  /** Per month, all assets. */
+  totals: string[];
+  total: string;
 }
 export interface AssetLineView {
   assetId: string;
@@ -483,7 +511,15 @@ export interface ClosingPosting {
   memo: string;
 }
 export type ClosingStepKey =
-  'checks' | 'fifo' | 'revaluation' | 'vat' | 'income' | 'result' | 'year' | 'lock';
+  | 'checks'
+  | 'fifo'
+  | 'depreciation'
+  | 'revaluation'
+  | 'vat'
+  | 'income'
+  | 'result'
+  | 'year'
+  | 'lock';
 export interface ClosingStep {
   key: ClosingStepKey;
   title: string;

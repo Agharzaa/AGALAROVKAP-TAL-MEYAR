@@ -42,6 +42,7 @@ export type Page =
   | 'fixedAssets'
   | 'assetCommissions'
   | 'assetOpenings'
+  | 'depreciationSchedule'
   | 'lists'
   | 'audit'
   | 'settings';

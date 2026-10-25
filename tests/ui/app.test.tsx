@@ -2515,6 +2515,10 @@ test('stage 7a: a new fixed asset is put into service from 113 and the list show
       [rows[0]!.cost, rows[0]!.monthly, rows[0]!.expenseAccount, rows[0]!.expenseNames],
       ['50000.00', '833.33', '701', ['Əsas nomenklatura qrupu', 'Amortizasiya']],
     );
+    // Stage 7b: the schedule lists it; its card opens from the row.
+    await user.click(screen.getByRole('button', { name: 'Əsas vəsaitlər' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Amortizasiya cədvəli' }));
+    await within(pane()).findByText('Actros 10-AB-123');
   } finally {
     h.close();
   }

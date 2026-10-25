@@ -141,6 +141,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Əsas vəsaitin 113-dən 111-ə keçməsi və amortizasiya şərtləri',
     icon: Truck,
   },
+  depreciationSchedule: {
+    title: 'Amortizasiya cədvəli',
+    hint: 'Əsas vəsait və ay üzrə: yazılmış və proqnoz',
+    icon: Reports,
+  },
   assetOpenings: {
     title: 'Əsas vəsaitlərin başlanğıc qalıqları',
     hint: 'Meyar-dan əvvəl alınmış vəsaitlər: dəyər, yığılmış amortizasiya, qalan ay',
@@ -427,6 +432,7 @@ export const sections: Section[] = [
       {
         title: 'Hesabatlar',
         items: [
+          { label: 'Amortizasiya cədvəli', icon: Reports, action: page('depreciationSchedule') },
           card('111', 'Əsas vəsaitlərin dəyəri (111)'),
           card('112', 'Yığılmış amortizasiya (112)'),
           card('113', 'Kapitallaşdırılan məsrəflər (113)'),
@@ -538,6 +544,7 @@ export function sectionOfView(view: View): string {
         case 'fixedAssets':
         case 'assetCommissions':
         case 'assetOpenings':
+        case 'depreciationSchedule':
           return 'assets';
         case 'operations':
         case 'accounts':

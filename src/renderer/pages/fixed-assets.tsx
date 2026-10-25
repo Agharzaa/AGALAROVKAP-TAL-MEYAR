@@ -6,10 +6,14 @@
 import { useState } from 'react';
 import { Plus, Truck } from '../icons';
 import { assetGroups, type AssetGroup } from '../../domain/assets';
-import type { AssetDocumentView, FixedAssetRow } from '../../contracts/queries';
+import type {
+  AssetDocumentView,
+  DepreciationSchedule,
+  FixedAssetRow,
+} from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { SearchField, matches } from '../filters';
-import { addAmounts, day, today } from '../format';
+import { addAmounts, day, money, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import {
@@ -30,6 +34,7 @@ const groupName = (g: AssetGroup) => assetGroups.find((x) => x.id === g)?.name ?
 /** The catalog card of one fixed asset (new or existing). */
 function AssetCard({ asset, onClose }: { asset: FixedAssetRow | 'new'; onClose: () => void }) {
   const win = useWindow();
+  const ws = useWorkspace();
   const m = useMutation();
   const current = asset === 'new' ? null : asset;
   const [name, setName] = useState(current?.name ?? '');
@@ -121,6 +126,20 @@ function AssetCard({ asset, onClose }: { asset: FixedAssetRow | 'new'; onClose: 
         </div>
         {m.error && <Notice>{m.error.message}</Notice>}
         <div className="form-actions">
+          {current &&
+            (['111', '112'] as const).map((account) => (
+              <button
+                key={account}
+                type="button"
+                className="button secondary"
+                onClick={() => (
+                  ws.open({ type: 'accountCard', account, sk: [current.id] }, win.companyId),
+                  onClose()
+                )}
+              >
+                {account} kartı
+              </button>
+            ))}
           <button type="button" className="button secondary" onClick={onClose}>
             Ləğv et
           </button>
@@ -351,6 +370,126 @@ export function AssetDocumentsPage({ kind }: { kind: 'commission' | 'opening' })
         rowClass={(d) => (d.status === 'cancelled' ? 'cancelled' : '')}
         empty={<Empty title="Hələ sənəd yoxdur" />}
       />
+    </ModuleFrame>
+  );
+}
+
+const monthShort = [
+  'Yan',
+  'Fev',
+  'Mar',
+  'Apr',
+  'May',
+  'İyn',
+  'İyl',
+  'Avq',
+  'Sen',
+  'Okt',
+  'Noy',
+  'Dek',
+];
+
+/** Stage 7b: depreciation by asset and month — posted months, then the forecast (grey). */
+export function DepreciationSchedulePage() {
+  const win = useWindow();
+  const ws = useWorkspace();
+  const [year, setYear] = useState(Number(today().slice(0, 4)));
+  const result = useQuery<DepreciationSchedule>({
+    type: 'depreciationSchedule',
+    companyId: win.companyId,
+    year,
+  });
+  const s = result.data;
+  return (
+    <ModuleFrame
+      title={pages.depreciationSchedule.title}
+      hint={
+        s?.closedThrough
+          ? `${day(s.closedThrough)} tarixinədək — ay bağlanışlarının yazdığı; sonrası proqnozdur (boz)`
+          : 'Bağlanmış ay yoxdur: hamısı proqnozdur (boz)'
+      }
+      onRefresh={result.reload}
+      filters={
+        <Field label="İl">
+          <select aria-label="İl" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {Array.from({ length: 12 }, (_, i) => Number(today().slice(0, 4)) - 5 + i).map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </Field>
+      }
+      notices={result.error && <Notice>{result.error}</Notice>}
+    >
+      <div className="table-scroll" aria-label="Amortizasiya cədvəli">
+        <table className="grid schedule">
+          <thead>
+            <tr>
+              <th scope="col">Əsas vəsait</th>
+              {monthShort.map((m) => (
+                <th key={m} scope="col" className="num">
+                  {m}
+                </th>
+              ))}
+              <th scope="col" className="num">
+                İl
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {s?.rows.map((r) => (
+              <tr key={r.assetId}>
+                <td>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() =>
+                      ws.open(
+                        { type: 'accountCard', account: '112', sk: [r.assetId] },
+                        win.companyId,
+                      )
+                    }
+                  >
+                    <span className="code">{r.inventoryNo}</span> {r.name}
+                  </button>
+                </td>
+                {r.cells.map((c, i) => (
+                  <td key={i} className={`num${c.forecast ? ' forecast' : ''}`}>
+                    {c.amount === '0.00' ? '' : money(c.amount)}
+                  </td>
+                ))}
+                <td className="num">
+                  <b>{money(r.total)}</b>
+                </td>
+              </tr>
+            ))}
+            {s && !s.rows.length && (
+              <tr>
+                <td colSpan={14} className="panel-empty">
+                  Bu ildə amortizasiya olunan əsas vəsait yoxdur.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {s && s.rows.length > 0 && (
+            <tfoot>
+              <tr>
+                <td>Cəmi</td>
+                {s.totals.map((t, i) => (
+                  <td
+                    key={i}
+                    className={`num${s.months[i]! > s.closedThrough.slice(0, 7) ? ' forecast' : ''}`}
+                  >
+                    {t === '0.00' ? '' : money(t)}
+                  </td>
+                ))}
+                <td className="num">{money(s.total)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
     </ModuleFrame>
   );
 }
