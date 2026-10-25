@@ -26,6 +26,7 @@ import { pages } from '../pages';
 import { MonthFilter } from '../filters';
 import { monthEnd } from '../../domain/rates';
 import { readSheet, SheetError } from '../sheet-reader';
+import { importSummary, sha256, useDvxSync } from '../dvx-sync';
 import { Amount, Confirm, DataTable, Empty, Field, Modal, Notice, type Column } from '../ui';
 import { accountOptions, Picker, type Option } from '../picker';
 import { api } from '../api';
@@ -62,22 +63,6 @@ interface Preview {
 /** The box (window) that last opened the DVX cabinet: the cabinet's exports go there only. */
 let cabinetBox = '';
 
-/** What an e-qaimə import did, in one sentence. */
-function importSummary(r: CommandResult): string {
-  return (
-    `yeni ${r.added ?? 0} e-qaimə` +
-    (r.updated ? `, ${r.updated} e-qaimənin DVX statusu və ya sətirləri yeniləndi` : '') +
-    (r.same ? `, ${r.same} dəyişməyib (təkrar yaradılmadı)` : '') +
-    (r.conflicts ? `, ${r.conflicts} ziddiyyət (bax “Ziddiyyət”)` : '') +
-    (r.rejected?.length ? `, ${r.rejected.length} sətir qəbul olunmadı` : '') +
-    (r.posted
-      ? `. ${r.posted} e-qaimə təsdiqlənmiş uyğunluqlarla avtomatik uçota alındı və ya əl ilə yazılmış qaiməyə bağlandı`
-      : '. Heç nə avtomatik uçota alınmayıb') +
-    (r.failed?.length ? `; ${r.failed.length} alınmadı (səbəb sətirdə)` : '') +
-    '.'
-  );
-}
-
 /** Stage 6c-1: the box's last update in one line (QERARLAR 2026-10-25 §18). */
 function lastUpdate(v: EqInboxView): string {
   const s = v.lastSync;
@@ -95,11 +80,6 @@ function lastUpdate(v: EqInboxView): string {
     (s.conflicts ? `, ziddiyyət ${s.conflicts}` : '') +
     (s.result === 'partial' ? ' (yarımçıq)' : '')
   );
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice());
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function EqaimePage({ direction }: { direction: Direction }) {
@@ -194,21 +174,6 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
-  // Stage 6a: whether the cabinet window is signed in (its session key seen by Meyar).
-  const [connected, setConnected] = useState(false);
-  useEffect(() => {
-    let live = true;
-    api.dvxConnected().then(
-      (c) => live && setConnected(c),
-      () => {},
-    );
-    const off = api.onDvxState((s) => setConnected(s.connected));
-    return () => {
-      live = false;
-      off();
-    };
-  }, []);
-
   // Stage 6a: the shape of the cabinet's API requests, for the automatic update (§7).
   async function diagnose() {
     setReadError('');
@@ -223,163 +188,33 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     }
   }
 
-  // Stage 6b: "DVX-dən yenilə" — the cabinet's own Excel export of this box for the open period,
-  // asked by Meyar and loaded as from a file (QERARLAR 2026-10-22). Not signed in: the cabinet
-  // opens and the update starts by itself once the sign-in is seen.
-  const [syncing, setSyncing] = useState(false);
-  const [syncAfterSignIn, setSyncAfterSignIn] = useState(false);
-  // Stage 6c-2: where the update stands, and "Ləğv et" (the pages taken so far stay).
-  const [progress, setProgress] = useState('');
-  const cancelled = useRef(false);
-  const running = useRef(false);
-  const boxName = direction === 'purchase' ? 'Gələnlər' : 'Göndərilənlər';
-  useEffect(
-    () =>
-      api.onDvxProgress((p) => {
-        if (running.current && !cancelled.current && p.direction === direction)
-          setProgress(`${boxName}: səhifə ${p.page} alınır…`);
-      }),
-    [direction, boxName],
-  );
-  function cancel() {
-    cancelled.current = true;
-    setProgress(`${boxName}: ləğv edilir…`);
-    void api.dvxCancel();
-  }
+  // Stage 6b–6c: "DVX-dən yenilə" of this box (src/renderer/dvx-sync.ts).
+  const dvx = useDvxSync({
+    companyId: win.companyId,
+    closedThrough: company?.closedThrough ?? '',
+    onOpen: () => (cabinetBox = win.id),
+    onDone: ([r]) => {
+      if (!r) return;
+      if (r.result === 'failed') setReadError(r.text);
+      else setMessage(r.text);
+      box.reload();
+      imports.reload();
+    },
+  });
+  const { connected, syncing, progress } = dvx;
   async function sync() {
     setReadError('');
     setMessage('');
     m.clear();
-    if (!connected) {
-      cabinetBox = win.id;
-      try {
-        await api.dvxOpen(direction);
-        setSyncAfterSignIn(true);
+    try {
+      if (!(await dvx.start([direction])))
         setMessage(
           'DVX kabineti açıldı. Daxil olun (ASAN İmza, SİMA və ya PIN) — girişdən sonra yeniləmə özü başlayacaq.',
         );
-      } catch (e) {
-        setReadError((e as Error).message);
-      }
-      return;
-    }
-    setSyncing(true);
-    running.current = true;
-    cancelled.current = false;
-    setProgress(`${boxName}: DVX-dən alınır…`);
-    const startedAt = new Date().toISOString();
-    const { from, to } = openPeriod(company?.closedThrough ?? '', today());
-    // DVX gives the period page by page; each page is one import (one e-qaimə, once).
-    const total: CommandResult = { id: '' };
-    // Stage 6c-1: every attempt is kept, also a failed one (QERARLAR 2026-10-25 §18).
-    const record = (result: 'ok' | 'partial' | 'failed' | 'cancelled', message = '') =>
-      api
-        .command({
-          type: 'eqaime.synced',
-          companyId: win.companyId,
-          direction,
-          from,
-          to,
-          startedAt,
-          result,
-          added: total.added ?? 0,
-          updated: total.updated ?? 0,
-          conflicts: total.conflicts ?? 0,
-          rejected: total.rejected?.length ?? 0,
-          posted: total.posted ?? 0,
-          message: message.slice(0, 500),
-        })
-        .catch(() => undefined)
-        .finally(box.reload);
-    try {
-      const exported = await api.dvxExport(direction, from, to);
-      const { files, partial } = exported;
-      let stopped = !!exported.cancelled || cancelled.current;
-      const period = `${day(from)}–${day(to)}`;
-      const add = (k: 'added' | 'updated' | 'same' | 'conflicts' | 'posted', n?: number) =>
-        n && (total[k] = (total[k] ?? 0) + n);
-      let loaded = 0;
-      for (const [i, f] of files.entries()) {
-        // Cancelled while loading: the pages loaded so far stay (one e-qaimə, once).
-        if (i && cancelled.current) {
-          stopped = true;
-          break;
-        }
-        if (!cancelled.current)
-          setProgress(`${boxName}: ${i + 1} / ${files.length} səhifə yüklənir…`);
-        const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
-        if (!read.report || !read.documents.length) {
-          if (read.problems.length) {
-            setReadError(read.problems[0]!.message);
-            void record('failed', read.problems[0]!.message);
-            return;
-          }
-          continue;
-        }
-        const r = await m.run({
-          type: 'eqaime.import',
-          companyId: win.companyId,
-          direction,
-          ...(read.directionHint ? { fileDirection: read.directionHint } : {}),
-          ...(read.ownerTaxId ? { fileOwnerTaxId: read.ownerTaxId } : {}),
-          // The box was chosen by Meyar itself: Gələnlər for purchases, Göndərilənlər for sales.
-          directionConfirmed: true,
-          report: read.report,
-          source: 'portal',
-          fileName: f.name,
-          fileHash: await sha256(f.bytes),
-          documents: read.documents,
-        });
-        if (!r) {
-          void record('failed', 'E-qaimələrin yüklənməsi alınmadı (səbəb yuxarıda).');
-          return;
-        }
-        loaded++;
-        add('added', r.added);
-        add('updated', r.updated);
-        add('same', r.same);
-        add('conflicts', r.conflicts);
-        add('posted', r.posted);
-        total.rejected = [...(total.rejected ?? []), ...(r.rejected ?? [])];
-        total.failed = [...(total.failed ?? []), ...(r.failed ?? [])];
-      }
-      if (stopped) {
-        void record('cancelled');
-        setMessage(
-          loaded
-            ? `DVX yeniləməsi ləğv edildi (${period}; alınmış səhifələr yükləndi, qalanını növbəti yeniləmə alacaq): ${importSummary(total)}`
-            : 'DVX yeniləməsi ləğv edildi: heç nə yüklənmədi.',
-        );
-        imports.reload();
-        return;
-      }
-      const said = partial ? 'DVX növbəti səhifəni demədi' : '';
-      if (!loaded) {
-        setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
-        void record(partial ? 'partial' : 'ok', said);
-        return;
-      }
-      void record(partial ? 'partial' : 'ok', said);
-      setMessage(
-        `DVX-dən yeniləndi (${period}${partial ? ', yarımçıq: DVX növbəti səhifəni demədi — yenidən basın' : ''}): ${importSummary(total)}`,
-      );
-      imports.reload();
     } catch (e) {
-      const message = e instanceof SheetError ? e.message : (e as Error).message;
-      setReadError(message);
-      void record('failed', message);
-    } finally {
-      running.current = false;
-      setProgress('');
-      setSyncing(false);
+      setReadError((e as Error).message);
     }
   }
-  useEffect(() => {
-    if (syncAfterSignIn && connected) {
-      setSyncAfterSignIn(false);
-      void sync();
-    }
-  }, [syncAfterSignIn, connected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     if (!preview?.read.report) return;
@@ -755,8 +590,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               <button
                 type="button"
                 className="button secondary"
-                disabled={cancelled.current}
-                onClick={cancel}
+                disabled={dvx.cancelling}
+                onClick={dvx.cancel}
               >
                 Ləğv et
               </button>

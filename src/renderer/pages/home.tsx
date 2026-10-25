@@ -2,6 +2,9 @@ import { CheckCircle2, ChevronRight, CircleAlert, Clock3, RefreshCw } from '../i
 import type { HomeView, IntegrityView, RecentDocument } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { day, longDate, money, today } from '../format';
+import { useState } from 'react';
+import { api } from '../api';
+import { boxName, useDvxSync, type SyncOutcome } from '../dvx-sync';
 import { useQuery } from '../hooks';
 import { Notice, Status } from '../ui';
 import { useWorkspace, type View } from '../workspace';
@@ -122,6 +125,67 @@ const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
   closing: 'Ay bağlanışı',
   vatUnconfirmed: 'ƏDV e-qaiməni gözləyir',
 };
+/** Stage 6c-3: both e-qaimə boxes from DVX in one update, purchases first. */
+function DvxBoth({ companyId, closedThrough }: { companyId: string; closedThrough: string }) {
+  const [said, setSaid] = useState<SyncOutcome[]>([]);
+  const [note, setNote] = useState('');
+  const dvx = useDvxSync({ companyId, closedThrough, onDone: setSaid });
+  async function start() {
+    setSaid([]);
+    setNote('');
+    try {
+      if (!(await dvx.start(['purchase', 'sale'])))
+        setNote(
+          'DVX kabineti açıldı. Daxil olun (ASAN İmza, SİMA və ya PIN) — girişdən sonra hər iki qutu özü yenilənəcək.',
+        );
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+  }
+  return (
+    <section className="panel dvx-desk" aria-label="DVX e-qaimələri">
+      <div className="dvx-desk-bar">
+        <button
+          type="button"
+          className="button secondary"
+          disabled={dvx.syncing}
+          onClick={() => void start()}
+        >
+          <RefreshCw size={15} /> DVX-dən yenilə (gələn və göndərilən)
+        </button>
+        {dvx.syncing && (
+          <>
+            <span role="status" aria-label="Yeniləmənin gedişatı" className="dvx-last">
+              {dvx.progress}
+            </span>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={dvx.cancelling}
+              onClick={dvx.cancel}
+            >
+              Ləğv et
+            </button>
+          </>
+        )}
+        <span className={dvx.connected ? 'dvx-state on' : 'dvx-state'}>
+          {dvx.connected ? '● DVX: daxil olunub' : '○ DVX: daxil olunmayıb'}
+        </span>
+      </div>
+      {note && <Notice onClose={() => setNote('')}>{note}</Notice>}
+      {said.map((r) => (
+        <Notice
+          key={r.direction}
+          kind={r.result === 'failed' ? 'error' : 'success'}
+          onClose={() => setSaid((list) => list.filter((x) => x !== r))}
+        >
+          {`${boxName(r.direction)}: ${r.text}`}
+        </Notice>
+      ))}
+    </section>
+  );
+}
+
 const viewOf = (d: RecentDocument): View => {
   switch (d.kind) {
     case 'operation':
@@ -203,6 +267,9 @@ export function HomePage({
         </p>
       </header>
       {home.error && <Notice>{home.error}</Notice>}
+      {api.hasDvx && company && (
+        <DvxBoth companyId={ws.companyId} closedThrough={company.closedThrough} />
+      )}
       <div className="desk">
         <div className="desk-main">
           <section className="panel" aria-label="İş xəritəsi">

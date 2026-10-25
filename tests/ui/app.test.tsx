@@ -18,6 +18,7 @@ import type {
 } from '../../src/contracts/queries';
 import { monthEnd } from '../../src/domain/rates';
 import { harness } from './harness';
+import type { Outcome } from '../../src/contracts/bridge';
 import { readSheet } from '../../src/renderer/sheet-reader';
 
 afterEach(() => cleanup());
@@ -2382,7 +2383,9 @@ test('stage 6c-2: "DVX-dən yenilə" shows its progress and can be cancelled; th
     await user.click(screen.getByRole('button', { name: 'Alış' }));
     await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
     const page = within(pane());
-    let answer!: (a: Awaited<Parameters<typeof h.setDvxExport>[0]>) => void;
+    let answer!: (
+      a: Outcome<{ files: { name: string; bytes: Uint8Array }[]; cancelled?: boolean }>,
+    ) => void;
     h.setDvxExport(new Promise((resolve) => (answer = resolve)));
     await user.click(await page.findByRole('button', { name: 'DVX-dən yenilə' }));
     await page.findByText('Gələnlər: DVX-dən alınır…');
@@ -2417,6 +2420,52 @@ test('stage 6c-2: "DVX-dən yenilə" shows its progress and can be cancelled; th
     assert.deepEqual(
       syncs.map((s) => [s.result, s.added]),
       [['cancelled', 1]],
+    );
+  } finally {
+    h.close();
+  }
+});
+
+test('stage 6c-3: İş masası updates both boxes from DVX at once, after the sign-in', async () => {
+  const h = harness();
+  seed(h);
+  const csv = [
+    'Daxil olan qaimələrin siyahısı',
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;118,00;100,00;Təsdiqləndi',
+  ].join('\r\n');
+  h.setDvxExport((direction) =>
+    direction === 'purchase'
+      ? {
+          ok: true,
+          value: { files: [{ name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) }] },
+        }
+      : { ok: true, value: { files: [] } },
+  );
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    const desk = within(await screen.findByRole('region', { name: 'DVX e-qaimələri' }));
+    await user.click(desk.getByRole('button', { name: 'DVX-dən yenilə (gələn və göndərilən)' }));
+    await desk.findByText(/girişdən sonra hər iki qutu özü yenilənəcək/);
+    assert.deepEqual(h.dvxOpened, ['purchase']);
+    act(() => h.dvxState({ connected: true }));
+    await desk.findByText(/Gələnlər: DVX-dən yeniləndi .*yeni 1 e-qaimə/);
+    desk.getByText(/Göndərilənlər: DVX-də .* dövründə e-qaimə yoxdur/);
+    assert.deepEqual(
+      h.dvxExports.map((e) => e.direction),
+      ['purchase', 'sale'],
+    );
+    const syncs = h.commands.filter((c) => c.type === 'eqaime.synced') as unknown as {
+      direction: string;
+      result: string;
+    }[];
+    assert.deepEqual(
+      syncs.map((s) => [s.direction, s.result]),
+      [
+        ['purchase', 'ok'],
+        ['sale', 'ok'],
+      ],
     );
   } finally {
     h.close();

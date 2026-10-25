@@ -3318,6 +3318,15 @@ button.step:active {
   font-size: 13px;
   white-space: nowrap;
 }
+.dvx-desk {
+  margin-bottom: 12px;
+}
+.dvx-desk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
 .dvx-last {
   align-self: center;
   color: var(--muted);

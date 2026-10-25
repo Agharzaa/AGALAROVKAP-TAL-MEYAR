@@ -41,7 +41,9 @@ export function harness(
     cancelled?: boolean;
   }>;
   // A promise: the export waits until the test answers it (stage 6c-2: progress and cancel).
-  let dvxExportFile: DvxAnswer | Promise<DvxAnswer> = {
+  // Or a function of the box (stage 6c-3: both boxes in one update).
+  let dvxExportFile:
+    DvxAnswer | Promise<DvxAnswer> | ((direction: 'sale' | 'purchase') => DvxAnswer) = {
     ok: false,
     error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
   };
@@ -129,7 +131,7 @@ export function harness(
     },
     async dvxExport(direction, from, to) {
       dvxExports.push({ direction, from, to });
-      return await dvxExportFile;
+      return typeof dvxExportFile === 'function' ? dvxExportFile(direction) : await dvxExportFile;
     },
     async dvxCancel() {
       dvxCancels++;
