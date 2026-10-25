@@ -1120,6 +1120,8 @@ function Routed({ win }: { win: Win }) {
           return <AssetDocumentsPage kind="commission" />;
         case 'assetOpenings':
           return <AssetDocumentsPage kind="opening" />;
+        case 'assetDisposals':
+          return <AssetDocumentsPage kind="disposal" />;
         case 'depreciationSchedule':
           return <DepreciationSchedulePage />;
         case 'lists':

@@ -48,7 +48,7 @@ test('company creation seeds the agreed chart and catalog lists', (t) => {
       .filter((i) => i.kind === 'incomeType')
       .map((i) => i.name)
       .sort(),
-    ['Məhsul satışı', 'Məzənnə fərqi', 'Xidmət satışı'],
+    ['Məhsul satışı', 'Məzənnə fərqi', 'Xidmət satışı', 'Əsas vəsaitin satışı'],
   );
   assert.throws(
     () => f.exec({ type: 'company.create', name: 'X', taxId: '1234567890', vatPayer: true }),

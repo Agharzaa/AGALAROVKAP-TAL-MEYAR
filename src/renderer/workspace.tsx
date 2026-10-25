@@ -42,6 +42,7 @@ export type Page =
   | 'fixedAssets'
   | 'assetCommissions'
   | 'assetOpenings'
+  | 'assetDisposals'
   | 'depreciationSchedule'
   | 'lists'
   | 'audit'
@@ -70,7 +71,7 @@ export type View =
     }
   | { type: 'cash'; direction: 'in' | 'out'; id?: string }
   /** Stage 7a: putting fixed assets into service or their opening balances. */
-  | { type: 'asset'; kind: 'commission' | 'opening'; id?: string }
+  | { type: 'asset'; kind: 'commission' | 'opening' | 'disposal'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;

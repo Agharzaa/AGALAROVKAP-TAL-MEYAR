@@ -18,7 +18,7 @@
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, type Minor } from '../domain/money.js';
 import { checkPostings, storno, type Posting, type Side } from '../domain/posting.js';
-import { formatPrice, formatQty, parsePrice, parseQty } from '../domain/quantity.js';
+import { formatPrice, formatQty, parsePrice, parseQty, QTY_SCALE } from '../domain/quantity.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import {
   allocateAdvances,
@@ -33,6 +33,7 @@ import type { Account, Chart, CurrencyCode, SubkontoKind, VatRate } from '../dom
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { dailyStock, openAdvances, quantityAt, settlementBalance, stockState } from './stock.js';
+import { writeOff } from './assets.js';
 import { buildPostings as buildManualPostings } from './operations.js';
 import { documentRate } from './rates.js';
 import { checkSideValues } from './subkonto.js';
@@ -56,6 +57,8 @@ interface StoredLine {
   account: string;
   expenseItemId: string;
   vatTreatment: 'offset' | 'cost' | '';
+  /** Sale of a fixed asset (stage 7c). */
+  assetId?: string;
   memo: string;
   net: string;
   vat: string;
@@ -199,21 +202,29 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
     let account: Account | undefined;
     let incomeTypeId = '';
     let expenseItemId = '';
+    let assetId = '';
     if (cmd.direction === 'sale') {
-      if (kind === 'asset')
-        throw new DomainError(
-          `${where}: əsas vəsaitin satışı qaimə ilə yox, ayrıca sənədlə aparılır.`,
-          f('productId'),
-        );
+      // Stage 7c (QERARLAR 2026-10-26 §9): the asset itself is sold; income to 611.
+      if (kind === 'asset') {
+        assetId = (l.assetId ?? '').trim();
+        if (!assetId)
+          throw new DomainError(`${where}: hansı əsas vəsait satılır? Onu seçin.`, f('assetId'));
+        if (quantity !== QTY_SCALE)
+          throw new DomainError(
+            `${where}: əsas vəsait bir-bir satılır — miqdar 1 olmalıdır.`,
+            f('quantity'),
+          );
+      }
       incomeTypeId =
         l.incomeTypeId ||
+        (kind === 'asset' ? role(tx, cmd.companyId, 'assetSale', 'Əsas vəsaitin satışı') : '') ||
         role(
           tx,
           cmd.companyId,
           kind === 'service' ? 'serviceIncome' : 'goodsIncome',
           kind === 'service' ? 'Xidmət satışı' : 'Məhsul satışı',
         );
-      if (kind !== 'service') {
+      if (kind !== 'service' && kind !== 'asset') {
         const code = l.account?.trim() || (kind === 'material' ? '201' : '205');
         account = chart.require(code, f('account'));
         if (!account.quantitative || account.subkonto[0] !== 'product')
@@ -253,6 +264,7 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
         account: account?.code ?? '',
         expenseItemId,
         vatTreatment: cmd.direction === 'purchase' ? lineTreatment : '',
+        ...(assetId ? { assetId } : {}),
         memo: parseText(l.memo, `${where}: məzmun`, 300, false),
         net: money(doc.net),
         vat: money(doc.vat),
@@ -337,15 +349,20 @@ function buildPostings(
     n.lines.forEach((l, i) => {
       const where = `Sətir ${i + 1}`;
       const memo = l.stored.memo || String(l.product.name);
+      // A fixed asset (7c): Dt 211 / Kt 611, its VAT Dt 611 / Kt 521.01, then written off.
+      const asset = l.stored.assetId;
+      const income = asset ? pick(chart, ['611'], 'lines') : revenue;
       out.push({
         dt: { ...side(receivable, pv, where), ...cur(l.doc.gross) },
-        kt: side(revenue, { incomeType: l.stored.incomeTypeId, vatRate: l.stored.vatRate }, where),
+        kt: side(income, { incomeType: l.stored.incomeTypeId, vatRate: l.stored.vatRate }, where),
         amount: l.azn.gross,
         memo,
       });
       if (l.azn.vat > 0n)
         out.push({
-          dt: side(vatOut, { vatRate: l.stored.vatRate }, where),
+          dt: asset
+            ? side(income, { incomeType: l.stored.incomeTypeId }, where)
+            : side(vatOut, { vatRate: l.stored.vatRate }, where),
           kt: side(
             vatTax,
             {
@@ -360,6 +377,10 @@ function buildPostings(
           amount: l.azn.vat,
           memo: `ƏDV · ${memo}`,
         });
+      if (asset)
+        out.push(
+          ...writeOff(tx, companyId, asset, header.date, where, `lines.${i}.assetId`).postings,
+        );
       if (l.account) {
         const stock = l.account;
         const label = `${where} (${memo})`;

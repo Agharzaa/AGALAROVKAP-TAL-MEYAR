@@ -181,7 +181,7 @@ Hər addım ayrıca commit-dir. Hər addımda əvvəl uğursuz test yazılır, h
    - siyahı.
    - Testlər: Ə1, Ə6 (yalnız şərtlər), Ə8-in bir hissəsi.
 2. **7b — amortizasiya ay bağlanışında.** ✅ (0.8.1, 26.10.2026) Addım, yoxlamalar, ləğv, amortizasiya cədvəli, vəsaitin kartı. Testlər: Ə2, Ə3, Ə6, Ə9.
-3. **7c — silinmə və satış.** Silinmə sənədi, satış qaiməsində əsas vəsait sətri, e-qaimə qoruması. Testlər: Ə4, Ə5, Ə7.
+3. **7c — silinmə və satış.** ✅ (0.8.2, 26.10.2026; satış — satış qaiməsi ilə, Ə7 edilmir — QERARLAR 2026-10-26 §9) Silinmə sənədi, satış qaiməsində əsas vəsait sətri, e-qaimə qoruması. Testlər: Ə4, Ə5, Ə7.
 4. **Müstəqil audit** (kodu yazmayan sessiya), `PROJECT_STATE.md`, `QERARLAR.md`.
 
 ## 11. Açıq suallar (istifadəçi və mühasib)

@@ -9,6 +9,7 @@
  */
 import {
   assetGroups,
+  depreciatedThrough,
   depreciationFor,
   monthAfter,
   monthlyAmount,
@@ -17,7 +18,13 @@ import {
 } from '../domain/assets.js';
 import type { Chart } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import { formatMinor, parseMoney, roundHalfAwayFromZero, type Minor } from '../domain/money.js';
+import {
+  displayMinor,
+  formatMinor,
+  parseMoney,
+  roundHalfAwayFromZero,
+  type Minor,
+} from '../domain/money.js';
 import { checkPostings, storno, type Posting } from '../domain/posting.js';
 import { formatQty, parseQty } from '../domain/quantity.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
@@ -36,12 +43,14 @@ import { checkSideValues } from './subkonto.js';
 import { expectVersion, loadChart, type Tx } from './tx.js';
 
 export const ASSET = 'asset';
-type Kind = 'commission' | 'opening';
-const prefix: Record<Kind, string> = { commission: 'ƏV', opening: 'ƏB' };
+type Kind = 'commission' | 'opening' | 'disposal';
+const prefix: Record<Kind, string> = { commission: 'ƏV', opening: 'ƏB', disposal: 'ƏS' };
 const label: Record<Kind, string> = {
   commission: 'İstismara vermə',
   opening: 'Əsas vəsaitlərin başlanğıc qalığı',
+  disposal: 'Əsas vəsaitin silinməsi',
 };
+const dmy = (iso: string) => iso.split('-').reverse().join('.');
 /** Depreciation goes to an expense account with an expense item (QERARLAR 2026-10-26 §3). */
 const expenseFamilies = ['202', '701', '711', '721', '731'];
 
@@ -135,6 +144,96 @@ export function saveFixedAsset(tx: Tx, cmd: CommandOf<'fixedAsset.save'>): Comma
 
 // ---------------------------------------------------------------------------------------------
 // Documents
+
+/** Months before `date`'s month, as "YYYY-MM". */
+function monthBefore(date: string): string {
+  const [y, m] = date.split('-').map(Number) as [number, number];
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/**
+ * Stage 7c: writing a fixed asset off on a day (its disposal or its sale): Dt 112 / Kt 111 for the
+ * depreciation so far, Dt 731 ("Əsas vəsaitlərin silinməsi") / Kt 111 for the rest. The asset must
+ * be in service, still on 111, and depreciated through the month before (the month closings).
+ */
+export function writeOff(
+  tx: Tx,
+  companyId: string,
+  assetId: string,
+  date: string,
+  where: string,
+  field: string,
+): { postings: Posting[]; cost: Minor; depreciated: Minor; label: string } {
+  const asset = tx.db.get(
+    'SELECT * FROM fixed_assets WHERE company_id=? AND id=?',
+    companyId,
+    assetId,
+  );
+  if (!asset) throw new DomainError(`${where}: əsas vəsait tapılmadı.`, field, 'not-found');
+  const label = `${str(asset.inventory_no)} ${str(asset.name)}`;
+  const line = tx.db.get(
+    `SELECT l.*, d.date AS doc_date FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
+     WHERE l.company_id=? AND l.asset_id=? AND d.status='posted' AND d.kind IN('commission','opening')`,
+    companyId,
+    assetId,
+  );
+  if (!line || str(line.doc_date) > date)
+    throw new DomainError(`${where}: ${label} ${dmy(date)} tarixinə istismarda deyil.`, field);
+  const at = (through: string) =>
+    tx.db.get(
+      `SELECT
+         COALESCE(SUM(CASE WHEN dt_account='111' AND dt_s1=?1 THEN amount ELSE 0 END),0)
+           - COALESCE(SUM(CASE WHEN kt_account='111' AND kt_s1=?1 THEN amount ELSE 0 END),0) AS cost,
+         COALESCE(SUM(CASE WHEN kt_account='112' AND kt_s1=?1 THEN amount ELSE 0 END),0)
+           - COALESCE(SUM(CASE WHEN dt_account='112' AND dt_s1=?1 THEN amount ELSE 0 END),0) AS dep
+       FROM postings WHERE company_id=?2 AND (dt_account IN('111','112') OR kt_account IN('111','112'))
+         AND date<=?3`,
+      assetId,
+      companyId,
+      through,
+    )!;
+  const onDay = at(date);
+  const ever = at('9999-12-31');
+  const cost = onDay.cost as bigint;
+  if (cost <= 0n || (ever.cost as bigint) <= 0n)
+    throw new DomainError(`${where}: ${label} artıq silinib və ya satılıb.`, field, 'conflict');
+  const depreciated = onDay.dep as bigint;
+  const terms = termsOf(line, str(line.doc_date));
+  const due = terms.accumulated + depreciatedThrough(terms, monthBefore(date));
+  if (due > depreciated)
+    throw new DomainError(
+      `${where}: ${label} üzrə ${displayMinor(due - depreciated)} amortizasiya ${monthBefore(date)} ayınadək hələ yazılmayıb — əvvəlcə həmin ayları bağlayın.`,
+      field,
+      'conflict',
+    );
+  const item = tx.db.get(
+    "SELECT id FROM items WHERE company_id=? AND role='assetDisposal' AND archived=0",
+    companyId,
+  );
+  if (!item)
+    throw new DomainError(
+      'Standart "Əsas vəsaitlərin silinməsi" xərc maddəsi təyin edilməyib. Siyahılar bölməsində elementi açıb "Yazılış qaydalarında" sahəsini seçin.',
+      undefined,
+      'not-found',
+    );
+  const postings: Posting[] = [];
+  const side111 = { account: '111', sk: [assetId] };
+  if (depreciated > 0n)
+    postings.push({
+      dt: { account: '112', sk: [assetId] },
+      kt: side111,
+      amount: depreciated,
+      memo: `Yığılmış amortizasiya silindi: ${label}`,
+    });
+  if (cost > depreciated)
+    postings.push({
+      dt: { account: '731', sk: [str(item.id)] },
+      kt: side111,
+      amount: cost - depreciated,
+      memo: `Qalıq dəyər silindi: ${label}`,
+    });
+  return { postings, cost, depreciated, label };
+}
 
 function nextNumber(tx: Tx, companyId: string, kind: Kind): string {
   const n =
@@ -236,8 +335,31 @@ function readLines(
     if (seen.has(l.assetId))
       throw new DomainError(`${where}: ${assetName} sənəddə ikinci dəfədir.`, `${f}.assetId`);
     seen.add(l.assetId);
+    if (kind === 'disposal') {
+      const w = writeOff(tx, companyId, l.assetId, date, where, `${f}.assetId`);
+      postings.push(...w.postings);
+      const item = w.postings.find((p) => p.dt.account === '731')?.dt.sk ?? [];
+      lines.push({
+        assetId: l.assetId,
+        assetName,
+        productId: '',
+        quantity: 0n,
+        cost: w.cost,
+        accumulated: w.depreciated,
+        salvage: 0n,
+        lifeMonths: 0,
+        months: 0,
+        expenseAccount: '731',
+        expenseSk: item,
+        counterAccount: '',
+        counterSk: [],
+      });
+      return;
+    }
+    if (l.lifeMonths < 1)
+      throw new DomainError(`${where}: faydalı istifadə müddətini (ay) yazın.`, `${f}.lifeMonths`);
     const busy = tx.db.get(
-      `SELECT d.number FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
+      `SELECT d.number, d.kind FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
        WHERE l.company_id=? AND l.asset_id=? AND d.status='posted' AND d.id<>?`,
       companyId,
       l.assetId,
@@ -245,7 +367,9 @@ function readLines(
     );
     if (busy)
       throw new DomainError(
-        `${where}: ${assetName} artıq istismardadır (${str(busy.number)}).`,
+        busy.kind === 'disposal'
+          ? `${where}: ${assetName} silinib (${str(busy.number)}); yenidən istismara verilmir.`
+          : `${where}: ${assetName} artıq istismardadır (${str(busy.number)}).`,
         `${f}.assetId`,
         'conflict',
       );
@@ -591,10 +715,20 @@ export function fixedAssets(db: Db, companyId: string, date: string): FixedAsset
     day,
   ))
     sums.set(str(r.asset), { cost: r.cost as bigint, depreciated: r.dep as bigint });
+  // The last day 111 moved: the disposal or sale of an asset no longer on it.
+  const lastMove = new Map(
+    db
+      .all(
+        `SELECT asset, MAX(date) AS d FROM (SELECT kt_s1 AS asset, date FROM postings WHERE company_id=? AND kt_account='111' AND date<=?) GROUP BY asset`,
+        companyId,
+        day,
+      )
+      .map((r) => [str(r.asset), str(r.d)]),
+  );
   const terms = new Map<string, Row>();
   for (const l of db.all(
     `SELECT l.*, d.date AS doc_date, d.kind AS doc_kind FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
-     WHERE l.company_id=? AND d.status='posted' AND d.date<=?`,
+     WHERE l.company_id=? AND d.status='posted' AND d.date<=? AND d.kind IN('commission','opening')`,
     companyId,
     day,
   ))
@@ -619,14 +753,15 @@ export function fixedAssets(db: Db, companyId: string, date: string): FixedAsset
             )!.n,
           )
         : 0;
-      const monthsLeft = t ? Math.max(0, t.months - done) : 0;
+      const monthsLeft = t && s.cost !== 0n ? Math.max(0, t.months - done) : 0;
       const expenseSk = l ? (JSON.parse(str(l.expense_sk)) as string[]) : [];
       const expenseAccount = l ? str(l.expense_account) : '';
       return {
         ...v,
         inService: l ? str(l.doc_date) : '',
         documentId: l ? str(l.document_id) : '',
-        documentKind: l ? (str(l.doc_kind) as Kind) : '',
+        documentKind: l ? (str(l.doc_kind) as 'commission' | 'opening') : '',
+        disposed: l && s.cost === 0n ? (lastMove.get(v.id) ?? '') : '',
         cost: formatMinor(s.cost),
         depreciated: formatMinor(s.depreciated),
         net: formatMinor(s.cost - s.depreciated),
@@ -729,7 +864,7 @@ export function depreciationSchedule(
   const terms = new Map<string, Row>();
   for (const l of db.all(
     `SELECT l.*, d.date AS doc_date FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
-     WHERE l.company_id=? AND d.status='posted' AND d.date<=?`,
+     WHERE l.company_id=? AND d.status='posted' AND d.date<=? AND d.kind IN('commission','opening')`,
     companyId,
     `${year}-12-31`,
   ))

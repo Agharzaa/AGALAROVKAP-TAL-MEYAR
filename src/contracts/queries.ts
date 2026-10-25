@@ -15,7 +15,7 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('assetDocuments'),
     companyId: id,
-    kind: z.enum(['commission', 'opening']),
+    kind: z.enum(['commission', 'opening', 'disposal']),
   }),
   z.object({ type: z.literal('assetDocument'), companyId: id, id }),
   /** Stage 7b: depreciation by asset and month of a year — posted, then forecast. */
@@ -230,6 +230,8 @@ export interface FixedAssetRow extends FixedAssetView {
   /** The document that did it. */
   documentId: string;
   documentKind: 'commission' | 'opening' | '';
+  /** Stage 7c: the day it was written off or sold ('' while in service). */
+  disposed: string;
   cost: string;
   depreciated: string;
   net: string;
@@ -284,7 +286,7 @@ export interface AssetLineView {
 export interface AssetDocumentView {
   id: string;
   version: number;
-  kind: 'commission' | 'opening';
+  kind: 'commission' | 'opening' | 'disposal';
   number: string;
   date: string;
   memo: string;
@@ -376,6 +378,8 @@ export interface InvoiceLineView {
   account: string;
   expenseItemId: string;
   vatTreatment: 'offset' | 'cost' | '';
+  /** Sale of a fixed asset (stage 7c). */
+  assetId?: string;
   memo: string;
   /** Document currency. */
   net: string;

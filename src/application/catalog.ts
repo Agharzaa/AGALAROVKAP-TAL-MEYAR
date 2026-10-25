@@ -15,6 +15,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       ['Məhsul satışı', 'goodsIncome'],
       ['Xidmət satışı', 'serviceIncome'],
       ['Məzənnə fərqi', 'fxIncome'],
+      ['Əsas vəsaitin satışı', 'assetSale'],
     ],
   ],
   [
@@ -544,6 +545,7 @@ const roleKind = {
   fxExpense: 'expenseItem',
   depreciation: 'expenseItem',
   assetDisposal: 'expenseItem',
+  assetSale: 'incomeType',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -555,6 +557,7 @@ const roleLabel = {
   fxExpense: 'məzənnə fərqi xərci (731)',
   depreciation: 'amortizasiya (Kt 112)',
   assetDisposal: 'əsas vəsaitlərin silinməsi (731)',
+  assetSale: 'əsas vəsaitin satışı (611)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

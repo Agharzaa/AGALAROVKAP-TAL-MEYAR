@@ -35,6 +35,8 @@ interface LineForm {
   account: string;
   expenseItemId: string;
   vatTreatment: Treatment | '';
+  /** Sale of a fixed asset (stage 7c). */
+  assetId: string;
   memo: string;
 }
 interface Form {
@@ -63,6 +65,7 @@ const blank = (vatRate: VatRate): LineForm => ({
   account: '',
   expenseItemId: '',
   vatTreatment: '',
+  assetId: '',
   memo: '',
 });
 const defaultAccount = {
@@ -92,6 +95,7 @@ function fromDetail(d: InvoiceDetail): Form {
       expenseItemId: l.expenseItemId,
       vatTreatment:
         d.direction === 'purchase' && l.vatTreatment !== d.vatTreatment ? l.vatTreatment : '',
+      assetId: l.assetId ?? '',
       memo: l.memo,
     })),
     manual: d.manual,
@@ -128,6 +132,7 @@ function fromEq(e: EqDocumentDetail, base: Form, keepHeader = false): Form {
           account: l.account,
           expenseItemId: l.expenseItemId,
           vatTreatment: l.vatTreatment,
+          assetId: '',
           memo: l.dvx?.name.slice(0, 300) ?? '',
         }))
       : base.lines,
@@ -144,6 +149,7 @@ function toInput(l: LineForm, direction: Direction): InvoiceLineInput {
     ...(l.account ? { account: l.account } : {}),
     ...(l.expenseItemId ? { expenseItemId: l.expenseItemId } : {}),
     ...(direction === 'purchase' && l.vatTreatment ? { vatTreatment: l.vatTreatment } : {}),
+    ...(direction === 'sale' && l.assetId ? { assetId: l.assetId } : {}),
     memo: l.memo,
   };
 }
@@ -267,13 +273,20 @@ export function InvoiceEditor({
     return {
       partners: subkontoOptions(catalog as Catalog, 'partner', '', ''),
       products: catalog.products
-        .filter((p) => !p.archived && (!sale || p.kind !== 'asset'))
+        .filter((p) => !p.archived)
         .map((p): Option => ({
           value: p.id,
           label: p.name,
           hint: [p.code, p.unit].filter(Boolean).join(' · '),
         })),
       incomeTypes: items('incomeType'),
+      fixedAssets: catalog.fixedAssets
+        .filter((a) => !a.archived)
+        .map((a): Option => ({
+          value: a.id,
+          label: `${a.inventoryNo} ${a.name}`,
+          ...(a.plate ? { hint: a.plate } : {}),
+        })),
       expenseItems: items('expenseItem'),
       accounts: accountOptions(catalog),
     };
@@ -622,6 +635,7 @@ export function InvoiceEditor({
                             account: '',
                             expenseItemId: '',
                             incomeTypeId: '',
+                            assetId: '',
                           })
                         }
                       />
@@ -690,12 +704,24 @@ export function InvoiceEditor({
                           emptyLabel={
                             kind === 'service'
                               ? 'Standart: xidmət satışı'
-                              : 'Standart: məhsul satışı'
+                              : kind === 'asset'
+                                ? 'Standart: əsas vəsaitin satışı (611)'
+                                : 'Standart: məhsul satışı'
                           }
                           onChange={(incomeTypeId) => setLine(i, { incomeTypeId })}
                         />
                       )}
-                      {(!sale || (kind && kind !== 'service')) && (
+                      {sale && kind === 'asset' && (
+                        <Picker
+                          ariaLabel={label('əsas vəsait')}
+                          value={l.assetId}
+                          options={options.fixedAssets}
+                          placeholder="Satılan əsas vəsait"
+                          invalid={e?.part === 'assetId'}
+                          onChange={(assetId) => setLine(i, { assetId })}
+                        />
+                      )}
+                      {(!sale || (kind && kind !== 'service' && kind !== 'asset')) && (
                         <Picker
                           ariaLabel={label(sale ? 'anbar hesabı' : 'hesab')}
                           value={l.account}

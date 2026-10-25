@@ -573,7 +573,8 @@ type Role =
   | 'fxIncome'
   | 'fxExpense'
   | 'depreciation'
-  | 'assetDisposal';
+  | 'assetDisposal'
+  | 'assetSale';
 /** Roles an element of each kind can take in the posting rules (invoices, revaluation). */
 const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
   paymentKind: [{ role: 'vatTax', label: 'Satışın ƏDV-si (Kt 521.01)' }],
@@ -588,6 +589,7 @@ const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
     { role: 'goodsIncome', label: 'Mal satışında standart' },
     { role: 'serviceIncome', label: 'Xidmət satışında standart' },
     { role: 'fxIncome', label: 'Məzənnə fərqi gəliri (Kt 611)' },
+    { role: 'assetSale', label: 'Əsas vəsaitin satışı (Kt 611)' },
   ],
 };
 const roleTitle = Object.fromEntries(

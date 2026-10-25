@@ -72,6 +72,8 @@ export const invoiceLineInput = z.object({
   expenseItemId: id.optional(),
   /** Purchase: overrides the invoice's VAT treatment for this line. */
   vatTreatment: vatTreatment.optional(),
+  /** Sale of a fixed asset (stage 7c): the asset sold (the product is of the "asset" kind). */
+  assetId: id.optional(),
   memo: text(300).default(''),
 });
 export type InvoiceLineInput = z.infer<typeof invoiceLineInput>;
@@ -107,11 +109,12 @@ export const assetLineInput = z.object({
   cost: decimal.default(''),
   accumulated: decimal.default('0'),
   salvage: decimal.default('0'),
-  lifeMonths: z.number().int().min(1).max(1200),
+  /** Putting into service / opening balance: the whole useful life (disposal: none). */
+  lifeMonths: z.number().int().min(0).max(1200).default(0),
   /** Opening balance: months still to depreciate (putting into service: the whole life). */
   remainingMonths: z.number().int().min(0).max(1200).optional(),
   /** Where depreciation goes: 701 / 711 / 721 / 731 / 202 with its subkonto. */
-  expenseAccount: code,
+  expenseAccount: code.default(''),
   expenseSk: z.array(z.string().max(120)).max(3).default([]),
   /** Opening balance: the counter account (e.g. 343) with its subkonto. */
   counterAccount: z.string().max(20).default(''),
@@ -270,7 +273,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     ...base,
     id: id.optional(),
     version: version.optional(),
-    kind: z.enum(['commission', 'opening']),
+    kind: z.enum(['commission', 'opening', 'disposal']),
     number: text(40).default(''),
     date,
     memo: text(500).default(''),
@@ -335,6 +338,7 @@ export const commandSchema = z.discriminatedUnion('type', [
         'fxExpense',
         'depreciation',
         'assetDisposal',
+        'assetSale',
       ])
       .optional(),
   }),

@@ -225,7 +225,8 @@ function depreciationStep(
       ? db.all(
           `SELECT l.*, d.date AS doc_date, a.name, a.inventory_no FROM asset_lines l
              JOIN asset_documents d ON d.id=l.document_id JOIN fixed_assets a ON a.id=l.asset_id
-           WHERE l.company_id=? AND d.status='posted' AND d.date<=? ORDER BY a.inventory_no`,
+           WHERE l.company_id=? AND d.status='posted' AND d.date<=? AND d.kind IN('commission','opening')
+           ORDER BY a.inventory_no`,
           companyId,
           end,
         )

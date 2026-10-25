@@ -11,7 +11,7 @@ import type { AssetLineInput } from '../../contracts/commands';
 import type { AssetDocumentDetail, Catalog } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { day, money, today } from '../format';
+import { addAmounts, day, money, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { accountOptions, Picker, SubkontoFields } from '../picker';
@@ -19,7 +19,7 @@ import { Postings } from '../postings';
 import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
-type Kind = 'commission' | 'opening';
+type Kind = 'commission' | 'opening' | 'disposal';
 
 interface LineForm {
   assetId: string;
@@ -87,10 +87,10 @@ function toInput(kind: Kind, l: LineForm): AssetLineInput {
     cost: kind === 'opening' ? l.cost : '',
     accumulated: kind === 'opening' ? l.accumulated || '0' : '0',
     salvage: l.salvage || '0',
-    lifeMonths: Number(l.lifeMonths) || 0,
+    lifeMonths: kind === 'disposal' ? 0 : Number(l.lifeMonths) || 0,
     ...(kind === 'opening' ? { remainingMonths: Number(l.remainingMonths) || 0 } : {}),
-    expenseAccount: l.expenseAccount,
-    expenseSk: l.expenseSk,
+    expenseAccount: kind === 'disposal' ? '' : l.expenseAccount,
+    expenseSk: kind === 'disposal' ? [] : l.expenseSk,
     counterAccount: kind === 'opening' ? l.counterAccount : '',
     counterSk: kind === 'opening' ? l.counterSk : [],
   };
@@ -311,11 +311,20 @@ export function AssetEditor({ kind, id }: { kind: Kind; id?: string }) {
             <input
               maxLength={40}
               value={form.number}
-              placeholder={kind === 'commission' ? 'ƏV-000001' : 'ƏB-000001'}
+              placeholder={
+                { commission: 'ƏV-000001', opening: 'ƏB-000001', disposal: 'ƏS-000001' }[kind]
+              }
               onChange={(e) => set({ number: e.target.value })}
             />
           </Field>
-          <Field label="Tarix" hint="Amortizasiya növbəti aydan başlayır">
+          <Field
+            label="Tarix"
+            hint={
+              kind === 'disposal'
+                ? 'Silinmə ayında amortizasiya hesablanmır'
+                : 'Amortizasiya növbəti aydan başlayır'
+            }
+          >
             <DateInput
               required
               value={form.date}
@@ -346,12 +355,20 @@ export function AssetEditor({ kind, id }: { kind: Kind; id?: string }) {
                   onChange={(assetId) =>
                     setLine(i, {
                       assetId,
-                      ...(l.expenseAccount ? {} : defaultsFor(catalog, assetId)),
+                      ...(l.expenseAccount || kind === 'disposal'
+                        ? {}
+                        : defaultsFor(catalog, assetId)),
                     })
                   }
                 />
               </Field>
-              {kind === 'commission' ? (
+              {kind === 'disposal' ? (
+                <p className="muted" role="status" aria-label={`Sətir ${i + 1}: silinmə`}>
+                  {doc?.lines[i]
+                    ? `İlkin dəyər ${money(doc.lines[i]!.cost)} ₼ · yığılmış amortizasiya ${money(doc.lines[i]!.accumulated)} ₼ · 731-ə ${money(addAmounts([doc.lines[i]!.cost, `-${doc.lines[i]!.accumulated}`]))} ₼`
+                    : 'Dəyər və yığılmış amortizasiya 111 / 112-dən özü gəlir.'}
+                </p>
+              ) : kind === 'commission' ? (
                 <>
                   <Field label="113-dən (nomenklatura)" wide>
                     <Picker
@@ -488,7 +505,9 @@ export function AssetEditor({ kind, id }: { kind: Kind; id?: string }) {
         <PostingRule>
           {kind === 'commission'
             ? 'İstismara vermə: Dt 111 (əsas vəsait) / Kt 113 (nomenklatura). Dəyər 113-ün qalığından miqdara görə gəlir; amortizasiya ay bağlanışında, növbəti aydan, düz xətt ilə hesablanır.'
-            : 'Başlanğıc qalıq: Dt 111 / Kt qarşı hesab — ilkin dəyər; Dt qarşı hesab / Kt 112 — yığılmış amortizasiya. Qalan dəyər qalan aylara bölünür.'}
+            : kind === 'opening'
+              ? 'Başlanğıc qalıq: Dt 111 / Kt qarşı hesab — ilkin dəyər; Dt qarşı hesab / Kt 112 — yığılmış amortizasiya. Qalan dəyər qalan aylara bölünür.'
+              : 'Silinmə: Dt 112 / Kt 111 — yığılmış amortizasiya; Dt 731 (Əsas vəsaitlərin silinməsi) / Kt 111 — qalıq dəyər. Əvvəlki ayların amortizasiyası yazılmalıdır (ay bağlanışı). Satış isə satış qaiməsi ilə aparılır.'}
         </PostingRule>
         {doc && doc.postings.length > 0 && <Postings postings={doc.postings} />}
         {doc && (

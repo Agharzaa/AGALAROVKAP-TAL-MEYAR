@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1286,6 +1286,40 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// v16 — disposal of fixed assets (stage 7c; QERARLAR 2026-10-26 §9): the document kind joins the
+// CHECK (a table rebuild, as SQLite asks), and the income type of an asset sale gets its role.
+
+const v16 = `
+CREATE TABLE asset_documents_v2(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN('commission','opening','disposal')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,number_key)
+);
+INSERT INTO asset_documents_v2 SELECT * FROM asset_documents;
+DROP TABLE asset_documents;
+ALTER TABLE asset_documents_v2 RENAME TO asset_documents;
+CREATE TRIGGER asset_documents_no_delete BEFORE DELETE ON asset_documents BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER asset_documents_period BEFORE UPDATE ON asset_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+UPDATE items SET role='assetSale' WHERE kind='incomeType' AND name='Əsas vəsaitin satışı' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='assetSale');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'incomeType','Əsas vəsaitin satışı','assetSale' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='incomeType' AND j.name='Əsas vəsaitin satışı');
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1302,4 +1336,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 13, sql: v13 },
   { version: 14, sql: v14 },
   { version: 15, sql: v15 },
+  { version: 16, sql: v16, foreignKeysOff: true },
 ];

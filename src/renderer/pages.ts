@@ -146,6 +146,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Əsas vəsait və ay üzrə: yazılmış və proqnoz',
     icon: Reports,
   },
+  assetDisposals: {
+    title: 'Əsas vəsaitlərin silinməsi',
+    hint: 'Silinmə: yığılmış amortizasiya 111-dən, qalıq dəyər 731-ə',
+    icon: Truck,
+  },
   assetOpenings: {
     title: 'Əsas vəsaitlərin başlanğıc qalıqları',
     hint: 'Meyar-dan əvvəl alınmış vəsaitlər: dəyər, yığılmış amortizasiya, qalan ay',
@@ -412,6 +417,7 @@ export const sections: Section[] = [
           { label: 'Əsas vəsaitlər', icon: Truck, action: page('fixedAssets') },
           { label: 'İstismara vermə', icon: Truck, action: page('assetCommissions') },
           { label: 'Başlanğıc qalıqlar', icon: ScrollText, action: page('assetOpenings') },
+          { label: 'Silinmə', icon: Truck, action: page('assetDisposals') },
         ],
       },
       {
@@ -426,6 +432,11 @@ export const sections: Section[] = [
             label: 'Başlanğıc qalıq',
             icon: FilePlus2,
             action: { kind: 'view', view: { type: 'asset', kind: 'opening' } },
+          },
+          {
+            label: 'Silinmə',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'asset', kind: 'disposal' } },
           },
         ],
       },
@@ -544,6 +555,7 @@ export function sectionOfView(view: View): string {
         case 'fixedAssets':
         case 'assetCommissions':
         case 'assetOpenings':
+        case 'assetDisposals':
         case 'depreciationSchedule':
           return 'assets';
         case 'operations':
@@ -639,8 +651,11 @@ export function viewTitle(view: View, label?: string): string {
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
     }
     case 'asset': {
-      const kind =
-        view.kind === 'commission' ? 'İstismara vermə' : 'Əsas vəsaitin başlanğıc qalığı';
+      const kind = {
+        commission: 'İstismara vermə',
+        opening: 'Əsas vəsaitin başlanğıc qalığı',
+        disposal: 'Əsas vəsaitin silinməsi',
+      }[view.kind];
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `${kind} (yeni)`;
     }
     case 'accountCard':

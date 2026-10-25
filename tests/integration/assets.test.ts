@@ -261,6 +261,8 @@ INSERT INTO registers VALUES('a','111','p','','','2026-09',100,0,1,0,0,0);`);
     'the element the accountant already had gets the role',
   );
   assert.deepEqual(role('b', 'assetDisposal'), ['Əsas vəsaitlərin silinməsi']);
+  // v16 (7c): the income type of an asset sale.
+  assert.deepEqual(role('b', 'assetSale'), ['Əsas vəsaitin satışı']);
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -445,5 +447,109 @@ test('7b: the depreciation schedule — posted months, then the forecast of the 
   assert.deepEqual(
     next.rows[0]!.cells.slice(8, 11).map((c) => c.amount),
     ['833.33', '833.53', '0.00'],
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// Stage 7c — disposal and sale (§4.3, §4.4; Ə4, Ə5; QERARLAR 2026-10-26 §9)
+
+const dispose = (f: F, assetId: string, date: string) =>
+  run(f, {
+    type: 'asset.save',
+    companyId: f.companyId,
+    kind: 'disposal',
+    date,
+    lines: [{ assetId }],
+  });
+
+test('Ə4: disposal writes the asset off — 112 against 111, the rest to 731; no depreciation after', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  closeMonth(f, '2026-10');
+  closeMonth(f, '2026-11');
+  const doc = dispose(f, actros, '2026-12-10');
+  assert.equal(doc.number, 'ƏS-000001');
+  assert.deepEqual(
+    [balance(f, '111', actros), balance(f, '112', actros), balance(f, '731')],
+    [0n, 0n, 4_916_667n],
+  );
+  const [row] = list(f, '2026-12-31');
+  assert.deepEqual([row!.disposed, row!.monthly, row!.monthsLeft], ['2026-12-10', '0.00', 0]);
+  const december = closingView(f, '2026-12').steps.find((s) => s.key === 'depreciation')!;
+  assert.deepEqual(december.postings, []);
+  // Once written off, it cannot go again.
+  assert.throws(() => dispose(f, actros, '2026-12-20'), /istismarda deyil|silinib/);
+});
+
+test('Ə4: no disposal while the months before it are not depreciated', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  closeMonth(f, '2026-10');
+  // November is not closed: its 833,33 is not on 112 yet.
+  assert.throws(() => dispose(f, actros, '2026-12-10'), /833,33.*amortizasiya.*bağlayın/);
+  // In November itself nothing was due before it.
+  dispose(f, actros, '2026-11-20');
+  assert.equal(balance(f, '731'), 5_000_000n);
+});
+
+test('Ə5: selling a fixed asset by a sale invoice — 611 with its VAT, the net value to 731', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  closeMonth(f, '2026-10');
+  closeMonth(f, '2026-11');
+  const truck = f.catalog().products.find((p) => p.name === 'Mercedes Actros')!.id;
+  const buyer = f.partner('Alıcı MMC', '1700000021');
+  const contract = f.contract(buyer, 'S-1', 'sale');
+  const sale = f.invoice('sale', '2026-12-05', buyer, contract, [
+    { productId: truck, assetId: actros, quantity: '1', price: '40000' },
+  ]);
+  assert.equal(balance(f, '611'), -4_000_000n); // 47 200 − its VAT 7 200
+  assert.equal(balance(f, '521.01'), -720_000n);
+  assert.equal(balance(f, '211.01'), 4_720_000n);
+  assert.equal(balance(f, '601'), 0n);
+  assert.deepEqual(
+    [balance(f, '111', actros), balance(f, '112', actros), balance(f, '731')],
+    [0n, 0n, 4_916_667n],
+  );
+  const december = closingView(f, '2026-12').steps.find((s) => s.key === 'depreciation')!;
+  assert.deepEqual(december.postings, []);
+  // Cancelling the invoice puts the asset back in service.
+  run(f, {
+    type: 'invoice.cancel',
+    companyId: f.companyId,
+    id: sale.id,
+    version: sale.version!,
+    reason: 'səhv',
+  });
+  assert.deepEqual([balance(f, '111', actros), balance(f, '112', actros)], [5_000_000n, -83_333n]);
+});
+
+test('7c: a sale line of a fixed asset needs the asset itself, in service, one of it', (t) => {
+  const f = fixture(t);
+  const actros = inService(f);
+  const truck = f.catalog().products.find((p) => p.name === 'Mercedes Actros')!.id;
+  const buyer = f.partner('Alıcı MMC', '1700000021');
+  const contract = f.contract(buyer, 'S-1', 'sale');
+  assert.throws(
+    () =>
+      f.invoice('sale', '2026-10-20', buyer, contract, [
+        { productId: truck, quantity: '1', price: '40000' },
+      ]),
+    /hansı əsas vəsait/,
+  );
+  assert.throws(
+    () =>
+      f.invoice('sale', '2026-10-20', buyer, contract, [
+        { productId: truck, assetId: actros, quantity: '2', price: '40000' },
+      ]),
+    /miqdar 1/,
+  );
+  const idle = asset(f, 'Anbardakı maşın').id;
+  assert.throws(
+    () =>
+      f.invoice('sale', '2026-10-20', buyer, contract, [
+        { productId: truck, assetId: idle, quantity: '1', price: '40000' },
+      ]),
+    /istismarda deyil/,
   );
 });

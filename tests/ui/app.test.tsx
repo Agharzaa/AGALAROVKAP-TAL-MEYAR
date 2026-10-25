@@ -2524,6 +2524,121 @@ test('stage 7a: a new fixed asset is put into service from 113 and the list show
   }
 });
 
+test('stage 7c: a sale invoice line of a fixed asset asks which asset is sold and books it to 611', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const first = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const p = (name: string, taxId: string) =>
+    h.run({
+      type: 'partner.save',
+      companyId: s.companyId,
+      name,
+      taxId,
+      kind: 'legal',
+      note: '',
+      archived: false,
+    }).id;
+  const supplier = p('Avto MMC', '1700000011');
+  const contract = h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'A-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  }).id;
+  const truck = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Mercedes Actros',
+    unit: 'ədəd',
+    kind: 'asset',
+    groupId: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'invoice.save',
+    companyId: s.companyId,
+    direction: 'purchase',
+    number: '',
+    date: first,
+    partnerId: supplier,
+    contractId: contract,
+    rate: '',
+    pricesIncludeVat: false,
+    eqSeries: '',
+    eqNumber: '',
+    memo: '',
+    lines: [{ productId: truck, quantity: '1', price: '50000', vatRate: '18', memo: '' }],
+  });
+  const actros = h.run({
+    type: 'fixedAsset.save',
+    companyId: s.companyId,
+    name: 'Actros 10-AB-123',
+    inventoryNo: '',
+    group: 'transport',
+    plate: '',
+    note: '',
+    archived: false,
+  }).id;
+  const items = (h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog).items;
+  h.run({
+    type: 'asset.save',
+    companyId: s.companyId,
+    kind: 'commission',
+    number: '',
+    date: first,
+    memo: '',
+    lines: [
+      {
+        assetId: actros,
+        productId: truck,
+        quantity: '1',
+        cost: '',
+        accumulated: '0',
+        salvage: '0',
+        lifeMonths: 60,
+        expenseAccount: '721',
+        expenseSk: [items.find((i) => i.role === 'depreciation')!.id],
+        counterAccount: '',
+        counterSk: [],
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Satış qaiməsi' })[0]!);
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    await pick('Kontragent', 'Alıcı');
+    await pick('Sətir 1 nomenklatura', 'Mercedes');
+    // A fixed asset: no stock account, but the asset itself.
+    assert.equal(editor.queryByRole('combobox', { name: 'Sətir 1 anbar hesabı' }), null);
+    await user.type(editor.getByRole('textbox', { name: 'Sətir 1 qiymət' }), '40000');
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/hansı əsas vəsait satılır/);
+    await pick('Sətir 1 əsas vəsait', 'Actros');
+    await user.keyboard('{Control>}s{/Control}');
+    await editor.findByText(/Qaimə SQ-000001 uçota alındı/);
+    const entry = await editor.findByRole('region', { name: 'Yazılışlar' });
+    assert.match(entry.textContent ?? '', /611/);
+    assert.match(entry.textContent ?? '', /731/);
+  } finally {
+    h.close();
+  }
+});
+
 test('stage 6c-3: İş masası updates both boxes from DVX at once, after the sign-in', async () => {
   const h = harness();
   seed(h);

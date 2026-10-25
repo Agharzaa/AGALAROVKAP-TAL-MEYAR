@@ -162,7 +162,7 @@ export function FixedAssetsPage() {
   const rows = (result.data ?? []).filter(
     (a) => !a.archived && matches(search, a.inventoryNo, a.name, a.plate),
   );
-  const openDoc = (kind: 'commission' | 'opening', id?: string) =>
+  const openDoc = (kind: 'commission' | 'opening' | 'disposal', id?: string) =>
     ws.open({ type: 'asset', kind, ...(id ? { id } : {}) }, win.companyId);
   const columns: Column<FixedAssetRow>[] = [
     { key: 'inv', label: 'İnv. №', render: (a) => <span className="code">{a.inventoryNo}</span> },
@@ -182,7 +182,9 @@ export function FixedAssetsPage() {
       key: 'since',
       label: 'İstismarda',
       render: (a) =>
-        a.inService ? (
+        a.disposed ? (
+          <span className="muted">silinib / satılıb {day(a.disposed)}</span>
+        ) : a.inService ? (
           <button
             type="button"
             className="link"
@@ -249,6 +251,9 @@ export function FixedAssetsPage() {
           <button type="button" className="button secondary" onClick={() => openDoc('opening')}>
             Başlanğıc qalıq
           </button>
+          <button type="button" className="button secondary" onClick={() => openDoc('disposal')}>
+            Silinmə
+          </button>
         </>
       }
       filters={
@@ -311,10 +316,17 @@ export function FixedAssetsPage() {
 }
 
 /** Documents of one kind: putting into service or opening balances. */
-export function AssetDocumentsPage({ kind }: { kind: 'commission' | 'opening' }) {
+export function AssetDocumentsPage({ kind }: { kind: 'commission' | 'opening' | 'disposal' }) {
   const win = useWindow();
   const ws = useWorkspace();
-  const page = pages[kind === 'commission' ? 'assetCommissions' : 'assetOpenings'];
+  const page =
+    pages[
+      kind === 'commission'
+        ? 'assetCommissions'
+        : kind === 'opening'
+          ? 'assetOpenings'
+          : 'assetDisposals'
+    ];
   const result = useQuery<AssetDocumentView[]>({
     type: 'assetDocuments',
     companyId: win.companyId,
@@ -356,7 +368,12 @@ export function AssetDocumentsPage({ kind }: { kind: 'commission' | 'opening' })
       onRefresh={result.reload}
       actions={
         <button type="button" className="button primary" onClick={() => open()}>
-          <Plus size={15} /> {kind === 'commission' ? 'İstismara ver' : 'Başlanğıc qalıq'}
+          <Plus size={15} />{' '}
+          {kind === 'commission'
+            ? 'İstismara ver'
+            : kind === 'opening'
+              ? 'Başlanğıc qalıq'
+              : 'Silinmə'}
         </button>
       }
       notices={result.error && <Notice>{result.error}</Notice>}
