@@ -128,10 +128,25 @@ export const api = {
     direction: 'sale' | 'purchase',
     from: string,
     to: string,
-  ): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial?: boolean }> {
+  ): Promise<{
+    files: { name: string; bytes: Uint8Array }[];
+    partial?: boolean;
+    cancelled?: boolean;
+  }> {
     const b = bridge();
     if (!b.dvxExport) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');
     return unwrap(await b.dvxExport(direction, from, to));
+  },
+  /** Stage 6c-2: "Ləğv et" — the cabinet stops asking DVX for more pages. */
+  async dvxCancel(): Promise<void> {
+    const b = override ?? window.meyar;
+    if (b?.dvxCancel) await b.dvxCancel();
+  },
+  onDvxProgress(
+    listener: (progress: { direction: 'sale' | 'purchase'; page: number }) => void,
+  ): () => void {
+    const b = override ?? window.meyar;
+    return b?.onDvxProgress ? b.onDvxProgress(listener) : () => {};
   },
   async dvxConnected(): Promise<boolean> {
     const b = override ?? window.meyar;

@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { Outcome, Zoom } from '../contracts/bridge.js';
 import type { LedgerClient } from './ledger-client.js';
 import { fetchAmb } from './amb.js';
-import { dvxConnected, dvxDiagnose, dvxExport, openDvxPortal } from './dvx-portal.js';
+import { dvxCancel, dvxConnected, dvxDiagnose, dvxExport, openDvxPortal } from './dvx-portal.js';
 import { startUpdates } from './updater.js';
 import { fitZoom } from './fit-zoom.js';
 
@@ -203,6 +203,7 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
   );
   // Stage 6b: the cabinet's own Excel export of one box, asked by Meyar.
   handle('meyar:dvx-export', async (_e, arg) => {
+    const direction = (arg as { direction?: unknown } | undefined)?.direction;
     try {
       const a = (arg ?? {}) as { direction?: unknown; from?: unknown; to?: unknown };
       const day = /^\d{4}-\d{2}-\d{2}$/;
@@ -220,6 +221,8 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
         a.to,
         path.join(app.getPath('userData'), 'dvx-diagnostics'),
         app.getVersion(),
+        // Stage 6c-2: the box shows which page is being taken.
+        (page) => !window.isDestroyed() && contents.send('meyar:dvx-progress', { direction, page }),
       );
       return { ok: true, value } satisfies Outcome<typeof value>;
     } catch (error) {
@@ -228,6 +231,10 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
         error: { message: (error as Error).message, code: 'dvx' },
       } satisfies Outcome<never>;
     }
+  });
+  handle('meyar:dvx-cancel', () => {
+    dvxCancel();
+    return null;
   });
   // Stage 6a: the shape of the cabinet's API requests, to the user's Documents folder.
   handle('meyar:dvx-diagnose', async () => {

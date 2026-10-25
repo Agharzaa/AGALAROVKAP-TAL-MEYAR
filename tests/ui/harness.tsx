@@ -35,11 +35,20 @@ export function harness(
   let dvxConnected = false;
   // Stage 6b: what the cabinet's Excel export answers, and what was asked.
   const dvxExports: { direction: string; from: string; to: string }[] = [];
-  let dvxExportFile: Outcome<{ files: { name: string; bytes: Uint8Array }[]; partial?: boolean }> =
-    {
-      ok: false,
-      error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
-    };
+  type DvxAnswer = Outcome<{
+    files: { name: string; bytes: Uint8Array }[];
+    partial?: boolean;
+    cancelled?: boolean;
+  }>;
+  // A promise: the export waits until the test answers it (stage 6c-2: progress and cancel).
+  let dvxExportFile: DvxAnswer | Promise<DvxAnswer> = {
+    ok: false,
+    error: { message: 'DVX ilə əlaqə yoxdur.', code: 'dvx' },
+  };
+  let dvxCancels = 0;
+  const dvxProgressListeners = new Set<
+    (p: { direction: 'sale' | 'purchase'; page: number }) => void
+  >();
   const dvxStateListeners = new Set<(state: { connected: boolean }) => void>();
   const dvxListeners = new Set<
     (file: { direction: 'sale' | 'purchase'; name: string; bytes: Uint8Array }) => void
@@ -120,7 +129,14 @@ export function harness(
     },
     async dvxExport(direction, from, to) {
       dvxExports.push({ direction, from, to });
-      return dvxExportFile;
+      return await dvxExportFile;
+    },
+    async dvxCancel() {
+      dvxCancels++;
+    },
+    onDvxProgress(listener) {
+      dvxProgressListeners.add(listener);
+      return () => dvxProgressListeners.delete(listener);
     },
     async dvxConnected() {
       return { ok: true, value: dvxConnected };
@@ -163,6 +179,12 @@ export function harness(
     /** What the next export answers. */
     setDvxExport(answer: typeof dvxExportFile) {
       dvxExportFile = answer;
+    },
+    /** How many times "Ləğv et" asked the cabinet to stop. */
+    dvxCancels: () => dvxCancels,
+    /** As if the cabinet's export reached another page. */
+    dvxProgress(p: { direction: 'sale' | 'purchase'; page: number }) {
+      for (const l of dvxProgressListeners) l(p);
     },
     /** As if the user signed in to (or closed) the cabinet window. */
     dvxState(state: { connected: boolean }) {

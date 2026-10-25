@@ -49,6 +49,18 @@ contextBridge.exposeInMainWorld('meyar', {
       from: String(from),
       to: String(to),
     }),
+  dvxCancel: () => ipcRenderer.invoke('meyar:dvx-cancel'),
+  onDvxProgress: (
+    listener: (progress: { direction: 'sale' | 'purchase'; page: number }) => void,
+  ) => {
+    const handler = (_event: IpcRendererEvent, progress: unknown) => {
+      const p = progress as { direction?: unknown; page?: unknown };
+      if ((p?.direction === 'sale' || p?.direction === 'purchase') && Number.isInteger(p.page))
+        listener({ direction: p.direction, page: p.page as number });
+    };
+    ipcRenderer.on('meyar:dvx-progress', handler);
+    return () => ipcRenderer.removeListener('meyar:dvx-progress', handler);
+  },
   dvxConnected: () => ipcRenderer.invoke('meyar:dvx-connected'),
   onDvxState: (listener: (state: { connected: boolean }) => void) => {
     const handler = (_event: IpcRendererEvent, state: unknown) => {

@@ -51,7 +51,19 @@ export interface MeyarBridge {
     direction: 'sale' | 'purchase',
     from: string,
     to: string,
-  ): Promise<Outcome<{ files: { name: string; bytes: Uint8Array }[]; partial?: boolean }>>;
+  ): Promise<
+    Outcome<{
+      files: { name: string; bytes: Uint8Array }[];
+      partial?: boolean;
+      cancelled?: boolean;
+    }>
+  >;
+  /** Stage 6c-2: stops the running export; the pages taken so far are answered (cancelled). */
+  dvxCancel?(): Promise<void>;
+  /** Stage 6c-2: the running export reached another page (1, 2, …). */
+  onDvxProgress?(
+    listener: (progress: { direction: 'sale' | 'purchase'; page: number }) => void,
+  ): () => void;
   /** Stage 6a: whether the cabinet is signed in now. */
   dvxConnected?(): Promise<Outcome<boolean>>;
   /** Stage 6a: signed in to the cabinet (its session key seen) or not any more. */

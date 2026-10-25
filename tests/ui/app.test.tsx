@@ -2366,6 +2366,63 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
   }
 });
 
+test('stage 6c-2: "DVX-dən yenilə" shows its progress and can be cancelled; the pages taken stay', async () => {
+  const h = harness();
+  seed(h);
+  const csv = [
+    'Daxil olan qaimələrin siyahısı',
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;118,00;100,00;Təsdiqləndi',
+  ].join('\r\n');
+  try {
+    const user = userEvent.setup();
+    act(() => h.dvxState({ connected: true }));
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    let answer!: (a: Awaited<Parameters<typeof h.setDvxExport>[0]>) => void;
+    h.setDvxExport(new Promise((resolve) => (answer = resolve)));
+    await user.click(await page.findByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText('Gələnlər: DVX-dən alınır…');
+    act(() => h.dvxProgress({ direction: 'purchase', page: 3 }));
+    await page.findByText('Gələnlər: səhifə 3 alınır…');
+    // Another box's progress is not this box's.
+    act(() => h.dvxProgress({ direction: 'sale', page: 7 }));
+    assert.equal(page.queryByText(/səhifə 7/), null);
+    await user.click(page.getByRole('button', { name: 'Ləğv et' }));
+    assert.equal(h.dvxCancels(), 1);
+    await act(async () =>
+      answer({
+        ok: true,
+        value: {
+          files: [{ name: 'DVX-Gelenler.csv', bytes: new TextEncoder().encode(csv) }],
+          cancelled: true,
+        },
+      }),
+    );
+    await page.findByText(/DVX yeniləməsi ləğv edildi .*yeni 1 e-qaimə/);
+    assert.equal(page.queryByRole('button', { name: 'Ləğv et' }), null);
+    await waitFor(() =>
+      assert.match(
+        page.getByRole('status', { name: 'Son yeniləmə' }).textContent ?? '',
+        /^Son cəhd .* ləğv edildi; son yeniləmə: /,
+      ),
+    );
+    const syncs = h.commands.filter((c) => c.type === 'eqaime.synced') as unknown as {
+      result: string;
+      added: number;
+    }[];
+    assert.deepEqual(
+      syncs.map((s) => [s.result, s.added]),
+      [['cancelled', 1]],
+    );
+  } finally {
+    h.close();
+  }
+});
+
 test('2026-10-22: a VAT-inclusive DVX e-qaimə opens as an invoice with "ƏDV daxildir" and DVX\'s VAT', async () => {
   const h = harness();
   const s = seed(h);

@@ -228,6 +228,24 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   // opens and the update starts by itself once the sign-in is seen.
   const [syncing, setSyncing] = useState(false);
   const [syncAfterSignIn, setSyncAfterSignIn] = useState(false);
+  // Stage 6c-2: where the update stands, and "Ləğv et" (the pages taken so far stay).
+  const [progress, setProgress] = useState('');
+  const cancelled = useRef(false);
+  const running = useRef(false);
+  const boxName = direction === 'purchase' ? 'Gələnlər' : 'Göndərilənlər';
+  useEffect(
+    () =>
+      api.onDvxProgress((p) => {
+        if (running.current && !cancelled.current && p.direction === direction)
+          setProgress(`${boxName}: səhifə ${p.page} alınır…`);
+      }),
+    [direction, boxName],
+  );
+  function cancel() {
+    cancelled.current = true;
+    setProgress(`${boxName}: ləğv edilir…`);
+    void api.dvxCancel();
+  }
   async function sync() {
     setReadError('');
     setMessage('');
@@ -246,12 +264,15 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       return;
     }
     setSyncing(true);
+    running.current = true;
+    cancelled.current = false;
+    setProgress(`${boxName}: DVX-dən alınır…`);
     const startedAt = new Date().toISOString();
     const { from, to } = openPeriod(company?.closedThrough ?? '', today());
     // DVX gives the period page by page; each page is one import (one e-qaimə, once).
     const total: CommandResult = { id: '' };
     // Stage 6c-1: every attempt is kept, also a failed one (QERARLAR 2026-10-25 §18).
-    const record = (result: 'ok' | 'partial' | 'failed', message = '') =>
+    const record = (result: 'ok' | 'partial' | 'failed' | 'cancelled', message = '') =>
       api
         .command({
           type: 'eqaime.synced',
@@ -271,12 +292,21 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         .catch(() => undefined)
         .finally(box.reload);
     try {
-      const { files, partial } = await api.dvxExport(direction, from, to);
+      const exported = await api.dvxExport(direction, from, to);
+      const { files, partial } = exported;
+      let stopped = !!exported.cancelled || cancelled.current;
       const period = `${day(from)}–${day(to)}`;
       const add = (k: 'added' | 'updated' | 'same' | 'conflicts' | 'posted', n?: number) =>
         n && (total[k] = (total[k] ?? 0) + n);
       let loaded = 0;
-      for (const f of files) {
+      for (const [i, f] of files.entries()) {
+        // Cancelled while loading: the pages loaded so far stay (one e-qaimə, once).
+        if (i && cancelled.current) {
+          stopped = true;
+          break;
+        }
+        if (!cancelled.current)
+          setProgress(`${boxName}: ${i + 1} / ${files.length} səhifə yüklənir…`);
         const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
         if (!read.report || !read.documents.length) {
           if (read.problems.length) {
@@ -313,6 +343,16 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         total.rejected = [...(total.rejected ?? []), ...(r.rejected ?? [])];
         total.failed = [...(total.failed ?? []), ...(r.failed ?? [])];
       }
+      if (stopped) {
+        void record('cancelled');
+        setMessage(
+          loaded
+            ? `DVX yeniləməsi ləğv edildi (${period}; alınmış səhifələr yükləndi, qalanını növbəti yeniləmə alacaq): ${importSummary(total)}`
+            : 'DVX yeniləməsi ləğv edildi: heç nə yüklənmədi.',
+        );
+        imports.reload();
+        return;
+      }
       const said = partial ? 'DVX növbəti səhifəni demədi' : '';
       if (!loaded) {
         setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
@@ -329,6 +369,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       setReadError(message);
       void record('failed', message);
     } finally {
+      running.current = false;
+      setProgress('');
       setSyncing(false);
     }
   }
@@ -704,6 +746,21 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             >
               {syncing ? 'DVX-dən alınır…' : 'DVX-dən yenilə'}
             </button>
+          )}
+          {syncing && (
+            <>
+              <span role="status" aria-label="Yeniləmənin gedişatı" className="dvx-last">
+                {progress}
+              </span>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={cancelled.current}
+                onClick={cancel}
+              >
+                Ləğv et
+              </button>
+            </>
           )}
           <button
             type="button"

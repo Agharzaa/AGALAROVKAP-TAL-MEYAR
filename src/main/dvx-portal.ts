@@ -246,6 +246,7 @@ export async function dvxDiagnose(
 
 /** At most 100 pages of 100 e-qaimələr in one update. */
 const MAX_PAGES = 100;
+let running: AbortController | undefined;
 
 class ExportError extends Error {
   constructor(
@@ -270,7 +271,8 @@ export async function dvxExport(
   to: string,
   diagDir: string,
   version: string,
-): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial: boolean }> {
+  onPage: (page: number) => void = () => {},
+): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial: boolean; cancelled: boolean }> {
   const state = current;
   const token = state && !state.window.isDestroyed() ? state.api.token() : '';
   if (!state || !token)
@@ -285,6 +287,10 @@ export async function dvxExport(
     .filter((r) => r.method === 'POST' && maskPath(r.url).split('?')[0] === list)
     .at(-1)?.body;
   let request = exportRequest(direction, from, to, 0, template);
+  // Stage 6c-2: "Ləğv et" stops the export; the pages taken so far are answered.
+  const stop = new AbortController();
+  running?.abort();
+  running = stop;
   const ask = (url: string, init: { method: string; body?: string }) =>
     state.ses.fetch(url, {
       ...init,
@@ -295,7 +301,7 @@ export async function dvxExport(
         [OWN_REQUEST]: '1',
       },
       redirect: 'error',
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.any([stop.signal, AbortSignal.timeout(120_000)]),
     });
   const refused = (step: string, status: number) =>
     status === 401 || status === 403
@@ -314,7 +320,8 @@ export async function dvxExport(
   // DVX could not say whether more pages follow: the update says it is partial (audit 2026-10-25).
   let partial = false;
   try {
-    for (let page = 0; page < MAX_PAGES; page++) {
+    for (let page = 0; page < MAX_PAGES && !stop.signal.aborted; page++) {
+      onPage(page + 1);
       request = exportRequest(direction, from, to, page, template);
       const res = await ask(origin + request.path, {
         method: 'POST',
@@ -365,8 +372,9 @@ export async function dvxExport(
       }
       if (!hasMore(answer)) break;
     }
-    return { files, partial };
+    return { files, partial, cancelled: stop.signal.aborted };
   } catch (error) {
+    if (stop.signal.aborted) return { files, partial, cancelled: true };
     const e =
       error instanceof ExportError
         ? error
@@ -385,7 +393,14 @@ export async function dvxExport(
       // The update failed already; the diagnostics are a help only.
     }
     throw e;
+  } finally {
+    if (running === stop) running = undefined;
   }
+}
+
+/** Stage 6c-2: stops the running export ("Ləğv et"). */
+export function dvxCancel(): void {
+  running?.abort();
 }
 
 /** Signed in to the cabinet now: its window is open and the portal's session key was seen. */
