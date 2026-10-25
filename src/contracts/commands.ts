@@ -28,6 +28,7 @@ const subkontoKind = z.enum([
   'fund',
   'capitalChange',
   'employee',
+  'fixedAsset',
 ]);
 const nature = z.enum(['active', 'passive', 'active-passive']);
 
@@ -95,6 +96,28 @@ export const bankLineInput = z.object({
   memo: text(300).default(''),
 });
 export type BankLineInput = z.infer<typeof bankLineInput>;
+
+/** A line of a fixed-asset document (stage 7a): the asset and its depreciation terms. */
+export const assetLineInput = z.object({
+  assetId: id,
+  /** Putting into service: the 113 nomenclature it comes from, and how many of it. */
+  productId: z.string().max(80).default(''),
+  quantity: decimal.default(''),
+  /** Opening balance: the cost and the depreciation so far. */
+  cost: decimal.default(''),
+  accumulated: decimal.default('0'),
+  salvage: decimal.default('0'),
+  lifeMonths: z.number().int().min(1).max(1200),
+  /** Opening balance: months still to depreciate (putting into service: the whole life). */
+  remainingMonths: z.number().int().min(0).max(1200).optional(),
+  /** Where depreciation goes: 701 / 711 / 721 / 731 / 202 with its subkonto. */
+  expenseAccount: code,
+  expenseSk: z.array(z.string().max(120)).max(3).default([]),
+  /** Opening balance: the counter account (e.g. 343) with its subkonto. */
+  counterAccount: z.string().max(20).default(''),
+  counterSk: z.array(z.string().max(120)).max(3).default([]),
+});
+export type AssetLineInput = z.infer<typeof assetLineInput>;
 
 /** One operation of a bank statement as the reader found it (docs/MERHELE-3-BANK.md §6). */
 export const statementLineInput = z.object({
@@ -227,6 +250,33 @@ export const commandSchema = z.discriminatedUnion('type', [
     account: code,
     name: text(160).default(''),
   }),
+  /** Stage 7a: a fixed asset of the catalog (subkonto of 111 / 112); inventory number by itself. */
+  z.object({
+    type: z.literal('fixedAsset.save'),
+    ...base,
+    ...editable,
+    name: text(240),
+    inventoryNo: text(40).default(''),
+    group: z.enum(['transport', 'machinery', 'computers', 'buildings', 'other']),
+    plate: text(40).default(''),
+    note: text(500).default(''),
+  }),
+  /**
+   * Stage 7a: putting fixed assets into service (113 → 111) or their opening balances. Each line
+   * keeps the asset's depreciation terms.
+   */
+  z.object({
+    type: z.literal('asset.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    kind: z.enum(['commission', 'opening']),
+    number: text(40).default(''),
+    date,
+    memo: text(500).default(''),
+    lines: z.array(assetLineInput).min(1).max(500),
+  }),
+  z.object({ type: z.literal('asset.cancel'), ...base, id, version, reason: text(240) }),
   z.object({
     type: z.literal('cashbox.save'),
     ...base,

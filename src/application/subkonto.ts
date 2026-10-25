@@ -24,6 +24,7 @@ const tables: Partial<Record<SubkontoKind, { table: string; kind?: string }>> = 
   capitalChange: { table: 'items', kind: 'capitalChange' },
   cashbox: { table: 'cashboxes' },
   productGroup: { table: 'items', kind: 'productGroup' },
+  fixedAsset: { table: 'fixed_assets' },
 };
 
 export interface SideCheck {

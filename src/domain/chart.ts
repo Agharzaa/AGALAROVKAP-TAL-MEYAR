@@ -24,7 +24,8 @@ export type SubkontoKind =
   | 'paymentKind'
   | 'fund'
   | 'capitalChange'
-  | 'employee';
+  | 'employee'
+  | 'fixedAsset';
 
 export const subkontoKinds: readonly SubkontoKind[] = [
   'partner',
@@ -42,6 +43,7 @@ export const subkontoKinds: readonly SubkontoKind[] = [
   'fund',
   'capitalChange',
   'employee',
+  'fixedAsset',
 ];
 
 export const subkontoLabel: Record<SubkontoKind, string> = {
@@ -60,6 +62,7 @@ export const subkontoLabel: Record<SubkontoKind, string> = {
   fund: 'Fond',
   capitalChange: 'Kapitalda dəyişiklik növü',
   employee: 'İşçi',
+  fixedAsset: 'Əsas vəsait',
 };
 
 /** VAT rates are fixed by law, not a user list: they decide postings and declaration lines. */
@@ -106,8 +109,9 @@ const PCD: SubkontoKind[] = ['partner', 'contract', 'document'];
 const PK: SubkontoKind[] = ['paymentKind'];
 const seed: Seed[] = [
   ['101', 'Qeyri-maddi aktivlərin dəyəri', A, ['product'], { qty: true }],
-  ['111', 'Torpaq, tikili və avadanlıqların dəyəri', A, ['product'], { qty: true }],
-  ['112', 'Torpaq, tikili və avadanlıqlar üzrə yığılmış amortizasiya', P, ['product']],
+  // Stage 7 (QERARLAR 2026-10-26 §1): by fixed asset, one asset a line — no quantity.
+  ['111', 'Torpaq, tikili və avadanlıqların dəyəri', A, ['fixedAsset']],
+  ['112', 'Torpaq, tikili və avadanlıqlar üzrə yığılmış amortizasiya', P, ['fixedAsset']],
   ['113', 'TTA ilə bağlı məsrəflərin kapitallaşdırılması', A, ['product'], { qty: true }],
   ['201', 'Material ehtiyatları', A, ['product'], { qty: true }],
   ['202', 'İstehsalat (iş və xidmət) məsrəfləri', A, ['expenseItem']],

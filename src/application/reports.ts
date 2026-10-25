@@ -60,6 +60,7 @@ import { closingList, closingView, nextClosingMonth, type ClosingControls } from
 import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
+import { assetDocument, assetDocuments, fixedAssets, fixedAssetView } from './assets.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const money = (v: bigint) => formatMinor(v);
@@ -141,6 +142,12 @@ export class Names {
         break;
       case 'employee':
         put(this.db.all('SELECT id,name FROM employees WHERE company_id=?', c), (r) => str(r.name));
+        break;
+      case 'fixedAsset':
+        put(
+          this.db.all('SELECT id,name,inventory_no FROM fixed_assets WHERE company_id=?', c),
+          (r) => `${str(r.inventory_no)} ${str(r.name)}`,
+        );
         break;
       case 'vatRate':
         vatRates.forEach((v) => m!.set(v.id, { name: v.name }));
@@ -1385,6 +1392,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             name: str(r.name),
             archived: flag(r.archived),
           })),
+        fixedAssets: db
+          .all('SELECT * FROM fixed_assets WHERE company_id=? ORDER BY inventory_no', c)
+          .map(fixedAssetView),
         cashboxes: db
           .all('SELECT * FROM cashboxes WHERE company_id=? ORDER BY account, name', c)
           .map((r): CashboxView => ({
@@ -1443,6 +1453,14 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     }
     case 'operation':
       return operationDetail(db, q.companyId, q.id);
+    case 'fixedAssets':
+      company(db, q.companyId);
+      return fixedAssets(db, q.companyId, q.date);
+    case 'assetDocuments':
+      company(db, q.companyId);
+      return assetDocuments(db, q.companyId, q.kind);
+    case 'assetDocument':
+      return assetDocument(db, q.companyId, q.id);
     case 'invoices': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);

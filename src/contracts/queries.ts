@@ -10,6 +10,14 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('catalog'), companyId: id }),
   z.object({ type: z.literal('operations'), companyId: id, from: date, to: date }),
   z.object({ type: z.literal('operation'), companyId: id, id }),
+  /** Stage 7a: the fixed assets with their cost, depreciation and terms on a day. */
+  z.object({ type: z.literal('fixedAssets'), companyId: id, date }),
+  z.object({
+    type: z.literal('assetDocuments'),
+    companyId: id,
+    kind: z.enum(['commission', 'opening']),
+  }),
+  z.object({ type: z.literal('assetDocument'), companyId: id, id }),
   z.object({
     type: z.literal('invoices'),
     companyId: id,
@@ -198,6 +206,67 @@ export interface ProductView {
   groupId: string;
   archived: boolean;
 }
+/** Stage 7a: a fixed asset of the catalog. */
+export interface FixedAssetView {
+  id: string;
+  version: number;
+  name: string;
+  inventoryNo: string;
+  group: 'transport' | 'machinery' | 'computers' | 'buildings' | 'other';
+  plate: string;
+  note: string;
+  archived: boolean;
+}
+/** A fixed asset on a day: cost (111), depreciation (112) and the terms it depreciates by. */
+export interface FixedAssetRow extends FixedAssetView {
+  /** The day it was put into service (or its opening balance); '' when not yet. */
+  inService: string;
+  /** The document that did it. */
+  documentId: string;
+  documentKind: 'commission' | 'opening' | '';
+  cost: string;
+  depreciated: string;
+  net: string;
+  /** The regular monthly amount; '0.00' when nothing is left to depreciate. */
+  monthly: string;
+  monthsLeft: number;
+  lifeMonths: number;
+  salvage: string;
+  expenseAccount: string;
+  expenseSk: string[];
+  expenseNames: string[];
+}
+export interface AssetLineView {
+  assetId: string;
+  assetName: string;
+  productId: string;
+  productName: string;
+  quantity: string;
+  cost: string;
+  accumulated: string;
+  salvage: string;
+  lifeMonths: number;
+  remainingMonths: number;
+  monthly: string;
+  expenseAccount: string;
+  expenseSk: string[];
+  counterAccount: string;
+  counterSk: string[];
+}
+export interface AssetDocumentView {
+  id: string;
+  version: number;
+  kind: 'commission' | 'opening';
+  number: string;
+  date: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+  total: string;
+  lines: AssetLineView[];
+}
+export interface AssetDocumentDetail extends AssetDocumentView {
+  postings: PostingView[];
+}
 export interface EmployeeView {
   id: string;
   version: number;
@@ -234,6 +303,7 @@ export interface Catalog {
   products: ProductView[];
   employees: EmployeeView[];
   items: ItemView[];
+  fixedAssets: FixedAssetView[];
 }
 
 export interface SideView {

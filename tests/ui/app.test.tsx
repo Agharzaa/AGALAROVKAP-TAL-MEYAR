@@ -2426,6 +2426,100 @@ test('stage 6c-2: "DVX-dən yenilə" shows its progress and can be cancelled; th
   }
 });
 
+test('stage 7a: a new fixed asset is put into service from 113 and the list shows its depreciation', async () => {
+  const h = harness();
+  const s = seed(h);
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Avto MMC',
+    taxId: '1700000011',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  const contract = h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'A-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  }).id;
+  const truck = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Mercedes Actros',
+    unit: 'ədəd',
+    kind: 'asset',
+    groupId: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'invoice.save',
+    companyId: s.companyId,
+    direction: 'purchase',
+    number: '',
+    date: '2026-01-15',
+    partnerId: supplier,
+    contractId: contract,
+    rate: '',
+    pricesIncludeVat: false,
+    eqSeries: '',
+    eqNumber: '',
+    memo: '',
+    lines: [{ productId: truck, quantity: '1', price: '50000', vatRate: '18', memo: '' }],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əsas vəsaitlər' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Əsas vəsaitlər' }));
+    const list = within(pane());
+    await list.findByText('Hələ əsas vəsait yoxdur');
+    await user.click(list.getAllByRole('button', { name: 'Yeni əsas vəsait' })[0]!);
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Əsas vəsaitin adı' }),
+      'Actros 10-AB-123',
+    );
+    await user.click(screen.getByRole('button', { name: 'Saxla' }));
+    await list.findByText('İN-000001');
+    await user.click(list.getByRole('button', { name: 'İstismara ver' }));
+    const editor = within(pane());
+    const pick = async (label: string, text: string) => {
+      await user.click(await editor.findByRole('combobox', { name: label }));
+      await user.keyboard(text);
+      await user.keyboard('{Enter}');
+    };
+    await pick('Sətir 1: əsas vəsait', 'Actros 10');
+    // Transport: 60 months to 701 with the "Amortizasiya" item, filled in by itself.
+    assert.equal(
+      (editor.getByRole('textbox', { name: 'Sətir 1: müddət' }) as HTMLInputElement).value,
+      '60',
+    );
+    await pick('Sətir 1: nomenklatura', 'Mercedes');
+    await user.click(editor.getByRole('button', { name: /^Uçota al$/ }));
+    await editor.findByText('Sənəd ƏV-000001 uçota alındı.');
+    await editor.findByText(/Aylıq amortizasiya: 833,33/);
+    const rows = h.ledger.query({
+      type: 'fixedAssets',
+      companyId: s.companyId,
+      date: '2099-12-31',
+    }) as { cost: string; monthly: string; expenseAccount: string; expenseNames: string[] }[];
+    assert.deepEqual(
+      [rows[0]!.cost, rows[0]!.monthly, rows[0]!.expenseAccount, rows[0]!.expenseNames],
+      ['50000.00', '833.33', '701', ['Əsas nomenklatura qrupu', 'Amortizasiya']],
+    );
+  } finally {
+    h.close();
+  }
+});
+
 test('stage 6c-3: İş masası updates both boxes from DVX at once, after the sign-in', async () => {
   const h = harness();
   seed(h);

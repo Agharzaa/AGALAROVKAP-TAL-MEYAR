@@ -3366,3 +3366,35 @@ button.step:active {
   background: var(--hover);
   font-weight: 600;
 }
+
+/* Stage 7a: a fixed asset per card in the putting-into-service and opening balance documents. */
+.asset-lines {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.asset-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.asset-line.invalid {
+  border-color: var(--bad-line);
+}
+.asset-account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.asset-line-foot {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+}

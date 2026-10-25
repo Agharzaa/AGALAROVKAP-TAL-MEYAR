@@ -20,6 +20,7 @@ import {
   Upload,
   UserRound,
   Users,
+  Truck,
   Wallet,
   type LucideIcon,
 } from './icons';
@@ -130,6 +131,21 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
   cashboxes: { title: 'Kassalar', hint: 'Kassa, hesab (221) və valyuta', icon: Wallet },
   products: { title: 'Nomenklatura', hint: 'Mallar, materiallar, əsas vəsaitlər', icon: Package },
   employees: { title: 'İşçilər', hint: '244, 533 subkontosu', icon: UserRound },
+  fixedAssets: {
+    title: 'Əsas vəsaitlər',
+    hint: 'İlkin dəyər, amortizasiya, qalıq dəyər, aylıq məbləğ və qalan ay',
+    icon: Truck,
+  },
+  assetCommissions: {
+    title: 'İstismara vermə',
+    hint: 'Əsas vəsaitin 113-dən 111-ə keçməsi və amortizasiya şərtləri',
+    icon: Truck,
+  },
+  assetOpenings: {
+    title: 'Əsas vəsaitlərin başlanğıc qalıqları',
+    hint: 'Meyar-dan əvvəl alınmış vəsaitlər: dəyər, yığılmış amortizasiya, qalan ay',
+    icon: Truck,
+  },
   lists: {
     title: 'Siyahılar',
     hint: 'Xərc maddələri, gəlir və vergi növləri, fondlar, pul hərəkəti maddələri',
@@ -381,6 +397,44 @@ export const sections: Section[] = [
     ],
   },
   {
+    id: 'assets',
+    label: 'Əsas vəsaitlər',
+    icon: Truck,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [
+          { label: 'Əsas vəsaitlər', icon: Truck, action: page('fixedAssets') },
+          { label: 'İstismara vermə', icon: Truck, action: page('assetCommissions') },
+          { label: 'Başlanğıc qalıqlar', icon: ScrollText, action: page('assetOpenings') },
+        ],
+      },
+      {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'İstismara vermə',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'asset', kind: 'commission' } },
+          },
+          {
+            label: 'Başlanğıc qalıq',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'asset', kind: 'opening' } },
+          },
+        ],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [
+          card('111', 'Əsas vəsaitlərin dəyəri (111)'),
+          card('112', 'Yığılmış amortizasiya (112)'),
+          card('113', 'Kapitallaşdırılan məsrəflər (113)'),
+        ],
+      },
+    ],
+  },
+  {
     id: 'reports',
     label: 'Hesabatlar',
     icon: Reports,
@@ -459,8 +513,11 @@ export function sectionOfView(view: View): string {
     case 'bank':
     case 'cash':
       return 'bank';
+    case 'asset':
+      return 'assets';
     case 'accountCard': {
       const a = view.account;
+      if (a.startsWith('11')) return 'assets';
       if (a.startsWith('211') || a.startsWith('543')) return 'sales';
       if (a.startsWith('531') || a.startsWith('243')) return 'purchases';
       if (a.startsWith('22')) return 'bank';
@@ -478,6 +535,10 @@ export function sectionOfView(view: View): string {
         case 'eqPurchase':
         case 'eqMaps':
           return 'purchases';
+        case 'fixedAssets':
+        case 'assetCommissions':
+        case 'assetOpenings':
+          return 'assets';
         case 'operations':
         case 'accounts':
         case 'revaluation':
@@ -569,6 +630,11 @@ export function viewTitle(view: View, label?: string): string {
     case 'cash': {
       const kind = view.direction === 'in' ? 'Kassa mədaxil orderi' : 'Kassa məxaric orderi';
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `Yeni ${kind.toLowerCase()}`;
+    }
+    case 'asset': {
+      const kind =
+        view.kind === 'commission' ? 'İstismara vermə' : 'Əsas vəsaitin başlanğıc qalığı';
+      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `${kind} (yeni)`;
     }
     case 'accountCard':
       return `Hesab kartı ${view.account}`;

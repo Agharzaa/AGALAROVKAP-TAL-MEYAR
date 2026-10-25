@@ -34,6 +34,7 @@ import { cancelInvoice, saveInvoice } from './invoices.js';
 import { ignoreEq, importEq, recordDvxSync, resolveEq, restoreEq } from './eqaime.js';
 import { applyEq, bulkEqMap, createEqPartners, learnEq, linkEq, saveEqMap } from './eqaime-book.js';
 import { cancelOperation, saveOperation } from './operations.js';
+import { cancelAssetDocument, saveAssetDocument, saveFixedAsset } from './assets.js';
 import { closingControls, runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
 
@@ -167,6 +168,12 @@ export class Ledger {
         const auto = applyEq(tx, c.companyId, c.direction);
         return { ...loaded, posted: auto.posted + auto.linked, failed: auto.failed };
       }
+      case 'fixedAsset.save':
+        return saveFixedAsset(tx, c);
+      case 'asset.save':
+        return saveAssetDocument(tx, c);
+      case 'asset.cancel':
+        return cancelAssetDocument(tx, c);
       case 'eqaime.synced':
         return recordDvxSync(tx, c);
       case 'eqaime.apply': {

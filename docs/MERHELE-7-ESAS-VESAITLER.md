@@ -1,6 +1,6 @@
 # Mərhələ 7 — Əsas vəsaitlər və amortizasiya (dizayn)
 
-Status: **təsdiq gözləyir** (25.10.2026). İstifadəçi mərhələ 7 olaraq "Əsas vəsaitlər"i seçdi. Açıq suallar §11-dədir; cavablardan sonra qərarlar `docs/QERARLAR.md`-yə yazılır və icra başlayır.
+Status: **təsdiqlənib** (26.10.2026). Cavablar və qərarlar — `docs/QERARLAR.md` 2026-10-26 (§11 sual 6 — satışda 611 — mühasibin təsdiqi 7c-dən əvvəl).
 
 Əsas: `docs/QERARLAR.md` — "Alış" (əsas vəsait → 113, istismara verəndə 111), "TƏSDİQLƏNDİ: 205, 201, 111, 113 — subkonto Nomenklatura + miqdar", mərhələ 5 (ay bağlanışı: bir sənəd, addımlar, ləğv), 2026-10-25 §17 auditin tövsiyəsi (avtomatik qaydalar gələcək əsas vəsaitləri 721-ə yaza bilər).
 
@@ -12,7 +12,7 @@ Status: **təsdiq gözləyir** (25.10.2026). İstifadəçi mərhələ 7 olaraq "
 
 1. **"Əsas vəsaitlər" kitabçası** (1C-dəki kimi ayrıca siyahı): ad, inventar nömrəsi, qrup (nəqliyyat, maşın və avadanlıq, bina, hesablama texnikası, digər), dövlət nömrəsi / seriya, qeyd.
 2. **İstismara vermə sənədi** (ƏV-000001): 113-dən 111-ə keçid. Burada ilkin dəyər, faydalı istifadə müddəti (ay), ləğv dəyəri, amortizasiya üsulu və xərc hesabı (hesab + xərc maddəsi) qeyd olunur. Bir sənəddə bir neçə vəsait ola bilər.
-3. **Başlanğıc qalıqlar:** Meyar-dan əvvəl alınmış vəsaitlər üçün ilkin dəyər, yığılmış amortizasiya və qalan müddət. Yazılış Dt 111 / Kt qarşı hesab və Dt qarşı hesab / Kt 112 olur. Qarşı hesabı mühasib seçir (məs. 301), çünki Meyar-da başlanğıc qalıqlar belə yazılır və 000 köməkçi hesabı yoxdur.
+3. **Başlanğıc qalıqlar:** Meyar-dan əvvəl alınmış vəsaitlər üçün ilkin dəyər, yığılmış amortizasiya və qalan müddət. Yazılış Dt 111 / Kt qarşı hesab və Dt qarşı hesab / Kt 112 olur. Qarşı hesabı mühasib seçir (məs. 343), çünki Meyar-da başlanğıc qalıqlar belə yazılır və 000 köməkçi hesabı yoxdur.
 4. **Amortizasiya — ay bağlanışının yeni addımı** (FIFO-dan sonra, 6xx / 7xx → 801-dən əvvəl). Yazılış: Dt xərc hesabı (701 / 711 / 721 / 202, xərc maddəsi "Amortizasiya") / Kt 112. Ay bağlanışı ləğv ediləndə bu yazılış da storno olunur, əlavə iş tələb etmir.
 5. **Silinmə** (ƏS-000001): Dt 112 / Kt 111 yığılmış amortizasiya qədər; qalıq dəyər Dt 731 (xərc maddəsi "Əsas vəsaitlərin silinməsi") / Kt 111.
 6. **Satış:** əsas vəsaitin satış qaiməsi ilə. Gəlir Dt 211 / Kt 611, satışın ƏDV-si Dt 611 / Kt 521.01 (1C sxemi, §11 sual 6), qalıq dəyər silinmə kimi. İndi "satışda əsas vəsait qaimə ilə satılmır" qaydası var; bu qayda dəyişir.
@@ -48,8 +48,8 @@ Status: **təsdiq gözləyir** (25.10.2026). İstifadəçi mərhələ 7 olaraq "
   - 111 miqdarlı qalmır: hər vəsait bir sətirdir.
   - Bazada 111 / 112-də artıq yazılış varsa, miqrasiya onları dəyişmir və mühasibə xəbər verir.
 - **`fixed_assets`** (kitabça): `id`, `company_id`, `name`, `inventory_no` (şirkət üzrə unikal, boş qalsa avtomatik İN-000001), `group`, `plate`, `note`, `archived`, `version`.
-- **`asset_terms`** — amortizasiyanın şərtləri tarix üzrə: başlama tarixi, ilkin dəyər, ləğv dəyəri, müddət (ay), üsul, xərc hesabı + xərc maddəsi, mənbə sənəd. Şərtlər yalnız sənədlə dəyişir: istismara vermə, başlanğıc qalıq, gələcəkdə modernizasiya.
-- **`asset_documents`** — istismara vermə (`commission`), başlanğıc qalıq (`opening`), silinmə (`disposal`). Sətirdə vəsait və onun şərtləri olur. Silmə qadağandır, ləğv storno ilədir, bağlı dövr qorunur.
+- **Şərtlər sənəd sətrindədir** (`asset_lines`: ilkin dəyər, yığılmış amortizasiya, ləğv dəyəri, müddət, qalan ay, xərc hesabı + subkonto, qarşı hesab). Ayrıca `asset_terms` cədvəli yoxdur: şərtlər yalnız sənədlə dəyişir (gələcəkdə modernizasiya da sənəd olacaq).
+- **`asset_documents`** — istismara vermə (`commission`, ƏV-000001), başlanğıc qalıq (`opening`, ƏB-000001); silinmə (`disposal`) 7c-də. Sətirdə vəsait və onun şərtləri olur. Silmə qadağandır, ləğv storno ilədir, bağlı dövr qorunur.
 - Amortizasiya ayrıca cədvəldə saxlanmır. O, ay bağlanışının addımıdır və yazılışları `month_closings` sənədinə aiddir.
 
 ## 4. Yazılışlar
@@ -175,7 +175,7 @@ Yoxlama: 59 × 833,33 + 833,53 = 50 000,00.
 
 Hər addım ayrıca commit-dir. Hər addımda əvvəl uğursuz test yazılır, hamısı yaşıl qalır, və (icazənizə görə) avtomatik buraxılır.
 
-1. **7a — kitabça və istismara vermə.**
+1. **7a — kitabça və istismara vermə.** ✅ (0.8.0, 26.10.2026)
    - sxem v15 (`fixed_assets`, `asset_terms`, `asset_documents`, `fixedAsset` subkontosu);
    - istismara vermə və başlanğıc qalıqlar;
    - siyahı.

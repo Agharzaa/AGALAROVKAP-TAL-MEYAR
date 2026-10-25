@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1200,6 +1200,92 @@ CREATE TRIGGER dvx_syncs_no_delete BEFORE DELETE ON dvx_syncs BEGIN SELECT RAISE
 CREATE TRIGGER dvx_syncs_no_update BEFORE UPDATE ON dvx_syncs BEGIN SELECT RAISE(ABORT,'guard: Yeniləmə qeydi dəyişmir.'); END;
 `;
 
+// v15 — fixed assets (stage 7a; docs/MERHELE-7-ESAS-VESAITLER.md §3, QERARLAR 2026-10-26 §1). A
+// catalog of fixed assets becomes the subkonto of 111 / 112 (111 no longer counts quantity: one
+// asset, one line). A company whose 111 / 112 already carry postings keeps its accounts as they
+// are; the documents refuse to work until the accountant sets them up. Putting into service
+// (113 → 111) and opening balances are documents with lines that keep the depreciation terms.
+
+const v15 = `
+CREATE TABLE fixed_assets(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  inventory_no TEXT NOT NULL,
+  asset_group TEXT NOT NULL CHECK(asset_group IN('transport','machinery','computers','buildings','other')),
+  plate TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),
+  version INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,inventory_no)
+);
+CREATE TRIGGER fixed_assets_no_delete BEFORE DELETE ON fixed_assets BEGIN SELECT RAISE(ABORT,'guard: Əsas vəsait silinmir; arxivləşdirilir.'); END;
+
+CREATE TABLE asset_documents(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN('commission','opening')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,number_key)
+);
+CREATE TRIGGER asset_documents_no_delete BEFORE DELETE ON asset_documents BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER asset_documents_period BEFORE UPDATE ON asset_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+-- The lines of the document's current version: the asset and its depreciation terms.
+CREATE TABLE asset_lines(
+  company_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  line_no INTEGER NOT NULL,
+  asset_id TEXT NOT NULL,
+  product_id TEXT NOT NULL DEFAULT '',
+  quantity INTEGER NOT NULL DEFAULT 0,
+  cost INTEGER NOT NULL,
+  accumulated INTEGER NOT NULL DEFAULT 0,
+  salvage INTEGER NOT NULL DEFAULT 0,
+  life_months INTEGER NOT NULL,
+  months INTEGER NOT NULL,
+  expense_account TEXT NOT NULL,
+  expense_sk TEXT NOT NULL,
+  counter_account TEXT NOT NULL DEFAULT '',
+  counter_sk TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY(document_id,line_no),
+  FOREIGN KEY(company_id,document_id) REFERENCES asset_documents(company_id,id),
+  FOREIGN KEY(company_id,asset_id) REFERENCES fixed_assets(company_id,id)
+);
+CREATE INDEX asset_lines_asset ON asset_lines(company_id,asset_id);
+
+UPDATE accounts SET subkonto='["fixedAsset"]', quantitative=0
+  WHERE code IN('111','112') AND subkonto='["product"]'
+    AND NOT EXISTS(SELECT 1 FROM registers r WHERE r.company_id=accounts.company_id AND r.account IN('111','112'));
+
+UPDATE items SET role='depreciation' WHERE kind='expenseItem' AND name='Amortizasiya' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='depreciation');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'expenseItem','Amortizasiya','depreciation' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Amortizasiya');
+UPDATE items SET role='assetDisposal' WHERE kind='expenseItem' AND name='Əsas vəsaitlərin silinməsi' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='assetDisposal');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'expenseItem','Əsas vəsaitlərin silinməsi','assetDisposal' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Əsas vəsaitlərin silinməsi');
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-15','Yeniləndi','Baza',id,
+  'Əsas vəsaitlər üçün baza hazırlandı (111 / 112 — əsas vəsait üzrə).'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1215,4 +1301,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 12, sql: v12 },
   { version: 13, sql: v13 },
   { version: 14, sql: v14 },
+  { version: 15, sql: v15 },
 ];

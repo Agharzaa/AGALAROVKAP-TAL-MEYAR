@@ -252,6 +252,14 @@ export function subkontoOptions(
       return catalog.employees
         .filter((e) => !e.archived)
         .map((e) => ({ value: e.id, label: e.name, ...(e.position ? { hint: e.position } : {}) }));
+    case 'fixedAsset':
+      return catalog.fixedAssets
+        .filter((a) => !a.archived)
+        .map((a) => ({
+          value: a.id,
+          label: `${a.inventoryNo} ${a.name}`,
+          ...(a.plate ? { hint: a.plate } : {}),
+        }));
     case 'vatRate':
       return vatRates.map((v) => ({ value: v.id, label: v.name }));
     case 'document':

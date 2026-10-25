@@ -52,6 +52,7 @@ import {
   SquareRegular,
   SubtractRegular,
   TextBulletListTreeRegular,
+  VehicleTruckProfileRegular,
   WalletRegular,
   WindowMultipleRegular,
 } from '@fluentui/react-icons';
@@ -131,6 +132,7 @@ export const ShieldCheck = icon(ShieldCheckmarkRegular);
 export const Square = icon(SquareRegular);
 export const SquareX = icon(DismissSquareRegular);
 export const Trash2 = icon(DeleteRegular);
+export const Truck = icon(VehicleTruckProfileRegular);
 export const Upload = icon(ArrowUploadRegular);
 export const UserRound = icon(PersonRegular);
 export const Users = icon(PeopleRegular);

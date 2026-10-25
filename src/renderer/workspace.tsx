@@ -39,6 +39,9 @@ export type Page =
   | 'dashboard'
   | 'products'
   | 'employees'
+  | 'fixedAssets'
+  | 'assetCommissions'
+  | 'assetOpenings'
   | 'lists'
   | 'audit'
   | 'settings';
@@ -65,6 +68,8 @@ export type View =
       statementLineId?: string;
     }
   | { type: 'cash'; direction: 'in' | 'out'; id?: string }
+  /** Stage 7a: putting fixed assets into service or their opening balances. */
+  | { type: 'asset'; kind: 'commission' | 'opening'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
@@ -198,7 +203,11 @@ const sameView = (a: View, b: View) => JSON.stringify(a) === JSON.stringify(b);
 /** New documents may be opened several times; everything else is focused if already open. */
 const reusable = (v: View) =>
   !(
-    (v.type === 'operation' || v.type === 'invoice' || v.type === 'bank' || v.type === 'cash') &&
+    (v.type === 'operation' ||
+      v.type === 'invoice' ||
+      v.type === 'bank' ||
+      v.type === 'cash' ||
+      v.type === 'asset') &&
     !v.id
   );
 

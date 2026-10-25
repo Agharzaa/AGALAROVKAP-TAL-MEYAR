@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.16, mərhələ 6-nın müstəqil auditi). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 26.10.2026 (0.8.0, mərhələ 7a). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -520,6 +520,20 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 - **Audit:** mərhələ 1-in auditi öz yoxlamamdır; mərhələ 2 müstəqil yoxlayıcıdan keçib; mərhələ 3 — müstəqil audit (2 tur, 4 qüsur düzəldi, 5 açıq sual 15.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 4 — müstəqil audit (2 tur, 12 qüsur düzəldi, 5 açıq sual 16.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 5c / 5d — müstəqil audit (2 tur, 6 qüsur düzəldi, 6 açıq sual 18.10-da qərarlaşdırılıb və tətbiq olunub; yuxarıda); mərhələ 6 — müstəqil audit (25.10.2026, 5 qüsur düzəldi, 4 müşahidə istifadəçiyə; yuxarıda).
 - **Windows:** quraşdırma və açılış istifadəçi tərəfindən təsdiqlənməlidir. İmzalanmamış sınaq versiyasıdır.
 
+## 0.8.0 — mərhələ 7a: əsas vəsaitlər, istismara vermə, başlanğıc qalıqlar (26.10.2026)
+
+Plan: `docs/MERHELE-7-ESAS-VESAITLER.md`, qərarlar — QERARLAR 2026-10-26 §1–7 (istifadəçi bütün tövsiyələri seçdi).
+
+- **Hesab planı:** 111 və 112-nin subkontosu "Əsas vəsait" (yeni kitabça, `fixedAsset`), 111 miqdarsız; 113 Nomenklatura ilə qalır. Sxem v15: köhnə bazada 111 / 112-də heç bir yazılış yoxdursa hesablar özü keçir, varsa toxunulmur (sənəd "subkontosu Əsas vəsait deyil" deyib dayanır). Yeni rollu xərc maddələri: "Amortizasiya" (`depreciation`), "Əsas vəsaitlərin silinməsi" (`assetDisposal`); eyni adlı element varsa rol ona verilir.
+- **Kitabça "Əsas vəsaitlər"** (`fixed_assets`): ad, inventar nömrəsi (boş — İN-000001), qrup (nəqliyyat, maşın və avadanlıq, hesablama texnikası, bina, digər), dövlət nömrəsi, qeyd; silinmir, arxivlənir.
+- **İstismara vermə** (ƏV-000001): Dt 111 (vəsait) / Kt 113 (nomenklatura, miqdarla). Dəyər 113-ün sənəd tarixindəki və bütün qalığından kiçiyindən miqdara görə; bütün miqdar keçəndə qalan hamısı (qəpik qalığı qalmır); bir alışdan bir neçə vəsait. Vəsait yalnız bir uçotdakı sənədlə istismarda ola bilər.
+- **Başlanğıc qalıq** (ƏB-000001): Dt 111 / Kt qarşı hesab — ilkin dəyər; Dt qarşı hesab / Kt 112 — yığılmış amortizasiya (məs. 343). Yığılmış + ləğv dəyəri ≤ ilkin dəyər; qalan ay ≤ müddət.
+- **Şərtlər** sənəd sətrində (`asset_lines`): müddət, qalan ay, ləğv dəyəri, xərc hesabı (202 / 701 / 711 / 721 / 731, xərc maddəsi ilə) və subkontosu. Qrup üzrə özü dolur: nəqliyyat — 60 ay, 701 ("Əsas nomenklatura qrupu", "Amortizasiya"); digərləri — 721. Düzəliş — storno + yeni yazılış, ləğv — storno; bağlı dövr qorunur.
+- **Amortizasiyanın hesablanması** (`src/domain/assets.ts`): düz xətt, növbəti aydan, aylıq qəpiyə yuvarlaqlaşdırılır, son ay qalanı silir (50 000 / 60 → 59 × 833,33 + 833,53). Ay bağlanışında yazılış — 7b.
+- **İnterfeys:** yeni bölmə "Əsas vəsaitlər" — siyahı (tarixə: ilkin dəyər, amortizasiya, qalıq dəyər, aylıq, qalan ay, xərc hesabı; kart pəncərəsi), "İstismara vermə", "Başlanğıc qalıqlar", hesab kartları 111 / 112 / 113. Sənəd formasında hər vəsait ayrıca kartdır; başlanğıc qalıqda aylıq məbləğ əvvəlcədən görünür.
+- Testlər: `tests/domain/assets.test.ts` (Ə2, Ə6), `tests/integration/assets.test.ts` (Ə1, Ə6, v14 → v15 miqrasiyası), `tests/ui` (7a). `npm test` 196, `npm run test:ui` 45, `npm run test:perf`.
+- **Növbəti:** 7b — amortizasiya ay bağlanışının addımı (yoxlamalar, ləğv, amortizasiya cədvəli, vəsaitin kartı).
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -527,7 +541,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
-7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, 25.10.2026 — istifadəçi seçdi, plan təsdiq gözləyir): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. 7a → 7b → 7c → müstəqil audit. Açıq suallar — §11.
+7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → 7b → 7c → müstəqil audit. Açıq suallar — §11.
 
 ## Əmrlər
 

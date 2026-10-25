@@ -44,6 +44,8 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       'Əmək haqqı',
       ['Satılmış malların maya dəyəri', 'cogs'],
       ['Məzənnə fərqi', 'fxExpense'],
+      ['Amortizasiya', 'depreciation'],
+      ['Əsas vəsaitlərin silinməsi', 'assetDisposal'],
     ],
   ],
   ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],

@@ -403,3 +403,15 @@ Plan: `docs/MERHELE-6-DVX-AVTOMAT.md`. İstifadəçi sualı: "DVX-dən e-qaimən
    - 6c-yə daxildir: son yeniləmənin vaxtı və nəticəsi qutuda (uğursuz cəhd də yazılır), gələn + göndərilən birdən, gedişat və "Ləğv et", "Mallar üzrə" sətirlərinin avtomatik gəlməsi (real formatı ilk real yeniləmədə yoxlanır).
    - **Göndərmə (Meyar-dan DVX-ə e-qaimə yaratmaq) — sonra, ayrıca mərhələ** (tövsiyə). 6c yalnız oxuyur.
 19. **6c-4 ("Mallar üzrə" avtomatik) — hələlik edilmir** (istifadəçinin seçimi, tövsiyə; 25.10.2026). Portalın indiki JS-i (25.10.2026, `index.4f35dc7b7e.js`) göstərir ki, e-qaimə siyahısının Excel ixracında "Mallar üzrə" yoxdur: növlər — "Qaimələr üzrə" (`excel`), "Ödəyicilər üzrə" (`excel-batch`), "Qaytarılmış mallar üzrə" (`excel-returned-products-statement`). Mal sətirləri yalnız hər e-qaimənin öz JSON sorğusu ilə (`GET …/v2/invoice/{id}`) və ya `find.<qutu>/byProducts` siyahısı ilə alına bilər — sənədləşdirilməmiş JSON, hər e-qaimə üçün ayrıca sorğu. E-qaimələr qaimə yekunu ilə uçota alınır (MG Transport — xidmətlər); anbar uçotu lazım olan şirkət gələndə bu işə qayıdılır. Mərhələ 6 §11 sual 4-ün davamı: Meyar JSON-u öz çeviricisi ilə oxumur qaydası qüvvədə qalır.
+
+## 2026-10-26 — Mərhələ 7: əsas vəsaitlər və amortizasiya
+
+Plan: `docs/MERHELE-7-ESAS-VESAITLER.md`. İstifadəçinin cavabları (hamısı tövsiyə ilə):
+
+1. **111 / 112-nin subkontosu — ayrıca "Əsas vəsaitlər" kitabçası** (1C kimi): inventar nömrəsi, dövlət nömrəsi, qrup. 2026-10-07-dəki "111 — Nomenklatura" qərarını əvəz edir; 113 Nomenklatura ilə qalır. 111 miqdarlı deyil (hər vəsait bir sətir).
+2. **Amortizasiya düz xətt, istismara verildiyi ayın növbəti ayından;** silindiyi / satıldığı ay hesablanmır (1C kimi). Aylıq = (ilkin − ləğv dəyəri) / müddət, qəpiyə yuvarlaqlaşdırılır, son ay qalanı silir.
+3. **Xərc hesabı:** daşıma maşınları → 701 ("Əsas nomenklatura qrupu", xərc maddəsi "Amortizasiya"), ofis avadanlığı → 721. Vəsait üzrə istismara vermədə seçilir.
+4. **Vergi amortizasiyası (VM 114) — sonra**, mənfəət vergisi bəyannaməsi ilə.
+5. **Mövcud maşınlar var — başlanğıc qalıqlar əl ilə forma ilə** (ilkin dəyər, yığılmış amortizasiya, qalan ay); qarşı hesabı mühasib seçir.
+6. Soruşulmayan, tövsiyə ilə qəbul edilən (mühasib dəyişə bilər): qrup üzrə müddət — nəqliyyat 60, maşın və avadanlıq 60, hesablama texnikası 36, bina 240, digər 60 ay; modernizasiya / əsaslı təmir — sonra.
+7. **Satışda gəlir 611 ("Əsas vəsaitin satışı") — mühasibin təsdiqi 7c-dən əvvəl soruşulacaq.**
