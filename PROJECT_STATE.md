@@ -579,7 +579,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 4. Üç maşından biri istismara verildikdən sonra alışın qiyməti düzəldilsə, qalan ikisi yeni qiymətlə keçir, verilmişin dəyəri köhnə qalır (rədd edilmir, çünki 113 ziddiyyətsiz qalır). Tövsiyə: belə düzəlişdə istismara vermə sənədi də yenidən saxlanılsın.
 5. v15-də rol verən `UPDATE` (`Amortizasiya`, `Əsas vəsaitlərin silinməsi`) `role=''` şərti olmadan yazılıb — eyni adlı elementin başqa rolu olsaydı əzilərdi. Miqrasiya istifadəçidə hələ işləməyib, amma ehtimal çox aşağıdır; tətbiq olunmuş miqrasiyanı dəyişməmək üçün toxunulmadı.
 
-Testlər Windows-da: `npm run typecheck`, `npm test` 215, `npm run test:ui` 46, `npm run test:perf` keçir (ay bağlanışı 200 vəsaitlə: baxış 2,6 s, bağlanış 2,4 s; hədd 10 s). Electron və `dvx-smoke` işlədilmədi (pəncərə açır). Push edilməyib.
+Testlər Windows-da: `npm run typecheck`, `npm test` 215, `npm run test:ui` 46, `npm run test:perf` keçir (ay bağlanışı 200 vəsaitlə: baxış 2,6 s, bağlanış 2,4 s; hədd 10 s). Electron və `dvx-smoke` işlədilmədi (pəncərə açır). **0.8.3** main-ə push edilib (26.10.2026, istifadəçinin icazəsi ilə).
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
