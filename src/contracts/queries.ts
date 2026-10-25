@@ -853,6 +853,8 @@ export interface HomeView {
       | 'eqWaiting'
       | 'eqVat'
       | 'eqMissing'
+      // DVX not updated for more than 7 days / after the closed month (stage 6c-1).
+      | 'dvxStale'
       // Month closing (stage 5c): missing month-end rate, register ≠ journal, steps refused, a
       // purchase whose VAT waits for its e-qaimə.
       | 'rate'
@@ -1001,9 +1003,28 @@ export interface EqDocumentView {
   proposal: EqProposal | null;
 }
 
+/** One "DVX-dən yenilə" attempt (stage 6c-1). */
+export interface DvxSyncView {
+  from: string;
+  to: string;
+  startedAt: string;
+  finishedAt: string;
+  result: 'ok' | 'partial' | 'failed' | 'cancelled';
+  added: number;
+  updated: number;
+  conflicts: number;
+  rejected: number;
+  posted: number;
+  message: string;
+}
+
 export interface EqInboxView {
   documents: EqDocumentView[];
   counts: Record<EqBucket, number>;
+  /** The last "DVX-dən yenilə" attempt of the box, whatever its result. */
+  lastSync: DvxSyncView | null;
+  /** When the box last got DVX's word: a successful (or partial) update or an Excel file; '' never. */
+  refreshedAt: string;
 }
 
 export interface EqLineView {

@@ -28,6 +28,13 @@ export function qty(value: string | undefined): string {
   const [whole = '', fraction] = (negative ? value.slice(1) : value).split('.');
   return `${negative ? '−' : ''}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}${fraction ? `,${fraction}` : ''}`;
 }
+/** A stored moment (ISO, UTC) as the computer's local time: "25.10.2026 14:05". */
+export function stamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
 export function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

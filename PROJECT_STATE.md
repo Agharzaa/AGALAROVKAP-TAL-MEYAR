@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.12, mərhələ 6b auditi). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.13, mərhələ 6c-1). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -486,6 +486,8 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 
 **0.7.12 — audit (25.10.2026, QERARLAR 2026-10-25 §17):** 6a–0.7.11 proqramçı və baş mühasib gözü ilə yoxlandı. | # | Ağırlıq | Tapıntı | Düzəliş | — 1 Yüksək: bağlanışda ƏDV əvəzləşdirməsi DVX ƏDV-si ilə məhdud deyildi → məhdud, fərq 241-də (closing.test.ts); 2 Orta: fərqli qaimə saxlananda xəbərdarlıq görünmürdü → CommandResult.warning, redaktorda bildiriş (tests/ui); 3 Orta: yeniləmə kabinetin filtrini götürürdü → bütün status/növ (dvx-export.test.ts); 4 Orta: yarımçıq yeniləmə tam sayılırdı → partial (tests/ui); 5 Aşağı: səhifələməni nəzərə almayan ixrac təkrar səhifə → samePage; 6 Aşağı: DBC Excel başlıqları ekrandan fərqli → 1C adları. Qüsur tapılmadı: JWT (yalnız yaddaş, 401/bağlananda silinir), host siyahısı, IPC göndərən yoxlaması, xlsx yoxlaması, diaqnostikanın gizliliyi, pennyOff hədləri, eynilik rəddləri, DBC cəmləri, kart tərəfləri. Tövsiyə (kod yox): MG Transport-un "Digər" kimi avtomatik qaydaları gələcək əsas vəsaitləri də 721-ə yaza bilər — təklif rejimi düşünülsün. dvx-smoke işlədilmədi (pəncərə açır). npm test 178, test:ui 41, test:perf.
 
+**0.7.13 — mərhələ 6c-1: son yeniləmə və "yenilənməyib" xəbərdarlığı (25.10.2026, QERARLAR 2026-10-25 §18):** istifadəçi 6c-nin tərkibini seçdi (son yeniləmə, gələn + göndərilən birdən, gedişat və ləğv, "Mallar üzrə"), xəbərdarlıq — 7 gün, göndərmə — sonra ayrıca mərhələ. Sxem v14 `dvx_syncs` (hər cəhd: dövr, nəticə ok / partial / failed / cancelled, saylar, səbəb; silinmir, dəyişmir); əmr `eqaime.synced` (qutu yeniləmənin sonunda yazır, uğursuz da); `eqInbox` → `lastSync`, `refreshedAt` (uğurlu / yarımçıq yeniləmə və ya Excel faylı); qutuda "Son yeniləmə: … — yeni N, statusu dəyişən M" / "Son cəhd … alınmadı — səbəb; son yeniləmə: …"; İş masasında `dvxStale` — "DVX N gündür yenilənməyib" (7 gündən çox; yalnız DVX ilə işləyən istiqamətdə), ay bağlanışında — ayın sonundan sonra yenilənməyibsə. Vaxt UTC saxlanır, tarix müqayisəsi UTC günü ilədir (Bakıda gecə 00:00–04:00 arası yeniləmə əvvəlki gün sayılır). Testlər: `tests/integration/dvx-sync.test.ts` (4), `tests/ui` (6b testi: son yeniləmə, uğursuz cəhd). `npm test` 182, `npm run test:ui` 41, `npm run test:perf`. **Növbəti:** 6c-2 gedişat və "Ləğv et" → 6c-3 hər iki istiqamət birdən → 6c-4 "Mallar üzrə".
+
 ## Açıq məsələlər
 
 - **1C ilə hələ açıq qalanlar:** "Pul vəsaitlərinin hərəkəti maddəsi" subkontosu (bank mərhələsində), qalan hesabların adları, "Ödəniş növü" kitabçasının real 1C-dəki elementləri.
@@ -499,7 +501,7 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
-6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5; real DVX ilə yoxlanmayıb). **Növbəti:** ilk real "DVX-dən yenilə" (uğursuz olsa — `dvx-diagnostics`) → 6c (son yeniləmə vaxtı, "yenilənməyib" xəbərdarlığı, hər iki istiqamət birdən, "Mallar üzrə"; əvvəl §11 sual 4 və 6 istifadəçiyə yenidən) → müstəqil audit.
+6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13). **Növbəti:** 6c-2 gedişat və ləğv → 6c-3 hər iki istiqamət birdən → 6c-4 "Mallar üzrə" → müstəqil audit.
 
 ## Əmrlər
 

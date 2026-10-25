@@ -398,3 +398,7 @@ Plan: `docs/MERHELE-6-DVX-AVTOMAT.md`. İstifadəçi sualı: "DVX-dən e-qaimən
    - "DVX-dən yenilə" kabinetdə seçilmiş status / növ filtrini götürmür — həmişə bütün statuslar və növlər;
    - bir səhifənin siyahı cavabı gəlməyibsə yeniləmə "yarımçıq" adlanır; ixrac səhifələməni nəzərə almırsa eyni səhifə təkrar yüklənmir;
    - DBC-nin Excel sütunları ekrandakı 1C adları ilədir.
+18. **6c-nin tərkibi** (istifadəçinin seçimi, 25.10.2026; mərhələ 6 §11 sual 4 və 6-ya cavab):
+   - **"Yenilənməyib" xəbərdarlığı — 7 gün** (tövsiyə): İş masasında "DVX N gündür yenilənməyib", əgər istiqamət üzrə son yeniləmə (DVX-dən yenilə və ya Excel faylı) 7 gündən köhnədirsə; ay bağlanışında — bağlanan ayın sonundan sonra heç yenilənməyibsə. Yalnız DVX ilə işləyən istiqamətdə (heç olmasa bir yüklənmə və ya yeniləmə cəhdi olub).
+   - 6c-yə daxildir: son yeniləmənin vaxtı və nəticəsi qutuda (uğursuz cəhd də yazılır), gələn + göndərilən birdən, gedişat və "Ləğv et", "Mallar üzrə" sətirlərinin avtomatik gəlməsi (real formatı ilk real yeniləmədə yoxlanır).
+   - **Göndərmə (Meyar-dan DVX-ə e-qaimə yaratmaq) — sonra, ayrıca mərhələ** (tövsiyə). 6c yalnız oxuyur.

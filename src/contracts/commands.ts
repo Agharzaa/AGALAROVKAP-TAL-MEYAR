@@ -525,6 +525,22 @@ export const commandSchema = z.discriminatedUnion('type', [
     fileHash: z.string().regex(/^[0-9a-f]{64}$/, 'Faylın həşi düzgün deyil.'),
     documents: z.array(eqDocumentInput).min(1).max(20000),
   }),
+  /** Stage 6c-1: one "DVX-dən yenilə" attempt, as it ended (its pages were imported one by one). */
+  z.object({
+    type: z.literal('eqaime.synced'),
+    ...base,
+    direction: z.enum(['sale', 'purchase']),
+    from: date,
+    to: date,
+    startedAt: text(40),
+    result: z.enum(['ok', 'partial', 'failed', 'cancelled']),
+    added: z.number().int().nonnegative(),
+    updated: z.number().int().nonnegative(),
+    conflicts: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+    posted: z.number().int().nonnegative(),
+    message: text(500),
+  }),
   z.object({
     type: z.literal('eqaime.ignore'),
     ...base,

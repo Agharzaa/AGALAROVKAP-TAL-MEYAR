@@ -15,6 +15,7 @@ import { displayMinor, formatMinor, parseMoney, type Minor } from '../domain/mon
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult, EqDocumentInputDto } from '../contracts/commands.js';
 import type {
+  DvxSyncView,
   EqBucket,
   EqDocumentDetail,
   EqDocumentView,
@@ -495,6 +496,45 @@ export function restoreEq(tx: Tx, cmd: CommandOf<'eqaime.restore'>): CommandResu
   return { id: cmd.documentId };
 }
 
+/** Stage 6c-1: one "DVX-dən yenilə" attempt, kept whatever its result (never changed). */
+export function recordDvxSync(tx: Tx, cmd: CommandOf<'eqaime.synced'>): CommandResult {
+  tx.company(cmd.companyId);
+  const id = tx.id();
+  tx.db.run(
+    `INSERT INTO dvx_syncs(id,company_id,direction,period_from,period_to,started_at,finished_at,result,
+       added,updated,conflicts,rejected,posted,message,actor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id,
+    cmd.companyId,
+    cmd.direction,
+    parseDate(cmd.from, 'from'),
+    parseDate(cmd.to, 'to'),
+    cmd.startedAt,
+    tx.clock.now(),
+    cmd.result,
+    cmd.added,
+    cmd.updated,
+    cmd.conflicts,
+    cmd.rejected,
+    cmd.posted,
+    cmd.message,
+    tx.ctx.actor,
+  );
+  const said = {
+    ok: 'yeniləndi',
+    partial: 'yarımçıq yeniləndi',
+    failed: 'alınmadı',
+    cancelled: 'ləğv edildi',
+  };
+  tx.audit(
+    cmd.companyId,
+    `DVX-dən ${said[cmd.result]}`,
+    'E-qaimə',
+    id,
+    `${cmd.direction === 'purchase' ? 'Gələnlər' : 'Göndərilənlər'} ${cmd.from} – ${cmd.to}: yeni ${cmd.added}, yenilənən ${cmd.updated}${cmd.message ? `; ${cmd.message}` : ''}`,
+  );
+  return { id };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Queries
 
@@ -602,7 +642,82 @@ export function eqInbox(
     counts[v.bucket]++;
     return v;
   });
-  return { documents, counts };
+  return { documents, counts, ...dvxState(db, companyId, direction) };
+}
+
+/** The box's last update attempt and when it last got DVX's word (stage 6c-1). */
+function dvxState(db: Db, companyId: string, direction: EqDirection) {
+  const r = db.get(
+    'SELECT * FROM dvx_syncs WHERE company_id=? AND direction=? ORDER BY finished_at DESC, rowid DESC LIMIT 1',
+    companyId,
+    direction,
+  );
+  const lastSync: DvxSyncView | null = r
+    ? {
+        from: String(r.period_from),
+        to: String(r.period_to),
+        startedAt: String(r.started_at),
+        finishedAt: String(r.finished_at),
+        result: String(r.result) as DvxSyncView['result'],
+        added: Number(r.added),
+        updated: Number(r.updated),
+        conflicts: Number(r.conflicts),
+        rejected: Number(r.rejected),
+        posted: Number(r.posted),
+        message: String(r.message),
+      }
+    : null;
+  // An Excel file is DVX's word too; a failed or cancelled attempt is not (its pages are imports).
+  const at = db.get(
+    `SELECT MAX(at) AS at, COUNT(*) AS n FROM (
+       SELECT imported_at AS at FROM eq_imports WHERE company_id=? AND direction=?
+       UNION ALL SELECT finished_at FROM dvx_syncs WHERE company_id=? AND direction=? AND result IN('ok','partial')
+       UNION ALL SELECT NULL FROM dvx_syncs WHERE company_id=? AND direction=?)`,
+    companyId,
+    direction,
+    companyId,
+    direction,
+    companyId,
+    direction,
+  )!;
+  return { lastSync, refreshedAt: at.at ? String(at.at) : '', used: Number(at.n) > 0 };
+}
+
+const shown = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');
+
+/**
+ * "DVX not updated" (QERARLAR 2026-10-25 §18), only for a box that works with DVX: İş masası —
+ * the last update is more than 7 days before today; month closing — none after the month's end.
+ */
+export function dvxStale(
+  db: Db,
+  companyId: string,
+  at: { today: string } | { monthEnd: string },
+): HomeView['warnings'] {
+  const out: HomeView['warnings'] = [];
+  for (const direction of ['purchase', 'sale'] as const) {
+    const s = dvxState(db, companyId, direction);
+    if (!s.used) continue;
+    const last = s.refreshedAt.slice(0, 10);
+    const box = direction === 'purchase' ? 'Alınan' : 'Göndərilən';
+    const since = last ? ` (son: ${shown(last)})` : '';
+    let text = '';
+    if ('today' in at) {
+      const days = last ? Math.round((Date.parse(at.today) - Date.parse(last)) / 86_400_000) : 0;
+      if (!last) text = 'DVX-dən heç yenilənməyib — “DVX-dən yenilə” basın.';
+      else if (days > 7) text = `DVX ${days} gündür yenilənməyib${since} — “DVX-dən yenilə” basın.`;
+    } else if (last <= at.monthEnd)
+      text = `ayın sonundan (${shown(at.monthEnd)}) sonra DVX yenilənməyib${since} — ayın gec gələn və ya statusu dəyişən e-qaimələri görünməyə bilər.`;
+    if (text)
+      out.push({
+        kind: 'dvxStale',
+        text: `${box} e-qaimələr: ${text}`,
+        account: '',
+        sk: [],
+        eq: direction,
+      });
+  }
+  return out;
 }
 
 export function eqDocument(db: Db, companyId: string, id: string): EqDocumentDetail {

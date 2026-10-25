@@ -11,7 +11,7 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1173,6 +1173,33 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// v14 — every "DVX-dən yenilə" attempt (stage 6c-1; docs/MERHELE-6-DVX-AVTOMAT.md §5): its period,
+// result and counts, also when it failed. The session key and DVX's answers are never kept.
+
+const v14 = `
+CREATE TABLE dvx_syncs(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  direction TEXT NOT NULL CHECK(direction IN('sale','purchase')),
+  period_from TEXT NOT NULL,
+  period_to TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT NOT NULL,
+  result TEXT NOT NULL CHECK(result IN('ok','partial','failed','cancelled')),
+  added INTEGER NOT NULL,
+  updated INTEGER NOT NULL,
+  conflicts INTEGER NOT NULL,
+  rejected INTEGER NOT NULL,
+  posted INTEGER NOT NULL,
+  message TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  UNIQUE(company_id,id)
+);
+CREATE INDEX dvx_syncs_time ON dvx_syncs(company_id,direction,finished_at);
+CREATE TRIGGER dvx_syncs_no_delete BEFORE DELETE ON dvx_syncs BEGIN SELECT RAISE(ABORT,'guard: Yeniləmə qeydi silinmir.'); END;
+CREATE TRIGGER dvx_syncs_no_update BEFORE UPDATE ON dvx_syncs BEGIN SELECT RAISE(ABORT,'guard: Yeniləmə qeydi dəyişmir.'); END;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1187,4 +1214,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 11, sql: v11 },
   { version: 12, sql: v12 },
   { version: 13, sql: v13 },
+  { version: 14, sql: v14 },
 ];

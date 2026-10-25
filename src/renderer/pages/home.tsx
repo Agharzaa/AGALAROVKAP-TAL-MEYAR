@@ -116,6 +116,7 @@ const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
   eqWaiting: 'E-qaimələr uçota alınmayıb',
   eqVat: 'ƏDV: DVX ilə uçot fərqlidir',
   eqMissing: 'E-qaimə DVX-də tapılmadı',
+  dvxStale: 'DVX yenilənməyib',
   rate: 'Ay sonu məzənnəsi yoxdur',
   integrity: 'Registr jurnalla uyğun deyil',
   closing: 'Ay bağlanışı',

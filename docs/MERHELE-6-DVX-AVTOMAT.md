@@ -136,7 +136,11 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
 
 1. **6a — sessiya və diaqnostika.** ✅ Hazır (22.10.2026, 0.7.3; istifadəçinin real diaqnostika faylı gözlənilir). Kabinet sessiyasında portalın API sorğularının qeydi (yaddaşda): açar, yol, gövdənin quruluşu, cavab kodu. Saf qaydalar (`src/main/dvx-api-policy.ts`: API ünvanı, açarın başlıqdan alınması, yolun maskalanması, dəyərsiz quruluş). Yalnız `find.*` siyahısını təkrar edən oxu müştərisi (`src/main/dvx-api.ts`, kabinetin öz sessiyası ilə). Diaqnostika faylı. Saxta serverlə D1, D2. **Bitəndə:** istifadəçi real girişlə (siyahını açıb bir dəfə "Excel-ə ixrac" basaraq) diaqnostika faylını göndərir — D10-un birinci yarısı.
 2. **6b — ixracın təkrarı və idxal.** Real quruluş əsasında ixrac sorğusu (dövr, istiqamət, hesabat növü), `.xlsx` → `readEqTable`, sxem v14 (`eq_imports.source`, `dvx_syncs`), xəta / təkrar / 401. D3 (API ixracı = əl ilə ixrac), D4, D5, D6, D7.
-3. **6c — "DVX-dən yenilə" axını.** Qutuda düymə, gedişat, ləğv, son yeniləmə, İş masası xəbərdarlığı, yeniləmədən sonra avtomatik uyğunluqlar. D8, D9.
+3. **6c — "DVX-dən yenilə" axını** (tərkib — QERARLAR 2026-10-25 §18). 6b-də düymə, ləğvsiz yeniləmə və avtomatik uyğunluqlar artıq hazırdır; qalanı hissə-hissə:
+   - **6c-1** — sxem v14 `dvx_syncs` (hər yeniləmə cəhdi: dövr, nəticə ok / partial / failed / cancelled, saylar, səbəb), qutuda "Son yeniləmə", İş masasında 7 günlük və ay bağlanışında "ayın sonundan sonra yenilənməyib" xəbərdarlığı. D8.
+   - **6c-2** — gedişat ("Gələnlər: 3 səhifə…") və "Ləğv et" (alınmış səhifələr qalır, nəticə cancelled).
+   - **6c-3** — İş masasında bir düymə: gələn + göndərilən ardıcıl.
+   - **6c-4** — "Mallar üzrə" ixracı avtomatik (mal sətirləri); real format ilk real yeniləmədə yoxlanır. D9.
 4. **Müstəqil audit** (kodu yazmayan sessiya), D10 — istifadəçi ilə real yeniləmə.
 
 ## 11. Açıq suallar (istifadəçi)

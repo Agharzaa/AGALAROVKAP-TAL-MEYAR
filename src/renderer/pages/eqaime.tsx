@@ -20,7 +20,7 @@ import type {
 } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { addAmounts, day, money, qty } from '../format';
+import { addAmounts, day, money, qty, stamp, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { MonthFilter } from '../filters';
@@ -75,6 +75,25 @@ function importSummary(r: CommandResult): string {
       : '. Heç nə avtomatik uçota alınmayıb') +
     (r.failed?.length ? `; ${r.failed.length} alınmadı (səbəb sətirdə)` : '') +
     '.'
+  );
+}
+
+/** Stage 6c-1: the box's last update in one line (QERARLAR 2026-10-25 §18). */
+function lastUpdate(v: EqInboxView): string {
+  const s = v.lastSync;
+  const at = v.refreshedAt ? stamp(v.refreshedAt) : '';
+  if (!s) return at ? `Son yükləmə: ${at}` : 'DVX-dən hələ yenilənməyib';
+  if (s.result === 'failed' || s.result === 'cancelled')
+    return (
+      `Son cəhd ${stamp(s.finishedAt)} ${s.result === 'failed' ? 'alınmadı' : 'ləğv edildi'}` +
+      (s.message ? ` — ${s.message}` : '') +
+      (at ? `; son yeniləmə: ${at}` : '')
+    );
+  return (
+    `Son yeniləmə: ${stamp(s.finishedAt)} — yeni ${s.added}, statusu dəyişən ${s.updated}` +
+    (s.posted ? `, uçota alınan ${s.posted}` : '') +
+    (s.conflicts ? `, ziddiyyət ${s.conflicts}` : '') +
+    (s.result === 'partial' ? ' (yarımçıq)' : '')
   );
 }
 
@@ -227,14 +246,33 @@ export function EqaimePage({ direction }: { direction: Direction }) {
       return;
     }
     setSyncing(true);
+    const startedAt = new Date().toISOString();
+    const { from, to } = openPeriod(company?.closedThrough ?? '', today());
+    // DVX gives the period page by page; each page is one import (one e-qaimə, once).
+    const total: CommandResult = { id: '' };
+    // Stage 6c-1: every attempt is kept, also a failed one (QERARLAR 2026-10-25 §18).
+    const record = (result: 'ok' | 'partial' | 'failed', message = '') =>
+      api
+        .command({
+          type: 'eqaime.synced',
+          companyId: win.companyId,
+          direction,
+          from,
+          to,
+          startedAt,
+          result,
+          added: total.added ?? 0,
+          updated: total.updated ?? 0,
+          conflicts: total.conflicts ?? 0,
+          rejected: total.rejected?.length ?? 0,
+          posted: total.posted ?? 0,
+          message: message.slice(0, 500),
+        })
+        .catch(() => undefined)
+        .finally(box.reload);
     try {
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const { from, to } = openPeriod(company?.closedThrough ?? '', today);
       const { files, partial } = await api.dvxExport(direction, from, to);
       const period = `${day(from)}–${day(to)}`;
-      // DVX gives the period page by page; each page is one import (one e-qaimə, once).
-      const total: CommandResult = { id: '' };
       const add = (k: 'added' | 'updated' | 'same' | 'conflicts' | 'posted', n?: number) =>
         n && (total[k] = (total[k] ?? 0) + n);
       let loaded = 0;
@@ -243,6 +281,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         if (!read.report || !read.documents.length) {
           if (read.problems.length) {
             setReadError(read.problems[0]!.message);
+            void record('failed', read.problems[0]!.message);
             return;
           }
           continue;
@@ -261,7 +300,10 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           fileHash: await sha256(f.bytes),
           documents: read.documents,
         });
-        if (!r) return;
+        if (!r) {
+          void record('failed', 'E-qaimələrin yüklənməsi alınmadı (səbəb yuxarıda).');
+          return;
+        }
         loaded++;
         add('added', r.added);
         add('updated', r.updated);
@@ -271,16 +313,21 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         total.rejected = [...(total.rejected ?? []), ...(r.rejected ?? [])];
         total.failed = [...(total.failed ?? []), ...(r.failed ?? [])];
       }
+      const said = partial ? 'DVX növbəti səhifəni demədi' : '';
       if (!loaded) {
         setMessage(`DVX-də ${period} dövründə e-qaimə yoxdur.`);
+        void record(partial ? 'partial' : 'ok', said);
         return;
       }
+      void record(partial ? 'partial' : 'ok', said);
       setMessage(
         `DVX-dən yeniləndi (${period}${partial ? ', yarımçıq: DVX növbəti səhifəni demədi — yenidən basın' : ''}): ${importSummary(total)}`,
       );
       imports.reload();
     } catch (e) {
-      setReadError(e instanceof SheetError ? e.message : (e as Error).message);
+      const message = e instanceof SheetError ? e.message : (e as Error).message;
+      setReadError(message);
+      void record('failed', message);
     } finally {
       setSyncing(false);
     }
@@ -687,6 +734,11 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               }
             >
               {connected ? '● DVX: daxil olunub' : '○ DVX: daxil olunmayıb'}
+            </span>
+          )}
+          {box.data && (
+            <span role="status" aria-label="Son yeniləmə" className="dvx-last">
+              {lastUpdate(box.data)}
             </span>
           )}
         </>

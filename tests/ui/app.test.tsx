@@ -2308,6 +2308,14 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
     });
     act(() => h.dvxState({ connected: true }));
     await page.findByText(/DVX-dən yeniləndi .*yeni 1 e-qaimə/);
+    // Stage 6c-1: the attempt is kept and the box says when it was last updated.
+    await waitFor(() =>
+      assert.match(
+        page.getByRole('status', { name: 'Son yeniləmə' }).textContent ?? '',
+        /^Son yeniləmə: \d{2}\.\d{2}\.\d{4} \d{2}:\d{2} — yeni 1, statusu dəyişən 0$/,
+      ),
+    );
+    assert.equal(h.commands.filter((c) => c.type === 'eqaime.synced').length, 1);
     assert.equal(h.dvxExports.length, 1);
     assert.equal(h.dvxExports[0]!.direction, 'purchase');
     assert.match(h.dvxExports[0]!.from, /^\d{4}-01-01$/);
@@ -2334,11 +2342,25 @@ test('stage 6b: "DVX-dən yenilə" signs in first, then loads the open period by
       },
     });
     await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
-    await page.findByText(/yarımçıq/);
+    await page.findByText(/yarımçıq: DVX növbəti səhifəni demədi/);
     // A refused export says why, nothing is loaded.
     h.setDvxExport({ ok: false, error: { message: 'DVX sessiyasının vaxtı bitib.', code: 'dvx' } });
     await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
     await page.findByText('DVX sessiyasının vaxtı bitib.');
+    // A failed attempt is kept too; the last good update stays visible.
+    await waitFor(() =>
+      assert.match(
+        page.getByRole('status', { name: 'Son yeniləmə' }).textContent ?? '',
+        /^Son cəhd \d{2}\.\d{2}\.\d{4} \d{2}:\d{2} alınmadı — DVX sessiyasının vaxtı bitib\.; son yeniləmə: \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/,
+      ),
+    );
+    const syncs = h.commands.filter((c) => c.type === 'eqaime.synced') as unknown as {
+      result: string;
+    }[];
+    assert.deepEqual(
+      syncs.map((s) => s.result),
+      ['ok', 'ok', 'partial', 'failed'],
+    );
   } finally {
     h.close();
   }
