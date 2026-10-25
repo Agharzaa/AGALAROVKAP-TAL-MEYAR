@@ -10,7 +10,7 @@
  */
 import { inFamily, vatRates, type Chart } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
-import { formatMinor, type Minor } from '../domain/money.js';
+import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import { monthEnd } from '../domain/rates.js';
 import type {
   CashFlowRow,
@@ -392,6 +392,25 @@ function vatOf(db: Db, companyId: string, month: string): Vat {
       at(t.s1).base -= v;
     }
   }
+  // A fixed asset is sold to 611 with its VAT taken from 611 (stage 7c, QERARLAR 2026-10-26 §9):
+  // no 601 / 604 turnover shows it, so its sale invoice lines do.
+  for (const i of db.all(
+    `SELECT lines FROM invoices WHERE company_id=? AND direction='sale' AND status='posted'
+       AND date BETWEEN ? AND ? AND lines LIKE '%"assetId"%'`,
+    companyId,
+    `${month}-01`,
+    monthEnd(month),
+  ))
+    for (const l of JSON.parse(String(i.lines)) as {
+      assetId?: string;
+      vatRate: string;
+      netAzn: string;
+      vatAzn: string;
+    }[])
+      if (l.assetId) {
+        at(l.vatRate).base += parseMoney(l.netAzn);
+        at(l.vatRate).vat += parseMoney(l.vatAzn);
+      }
   const sales = vatRates
     .map((r) => {
       const x = byRate.get(r.id) ?? { base: 0n, vat: 0n };

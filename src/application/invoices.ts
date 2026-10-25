@@ -175,6 +175,8 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
   const treatment: 'offset' | 'cost' = !vatPayer
     ? 'cost'
     : (cmd.vatTreatment ?? (company.purchase_vat as 'offset' | 'cost'));
+  // Every line writes its fixed asset off: one asset, one line.
+  const sold = new Set<string>();
 
   const lines: Line[] = cmd.lines.map((l, i) => {
     const where = `Sətir ${i + 1}`;
@@ -209,6 +211,14 @@ function normalize(tx: Tx, cmd: SaveInvoice, chart: Chart) {
         assetId = (l.assetId ?? '').trim();
         if (!assetId)
           throw new DomainError(`${where}: hansı əsas vəsait satılır? Onu seçin.`, f('assetId'));
+        if (sold.has(assetId))
+          throw new DomainError(`${where}: bu əsas vəsait qaimədə ikinci dəfədir.`, f('assetId'));
+        sold.add(assetId);
+        if (cmd.postings)
+          throw new DomainError(
+            `${where}: əsas vəsaitin satışı əl ilə yazılışla aparılmır — o, satışla birlikdə silinməlidir. "Əl ilə düzəliş"i söndürün.`,
+            f('assetId'),
+          );
         if (quantity !== QTY_SCALE)
           throw new DomainError(
             `${where}: əsas vəsait bir-bir satılır — miqdar 1 olmalıdır.`,
@@ -612,6 +622,61 @@ function guardStock(
 }
 
 /**
+ * 113 of a nomenclature that was put into service (stage 7a) keeps its amount: the commission took
+ * its cost to 111 by quantity, so a purchase changed afterwards must not leave 113 with an amount
+ * and no quantity (or below zero), which no commission can move. The commission is cancelled first.
+ */
+function guardCommissioned(
+  tx: Tx,
+  companyId: string,
+  previous: readonly Posting[],
+  current: readonly Posting[],
+) {
+  // A new purchase only adds to 113.
+  if (!previous.length) return;
+  const delta = new Map<string, Minor>();
+  const add = (postings: readonly Posting[], sign: bigint) => {
+    for (const p of postings)
+      for (const [direction, s] of [
+        [1n, p.dt],
+        [-1n, p.kt],
+      ] as const)
+        if (s.account === '113' && s.sk[0])
+          delta.set(s.sk[0], (delta.get(s.sk[0]) ?? 0n) + sign * direction * p.amount);
+  };
+  add(previous, -1n);
+  add(current, 1n);
+  for (const [product, change] of delta) {
+    if (!change) continue;
+    const left = tx.db.get(
+      `SELECT COALESCE(SUM(a),0) AS amount, COALESCE(SUM(q),0) AS qty FROM (
+         SELECT amount AS a, dt_qty AS q FROM postings WHERE company_id=?1 AND dt_account='113' AND dt_s1=?2
+         UNION ALL SELECT -amount, -kt_qty FROM postings WHERE company_id=?1 AND kt_account='113' AND kt_s1=?2)`,
+      companyId,
+      product,
+    )!;
+    const amount = left.amount as bigint;
+    if (amount >= 0n && (amount === 0n || (left.qty as bigint) > 0n)) continue;
+    const used = tx.db.get(
+      `SELECT MAX(e.source_number) AS number FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND p.kt_account='113' AND p.kt_s1=?
+         AND e.source_type='asset'
+       GROUP BY e.source_id HAVING SUM(p.amount)<>0 LIMIT 1`,
+      companyId,
+      product,
+    );
+    if (used) {
+      const name = tx.db.get('SELECT name FROM products WHERE id=?', product)?.name ?? product;
+      throw new DomainError(
+        `${String(name)} (113) ${String(used.number)} ilə istismara verilib: 113-ün məbləği dəyişərsə, 111-dəki dəyər ona uyğun gəlməz. Əvvəlcə istismara vermə sənədini ləğv edin.`,
+        undefined,
+        'conflict',
+      );
+    }
+  }
+}
+
+/**
  * Money already received or paid against this invoice is not left hanging on it: after a
  * correction or cancellation the invoice's own settlement key may not become an overpayment
  * (211 credit, 531 debit) it did not already have. The payment document is corrected first.
@@ -835,6 +900,7 @@ export function saveInvoice(
     postings,
   );
   guardStock(tx, cmd.companyId, chart, previous, previousDate, postings, n.header.date);
+  guardCommissioned(tx, cmd.companyId, previous, postings);
   guardSettlement(tx, cmd.companyId, chart, id, number, previous, postings);
   tx.history(cmd.companyId, INVOICE, id, version, 'posted', data);
   tx.audit(
@@ -881,6 +947,7 @@ export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): Command
     cmd.id,
   );
   guardStock(tx, cmd.companyId, chart, prev.postings, prev.date, [], prev.date);
+  guardCommissioned(tx, cmd.companyId, prev.postings, []);
   guardSettlement(tx, cmd.companyId, chart, cmd.id, String(row.number), prev.postings, []);
   releaseEq(tx, cmd.companyId, cmd.id);
   tx.history(cmd.companyId, INVOICE, cmd.id, version, 'cancelled', { reason });

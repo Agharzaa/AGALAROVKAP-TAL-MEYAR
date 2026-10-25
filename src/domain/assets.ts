@@ -82,3 +82,14 @@ export function monthsLeftAfter(t: DepreciationTerms, month: string): number {
   const done = Math.max(0, Math.min(monthsBetween(t.start, month) + 1, t.months));
   return t.months - done;
 }
+
+/**
+ * Months of the schedule that `amount` (depreciation posted since the start) covers: the month
+ * closings may post two months at once (a month closed without it), so months are not counted.
+ */
+export function monthsDepreciated(t: DepreciationTerms, amount: Minor): number {
+  if (amount >= depreciable(t)) return t.months;
+  const regular = monthlyAmount(t);
+  if (regular <= 0n || amount <= 0n) return 0;
+  return Math.min(t.months - 1, Number(amount / regular));
+}

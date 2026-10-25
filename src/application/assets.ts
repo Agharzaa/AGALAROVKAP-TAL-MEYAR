@@ -13,6 +13,7 @@ import {
   depreciationFor,
   monthAfter,
   monthlyAmount,
+  monthsDepreciated,
   type AssetGroup,
   type DepreciationTerms,
 } from '../domain/assets.js';
@@ -170,6 +171,7 @@ export function writeOff(
     assetId,
   );
   if (!asset) throw new DomainError(`${where}: əsas vəsait tapılmadı.`, field, 'not-found');
+  requireAssetAccounts(tx.chart(companyId));
   const label = `${str(asset.inventory_no)} ${str(asset.name)}`;
   const line = tx.db.get(
     `SELECT l.*, d.date AS doc_date FROM asset_lines l JOIN asset_documents d ON d.id=l.document_id
@@ -235,6 +237,44 @@ export function writeOff(
   return { postings, cost, depreciated, label };
 }
 
+/**
+ * A commission or opening balance is changed or cancelled only while nothing else moved its assets
+ * on 111 / 112: a sale, a disposal or a month's depreciation would be left against a cost that is
+ * gone. That document is cancelled first.
+ */
+function guardLaterMoves(tx: Tx, companyId: string, id: string) {
+  for (const l of tx.db.all(
+    `SELECT l.asset_id, a.name, a.inventory_no FROM asset_lines l JOIN fixed_assets a ON a.id=l.asset_id
+     WHERE l.document_id=?`,
+    id,
+  )) {
+    const asset = str(l.asset_id);
+    const other = tx.db.get(
+      `SELECT e.source_type AS type, MAX(e.source_number) AS number FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND ((p.kt_account='111' AND p.kt_s1=?) OR (p.kt_account='112' AND p.kt_s1=?))
+         AND NOT (e.source_type=? AND e.source_id=?)
+       GROUP BY e.source_type, e.source_id HAVING SUM(p.amount)<>0 LIMIT 1`,
+      companyId,
+      asset,
+      asset,
+      ASSET,
+      id,
+    );
+    if (other)
+      throw new DomainError(
+        `${str(l.inventory_no)} ${str(l.name)} ${str(other.number)} ilə ${
+          other.type === 'invoice'
+            ? 'satılıb'
+            : other.type === ASSET
+              ? 'silinib'
+              : 'amortizasiya olunub'
+        }: əvvəlcə həmin sənədi ləğv edin.`,
+        undefined,
+        'conflict',
+      );
+  }
+}
+
 function nextNumber(tx: Tx, companyId: string, kind: Kind): string {
   const n =
     Number(
@@ -264,7 +304,7 @@ function requireAssetAccounts(chart: Chart) {
     const a = chart.get(code);
     if (!a || a.subkonto.length !== 1 || a.subkonto[0] !== 'fixedAsset')
       throw new DomainError(
-        `${code} hesabının subkontosu "Əsas vəsait" deyil (hesabda köhnə yazılışlar var). Hesablar planında ${code}-in subkontosunu "Əsas vəsait" edin.`,
+        `${code} hesabının subkontosu "Əsas vəsait" deyil: hesabda əsas vəsaitlər kitabçasından əvvəlki (nomenklatura üzrə) yazılışlar var, yazılışı olan hesabın subkontosu isə dəyişdirilmir. Bu şirkətdə əsas vəsait sənədləri işləmir.`,
         undefined,
         'conflict',
       );
@@ -544,6 +584,7 @@ export function saveAssetDocument(tx: Tx, cmd: CommandOf<'asset.save'>): Command
   const now = tx.clock.now();
   // A correction gives 113 back first (storno), then takes it again.
   if (existing) {
+    if (kind !== 'disposal') guardLaterMoves(tx, cmd.companyId, id);
     const before = tx.entryPostings(cmd.companyId, ASSET, id, Number(existing.version));
     tx.open(cmd.companyId, before.date);
     tx.post(
@@ -637,6 +678,7 @@ export function cancelAssetDocument(tx: Tx, cmd: CommandOf<'asset.cancel'>): Com
   expectVersion(row, cmd.version, label[kind]);
   if (row.status !== 'posted')
     throw new DomainError('Sənəd artıq ləğv edilib.', undefined, 'conflict');
+  if (kind !== 'disposal') guardLaterMoves(tx, cmd.companyId, cmd.id);
   const before = tx.entryPostings(cmd.companyId, ASSET, cmd.id, Number(row.version));
   tx.open(cmd.companyId, before.date);
   tx.post(
@@ -740,20 +782,9 @@ export function fixedAssets(db: Db, companyId: string, date: string): FixedAsset
       const s = sums.get(v.id) ?? { cost: 0n, depreciated: 0n };
       const l = terms.get(v.id);
       const t = l ? termsOf(l, str(l.doc_date)) : undefined;
-      // Months already depreciated by the month closings (stage 7b) since the start.
-      const done = t
-        ? Number(
-            db.get(
-              `SELECT COUNT(*) AS n FROM registers WHERE company_id=? AND account='112' AND s1=?
-                 AND month>=? AND month<=? AND credit-debit>0`,
-              companyId,
-              v.id,
-              t.start,
-              day.slice(0, 7),
-            )!.n,
-          )
-        : 0;
-      const monthsLeft = t && s.cost !== 0n ? Math.max(0, t.months - done) : 0;
+      // Months the month closings (stage 7b) depreciated since the start, by the amount on 112.
+      const monthsLeft =
+        t && s.cost !== 0n ? t.months - monthsDepreciated(t, s.depreciated - t.accumulated) : 0;
       const expenseSk = l ? (JSON.parse(str(l.expense_sk)) as string[]) : [];
       const expenseAccount = l ? str(l.expense_account) : '';
       return {
@@ -869,6 +900,18 @@ export function depreciationSchedule(
     `${year}-12-31`,
   ))
     terms.set(str(l.asset_id), l);
+  // Sold or disposed (7c): no forecast from the month the asset left 111.
+  const gone = new Map(
+    db
+      .all(
+        `SELECT asset, MAX(date) AS d FROM (
+           SELECT dt_s1 AS asset, amount AS a, '' AS date FROM postings WHERE company_id=?1 AND dt_account='111'
+           UNION ALL SELECT kt_s1, -amount, date FROM postings WHERE company_id=?1 AND kt_account='111')
+         GROUP BY asset HAVING SUM(a)<=0`,
+        companyId,
+      )
+      .map((r) => [str(r.asset), str(r.d).slice(0, 7)]),
+  );
   const totals = months.map(() => 0n);
   const rows: DepreciationSchedule['rows'] = [];
   for (const a of db.all(
@@ -878,10 +921,15 @@ export function depreciationSchedule(
     const id = str(a.id);
     const l = terms.get(id);
     const t = l ? termsOf(l, str(l.doc_date)) : undefined;
+    const left = gone.get(id);
     let sum = 0n;
     const cells = months.map((m, i) => {
       const forecast = m > closedMonth;
-      const amount = forecast ? (t ? depreciationFor(t, m) : 0n) : (posted.get(`${id}|${m}`) ?? 0n);
+      const amount = forecast
+        ? t && !(left !== undefined && m >= left)
+          ? depreciationFor(t, m)
+          : 0n
+        : (posted.get(`${id}|${m}`) ?? 0n);
       sum += amount;
       totals[i] = totals[i]! + amount;
       return { amount: formatMinor(amount), forecast };
