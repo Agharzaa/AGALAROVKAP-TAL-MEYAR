@@ -140,7 +140,8 @@ Status: **təsdiqlənib** (22.10.2026). §11-in cavabları orada və `docs/QERAR
    - **6c-1** — sxem v14 `dvx_syncs` (hər yeniləmə cəhdi: dövr, nəticə ok / partial / failed / cancelled, saylar, səbəb), qutuda "Son yeniləmə", İş masasında 7 günlük və ay bağlanışında "ayın sonundan sonra yenilənməyib" xəbərdarlığı. D8.
    - **6c-2** — gedişat ("Gələnlər: 3 səhifə…") və "Ləğv et" (alınmış səhifələr qalır, nəticə cancelled).
    - **6c-3** — İş masasında bir düymə: gələn + göndərilən ardıcıl.
-   - **6c-4** — "Mallar üzrə" ixracı avtomatik (mal sətirləri); real format ilk real yeniləmədə yoxlanır. D9.
+   - ~~6c-1~~ (0.7.13), ~~6c-2~~ (0.7.14), ~~6c-3~~ (0.7.15) — hazır.
+   - **6c-4** — "Mallar üzrə" avtomatik: **edilmir** (QERARLAR 2026-10-25 §19) — portalın Excel ixracında belə hesabat yoxdur; mal sətirləri yalnız hər e-qaimənin JSON-u ilə.
 4. **Müstəqil audit** (kodu yazmayan sessiya), D10 — istifadəçi ilə real yeniləmə.
 
 ## 11. Açıq suallar (istifadəçi)

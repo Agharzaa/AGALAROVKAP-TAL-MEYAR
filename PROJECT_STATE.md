@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 25.10.2026 (0.7.15, mərhələ 6c-3). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 25.10.2026 (0.7.15, mərhələ 6c bitdi). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -490,7 +490,7 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 
 **0.7.14 — mərhələ 6c-2: gedişat və "Ləğv et" (25.10.2026):** yeniləmə zamanı qutuda "Gələnlər: səhifə 3 alınır…", sonra "2 / 5 səhifə yüklənir…" (əsas proses hər səhifədə `meyar:dvx-progress` göndərir; başqa qutunun gedişatı göstərilmir). "Ləğv et": əsas prosesdə DVX sorğusu dayanır (`dvxCancel`, `AbortController`), alınmış səhifələr yüklənir, yükləmə zamanı ləğv edilsə — növbəti səhifədən dayanır; nəticə `cancelled` kimi yazılır, qalanını növbəti yeniləmə alır (bir e-qaimə — bir dəfə). Yeni yeniləmə köhnəsini dayandırır. Testlər: `tests/ui` (6c-2). `npm test` 182, `npm run test:ui` 42, `npm run test:perf`. **Yoxlanmayıb:** əsas prosesdəki ləğv real Electron-da (smoke test pəncərə açır) — yalnız jsdom. **Növbəti:** 6c-3 hər iki istiqamət birdən → 6c-4 "Mallar üzrə".
 
-**0.7.15 — mərhələ 6c-3: İş masasında hər iki qutu birdən (25.10.2026):** İş masasında "DVX e-qaimələri" paneli: "DVX-dən yenilə (gələn və göndərilən)" — əvvəl Gələnlər, sonra Göndərilənlər, hər biri öz dövrü, gedişatı və nəticəsi ilə (hər qutu üçün ayrıca bildiriş, `dvx_syncs`-də ayrıca qeyd); daxil olunmayıbsa kabinet açılır, girişdən sonra özü başlayır; "Ləğv et" qalan qutunu da dayandırır. Yeniləmə məntiqi qutudan `src/renderer/dvx-sync.ts`-ə (`useDvxSync`) çıxarıldı — qutu və İş masası eyni koddan istifadə edir; idxal əmri artıq `useMutation` ilə yox, birbaşa göndərilir, xətanın səbəbi nəticə mətnində və `dvx_syncs`-də. Testlər: `tests/ui` (6c-3; 6b və 6c-2 testləri dəyişmədən keçir). `npm test` 182, `npm run test:ui` 43, `npm run test:perf`. **Növbəti:** 6c-4 "Mallar üzrə".
+**0.7.15 — mərhələ 6c-3: İş masasında hər iki qutu birdən (25.10.2026):** İş masasında "DVX e-qaimələri" paneli: "DVX-dən yenilə (gələn və göndərilən)" — əvvəl Gələnlər, sonra Göndərilənlər, hər biri öz dövrü, gedişatı və nəticəsi ilə (hər qutu üçün ayrıca bildiriş, `dvx_syncs`-də ayrıca qeyd); daxil olunmayıbsa kabinet açılır, girişdən sonra özü başlayır; "Ləğv et" qalan qutunu da dayandırır. Yeniləmə məntiqi qutudan `src/renderer/dvx-sync.ts`-ə (`useDvxSync`) çıxarıldı — qutu və İş masası eyni koddan istifadə edir; idxal əmri artıq `useMutation` ilə yox, birbaşa göndərilir, xətanın səbəbi nəticə mətnində və `dvx_syncs`-də. Testlər: `tests/ui` (6c-3; 6b və 6c-2 testləri dəyişmədən keçir). `npm test` 182, `npm run test:ui` 43, `npm run test:perf`. **Növbəti:** 6c-4 — edilmir (QERARLAR §19); mərhələ 6-nın müstəqil auditi.
 
 ## Açıq məsələlər
 
@@ -505,7 +505,7 @@ Testlər: `npm test` 172, `npm run test:ui` 37, `npm run test:perf`, Electron sm
 3. **Bank:** ~~3a~~, ~~3b~~, ~~3c~~, ~~3d~~, ~~müstəqil audit~~ — hazır (0.5.0). **Qalan:** real bank çıxarışı nümunələri ilə oxuyucunun yoxlanması.
 4. **DVX e-qaimələri:** ~~4a~~, ~~4b~~, ~~4c~~, ~~4d~~, ~~müstəqil audit~~, ~~real "Qaimələr üzrə" faylları~~, ~~avtomatik yenilənmə~~, ~~toplu kontragent və xidmət uyğunluğu~~ — hazır (0.6.0–0.6.4; istifadəçiyə 0.6.4 quraşdırıcısı verildi, sonrakılar özü yenilənir). **Qalan (istifadəçidən):** real "Mallar üzrə" ixracı (mal sətirləri), real ASAN İmza / SİMA girişi ilə kabinet (giriş domenləri, ixracın formatı — .xls olarsa oxuyucu açmır); düzəliş e-qaimələrinin əsasa istinadı real faylda yoxdur — onları mühasib əl ilə keçirir.
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
-6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15). **Növbəti:** 6c-4 "Mallar üzrə" → müstəqil audit.
+6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 
 ## Əmrlər
 
