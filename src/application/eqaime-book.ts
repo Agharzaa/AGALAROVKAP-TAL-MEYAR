@@ -271,6 +271,8 @@ export function vatFromGross(base18: Minor, vat: Minor): boolean {
 export function pennyOff(doc: Row): bigint {
   const off = (doc.total as bigint) - (doc.net as bigint) - (doc.vat as bigint);
   if (off !== 1n && off !== -1n) return 0n;
+  // Without VAT there is no VAT rounding: a qəpik there is the accountant's (audit of stage 6).
+  if ((doc.vat as bigint) === 0n) return 0n;
   if (BigInt(doc.excise ?? 0n) !== 0n || BigInt(doc.road_tax ?? 0n) !== 0n) return 0n;
   return off;
 }

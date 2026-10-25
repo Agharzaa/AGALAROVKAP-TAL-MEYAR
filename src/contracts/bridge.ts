@@ -56,6 +56,9 @@ export interface MeyarBridge {
       files: { name: string; bytes: Uint8Array }[];
       partial?: boolean;
       cancelled?: boolean;
+      /** The export did not page: its one file is all DVX gave (audit of stage 6). */
+      repeated?: boolean;
+      pageSize?: number;
     }>
   >;
   /** Stage 6c-2: stops the running export; the pages taken so far are answered (cancelled). */

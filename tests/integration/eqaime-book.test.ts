@@ -1647,3 +1647,29 @@ test('2026-10-22: a VAT-inclusive DVX e-qaimə (VAT = gross × 18/118) books its
   assert.equal(byNumber(f, 'MT4').bucket, 'proposal');
   assert.match(byNumber(f, 'MT4').proposal!.reasons.join(' '), /Yekun məbləğ/);
 });
+
+test("audit of stage 6: a qəpik off in an e-qaimə without VAT is not DVX's VAT rounding — not booked by itself", (t) => {
+  const f = fixture(t);
+  const s = setup(f);
+  map(f, 'purchase', { taxId: TELECOM, productId: s.service, expenseItemId: s.rabite });
+  load(
+    f,
+    'purchase',
+    [
+      // Only a 0% base, the total a qəpik more: an 18% line of 0,01 would be made up.
+      doc('MT1', '2026-09-10', TELECOM, {
+        net: '100.00',
+        vat: '0.00',
+        total: '100.01',
+        base0: '100.00',
+      }),
+      // Outside VAT, a qəpik less.
+      doc('MT2', '2026-09-11', TELECOM, { net: '120.00', vat: '0.00', total: '119.99' }),
+    ],
+    'invoices',
+  );
+  for (const n of ['MT1', 'MT2']) {
+    assert.equal(byNumber(f, n).invoiceId, '', n);
+    assert.match(byNumber(f, n).proposal!.reasons.join(' '), /Yekun məbləğ/, n);
+  }
+});

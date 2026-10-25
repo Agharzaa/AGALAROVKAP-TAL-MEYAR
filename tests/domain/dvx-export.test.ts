@@ -15,6 +15,7 @@ import {
   listPath,
   samePage,
 } from '../../src/main/dvx-api-policy.js';
+import { exportPages, type Ask } from '../../src/main/dvx-export.js';
 import { openPeriod } from '../../src/domain/eqaime.js';
 
 test('6b: Gələnlər are the inbox, Göndərilənlər the outbox; the whole period, every status', () => {
@@ -164,4 +165,95 @@ test('audit 2026-10-25: a page equal to the one before is the same file — the 
   assert.equal(samePage(a, new Uint8Array(a)), true);
   assert.equal(samePage(a, new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 4])), false);
   assert.equal(samePage(undefined, a), false);
+});
+
+// Audit of stage 6 (2026-10-25): the pages of one export, with a fake portal.
+const xlsx = (n: number) => new Uint8Array([0x50, 0x4b, 3, 4, n]);
+function portal(o: { pages: number[]; more: (page: number) => unknown; onAsk?: () => void }) {
+  const asked: string[] = [];
+  let page = 0;
+  const answer = (body: unknown, type = 'application/json') => ({
+    ok: true,
+    status: 200,
+    headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? type : null) },
+    text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
+    json: async () => body,
+    arrayBuffer: async () => (body as Uint8Array).slice().buffer,
+  });
+  const ask: Ask = async (path, init) => {
+    asked.push(path);
+    o.onAsk?.();
+    if (path.endsWith('/excel')) {
+      page = (JSON.parse(init.body!) as { offset: number }).offset / 100;
+      return answer({ id: `file-${page}` });
+    }
+    if (path.includes('/download/'))
+      return answer(xlsx(o.pages[Math.min(page, o.pages.length - 1)]!), 'application/octet-stream');
+    return answer(o.more(page));
+  };
+  return { ask, asked };
+}
+
+test('audit: the page limit reached while DVX says more follow — the update is partial', async () => {
+  const p = portal({ pages: [1, 2, 3, 4], more: () => ({ hasMore: true }) });
+  const r = await exportPages({
+    direction: 'purchase',
+    from: '2026-10-01',
+    to: '2026-10-25',
+    ask: p.ask,
+    signal: new AbortController().signal,
+    maxPages: 3,
+  });
+  assert.equal(r.files.length, 3);
+  assert.equal(r.partial, true);
+  assert.equal(r.cancelled, false);
+  // The last page said no more: whole.
+  const whole = portal({ pages: [1, 2, 3], more: (page) => ({ hasMore: page < 2 }) });
+  const w = await exportPages({
+    direction: 'sale',
+    from: '2026-10-01',
+    to: '2026-10-25',
+    ask: whole.ask,
+    signal: new AbortController().signal,
+    maxPages: 3,
+  });
+  assert.deepEqual([w.files.length, w.partial], [3, false]);
+  // Every request goes to the portal's API (the origin is added by the cabinet's session only).
+  assert.ok([...p.asked, ...whole.asked].every((path) => path.startsWith('/api/po/')));
+});
+
+test('audit: "Ləğv et" keeps the pages taken; an export cancelled mid-request is cancelled, not failed', async () => {
+  const stop = new AbortController();
+  let n = 0;
+  const p = portal({
+    pages: [1, 2, 3],
+    more: () => ({ hasMore: true }),
+    onAsk: () => {
+      // The 7th request is the 3rd page's export: the user cancels while it is asked.
+      if (++n === 7) {
+        stop.abort();
+        throw new DOMException('aborted', 'AbortError');
+      }
+    },
+  });
+  const r = await exportPages({
+    direction: 'purchase',
+    from: '2026-10-01',
+    to: '2026-10-25',
+    ask: p.ask,
+    signal: stop.signal,
+  });
+  assert.deepEqual([r.files.length, r.cancelled, r.partial], [2, true, false]);
+});
+
+test('audit: an export that ignores paging is not asked again and says so', async () => {
+  const p = portal({ pages: [1, 1], more: () => ({ hasMore: true }) });
+  const r = await exportPages({
+    direction: 'purchase',
+    from: '2026-10-01',
+    to: '2026-10-25',
+    ask: p.ask,
+    signal: new AbortController().signal,
+  });
+  assert.deepEqual([r.files.length, r.repeated, r.pageSize], [1, true, 100]);
 });

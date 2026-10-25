@@ -2472,6 +2472,51 @@ test('stage 6c-3: İş masası updates both boxes from DVX at once, after the si
   }
 });
 
+test('audit of stage 6: an export that does not page is partial when its one file holds no more than a page', async () => {
+  const h = harness();
+  seed(h);
+  const head = [
+    'Daxil olan qaimələrin siyahısı',
+    'Seriya;Nömrə;Tarix;VÖEN;Adı;Malın ƏDV-siz ümumi dəyəri;Malın ƏDV məbləği;Yekun məbləğ;ƏDV-yə cəlb edilən;Vəziyyəti',
+  ];
+  const one =
+    'MT;2609001;05.09.2026;1700000001;Malsatan MMC;100,00;18,00;118,00;100,00;Təsdiqləndi';
+  const two =
+    'MT;2609002;06.09.2026;1700000001;Malsatan MMC;200,00;36,00;236,00;200,00;Təsdiqləndi';
+  const file = (...rows: string[]) => ({
+    name: 'DVX-Gelenler.csv',
+    bytes: new TextEncoder().encode([...head, ...rows].join('\r\n')),
+  });
+  try {
+    const user = userEvent.setup();
+    act(() => h.dvxState({ connected: true }));
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    // DVX said more follow, the next page was the same file of a page or less: the rest is missing.
+    h.setDvxExport({ ok: true, value: { files: [file(one)], repeated: true, pageSize: 100 } });
+    await user.click(await page.findByRole('button', { name: 'DVX-dən yenilə' }));
+    const said = await page.findByText(/DVX-dən yeniləndi .*yarımçıq/);
+    // Not shown as a success.
+    assert.match(said.closest('.notice')?.className ?? '', /warning/);
+    // More rows than a page: the export gave the whole period at once.
+    h.setDvxExport({ ok: true, value: { files: [file(one, two)], repeated: true, pageSize: 1 } });
+    await user.click(page.getByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText(/DVX-dən yeniləndi \([^)]*\): yeni 1 e-qaimə/);
+    const syncs = h.commands.filter((c) => c.type === 'eqaime.synced') as unknown as {
+      result: string;
+    }[];
+    assert.deepEqual(
+      syncs.map((s) => s.result),
+      ['partial', 'ok'],
+    );
+  } finally {
+    h.close();
+  }
+});
+
 test('2026-10-22: a VAT-inclusive DVX e-qaimə opens as an invoice with "ƏDV daxildir" and DVX\'s VAT', async () => {
   const h = harness();
   const s = seed(h);

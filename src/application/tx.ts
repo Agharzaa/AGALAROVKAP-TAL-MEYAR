@@ -10,12 +10,14 @@ export interface Clock {
   /** Local calendar date YYYY-MM-DD. */
   today(): string;
 }
+/** The local calendar date YYYY-MM-DD of a moment (of `now()` timestamps, which are UTC). */
+export function localDay(at: Date | string): string {
+  const d = typeof at === 'string' ? new Date(at) : at;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 export const systemClock: Clock = {
   now: () => new Date().toISOString(),
-  today: () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  },
+  today: () => localDay(new Date()),
 };
 export interface Context {
   actor: string;

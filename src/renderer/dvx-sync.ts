@@ -116,11 +116,13 @@ export function useDvxSync(o: {
     };
     try {
       const exported = await api.dvxExport(direction, from, to);
-      const { files, partial } = exported;
+      const { files } = exported;
       let stopped = !!exported.cancelled || cancelled.current;
       const add = (k: 'added' | 'updated' | 'same' | 'conflicts' | 'posted', n?: number) =>
         n && (total[k] = (total[k] ?? 0) + n);
       let loaded = 0;
+      /** The e-qaimələr of the last file read. */
+      let rows = 0;
       for (const [i, f] of files.entries()) {
         // Cancelled while loading: the pages loaded so far stay (one e-qaimə, once).
         if (i && cancelled.current) {
@@ -129,6 +131,7 @@ export function useDvxSync(o: {
         }
         if (!cancelled.current) setProgress(`${name}: ${i + 1} / ${files.length} səhifə yüklənir…`);
         const read = readEqTable(await readSheet(f.name, f.bytes), f.name);
+        rows = read.documents.length;
         if (!read.report || !read.documents.length) {
           const problem = read.problems[0]?.message;
           if (problem) return await end('failed', problem, problem);
@@ -164,7 +167,15 @@ export function useDvxSync(o: {
             ? `DVX yeniləməsi ləğv edildi (${period}; alınmış səhifələr yükləndi, qalanını növbəti yeniləmə alacaq): ${importSummary(total)}`
             : 'DVX yeniləməsi ləğv edildi: heç nə yüklənmədi.',
         );
-      const said = partial ? 'DVX növbəti səhifəni demədi' : '';
+      // The export did not page and its one file holds no more than a page: DVX said more follow,
+      // the rest was not given (audit of stage 6).
+      const unpaged = !!exported.repeated && rows <= (exported.pageSize ?? 100);
+      const partial = !!exported.partial || unpaged;
+      const said = unpaged
+        ? 'DVX ixracı səhifələri ayırmadı'
+        : partial
+          ? 'DVX növbəti səhifəni demədi'
+          : '';
       if (!loaded)
         return await end(
           partial ? 'partial' : 'ok',
@@ -173,7 +184,7 @@ export function useDvxSync(o: {
         );
       return await end(
         partial ? 'partial' : 'ok',
-        `DVX-dən yeniləndi (${period}${partial ? ', yarımçıq: DVX növbəti səhifəni demədi — yenidən basın' : ''}): ${importSummary(total)}`,
+        `DVX-dən yeniləndi (${period}${partial ? `, yarımçıq: ${said} — yenidən basın və ya qalanını kabinetdə "Exceli endir" ilə yükləyin` : ''}): ${importSummary(total)}`,
         said,
       );
     } catch (e) {

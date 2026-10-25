@@ -27,7 +27,7 @@ import type {
   HomeView,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
-import type { Tx } from './tx.js';
+import { localDay, type Tx } from './tx.js';
 import { BOOKING_CONFLICT, eqContext, propose, type EqContext } from './eqaime-book.js';
 
 const label = { purchase: 'Gələnlər (alış)', sale: 'Göndərilənlər (satış)' } as const;
@@ -698,7 +698,8 @@ export function dvxStale(
   for (const direction of ['purchase', 'sale'] as const) {
     const s = dvxState(db, companyId, direction);
     if (!s.used) continue;
-    const last = s.refreshedAt.slice(0, 10);
+    // The day of the update on the accountant's calendar, as today and the month's end are.
+    const last = s.refreshedAt ? localDay(s.refreshedAt) : '';
     const box = direction === 'purchase' ? 'Alınan' : 'Göndərilən';
     const since = last ? ` (son: ${shown(last)})` : '';
     let text = '';

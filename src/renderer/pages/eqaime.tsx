@@ -115,6 +115,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   useEffect(() => setConfirmed(false), [preview]);
   const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
+  /** A partial or cancelled DVX update: said as a warning, not as a success. */
+  const [warned, setWarned] = useState('');
   const [open, setOpen] = useState<string>('');
   const [ignore, setIgnore] = useState<EqDocumentView | null>(null);
   const [settle, setSettle] = useState<EqDocumentView | null>(null);
@@ -196,7 +198,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
     onDone: ([r]) => {
       if (!r) return;
       if (r.result === 'failed') setReadError(r.text);
-      else setMessage(r.text);
+      else if (r.result === 'ok') setMessage(r.text);
+      else setWarned(r.text);
       box.reload();
       imports.reload();
     },
@@ -205,6 +208,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   async function sync() {
     setReadError('');
     setMessage('');
+    setWarned('');
     m.clear();
     try {
       if (!(await dvx.start([direction])))
@@ -642,6 +646,11 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
               {message}
+            </Notice>
+          )}
+          {warned && (
+            <Notice kind="warning" onClose={() => setWarned('')}>
+              {warned}
             </Notice>
           )}
           {box.error && <Notice>{box.error}</Notice>}

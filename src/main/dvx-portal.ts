@@ -24,18 +24,13 @@ import {
   apiUrl,
   diagnosticReport,
   maskPath,
-  downloadPath,
   DVX_API_HOST,
-  exportRequest,
-  fileIdOf,
-  hasMore,
-  isXlsx,
   listPath,
-  samePage,
   replayable,
   replayBody,
   type Replay,
 } from './dvx-api-policy.js';
+import { exportPages, type Ask, type ExportError, type ExportPages } from './dvx-export.js';
 
 export type DvxDirection = 'sale' | 'purchase';
 export interface DvxFile {
@@ -244,26 +239,14 @@ export async function dvxDiagnose(
   return { file, requests: report.requests.length, replayed: replays.length };
 }
 
-/** At most 100 pages of 100 e-qaimələr in one update. */
-const MAX_PAGES = 100;
 let running: AbortController | undefined;
-
-class ExportError extends Error {
-  constructor(
-    message: string,
-    readonly step: string,
-    readonly status?: number,
-  ) {
-    super(message);
-  }
-}
 
 /**
  * Stage 6b: the cabinet's own Excel export of one box (purchase: Gələnlər, sale: Göndərilənlər)
  * for a period, asked by Meyar with the portal's session key through the cabinet's session —
- * the same file the user downloads with "Exceli endir → Qaimələr üzrə", read by the same reader.
- * When DVX answers something else, the diagnostics (no values) are written to `diagDir` by
- * themselves, so the cause can be read without asking the user.
+ * the same file the user downloads with "Exceli endir → Qaimələr üzrə", read by the same reader
+ * (the pages: src/main/dvx-export.ts). When DVX answers something else, the diagnostics (no
+ * values) are written to `diagDir` by themselves, so the cause can be read without asking the user.
  */
 export async function dvxExport(
   direction: DvxDirection,
@@ -272,7 +255,7 @@ export async function dvxExport(
   diagDir: string,
   version: string,
   onPage: (page: number) => void = () => {},
-): Promise<{ files: { name: string; bytes: Uint8Array }[]; partial: boolean; cancelled: boolean }> {
+): Promise<ExportPages> {
   const state = current;
   const token = state && !state.window.isDestroyed() ? state.api.token() : '';
   if (!state || !token)
@@ -286,13 +269,13 @@ export async function dvxExport(
     .seen()
     .filter((r) => r.method === 'POST' && maskPath(r.url).split('?')[0] === list)
     .at(-1)?.body;
-  let request = exportRequest(direction, from, to, 0, template);
   // Stage 6c-2: "Ləğv et" stops the export; the pages taken so far are answered.
   const stop = new AbortController();
   running?.abort();
   running = stop;
-  const ask = (url: string, init: { method: string; body?: string }) =>
-    state.ses.fetch(url, {
+  // The key goes to the portal's API origin only, never after a redirect.
+  const ask: Ask = (apiPath, init) =>
+    state.ses.fetch(origin + apiPath, {
       ...init,
       headers: {
         accept: 'application/json, text/plain, */*',
@@ -303,88 +286,16 @@ export async function dvxExport(
       redirect: 'error',
       signal: AbortSignal.any([stop.signal, AbortSignal.timeout(120_000)]),
     });
-  const refused = (step: string, status: number) =>
-    status === 401 || status === 403
-      ? new ExportError(
-          'DVX sessiyasının vaxtı bitib: kabinetə yenidən daxil olun və yenidən yoxlayın.',
-          step,
-          status,
-        )
-      : new ExportError(
-          `DVX ixracı alınmadı (cavab ${status}). Hələlik kabinetdə "Exceli endir" ilə davam edin.`,
-          step,
-          status,
-        );
-  const box = direction === 'purchase' ? 'Gelenler' : 'Gonderilenler';
-  const files: { name: string; bytes: Uint8Array }[] = [];
-  // DVX could not say whether more pages follow: the update says it is partial (audit 2026-10-25).
-  let partial = false;
   try {
-    for (let page = 0; page < MAX_PAGES && !stop.signal.aborted; page++) {
-      onPage(page + 1);
-      request = exportRequest(direction, from, to, page, template);
-      const res = await ask(origin + request.path, {
-        method: 'POST',
-        body: JSON.stringify(request.body),
-      });
-      if (!res.ok) throw refused('export', res.status);
-      const type = res.headers.get('content-type') ?? '';
-      let bytes: Uint8Array;
-      if (/json|text/i.test(type)) {
-        const text = await res.text();
-        let answer: unknown = text;
-        try {
-          answer = JSON.parse(text);
-        } catch {
-          // A plain-text id.
-        }
-        const id = fileIdOf(answer);
-        if (!id)
-          throw new ExportError(
-            'DVX ixracı gözlənilməyən cavab verdi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
-            'export-answer',
-            res.status,
-          );
-        const file = await ask(origin + downloadPath(id), { method: 'GET' });
-        if (!file.ok) throw refused('download', file.status);
-        bytes = new Uint8Array(await file.arrayBuffer());
-      } else {
-        // The file itself, without an id.
-        bytes = new Uint8Array(await res.arrayBuffer());
-      }
-      if (bytes.length > MAX_DOWNLOAD)
-        throw new ExportError('DVX faylı 50 MB-dan böyükdür.', 'download-size');
-      if (!isXlsx(bytes))
-        throw new ExportError(
-          'DVX-dən Excel faylı gəlmədi. Hələlik kabinetdə "Exceli endir" ilə davam edin.',
-          'download-type',
-        );
-      // The same file as the page before: the export ignores paging — it is all there.
-      if (samePage(files.at(-1)?.bytes, bytes)) break;
-      files.push({ name: `DVX-${box}-${from}_${to}-${page + 1}.xlsx`, bytes });
-      // The same page of the list says whether another one follows. If the list cannot say,
-      // the pages taken so far stand (a repeated update takes the rest: one e-qaimə, once).
-      const more = await ask(origin + list, { method: 'POST', body: JSON.stringify(request.body) });
-      const answer: unknown = more.ok ? await more.json().catch(() => undefined) : undefined;
-      if (answer === undefined) {
-        partial = true;
-        break;
-      }
-      if (!hasMore(answer)) break;
-    }
-    return { files, partial, cancelled: stop.signal.aborted };
+    return await exportPages({ direction, from, to, template, ask, signal: stop.signal, onPage });
   } catch (error) {
-    if (stop.signal.aborted) return { files, partial, cancelled: true };
-    const e =
-      error instanceof ExportError
-        ? error
-        : new ExportError(`DVX ilə əlaqə alınmadı: ${(error as Error).message}`, 'network');
+    const e = error as ExportError;
     // The cause, for the developers, without values (Meyar's data folder).
     try {
       await mkdir(diagDir, { recursive: true });
       await dvxDiagnose(diagDir, version, new Date(), [
         {
-          path: `${request.path} → ${e.step}`,
+          path: `${e.path || list} → ${e.step ?? 'network'}`,
           ...(e.status ? { status: e.status } : {}),
           error: e.message,
         },

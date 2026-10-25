@@ -22,7 +22,12 @@ export type Cmd = Without<Command, 'key'>;
 let counter = 0;
 export const newKey = () => `test-${String(++counter).padStart(8, '0')}`;
 
-export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31') {
+export function fixture(
+  t: TestContext,
+  path = ':memory:',
+  today = '2026-12-31',
+  now = '2026-10-07T12:00:00.000Z',
+) {
   const db = new Db(path);
   t.after(() => {
     try {
@@ -31,7 +36,7 @@ export function fixture(t: TestContext, path = ':memory:', today = '2026-12-31')
       /* closed by the test */
     }
   });
-  const ledger = new Ledger(db, { now: () => '2026-10-07T12:00:00.000Z', today: () => today });
+  const ledger = new Ledger(db, { now: () => now, today: () => today });
   const ctx = { actor: 'test', correlationId: 'test' };
   const exec = (cmd: Cmd, key = newKey()) => ledger.execute({ key, ...cmd }, ctx) as CommandResult;
   const query = <T>(q: object) => ledger.query(q) as T;

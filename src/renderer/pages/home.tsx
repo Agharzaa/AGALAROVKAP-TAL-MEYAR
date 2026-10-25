@@ -176,7 +176,7 @@ function DvxBoth({ companyId, closedThrough }: { companyId: string; closedThroug
       {said.map((r) => (
         <Notice
           key={r.direction}
-          kind={r.result === 'failed' ? 'error' : 'success'}
+          kind={r.result === 'failed' ? 'error' : r.result === 'ok' ? 'success' : 'warning'}
           onClose={() => setSaid((list) => list.filter((x) => x !== r))}
         >
           {`${boxName(r.direction)}: ${r.text}`}

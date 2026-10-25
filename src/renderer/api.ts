@@ -132,6 +132,9 @@ export const api = {
     files: { name: string; bytes: Uint8Array }[];
     partial?: boolean;
     cancelled?: boolean;
+    /** The export did not page: its one file is all DVX gave (audit of stage 6). */
+    repeated?: boolean;
+    pageSize?: number;
   }> {
     const b = bridge();
     if (!b.dvxExport) throw new Error('DVX kabineti yalnız masaüstü proqramda işləyir.');

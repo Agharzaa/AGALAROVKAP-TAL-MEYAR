@@ -39,6 +39,9 @@ export function harness(
     files: { name: string; bytes: Uint8Array }[];
     partial?: boolean;
     cancelled?: boolean;
+    /** The export did not page: its one file is all DVX gave (audit of stage 6). */
+    repeated?: boolean;
+    pageSize?: number;
   }>;
   // A promise: the export waits until the test answers it (stage 6c-2: progress and cancel).
   // Or a function of the box (stage 6c-3: both boxes in one update).
