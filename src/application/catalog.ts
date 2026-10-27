@@ -1,8 +1,11 @@
 /** Company, chart of accounts and the catalogs that subkonto values point to. */
 import { baseChart, checkSubkonto, currencies, newAccount } from '../domain/chart.js';
 import { CASH_FLOW_ITEMS } from '../domain/bank.js';
+import { rates2026 } from '../domain/payroll.js';
 import { DomainError } from '../domain/errors.js';
 import { numberKey, parseDate, parseTaxId, parseText } from '../domain/values.js';
+import { parseMoney } from '../domain/money.js';
+import { isPayrollExpense } from './payroll.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { expectVersion, type Tx } from './tx.js';
@@ -42,7 +45,8 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       'İcarə',
       'Kommunal xidmətlər',
       'Ofis xərcləri',
-      'Əmək haqqı',
+      ['Əmək haqqı', 'salary'],
+      ['Sosial sığorta ayırmaları', 'socialInsurance'],
       ['Satılmış malların maya dəyəri', 'cogs'],
       ['Məzənnə fərqi', 'fxExpense'],
       ['Amortizasiya', 'depreciation'],
@@ -96,6 +100,13 @@ export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): Command
     "INSERT INTO cashboxes(id,company_id,name,account,currency) VALUES(?,?,'Əsas kassa','221.01','AZN')",
     tx.id(),
     id,
+  );
+  // Stage 8: the 2026 payroll rates, for the accountant to confirm (QERARLAR 2026-10-27 §1).
+  tx.db.run(
+    "INSERT INTO payroll_rates VALUES(?,'2026-01-01',?,?)",
+    id,
+    JSON.stringify(rates2026),
+    tx.clock.now(),
   );
   tx.audit(id, 'Yaradıldı', 'Şirkət', id, `${name} · VÖEN ${taxId}`);
   return { id };
@@ -507,6 +518,31 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
     if (same && same.id !== cmd.id)
       throw new DomainError('Bu FİN ilə işçi artıq var.', 'fin', 'conflict');
   }
+  // Stage 8a: employment and the monthly salary with the account it is charged to.
+  const hired = cmd.hired.trim() ? parseDate(cmd.hired, 'İşə qəbul tarixi') : '';
+  const left = cmd.left.trim() ? parseDate(cmd.left, 'İşdən çıxma tarixi') : '';
+  if (hired && left && left < hired)
+    throw new DomainError('İşdən çıxma tarixi işə qəbuldan əvvəl ola bilməz.', 'left');
+  const salary = parseMoney(cmd.salary || '0', 'Aylıq əmək haqqı');
+  if (salary < 0n) throw new DomainError('Əmək haqqı mənfi ola bilməz.', 'salary');
+  let expenseSk: string[] = [];
+  const code = cmd.expenseAccount.trim();
+  if (code) {
+    const account = tx.chart(cmd.companyId).require(code, 'expenseAccount');
+    if (!isPayrollExpense(account.code) || !account.subkonto.includes('expenseItem'))
+      throw new DomainError(
+        'Əmək haqqının xərc hesabı 701, 711, 721 və ya 202 olmalıdır (xərc maddəsi ilə).',
+        'expenseAccount',
+      );
+    // The expense item is the payroll's own ("Əmək haqqı", "Sosial sığorta ayırmaları").
+    expenseSk = account.subkonto.map((k, i) =>
+      k === 'expenseItem' ? '' : (cmd.expenseSk[i] ?? '').trim(),
+    );
+    account.subkonto.forEach((k, i) => {
+      if (k !== 'expenseItem' && !expenseSk[i])
+        throw new DomainError(`${code} hesabının subkontosunu seçin.`, `expenseSk.${i}`);
+    });
+  }
   return saveRow(
     tx,
     'employees',
@@ -518,6 +554,12 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
       position: parseText(cmd.position, 'Vəzifə', 120, false),
       fin,
       archived: cmd.archived ? 1 : 0,
+      tab_no: parseText(cmd.tabNo, 'Tabel nömrəsi', 20, false),
+      hired,
+      left_on: left,
+      salary: String(salary),
+      expense_account: code,
+      expense_sk: JSON.stringify(expenseSk),
     },
     name,
   );
@@ -546,6 +588,8 @@ const roleKind = {
   depreciation: 'expenseItem',
   assetDisposal: 'expenseItem',
   assetSale: 'incomeType',
+  salary: 'expenseItem',
+  socialInsurance: 'expenseItem',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -558,6 +602,8 @@ const roleLabel = {
   depreciation: 'amortizasiya (Kt 112)',
   assetDisposal: 'əsas vəsaitlərin silinməsi (731)',
   assetSale: 'əsas vəsaitin satışı (611)',
+  salary: 'əmək haqqı (Kt 533)',
+  socialInsurance: 'sosial sığorta ayırmaları (Kt 522)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

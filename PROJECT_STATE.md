@@ -581,6 +581,18 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 215, `npm run test:ui` 46, `npm run test:perf` keçir (ay bağlanışı 200 vəsaitlə: baxış 2,6 s, bağlanış 2,4 s; hədd 10 s). Electron və `dvx-smoke` işlədilmədi (pəncərə açır). **0.8.3** main-ə push edilib (26.10.2026, istifadəçinin icazəsi ilə).
 
+## 0.9.0 — mərhələ 8a: əmək haqqının hesablanması (27.10.2026, QERARLAR 2026-10-27)
+
+Plan: `docs/MERHELE-8-EMEK-HAQQI.md` (istifadəçi bütün tövsiyələri təsdiqlədi).
+
+- **İşçilər kitabçası:** tabel nömrəsi, işə qəbul / çıxma tarixi, aylıq əmək haqqı, xərc hesabı (701 — "Əsas nomenklatura qrupu" özü dolur; 721; 711; 202). Xərc maddəsini sənəd özü qoyur.
+- **Dərəcələr** (Əmək haqqı → Dərəcələr; `payroll_rates`, tarixdən qüvvədə): gəlir vergisi 3 / 10 / 14% (2 500 / 8 000), 2 500-dək gəlirdə 200 güzəşt; DSMF işçi 3% / 10%, işəgötürən 22% / 15% (200 həddi); işsizlik 0,5% + 0,5%; tibbi 2% / 0,5% hər tərəf (2 500 həddi). Pillələr marjinal, hər məbləğ bir dəfə qəpiyə yuvarlaqlaşdırılır. Başlanğıc dəst — 01.01.2026; **mühasib təsdiq etməlidir**. Uçotdakı ayın istifadə etdiyi dəst dəyişdirilmir, ondan əvvələ yeni dəst qoyulmur.
+- **Əmək haqqının hesablanması** (ƏH-000001; ayda bir uçotdakı sənəd): ay seçiləndə işçilər özü dolur (işə qəbul / çıxma ayında B.e.–C. iş günlərinə mütənasib; bayramlar sayılmır), sətirdə əmək haqqı + mükafat, tutulmalar, ödəniləcək və işəgötürənin payı yazdıqca hesablanır. Yazılış ayın son günü: Dt 701 / 721 ("Əmək haqqı") / Kt 533 — hesablanan; Dt 533 / Kt 521.03, 522.01, 522.03.1, 522.04.1 — tutulan; Dt 701 / 721 ("Sosial sığorta ayırmaları") / Kt 522.01, 522.03.2, 522.04.2 — işəgötürən. Düzəliş — storno + yeni yazılış, ləğv — storno, bağlı dövr qorunur. Sənəddə ən çox 300 işçi.
+- Sxem v17: işçilərin yeni sahələri, `payroll_rates` (2026 dəsti hər şirkətə), `payroll_documents` / `payroll_lines`, rollu xərc maddələri "Əmək haqqı" (`salary`), "Sosial sığorta ayırmaları" (`socialInsurance`).
+- Menyu "Əmək haqqı": hesablama sənədləri, yeni sənəd, İşçilər, Dərəcələr, 533 / 521.03 / 522.01 kartları.
+- Testlər: `tests/domain/payroll.test.ts` (Ə1 §9 misalı qəpikbəqəpik, Ə2 pillə sərhədləri, Ə4), `tests/integration/payroll.test.ts` (Ə3, Ə4, Ə5, işçinin yoxlamaları, v16 → v17), `tests/ui` (8a).
+- **Növbəti:** 8b — ödəniş (çıxarışda işçi), gəlir vergisindən başqa tutulmalar, hesabatlar (cədvəl, vərəqə, hesablaşmalar, vergi və fondlar), ay bağlanışında yoxlama, perf (Ə6, Ə7, Ə9).
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -589,7 +601,7 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 215, `npm run test:ui` 46, 
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → ~~7c silinmə və satış~~ (0.8.2) → ~~müstəqil audit~~ (26.10.2026, 8 qüsur düzəldi, 1 açıq sual). Açıq suallar — §11.
-8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiq gözləyir 27.10.2026): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. 8a → 8b → müstəqil audit. Açıq suallar — §11.
+8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → 8b ödəniş və hesabatlar → müstəqil audit.
 
 ## Əmrlər
 

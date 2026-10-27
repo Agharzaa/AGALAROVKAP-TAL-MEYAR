@@ -122,6 +122,26 @@ export const assetLineInput = z.object({
 });
 export type AssetLineInput = z.infer<typeof assetLineInput>;
 
+const bracketInput = z.object({ upTo: decimal, rate: z.string().max(8) });
+const brackets = z.array(bracketInput).min(1).max(10);
+export const payrollRatesInput = z.object({
+  incomeTax: brackets,
+  relief: z.object({ amount: decimal, ifUpTo: decimal }),
+  dsmfEmployee: brackets,
+  unemploymentEmployee: brackets,
+  medicalEmployee: brackets,
+  dsmfEmployer: brackets,
+  unemploymentEmployer: brackets,
+  medicalEmployer: brackets,
+});
+/** A payroll line (stage 8a): the month's salary (prorated by the form) and a bonus. */
+export const payrollLineInput = z.object({
+  employeeId: id,
+  salary: decimal,
+  bonus: decimal.default(''),
+});
+export type PayrollLineInput = z.infer<typeof payrollLineInput>;
+
 /** One operation of a bank statement as the reader found it (docs/MERHELE-3-BANK.md §6). */
 export const statementLineInput = z.object({
   row: z.number().int().nonnegative(),
@@ -306,7 +326,33 @@ export const commandSchema = z.discriminatedUnion('type', [
     name: text(160),
     position: text(120).default(''),
     fin: text(10).default(''),
+    /** Stage 8a: tabel number, employment, monthly salary and the account it is charged to. */
+    tabNo: text(20).default(''),
+    hired: z.string().max(10).default(''),
+    left: z.string().max(10).default(''),
+    salary: decimal.default(''),
+    expenseAccount: code.default(''),
+    expenseSk: z.array(z.string().max(120)).max(3).default([]),
   }),
+  /** Stage 8a: a set of payroll rates in force from a day (marginal brackets, percent). */
+  z.object({
+    type: z.literal('payrollRates.save'),
+    ...base,
+    validFrom: date,
+    rates: payrollRatesInput,
+  }),
+  /** Stage 8a: a month's payroll — one line per employee, posted on the month's last day. */
+  z.object({
+    type: z.literal('payroll.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    month: z.string().max(7),
+    number: text(40).default(''),
+    memo: text(500).default(''),
+    lines: z.array(payrollLineInput).min(1).max(300),
+  }),
+  z.object({ type: z.literal('payroll.cancel'), ...base, id, version, reason: text(240) }),
   z.object({
     type: z.literal('item.save'),
     ...base,
@@ -339,6 +385,8 @@ export const commandSchema = z.discriminatedUnion('type', [
         'depreciation',
         'assetDisposal',
         'assetSale',
+        'salary',
+        'socialInsurance',
       ])
       .optional(),
   }),

@@ -2,6 +2,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BookOpen,
+  Calculator,
   LayoutDashboard,
   Building2,
   FilePlus2,
@@ -155,6 +156,16 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     title: 'Əsas vəsaitlərin başlanğıc qalıqları',
     hint: 'Meyar-dan əvvəl alınmış vəsaitlər: dəyər, yığılmış amortizasiya, qalan ay',
     icon: Truck,
+  },
+  payrolls: {
+    title: 'Əmək haqqının hesablanması',
+    hint: 'Ay üzrə: hesablanan, tutulan vergi və fondlar, ödəniləcək, işəgötürənin payı',
+    icon: Calculator,
+  },
+  payrollRates: {
+    title: 'Əmək haqqı dərəcələri',
+    hint: 'Gəlir vergisi, DSMF, işsizlik və tibbi sığorta — tarixdən qüvvədə',
+    icon: Scale,
   },
   lists: {
     title: 'Siyahılar',
@@ -452,6 +463,44 @@ export const sections: Section[] = [
     ],
   },
   {
+    id: 'payroll',
+    label: 'Əmək haqqı',
+    icon: Calculator,
+    groups: [
+      {
+        title: 'Sənədlər',
+        items: [
+          { label: 'Əmək haqqının hesablanması', icon: Calculator, action: page('payrolls') },
+        ],
+      },
+      {
+        title: 'Yarat',
+        items: [
+          {
+            label: 'Əmək haqqını hesabla',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'payroll' } },
+          },
+        ],
+      },
+      {
+        title: 'Kitabçalar',
+        items: [
+          { label: 'İşçilər', icon: UserRound, action: page('employees') },
+          { label: 'Dərəcələr', icon: Scale, action: page('payrollRates') },
+        ],
+      },
+      {
+        title: 'Hesabatlar',
+        items: [
+          card('533', 'İşçilərlə hesablaşmalar (533)'),
+          card('521.03', 'Gəlir vergisi (521.03)'),
+          card('522.01', 'DSMF (522.01)'),
+        ],
+      },
+    ],
+  },
+  {
     id: 'reports',
     label: 'Hesabatlar',
     icon: Reports,
@@ -532,6 +581,8 @@ export function sectionOfView(view: View): string {
       return 'bank';
     case 'asset':
       return 'assets';
+    case 'payroll':
+      return 'payroll';
     case 'accountCard': {
       const a = view.account;
       if (a.startsWith('11')) return 'assets';
@@ -558,6 +609,9 @@ export function sectionOfView(view: View): string {
         case 'assetDisposals':
         case 'depreciationSchedule':
           return 'assets';
+        case 'payrolls':
+        case 'payrollRates':
+          return 'payroll';
         case 'operations':
         case 'accounts':
         case 'revaluation':
@@ -658,6 +712,10 @@ export function viewTitle(view: View, label?: string): string {
       }[view.kind];
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `${kind} (yeni)`;
     }
+    case 'payroll':
+      return view.id
+        ? `Əmək haqqının hesablanması${label ? ` ${label}` : ''}`
+        : 'Əmək haqqının hesablanması (yeni)';
     case 'accountCard':
       return `Hesab kartı ${view.account}`;
   }

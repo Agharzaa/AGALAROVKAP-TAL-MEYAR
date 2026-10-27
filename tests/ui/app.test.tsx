@@ -3024,3 +3024,64 @@ test('audit 2026-10-25: an invoice saved other than DVX wrote shows the warning 
     h.close();
   }
 });
+
+test('stage 8a: the month payroll fills in from the employees, computes as typed and is posted', async () => {
+  const h = harness();
+  const s = seed(h);
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const group = catalog.items.find((i) => i.role === 'defaultProductGroup')!.id;
+  const driver = h.run({
+    type: 'employee.save',
+    companyId: s.companyId,
+    name: 'Sürücü Məmmədov',
+    position: 'Sürücü',
+    fin: '',
+    tabNo: '001',
+    hired: '2026-01-12',
+    left: '',
+    salary: '1000',
+    expenseAccount: '701',
+    expenseSk: [group, ''],
+    archived: false,
+  }).id;
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Əmək haqqının hesablanması' }));
+    const list = within(pane());
+    await list.findByText('Hələ əmək haqqı hesablanmayıb');
+    await user.click(list.getByRole('button', { name: 'Əmək haqqını hesabla' }));
+    const editor = within(pane());
+    // Filled in from the employee's card; 1 000 → 865,00 to pay (§9).
+    await waitFor(() =>
+      assert.equal(editor.getByLabelText('Sətir 1: ödəniləcək').textContent, '865,00'),
+    );
+    const bonus = editor.getByRole('textbox', { name: 'Sətir 1: mükafat' });
+    await user.type(bonus, '1500');
+    // 2 500: the 200 relief still applies — 2 500 − 69 − 236 − 12,50 − 50.
+    await waitFor(() =>
+      assert.equal(
+        editor.getByLabelText('Sətir 1: ödəniləcək').textContent?.replace(/\s/g, ' '),
+        '2 132,50',
+      ),
+    );
+    await user.clear(bonus);
+    await user.click(editor.getByRole('button', { name: /^Uçota al$/ }));
+    await editor.findByText('Sənəd ƏH-000001 uçota alındı.');
+    const docs = h.ledger.query({ type: 'payrollDocuments', companyId: s.companyId }) as {
+      net: string;
+      lines: { employeeId: string }[];
+    }[];
+    assert.deepEqual([docs[0]!.net, docs[0]!.lines[0]!.employeeId], ['865.00', driver]);
+    // The rates: the 2026 set, used by the posted month, is not changed any more.
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Dərəcələr' }));
+    const rates = within(pane());
+    await rates.findByText('01.01.2026 tarixindən');
+    await rates.findByText('Uçotdakı əmək haqqı sənədləri ilə istifadə olunub');
+  } finally {
+    h.close();
+  }
+});

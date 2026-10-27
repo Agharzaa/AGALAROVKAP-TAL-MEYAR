@@ -1,6 +1,6 @@
 # Mərhələ 8 — Əmək haqqı (dizayn)
 
-Status: **təsdiq gözləyir** (27.10.2026). Suallar — §11.
+Status: **təsdiqlənib** (27.10.2026; bütün suallarda tövsiyə). Qərarlar — `docs/QERARLAR.md` 2026-10-27.
 
 Əsas: `docs/QERARLAR.md` — "521 və 522 — 1C kimi subhesablar" (522.01, 522.03.1/.2, 522.04.1/.2), 2026-10-07 §9 ("Əmək haqqı hələlik bir sənəddə hər işçi bir sətir; avtomatik bölgü əməkhaqqı mərhələsində"), mərhələ 5 (ay bağlanışı), mərhələ 3 (bank çıxarışında əmək haqqı → 533).
 
@@ -113,7 +113,7 @@ Sürücü, əmək haqqı 1 000,00 ₼, oktyabr 2026, 701:
 
 ## 10. İcra ardıcıllığı
 
-1. **8a — işçilər, dərəcələr, hesablama sənədi** (sxem v17, domen, yazılışlar, forma). Testlər: Ə1–Ə5, Ə8.
+1. **8a — işçilər, dərəcələr, hesablama sənədi** (sxem v17, domen, yazılışlar, forma). Testlər: Ə1–Ə5, Ə8. ✅ (0.9.0, 27.10.2026)
 2. **8b — ödəniş və hesabatlar** (çıxarışda işçi, cədvəl, vərəqə, hesablaşmalar, bağlanış yoxlaması). Testlər: Ə6, Ə7, Ə9.
 3. **Müstəqil audit** (kodu yazmayan sessiya).
 

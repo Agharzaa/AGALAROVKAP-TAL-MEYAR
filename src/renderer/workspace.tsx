@@ -44,6 +44,8 @@ export type Page =
   | 'assetOpenings'
   | 'assetDisposals'
   | 'depreciationSchedule'
+  | 'payrolls'
+  | 'payrollRates'
   | 'lists'
   | 'audit'
   | 'settings';
@@ -72,6 +74,8 @@ export type View =
   | { type: 'cash'; direction: 'in' | 'out'; id?: string }
   /** Stage 7a: putting fixed assets into service or their opening balances. */
   | { type: 'asset'; kind: 'commission' | 'opening' | 'disposal'; id?: string }
+  /** Stage 8a: a month's payroll. */
+  | { type: 'payroll'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
@@ -209,7 +213,8 @@ const reusable = (v: View) =>
       v.type === 'invoice' ||
       v.type === 'bank' ||
       v.type === 'cash' ||
-      v.type === 'asset') &&
+      v.type === 'asset' ||
+      v.type === 'payroll') &&
     !v.id
   );
 

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pencil, Plus } from '../icons';
-import { currencies } from '../../domain/chart';
+import { currencies, subkontoLabel } from '../../domain/chart';
 import type { CommandInput } from '../api';
 import type {
   BankAccountView,
@@ -15,8 +15,9 @@ import { ModuleFrame } from '../frame';
 import { SearchField, matches } from '../filters';
 import { useMutation } from '../hooks';
 import { pages } from '../pages';
-import { Picker } from '../picker';
-import { Field, Modal, Notice } from '../ui';
+import { accountOptions, Picker, subkontoOptions } from '../picker';
+import { day, money } from '../format';
+import { DateInput, Field, Modal, Notice } from '../ui';
 import { useWindow } from '../workspace';
 
 function EditDialog({
@@ -484,31 +485,79 @@ export function ProductsPage() {
   );
 }
 
+/** Salary goes to an expense account with an expense item (stage 8a, QERARLAR 2026-10-27 §2). */
+const payrollExpense = (code: string) =>
+  ['202', '701', '711', '721'].some((f) => code === f || code.startsWith(`${f}.`));
+
 export function EmployeesPage() {
   const win = useWindow();
   const { catalog } = useCatalog(win.companyId);
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState<EmployeeView | 'new' | null>(null);
-  const [f, setF] = useState({ name: '', position: '', fin: '', archived: false });
-  const rows = (catalog?.employees ?? []).filter((e) => matches(search, e.name, e.position, e.fin));
+  const empty = {
+    name: '',
+    position: '',
+    fin: '',
+    archived: false,
+    tabNo: '',
+    hired: '',
+    left: '',
+    salary: '',
+    expenseAccount: '',
+    expenseSk: [] as string[],
+  };
+  const [f, setF] = useState(empty);
+  const rows = (catalog?.employees ?? []).filter((e) =>
+    matches(search, e.name, e.position, e.fin, e.tabNo),
+  );
   const open = (e: EmployeeView | 'new') => {
     setEdit(e);
     setF(
       e === 'new'
-        ? { name: '', position: '', fin: '', archived: false }
-        : { name: e.name, position: e.position, fin: e.fin, archived: e.archived },
+        ? empty
+        : {
+            name: e.name,
+            position: e.position,
+            fin: e.fin,
+            archived: e.archived,
+            tabNo: e.tabNo,
+            hired: e.hired,
+            left: e.left,
+            salary: e.salary === '0.00' ? '' : e.salary,
+            expenseAccount: e.expenseAccount,
+            expenseSk: e.expenseSk,
+          },
     );
   };
   const current = edit && edit !== 'new' ? edit : null;
+  const account = catalog?.accounts.find((a) => a.code === f.expenseAccount);
+  // Drivers to 701 with the default product group (QERARLAR 2026-10-27 §2).
+  const setAccount = (code: string) => {
+    const a = catalog?.accounts.find((x) => x.code === code);
+    const group = catalog?.items.find((i) => i.role === 'defaultProductGroup' && !i.archived)?.id;
+    setF({
+      ...f,
+      expenseAccount: code,
+      expenseSk: (a?.subkonto ?? []).map((k) => (k === 'productGroup' ? (group ?? '') : '')),
+    });
+  };
   return (
     <ListFrame
       page="employees"
       rows={rows}
       search={search}
       setSearch={setSearch}
-      placeholder="Ad, vəzifə, FİN"
-      head={['Ad, soyad', 'Vəzifə', 'FİN']}
-      row={(e) => [e.name, e.position, e.fin]}
+      placeholder="Ad, vəzifə, FİN, tabel nömrəsi"
+      head={['Tabel №', 'Ad, soyad', 'Vəzifə', 'FİN', 'Əmək haqqı', 'Xərc hesabı', 'İşə qəbul']}
+      row={(e) => [
+        e.tabNo,
+        e.name,
+        e.position,
+        e.fin,
+        e.salary === '0.00' ? '' : money(e.salary),
+        e.expenseAccount,
+        e.hired ? day(e.hired) : '',
+      ]}
       onNew={() => open('new')}
       onEdit={open}
     >
@@ -545,6 +594,63 @@ export function EmployeesPage() {
               onChange={(e) => setF({ ...f, fin: e.target.value.toUpperCase() })}
             />
           </Field>
+          <Field label="Tabel nömrəsi">
+            <input
+              maxLength={20}
+              value={f.tabNo}
+              onChange={(e) => setF({ ...f, tabNo: e.target.value })}
+            />
+          </Field>
+          <Field label="Aylıq əmək haqqı" hint="Əmək müqaviləsi üzrə, vergilərdən əvvəl">
+            <input
+              inputMode="decimal"
+              value={f.salary}
+              onChange={(e) => setF({ ...f, salary: e.target.value })}
+            />
+          </Field>
+          <Field label="İşə qəbul">
+            <DateInput
+              value={f.hired}
+              onChange={(hired) => setF({ ...f, hired })}
+              aria-label="İşə qəbul"
+            />
+          </Field>
+          <Field label="İşdən çıxma" hint="Boş — işləyir">
+            <DateInput
+              value={f.left}
+              onChange={(left) => setF({ ...f, left })}
+              aria-label="İşdən çıxma"
+            />
+          </Field>
+          <Field label="Əmək haqqının xərc hesabı" wide hint="Sürücülər — 701, ofis — 721">
+            <Picker
+              ariaLabel="Xərc hesabı"
+              value={f.expenseAccount}
+              options={catalog ? accountOptions(catalog, payrollExpense) : []}
+              onChange={setAccount}
+              placeholder="Hesab"
+            />
+          </Field>
+          {catalog &&
+            account?.subkonto.map((kind, i) =>
+              kind === 'expenseItem' ? null : (
+                <Field key={kind} label={subkontoLabel[kind]}>
+                  <Picker
+                    ariaLabel={subkontoLabel[kind]}
+                    value={f.expenseSk[i] ?? ''}
+                    options={subkontoOptions(catalog, kind, account.code, '')}
+                    onChange={(v) =>
+                      setF({
+                        ...f,
+                        expenseSk: account.subkonto.map((_, j) =>
+                          j === i ? v : (f.expenseSk[j] ?? ''),
+                        ),
+                      })
+                    }
+                  />
+                </Field>
+              ),
+            )}
           {archiveBox(f.archived, (archived) => setF({ ...f, archived }), !!current)}
         </EditDialog>
       )}

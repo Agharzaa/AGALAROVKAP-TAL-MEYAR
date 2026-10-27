@@ -3403,3 +3403,43 @@ button.step:active {
 .schedule td.forecast {
   color: var(--off);
 }
+
+/* Stage 8a — payroll: the month's lines (amounts computed as typed) and the rate brackets. */
+.payroll-grid td input.num {
+  width: 9em;
+  text-align: right;
+}
+.payroll-grid td.num,
+.payroll-grid th.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.payroll-grid tr.invalid td {
+  background: var(--row-bad);
+}
+.payroll-grid tfoot th,
+.payroll-grid tfoot td {
+  border-top: 1px solid var(--frame);
+}
+.rate-set {
+  margin-bottom: 12px;
+}
+.rate-brackets {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.rate-bracket,
+.inline-pair {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.rate-bracket input,
+.inline-pair input {
+  width: 8em;
+}

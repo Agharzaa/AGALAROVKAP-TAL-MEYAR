@@ -24,6 +24,11 @@ export const querySchema = z.discriminatedUnion('type', [
     companyId: id,
     year: z.number().int().min(2000).max(2100),
   }),
+  /** Stage 8a: payroll — the dated rates, the month documents and a new month's lines. */
+  z.object({ type: z.literal('payrollRates'), companyId: id }),
+  z.object({ type: z.literal('payrollDocuments'), companyId: id }),
+  z.object({ type: z.literal('payrollDocument'), companyId: id, id }),
+  z.object({ type: z.literal('payrollFill'), companyId: id, month: z.string().max(7) }),
   z.object({
     type: z.literal('invoices'),
     companyId: id,
@@ -304,6 +309,58 @@ export interface EmployeeView {
   position: string;
   fin: string;
   archived: boolean;
+  /** Stage 8a. */
+  tabNo: string;
+  hired: string;
+  left: string;
+  salary: string;
+  expenseAccount: string;
+  expenseSk: string[];
+}
+/** Stage 8a: a set of payroll rates; `used` — a posted month was computed with it. */
+export interface PayrollRatesView {
+  validFrom: string;
+  rates: import('../domain/payroll.js').RatesInput;
+  used: boolean;
+}
+export interface PayrollLineView {
+  employeeId: string;
+  name: string;
+  tabNo: string;
+  position: string;
+  salary: string;
+  bonus: string;
+  gross: string;
+  incomeTax: string;
+  dsmfEmployee: string;
+  unemploymentEmployee: string;
+  medicalEmployee: string;
+  net: string;
+  dsmfEmployer: string;
+  unemploymentEmployer: string;
+  medicalEmployer: string;
+  expenseAccount: string;
+}
+export interface PayrollDocumentView {
+  id: string;
+  version: number;
+  month: string;
+  number: string;
+  date: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+  employees: number;
+  gross: string;
+  net: string;
+  lines: PayrollLineView[];
+}
+export interface PayrollDocumentDetail extends PayrollDocumentView {
+  postings: PostingView[];
+}
+export interface PayrollFillLine {
+  employeeId: string;
+  name: string;
+  salary: string;
 }
 export type ItemKind =
   | 'expenseItem'

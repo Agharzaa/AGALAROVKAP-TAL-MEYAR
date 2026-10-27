@@ -67,6 +67,7 @@ import {
   fixedAssets,
   fixedAssetView,
 } from './assets.js';
+import { payrollDocument, payrollDocuments, payrollFill, payrollRates } from './payroll.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const money = (v: bigint) => formatMinor(v);
@@ -1432,6 +1433,12 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             position: str(r.position),
             fin: str(r.fin),
             archived: flag(r.archived),
+            tabNo: str(r.tab_no),
+            hired: str(r.hired),
+            left: str(r.left_on),
+            salary: money(r.salary as bigint),
+            expenseAccount: str(r.expense_account),
+            expenseSk: JSON.parse(str(r.expense_sk)) as string[],
           })),
         items: db
           .all('SELECT * FROM items WHERE company_id=? ORDER BY kind, name', c)
@@ -1470,6 +1477,17 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'depreciationSchedule':
       company(db, q.companyId);
       return depreciationSchedule(db, q.companyId, q.year);
+    case 'payrollRates':
+      company(db, q.companyId);
+      return payrollRates(db, q.companyId);
+    case 'payrollDocuments':
+      company(db, q.companyId);
+      return payrollDocuments(db, q.companyId);
+    case 'payrollDocument':
+      return payrollDocument(db, q.companyId, q.id);
+    case 'payrollFill':
+      company(db, q.companyId);
+      return payrollFill(db, q.companyId, q.month);
     case 'invoices': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);

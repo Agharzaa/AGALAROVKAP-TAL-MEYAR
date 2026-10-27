@@ -75,7 +75,7 @@ function setup(f: F) {
     position: '',
     fin: '',
     archived: false,
-  }).id;
+  } as never).id;
   return { box, founder, customer, supplier, c7, c12, paper, capitalIn, employee };
 }
 

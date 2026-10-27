@@ -11,7 +11,9 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
-export const SCHEMA_VERSION = 16;
+import { rates2026 } from '../../domain/payroll.js';
+
+export const SCHEMA_VERSION = 17;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1320,6 +1322,90 @@ INSERT INTO items(id,company_id,kind,name,role)
   WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='incomeType' AND j.name='Əsas vəsaitin satışı');
 `;
 
+// v17 — payroll (stage 8a; docs/MERHELE-8-EMEK-HAQQI.md, QERARLAR 2026-10-27). Employees get their
+// contract terms; the rates of income tax and the contributions are a dated table (the 2026 set
+// seeded); a month's payroll is a document with one line per employee.
+
+const v17 = `
+ALTER TABLE employees ADD COLUMN tab_no TEXT NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN hired TEXT NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN left_on TEXT NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN salary INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE employees ADD COLUMN expense_account TEXT NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN expense_sk TEXT NOT NULL DEFAULT '[]';
+
+CREATE TABLE payroll_rates(
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  valid_from TEXT NOT NULL,
+  rates TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(company_id,valid_from)
+);
+INSERT INTO payroll_rates SELECT id,'2026-01-01',${q(JSON.stringify(rates2026))},strftime('%Y-%m-%dT%H:%M:%fZ','now') FROM companies;
+
+CREATE TABLE payroll_documents(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  month TEXT NOT NULL,
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,number_key)
+);
+CREATE UNIQUE INDEX payroll_documents_month ON payroll_documents(company_id,month) WHERE status='posted';
+CREATE TRIGGER payroll_documents_no_delete BEFORE DELETE ON payroll_documents BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER payroll_documents_period BEFORE UPDATE ON payroll_documents
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+-- The lines of the document's current version: the employee's month, amounts in qəpik.
+CREATE TABLE payroll_lines(
+  company_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  line_no INTEGER NOT NULL,
+  employee_id TEXT NOT NULL,
+  salary INTEGER NOT NULL,
+  bonus INTEGER NOT NULL DEFAULT 0,
+  gross INTEGER NOT NULL,
+  income_tax INTEGER NOT NULL,
+  dsmf_employee INTEGER NOT NULL,
+  unemployment_employee INTEGER NOT NULL,
+  medical_employee INTEGER NOT NULL,
+  net INTEGER NOT NULL,
+  dsmf_employer INTEGER NOT NULL,
+  unemployment_employer INTEGER NOT NULL,
+  medical_employer INTEGER NOT NULL,
+  expense_account TEXT NOT NULL,
+  expense_sk TEXT NOT NULL,
+  PRIMARY KEY(document_id,line_no),
+  FOREIGN KEY(company_id,document_id) REFERENCES payroll_documents(company_id,id),
+  FOREIGN KEY(company_id,employee_id) REFERENCES employees(company_id,id)
+);
+CREATE INDEX payroll_lines_employee ON payroll_lines(company_id,employee_id);
+
+UPDATE items SET role='salary' WHERE kind='expenseItem' AND name='Əmək haqqı' AND archived=0 AND role=''
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='salary');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'expenseItem','Əmək haqqı','salary' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Əmək haqqı');
+UPDATE items SET role='socialInsurance' WHERE kind='expenseItem' AND name='Sosial sığorta ayırmaları' AND archived=0 AND role=''
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='socialInsurance');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'expenseItem','Sosial sığorta ayırmaları','socialInsurance' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Sosial sığorta ayırmaları');
+
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-17','Yeniləndi','Baza',id,
+  'Əmək haqqı üçün baza hazırlandı (işçilərin şərtləri, 2026 dərəcələri).'
+  FROM companies;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1337,4 +1423,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 14, sql: v14 },
   { version: 15, sql: v15 },
   { version: 16, sql: v16, foreignKeysOff: true },
+  { version: 17, sql: v17 },
 ];

@@ -421,3 +421,14 @@ Plan: `docs/MERHELE-7-ESAS-VESAITLER.md`. İstifadəçinin cavabları (hamısı 
    - **Silinmə** (ƏS-000001): Dt 112 / Kt 111 yığılmış amortizasiya qədər, qalan Dt 731 / Kt 111.
    - Hər ikisində: silinmə / satış ayına qədər çatan amortizasiya yazılmayıbsa (əvvəlki ay bağlanmayıb) — rədd: "əvvəlcə həmin ayları bağlayın"; silinmə / satış ayında amortizasiya hesablanmır. Silinmiş vəsait yenidən istismara verilmir.
    - **Ə7 (e-qaimədə əsas vəsait sətri avtomatik uçota düşməsin) edilmir:** DVX-dən mal sətirləri gəlmir (§19), qaimə yekunundan əsas vəsaiti tanımaq olmur. Əvəzinə tövsiyə: "Digər" kimi geniş "bütün qaimə" qaydaları "təklif" rejimində saxlanılsın.
+
+## 2026-10-27 — Mərhələ 8: əmək haqqı
+
+Plan: `docs/MERHELE-8-EMEK-HAQQI.md`. İstifadəçi planı təsdiqlədi, bütün suallarda tövsiyə ilə:
+
+1. **Dərəcələr** — planın §5-indəki 2026 dəyərləri başlanğıc dəstdir (01.01.2026-dan qüvvədə), mühasib taxes.gov.az / DSMF ilə təsdiq edir; dəyişsə — yalnız "Dərəcələr" cədvəlinə yeni dəst. Pillələr marjinaldır (hər dərəcə öz hissəsinə). 8 000-dən yuxarı DSMF ayrıca pillə kimi yazılmayıb (işçi 10%, işəgötürən 15% davam edir) — mühasib təsdiq edənə qədər.
+2. **Xərc hesabı:** sürücülər → 701 ("Əsas nomenklatura qrupu", xərc maddəsi "Əmək haqqı"), ofis → 721; işçinin kartında seçilir. İşəgötürən payları eyni hesaba, xərc maddəsi "Sosial sığorta ayırmaları".
+3. **Mükafat** — sətirdə sərbəst məbləğ (gross-a daxil). Gəlir vergisindən başqa tutulmalar (cərimə, avansın qaytarılması başqa hesaba) 8b-də: qarşı hesab lazımdır.
+4. **Avans** — ayrıca sənəd yox: bank / kassa ilə Dt 533, ay sonunda hesablama bağlayır.
+5. **Məzuniyyət və xəstəlik — sonra;** ilk aylar mükafat sətri kimi əl ilə.
+6. **8a-da dəqiqləşdi:** ayda bir uçotdakı əmək haqqı sənədi (pilləli vergi işçinin ayın bütün gəlirindən hesablanır). İşə qəbul / çıxma ayında əmək haqqı iş günlərinə (B.e.–C.) mütənasib; bayramlar sayılmır — mühasib məbləği düzəldə bilər. Yalnız əmək müqaviləsi; xidmət müqaviləsi (522.02) — sonra.

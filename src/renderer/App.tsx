@@ -63,6 +63,7 @@ import { HomePage } from './pages/home';
 import { OperationsPage } from './pages/operations';
 import { OperationEditor } from './pages/operation-editor';
 import { AssetEditor } from './pages/asset-editor';
+import { PayrollDocumentsPage, PayrollEditor, PayrollRatesPage } from './pages/payroll';
 import {
   AssetDocumentsPage,
   DepreciationSchedulePage,
@@ -1056,6 +1057,8 @@ function Routed({ win }: { win: Win }) {
       return <CashEditor direction={v.direction} {...(v.id ? { id: v.id } : {})} />;
     case 'asset':
       return <AssetEditor kind={v.kind} {...(v.id ? { id: v.id } : {})} />;
+    case 'payroll':
+      return <PayrollEditor {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
@@ -1124,6 +1127,10 @@ function Routed({ win }: { win: Win }) {
           return <AssetDocumentsPage kind="disposal" />;
         case 'depreciationSchedule':
           return <DepreciationSchedulePage />;
+        case 'payrolls':
+          return <PayrollDocumentsPage />;
+        case 'payrollRates':
+          return <PayrollRatesPage />;
         case 'lists':
           return <ListsPage />;
         case 'audit':
