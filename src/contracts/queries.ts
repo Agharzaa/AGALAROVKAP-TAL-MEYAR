@@ -29,6 +29,16 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('payrollDocuments'), companyId: id }),
   z.object({ type: z.literal('payrollDocument'), companyId: id, id }),
   z.object({ type: z.literal('payrollFill'), companyId: id, month: z.string().max(7) }),
+  /** Stage 8b / 8c: absences, the employee's month, settlements on 533, taxes and funds. */
+  z.object({
+    type: z.literal('absences'),
+    companyId: id,
+    kind: z.enum(['vacation', 'unpaid', 'sick']).optional(),
+  }),
+  z.object({ type: z.literal('absence'), companyId: id, id }),
+  z.object({ type: z.literal('payslip'), companyId: id, employeeId: id, month: z.string().max(7) }),
+  z.object({ type: z.literal('payrollSettlements'), companyId: id, from: date, to: date }),
+  z.object({ type: z.literal('payrollTaxes'), companyId: id, month: z.string().max(7) }),
   z.object({
     type: z.literal('invoices'),
     companyId: id,
@@ -316,6 +326,12 @@ export interface EmployeeView {
   salary: string;
   expenseAccount: string;
   expenseSk: string[];
+  /** Stage 8c. */
+  mainJob: boolean;
+  exemption: '0' | '100' | '200' | '400';
+  exemptionExtra: boolean;
+  exemptionFrom: string;
+  exemptionTo: string;
 }
 /** Stage 8a: a set of payroll rates; `used` — a posted month was computed with it. */
 export interface PayrollRatesView {
@@ -340,6 +356,12 @@ export interface PayrollLineView {
   unemploymentEmployer: string;
   medicalEmployer: string;
   expenseAccount: string;
+  /** Stage 8b / 8c. */
+  vacation: string;
+  sick: string;
+  exemption: string;
+  deducted: string;
+  deductions: { amount: string; account: string; sk: string[]; memo: string }[];
 }
 export interface PayrollDocumentView {
   id: string;
@@ -353,6 +375,8 @@ export interface PayrollDocumentView {
   gross: string;
   net: string;
   lines: PayrollLineView[];
+  /** Employees whose vacation or sick leave changed after the document was posted (8c). */
+  stale: string[];
 }
 export interface PayrollDocumentDetail extends PayrollDocumentView {
   postings: PostingView[];
@@ -361,6 +385,70 @@ export interface PayrollFillLine {
   employeeId: string;
   name: string;
   salary: string;
+  /** Pay of the vacations and sick leaves that start in the month (8c). */
+  vacation: string;
+  sick: string;
+}
+/** Stage 8c: a vacation or a sick leave. */
+export interface AbsenceView {
+  id: string;
+  version: number;
+  kind: 'vacation' | 'unpaid' | 'sick';
+  number: string;
+  employeeId: string;
+  employeeName: string;
+  from: string;
+  to: string;
+  days: number;
+  sheetNo: string;
+  percent: number;
+  employerAll: boolean;
+  manual: string;
+  /** Vacation: the average monthly earnings; sick leave: the average daily earnings. */
+  average: string;
+  daily: string;
+  employerDays: number;
+  fundDays: number;
+  amount: string;
+  basis: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+}
+/** Stage 8b: the employee's month — owed at the start, accrued, withheld, paid, owed at the end. */
+export interface PayslipView {
+  employeeId: string;
+  name: string;
+  tabNo: string;
+  position: string;
+  month: string;
+  opening: string;
+  accrued: { label: string; amount: string }[];
+  withheld: { label: string; amount: string }[];
+  paid: { date: string; number: string; amount: string }[];
+  closing: string;
+}
+export interface PayrollSettlementRow {
+  employeeId: string;
+  name: string;
+  opening: string;
+  accrued: string;
+  withheld: string;
+  paid: string;
+  closing: string;
+}
+export interface PayrollTaxRow {
+  account: string;
+  label: string;
+  opening: string;
+  accrued: string;
+  paid: string;
+  closing: string;
+}
+export interface PayrollTaxesView {
+  month: string;
+  employees: number;
+  base: string;
+  rows: PayrollTaxRow[];
 }
 export type ItemKind =
   | 'expenseItem'

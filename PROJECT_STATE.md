@@ -593,6 +593,24 @@ Plan: `docs/MERHELE-8-EMEK-HAQQI.md` (istifadəçi bütün tövsiyələri təsdi
 - Testlər: `tests/domain/payroll.test.ts` (Ə1 §9 misalı qəpikbəqəpik, Ə2 pillə sərhədləri, Ə4), `tests/integration/payroll.test.ts` (Ə3, Ə4, Ə5, işçinin yoxlamaları, v16 → v17), `tests/ui` (8a).
 - **Növbəti:** 8b — ödəniş (çıxarışda işçi), gəlir vergisindən başqa tutulmalar, hesabatlar (cədvəl, vərəqə, hesablaşmalar, vergi və fondlar), ay bağlanışında yoxlama, perf (Ə6, Ə7, Ə9).
 
+## 0.9.1 — mərhələ 8b / 8c: güzəştlər, məzuniyyət, xəstəlik vərəqəsi, tutulmalar, hesabatlar (27.10.2026)
+
+İstifadəçi: "hamısını, hər detalı düşün — gəlir vergisi güzəştləri, xəstəlik vərəqəsi və s." Plan §12, QERARLAR 2026-10-27 §7–§12. Mənbələr zidd olan yerdə qayda parametrdir və **mühasib təsdiq edir**.
+
+- **Gəlir vergisi güzəştləri (VM 102)** işçinin kartında: 400 / 200 / 100 ₼ (ən böyüyü, 102.7) + əlavə 50 ₼ (102.5), qüvvədə olduğu tarixlər, "əsas iş yeri" (yalnız orada). 2026-nın "≤ 2 500 → 200 azad" qaydası ilə toplanmır — ən böyüyü.
+- **Məzuniyyət** (MZ-000001) və **ödənişsiz məzuniyyət** (ÖM-000001): 12 tam ayın (Meyar-da hesablanmış) əmək haqqı + mükafatı / ay sayı / 30,4 (günlük qəpiyə yuvarlaqlaşdırılır) × təqvim günü; Meyar-dan əvvəlki aylar üçün mühasib orta aylığı əl ilə yazır. Başladığı ayın əmək haqqına düşür, vergi və fondlar adi əmək haqqı kimi; məzuniyyət günlərinin maaşı hesablanmır.
+- **Xəstəlik vərəqəsi** (XV-000001): orta günlük = əvvəlki 4 tam rübün sığortaya cəlb olunan gəliri / təqvim günləri (əvvəlki xəstəlik günləri çıxılır) × staj faizi (60 / 80 / 100); ilk 14 təqvim günü işəgötürən (istehsalat qəzasında işəgötürənin günahı ilə — hamısı), qalanı DSMF (yazılış yox, sənəddə göstərilir); 6 aydan az staj — xəbərdarlıq. Müavinət: Dt 701 / 721 ("Xəstəlik vərəqəsi üzrə müavinət") / Kt 533, yalnız gəlir vergisi.
+- Hər sənəd hesablamanı öz mətnində göstərir ("9 ay … / 9 = …; … / 30,4 = … × 21 gün"). Uçotdakı ayın əmək haqqından sonra dəyişsə — əmək haqqı sənədi "köhnəlib" (bildiriş), ay bağlanışı bloklanır; "İşçilərə görə doldur" + düzəliş kifayətdir.
+- **Başqa tutulmalar** (aliment, avansın qaytarılması): sətirdə məbləğ + hesab + subkonto, Dt 533 / Kt hesab; vergi bazasını dəyişmir, ödəniləcəkdən çox ola bilməz.
+- **Bank çıxarışı:** əmək haqqı sətri təyinatdakı FİN-ə və ya ad-soyada görə işçiyə bağlanır (533-ün subkontosu).
+- **Hesabatlar** (Əmək haqqı → Hesabatlar): hesablaşma vərəqəsi (işçi × ay, çap / Excel), işçilərlə hesablaşmalar (533, dövr), vergi və fondlar (ay: hesablanıb, köçürülüb, borc; işçi sayı və baza); əmək haqqı sənədindən Excel cədvəli.
+- **Ay bağlanışı:** işləyən işçi var, ayın əmək haqqı yoxdur — xəbərdarlıq; köhnəlmiş əmək haqqı — bloklayır.
+- Sxem v18: işçinin güzəşt sahələri, `payroll_absences`, əmək haqqı sətrində məzuniyyət / xəstəlik / güzəşt / tutulmalar, "Xəstəlik vərəqəsi üzrə müavinət" (`sickPay`).
+- **Məlum sərhədlər:** bayramlar iş günü sayılır (məbləği mühasib düzəldir); xəstəliyin aylıq yuxarı həddi (25 × minimum pensiya) tətbiq olunmur; 01.05.2026-dan əvvəlki xəstəlik — yeni qayda ilə, lazım olsa orta günlük əl ilə; məzuniyyət aylara bölünmür.
+- Testlər: `tests/domain/payroll.test.ts`, `tests/integration/payroll-8bc.test.ts`, `tests/ui` (8c), perf — 300 işçi.
+- Testlər Windows-da: `npm run typecheck`, `npm test` 235, `npm run test:ui` 48, `npm run test:perf` (300 işçi: doldurma 14 ms, uçot 49 ms). Electron işlədilmədi.
+- **Növbəti:** mərhələ 8-in müstəqil auditi; mühasibin dərəcələri və qaydaları təsdiqi.
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -601,7 +619,7 @@ Plan: `docs/MERHELE-8-EMEK-HAQQI.md` (istifadəçi bütün tövsiyələri təsdi
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → ~~7c silinmə və satış~~ (0.8.2) → ~~müstəqil audit~~ (26.10.2026, 8 qüsur düzəldi, 1 açıq sual). Açıq suallar — §11.
-8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → 8b ödəniş və hesabatlar → müstəqil audit.
+8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → müstəqil audit.
 
 ## Əmrlər
 

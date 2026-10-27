@@ -36,6 +36,7 @@ import { applyEq, bulkEqMap, createEqPartners, learnEq, linkEq, saveEqMap } from
 import { cancelOperation, saveOperation } from './operations.js';
 import { cancelAssetDocument, saveAssetDocument, saveFixedAsset } from './assets.js';
 import { cancelPayroll, savePayroll, savePayrollRates } from './payroll.js';
+import { cancelAbsence, saveAbsence } from './absences.js';
 import { closingControls, runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
 
@@ -181,6 +182,10 @@ export class Ledger {
         return savePayroll(tx, c);
       case 'payroll.cancel':
         return cancelPayroll(tx, c);
+      case 'absence.save':
+        return saveAbsence(tx, c);
+      case 'absence.cancel':
+        return cancelAbsence(tx, c);
       case 'eqaime.synced':
         return recordDvxSync(tx, c);
       case 'eqaime.apply': {

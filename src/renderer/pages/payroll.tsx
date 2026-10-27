@@ -1,20 +1,24 @@
 /**
- * Stage 8a — payroll (docs/MERHELE-8-EMEK-HAQQI.md §7): the month documents, the document with its
- * lines computed as they are typed (the same domain rules the ledger posts by) and the dated rates.
+ * Stage 8 — payroll (docs/MERHELE-8-EMEK-HAQQI.md §7, §12): the month documents, the document with
+ * its lines computed as they are typed (the same domain rules the ledger posts by: exemptions,
+ * vacation and sick pay, deductions), its Excel sheet, and the dated rates.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, CheckCheck, Pencil, Plus, Trash2, UserRound } from '../icons';
+import { Ban, Check, CheckCheck, FileDown, Pencil, Plus, Trash2, UserRound } from '../icons';
 import { formatMinor, parseMoney } from '../../domain/money';
 import {
   contributionKeys,
   contributionLabel,
+  noExemption,
   parseRates,
   payrollFor,
   rates2026,
+  type Exemption,
   type PayrollAmounts,
   type RatesInput,
 } from '../../domain/payroll';
 import type {
+  EmployeeView,
   PayrollDocumentDetail,
   PayrollDocumentView,
   PayrollFillLine,
@@ -26,7 +30,8 @@ import { ModuleFrame } from '../frame';
 import { day, money, monthTitle, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages, viewTitle } from '../pages';
-import { Picker } from '../picker';
+import { accountOptions, Picker, SubkontoFields } from '../picker';
+import { workbook } from '../xlsx';
 import { Postings } from '../postings';
 import {
   Amount,
@@ -116,10 +121,20 @@ export function PayrollDocumentsPage() {
 // ---------------------------------------------------------------------------------------------
 // Document
 
+interface DeductionForm {
+  amount: string;
+  account: string;
+  sk: string[];
+  memo: string;
+}
 interface LineForm {
   employeeId: string;
   salary: string;
   bonus: string;
+  /** From the vacation and sick leave documents (8c): shown, never typed. */
+  vacation: string;
+  sick: string;
+  deductions: DeductionForm[];
 }
 interface Form {
   month: string;
@@ -127,11 +142,21 @@ interface Form {
   memo: string;
   lines: LineForm[];
 }
-const blank = (): LineForm => ({ employeeId: '', salary: '', bonus: '' });
+const blank = (): LineForm => ({
+  employeeId: '',
+  salary: '',
+  bonus: '',
+  vacation: '0.00',
+  sick: '0.00',
+  deductions: [],
+});
 const toInput = (l: LineForm) => ({
   employeeId: l.employeeId,
   salary: l.salary.trim(),
   bonus: l.bonus.trim(),
+  deductions: l.deductions
+    .filter((d) => d.amount.trim())
+    .map((d) => ({ amount: d.amount.trim(), account: d.account, sk: d.sk, memo: d.memo })),
 });
 const fromDetail = (d: PayrollDocumentDetail): Form => ({
   month: d.month,
@@ -141,16 +166,57 @@ const fromDetail = (d: PayrollDocumentDetail): Form => ({
     employeeId: l.employeeId,
     salary: l.salary,
     bonus: l.bonus === '0.00' ? '' : l.bonus,
+    vacation: l.vacation,
+    sick: l.sick,
+    deductions: l.deductions,
   })),
 });
-const fromFill = (lines: PayrollFillLine[]): LineForm[] =>
-  lines.map((l) => ({ employeeId: l.employeeId, salary: l.salary, bonus: '' }));
+/** New lines from the employees; a bonus or a deduction typed before stays with its employee. */
+const fromFill = (lines: PayrollFillLine[], before: LineForm[]): LineForm[] =>
+  lines.map((l) => {
+    const old = before.find((b) => b.employeeId === l.employeeId);
+    return {
+      employeeId: l.employeeId,
+      salary: l.salary,
+      bonus: old?.bonus ?? '',
+      vacation: l.vacation,
+      sick: l.sick,
+      deductions: old?.deductions ?? [],
+    };
+  });
+
+/** The employee's own exemption in force in the month, as the ledger reads it (8c). */
+function exemptionFor(e: EmployeeView | undefined, month: string): Exemption {
+  if (!e || !e.mainJob) return noExemption;
+  const first = `${month}-01`;
+  const last = monthEndOf(month);
+  if ((e.exemptionFrom && e.exemptionFrom > last) || (e.exemptionTo && e.exemptionTo < first))
+    return noExemption;
+  return { amount: BigInt(e.exemption) * 100n, extra: e.exemptionExtra ? 5_000n : 0n };
+}
+
+interface LineAmounts extends PayrollAmounts {
+  deducted: bigint;
+  /** Net after the deductions: what the employee is paid. */
+  pay: bigint;
+}
 
 /** The amounts of a line as the ledger will post them; null while the input is not a number. */
-function compute(l: LineForm, rates: ReturnType<typeof parseRates> | null): PayrollAmounts | null {
+function compute(
+  l: LineForm,
+  rates: ReturnType<typeof parseRates> | null,
+  exemption: Exemption,
+): LineAmounts | null {
   if (!rates) return null;
   try {
-    return payrollFor(parseMoney(l.salary || '0') + parseMoney(l.bonus || '0'), rates);
+    const a = payrollFor(
+      parseMoney(l.salary || '0') + parseMoney(l.bonus || '0') + parseMoney(l.vacation),
+      rates,
+      exemption,
+      parseMoney(l.sick),
+    );
+    const deducted = l.deductions.reduce((s, d) => s + parseMoney(d.amount || '0'), 0n);
+    return { ...a, deducted, pay: a.net - deducted };
   } catch {
     return null;
   }
@@ -186,7 +252,7 @@ export function PayrollEditor({ id }: { id?: string }) {
         companyId: win.companyId,
         month,
       });
-      setForm({ ...base, month, lines: lines.length ? fromFill(lines) : [blank()] });
+      setForm({ ...base, month, lines: lines.length ? fromFill(lines, base.lines) : [blank()] });
       if (!lines.length)
         setFillError('Bu ay üçün əmək haqqı yazılmış işçi yoxdur (İşçilər kitabçası).');
     } catch (e) {
@@ -300,12 +366,74 @@ export function PayrollEditor({ id }: { id?: string }) {
       label: e.name,
       ...(e.position || e.tabNo ? { hint: [e.tabNo, e.position].filter(Boolean).join(' · ') } : {}),
     }));
-  const amounts = form.lines.map((l) => compute(l, rates?.rates ?? null));
-  const total = (pick: (a: PayrollAmounts) => bigint) =>
+  const byId = new Map(catalog.employees.map((e) => [e.id, e]));
+  const amounts = form.lines.map((l) =>
+    compute(l, rates?.rates ?? null, exemptionFor(byId.get(l.employeeId), form.month)),
+  );
+  const total = (pick: (a: LineAmounts) => bigint) =>
     formatMinor(amounts.reduce((s, a) => s + (a ? pick(a) : 0n), 0n));
   const errorLine = /^lines\.(\d+)\./.exec(m.error?.field ?? '')?.[1];
-  const cell = (a: PayrollAmounts | null, v: (a: PayrollAmounts) => bigint) =>
+  const cell = (a: LineAmounts | null, v: (a: LineAmounts) => bigint) =>
     a ? money(formatMinor(v(a))) : '—';
+  const zero = (v: string) => (v === '0.00' ? '' : money(v));
+  const deductionAccounts = accountOptions(catalog, (c) => c !== '533' && !c.startsWith('52'));
+  const setDeduction = (i: number, j: number, patch: Partial<DeductionForm>) =>
+    setLine(i, {
+      deductions: form.lines[i]!.deductions.map((d, k) => (k === j ? { ...d, ...patch } : d)),
+    });
+  const exportSheet = async () => {
+    try {
+      const head = [
+        'Tabel №',
+        'İşçi',
+        'Əmək haqqı',
+        'Mükafat',
+        'Məzuniyyət',
+        'Xəstəlik',
+        'Hesablanıb',
+        'Güzəşt',
+        ...shown.map((k) => contributionLabel[k]),
+        'Tutulma',
+        'Ödəniləcək',
+        ...employerKeys.map((k) => contributionLabel[k]),
+      ];
+      const rows = form.lines.map((l, i) => {
+        const a = amounts[i];
+        const e = byId.get(l.employeeId);
+        const mny = (v: bigint | undefined) => ({ money: v === undefined ? '' : formatMinor(v) });
+        return [
+          e?.tabNo ?? '',
+          e?.name ?? '',
+          { money: l.salary },
+          { money: l.bonus },
+          { money: l.vacation },
+          { money: l.sick },
+          mny(a ? a.gross + a.sick : undefined),
+          mny(a?.exemption),
+          ...shown.map((k) => mny(a?.[k])),
+          mny(a?.deducted),
+          mny(a?.pay),
+          ...employerKeys.map((k) => mny(a?.[k])),
+        ];
+      });
+      const saved = await api.saveFile(
+        `Əmək haqqı cədvəli ${form.month}.xlsx`,
+        workbook({
+          name: `Əmək haqqı ${form.month}`,
+          title: [
+            'Əmək haqqı cədvəli',
+            `${monthTitle(form.month)}${form.number ? ` · ${form.number}` : ''}`,
+          ],
+          header: head,
+          rows,
+          widths: [10, 30, ...head.slice(2).map(() => 13)],
+        }),
+      );
+      if (saved) setMessage(`Saxlanıldı: ${saved}`);
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  };
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
@@ -344,6 +472,9 @@ export function PayrollEditor({ id }: { id?: string }) {
               <UserRound size={15} /> İşçilərə görə doldur
             </button>
           )}
+          <button type="button" className="button secondary" onClick={() => void exportSheet()}>
+            <FileDown size={15} /> Excel
+          </button>
           {doc && doc.status === 'posted' && (
             <button
               type="button"
@@ -359,6 +490,12 @@ export function PayrollEditor({ id }: { id?: string }) {
         <>
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
           {fillError && <Notice onClose={() => setFillError('')}>{fillError}</Notice>}
+          {doc && doc.stale.length > 0 && (
+            <Notice kind="warning">
+              Uçotdan sonra dəyişən məzuniyyət / xəstəlik vərəqəsi: {doc.stale.join(', ')}.
+              "İşçilərə görə doldur" və düzəlişi uçota alın — o vaxtadək ay bağlanmır.
+            </Notice>
+          )}
           {sets.data && !rates && (
             <Notice>
               {monthTitle(form.month)} üçün qüvvədə olan dərəcələr yoxdur (Əmək haqqı → Dərəcələr).
@@ -416,6 +553,16 @@ export function PayrollEditor({ id }: { id?: string }) {
                   <th scope="col" className="num">
                     Mükafat
                   </th>
+                  <th scope="col" className="num" title="Məzuniyyət sənədlərindən">
+                    Məzuniyyət
+                  </th>
+                  <th
+                    scope="col"
+                    className="num"
+                    title="Xəstəlik vərəqələrindən: işəgötürənin günləri"
+                  >
+                    Xəstəlik
+                  </th>
                   <th scope="col" className="num">
                     Hesablanıb
                   </th>
@@ -424,6 +571,9 @@ export function PayrollEditor({ id }: { id?: string }) {
                       {contributionLabel[k].replace(' — işçi', '')}
                     </th>
                   ))}
+                  <th scope="col" className="num" title="Aliment, avansın qaytarılması və s.">
+                    Tutulma
+                  </th>
                   <th scope="col" className="num">
                     Ödəniləcək
                   </th>
@@ -466,14 +616,43 @@ export function PayrollEditor({ id }: { id?: string }) {
                           onChange={(e) => setLine(i, { bonus: e.target.value })}
                         />
                       </td>
-                      <td className="num">{cell(a, (x) => x.gross)}</td>
+                      <td className="num" aria-label={`Sətir ${i + 1}: məzuniyyət`}>
+                        {zero(l.vacation)}
+                      </td>
+                      <td className="num" aria-label={`Sətir ${i + 1}: xəstəlik`}>
+                        {zero(l.sick)}
+                      </td>
+                      <td className="num">{cell(a, (x) => x.gross + x.sick)}</td>
                       {shown.map((k) => (
-                        <td key={k} className="num">
+                        <td
+                          key={k}
+                          className="num"
+                          {...(k === 'incomeTax' && a?.exemption
+                            ? { title: `Güzəşt ${money(formatMinor(a.exemption))}` }
+                            : {})}
+                        >
                           {cell(a, (x) => x[k])}
                         </td>
                       ))}
+                      <td className="num">
+                        <button
+                          type="button"
+                          className="link"
+                          aria-label={`Sətir ${i + 1}: tutulma əlavə et`}
+                          onClick={() =>
+                            setLine(i, {
+                              deductions: [
+                                ...l.deductions,
+                                { amount: '', account: '', sk: [], memo: '' },
+                              ],
+                            })
+                          }
+                        >
+                          {a && a.deducted ? money(formatMinor(a.deducted)) : '+'}
+                        </button>
+                      </td>
                       <td className="num" aria-label={`Sətir ${i + 1}: ödəniləcək`}>
-                        <strong>{cell(a, (x) => x.net)}</strong>
+                        <strong>{cell(a, (x) => x.pay)}</strong>
                       </td>
                       <td className="num">
                         {cell(a, (x) => employerKeys.reduce((s, k) => s + x[k], 0n))}
@@ -499,14 +678,17 @@ export function PayrollEditor({ id }: { id?: string }) {
                   <th scope="row">Cəmi</th>
                   <td />
                   <td />
-                  <td className="num">{money(total((a) => a.gross))}</td>
+                  <td />
+                  <td />
+                  <td className="num">{money(total((a) => a.gross + a.sick))}</td>
                   {shown.map((k) => (
                     <td key={k} className="num">
                       {money(total((a) => a[k]))}
                     </td>
                   ))}
+                  <td className="num">{money(total((a) => a.deducted))}</td>
                   <td className="num" aria-label="Cəmi ödəniləcək">
-                    <strong>{money(total((a) => a.net))}</strong>
+                    <strong>{money(total((a) => a.pay))}</strong>
                   </td>
                   <td className="num">
                     {money(total((a) => employerKeys.reduce((s, k) => s + a[k], 0n)))}
@@ -523,13 +705,69 @@ export function PayrollEditor({ id }: { id?: string }) {
           >
             <Plus size={15} /> İşçi əlavə et
           </button>
+          {form.lines.some((l) => l.deductions.length > 0) && (
+            <section className="panel payroll-deductions" aria-label="Tutulmalar">
+              <h2>Tutulmalar</h2>
+              {form.lines.map((l, i) =>
+                l.deductions.map((d, j) => (
+                  <div key={`${i}-${j}`} className="deduction-row">
+                    <span className="deduction-who">
+                      {byId.get(l.employeeId)?.name ?? `Sətir ${i + 1}`}
+                    </span>
+                    <input
+                      aria-label={`Sətir ${i + 1}, tutulma ${j + 1}: məbləğ`}
+                      inputMode="decimal"
+                      placeholder="Məbləğ"
+                      value={d.amount}
+                      onChange={(e) => setDeduction(i, j, { amount: e.target.value })}
+                    />
+                    <Picker
+                      className="account-picker"
+                      ariaLabel={`Sətir ${i + 1}, tutulma ${j + 1}: hesab`}
+                      value={d.account}
+                      options={deductionAccounts}
+                      placeholder="Hesab (məs. 538, 244)"
+                      onChange={(account) => setDeduction(i, j, { account, sk: [] })}
+                    />
+                    <SubkontoFields
+                      catalog={catalog}
+                      companyId={win.companyId}
+                      account={d.account}
+                      values={d.sk}
+                      onChange={(sk) => setDeduction(i, j, { sk })}
+                      side={`Sətir ${i + 1}, tutulma ${j + 1}`}
+                    />
+                    <input
+                      aria-label={`Sətir ${i + 1}, tutulma ${j + 1}: məzmun`}
+                      placeholder="Məzmun (məs. Aliment)"
+                      maxLength={200}
+                      value={d.memo}
+                      onChange={(e) => setDeduction(i, j, { memo: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Sətir ${i + 1}, tutulma ${j + 1}: sil`}
+                      onClick={() =>
+                        setLine(i, { deductions: l.deductions.filter((_, k) => k !== j) })
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )),
+              )}
+            </section>
+          )}
         </fieldset>
         <PostingRule>
           Ayın son günü: Dt 701 / 721 ("Əmək haqqı") / Kt 533 — hesablanan; Dt 533 / Kt 521.03,
           522.01, 522.03.1, 522.04.1 — işçidən tutulan; Dt 701 / 721 ("Sosial sığorta ayırmaları") /
           Kt 522.01, 522.03.2, 522.04.2 — işəgötürənin payı. Xərc hesabı işçinin kartındadır.
-          {rates ? ` Dərəcələr ${day(rates.from)} tarixindən.` : ''} Ödəniş — bank və ya kassa
-          sənədi ilə (Dt 533).
+          {rates ? ` Dərəcələr ${day(rates.from)} tarixindən.` : ''} Məzuniyyət və xəstəlik vərəqəsi
+          öz sənədlərindən gəlir (xəstəlik — "Xəstəlik vərəqəsi üzrə müavinət", yalnız gəlir
+          vergisi); güzəşt işçinin kartındadır. Tutulma: Dt 533 / Kt seçilən hesab. Ödəniş — bank və
+          ya kassa sənədi ilə (Dt 533).
         </PostingRule>
         {doc && doc.postings.length > 0 && <Postings postings={doc.postings} />}
       </form>

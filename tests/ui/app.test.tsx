@@ -3085,3 +3085,92 @@ test('stage 8a: the month payroll fills in from the employees, computes as typed
     h.close();
   }
 });
+
+test('stage 8c: a vacation with the accountant’s average goes to the month payroll; the payslip shows the debt', async () => {
+  const h = harness();
+  const s = seed(h);
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const group = catalog.items.find((i) => i.role === 'defaultProductGroup')!.id;
+  h.run({
+    type: 'employee.save',
+    companyId: s.companyId,
+    name: 'Sürücü Məmmədov',
+    position: 'Sürücü',
+    fin: '',
+    tabNo: '001',
+    hired: '2025-01-12',
+    left: '',
+    salary: '1000',
+    expenseAccount: '701',
+    expenseSk: [group, ''],
+    mainJob: true,
+    exemption: '0',
+    exemptionExtra: false,
+    exemptionFrom: '',
+    exemptionTo: '',
+    archived: false,
+  });
+  const month = monthsBack(1);
+  const [y, m] = [month.iso.slice(0, 4), month.iso.slice(5, 7)];
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Məzuniyyətlər' }));
+    const list = within(pane());
+    await list.findByText('Hələ sənəd yoxdur');
+    await user.click(list.getByRole('button', { name: 'Məzuniyyət' }));
+    const editor = within(pane());
+    await user.click(await editor.findByRole('combobox', { name: 'İşçi' }));
+    await user.keyboard('Sürücü');
+    await user.keyboard('{Enter}');
+    const date = async (label: string, text: string) => {
+      const input = editor.getByRole('textbox', { name: label });
+      await user.clear(input);
+      await user.type(input, text);
+    };
+    await date('Başlama', `05.${m}.${y}`);
+    await date('Bitmə', `09.${m}.${y}`);
+    await user.type(editor.getByRole('textbox', { name: /Orta aylıq qazanc/ }), '1216');
+    await user.click(editor.getByRole('button', { name: 'Hesabla və saxla' }));
+    // 1 216 / 30,4 = 40,00 a day × 5 days.
+    await waitFor(() =>
+      assert.match(
+        editor.getByRole('status', { name: 'Hesablama' }).textContent ?? '',
+        /40,00 ₼ × 5 gün/,
+      ),
+    );
+    await editor.findByText(/Məzuniyyət haqqı: 200,00/);
+    // The month's payroll shows it and the fewer working days.
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Əmək haqqını hesabla' }));
+    const doc = within(pane());
+    await waitFor(() =>
+      assert.equal(doc.getByLabelText('Sətir 1: məzuniyyət').textContent, '200,00'),
+    );
+    await user.click(doc.getByRole('button', { name: /^Uçota al$/ }));
+    await doc.findByText('Sənəd ƏH-000001 uçota alındı.');
+    const posted = h.ledger.query({ type: 'payrollDocuments', companyId: s.companyId }) as {
+      net: string;
+      lines: { vacation: string }[];
+    }[];
+    assert.equal(posted[0]!.lines[0]!.vacation, '200.00');
+    // The payslip: nothing paid yet — the month's net is owed.
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Hesablaşma vərəqəsi' }));
+    const slip = within(pane());
+    await user.click(await slip.findByRole('combobox', { name: 'İşçi' }));
+    await user.keyboard('Sürücü');
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      assert.equal(
+        slip.getByLabelText('Ayın sonuna borc').textContent?.replace(/\s/g, ' '),
+        posted[0]!.net.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' '),
+      ),
+    );
+    await slip.findByText('Məzuniyyət');
+  } finally {
+    h.close();
+  }
+});

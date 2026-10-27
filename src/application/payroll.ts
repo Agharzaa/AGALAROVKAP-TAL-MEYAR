@@ -10,11 +10,14 @@ import type { Chart } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import {
+  monthBounds,
+  noExemption,
   parseRates,
   payrollFor,
   ratesInput,
   salaryFor,
   type ContributionKey,
+  type Exemption,
   type PayrollRates,
   type RatesInput,
 } from '../domain/payroll.js';
@@ -28,8 +31,12 @@ import type {
   PayrollFillLine,
   PayrollLineView,
   PayrollRatesView,
+  PayrollSettlementRow,
+  PayrollTaxesView,
+  PayslipView,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
+import { absencePay, awayIn } from './absences.js';
 import { documentEntry } from './reports.js';
 import { checkMonth } from './revaluation.js';
 import { checkSideValues } from './subkonto.js';
@@ -198,14 +205,34 @@ function nextNumber(tx: Tx, companyId: string): string {
   }
 }
 
+interface Deduction {
+  amount: Minor;
+  account: string;
+  sk: string[];
+  memo: string;
+}
+
 interface Line {
   employeeId: string;
   name: string;
   salary: Minor;
   bonus: Minor;
+  vacation: Minor;
+  sick: Minor;
+  deductions: Deduction[];
+  deducted: Minor;
   amounts: ReturnType<typeof payrollFor>;
   expenseAccount: string;
   expenseSk: string[];
+}
+
+/** The employee's own exemption in force in the month (8c): only at the main workplace. */
+export function exemptionOf(e: Row, month: string): Exemption {
+  const { first, last } = monthBounds(month);
+  const from = str(e.exemption_from);
+  const to = str(e.exemption_to);
+  if (e.main_job !== 1n || (from && from > last) || (to && to < first)) return noExemption;
+  return { amount: e.exemption as bigint, extra: e.exemption_extra as bigint };
 }
 
 function readLines(
@@ -213,6 +240,7 @@ function readLines(
   companyId: string,
   chart: Chart,
   rates: PayrollRates,
+  month: string,
   input: CommandOf<'payroll.save'>['lines'],
 ): { lines: Line[]; postings: Posting[] } {
   const seen = new Set<string>();
@@ -220,6 +248,7 @@ function readLines(
   const kind = roleItem(tx, companyId, 'vatTax', 'Vergi (haqq)');
   const salaryItem = roleItem(tx, companyId, 'salary', 'Əmək haqqı');
   const socialItem = roleItem(tx, companyId, 'socialInsurance', 'Sosial sığorta ayırmaları');
+  let sickItem = '';
   const gross: Posting[] = [];
   const kept: Posting[] = [];
   // The employer's share, summed by expense account and its subkonto.
@@ -243,7 +272,9 @@ function readLines(
     const bonus = parseMoney(l.bonus || '0', `${where}: mükafat`);
     if (salary < 0n || bonus < 0n)
       throw new DomainError(`${where}: məbləğ mənfi ola bilməz.`, `${f}.salary`);
-    if (salary + bonus <= 0n)
+    // Vacation and sick pay come from their documents (8c), never from the form.
+    const pay = absencePay(tx.db, companyId, l.employeeId, month);
+    if (salary + bonus + pay.vacation + pay.sick <= 0n)
       throw new DomainError(`${where}: ${name} üçün məbləğ yoxdur.`, `${f}.salary`);
     const code = str(e.expense_account);
     if (!code)
@@ -262,14 +293,28 @@ function readLines(
       account.subkonto.map((k, j) => (k === 'expenseItem' ? item : (stored[j] ?? '').trim()));
     const expenseSk = sk(salaryItem);
     checkSideValues(tx.db, companyId, account, expenseSk, `${f}.employeeId`, '');
-    const amounts = payrollFor(salary + bonus, rates);
+    const amounts = payrollFor(
+      salary + bonus + pay.vacation,
+      rates,
+      exemptionOf(e, month),
+      pay.sick,
+    );
     const side533 = { account: '533', sk: [l.employeeId] };
     gross.push({
       dt: { account: account.code, sk: expenseSk },
       kt: side533,
       amount: amounts.gross,
-      memo: `Əmək haqqı: ${name}`,
+      memo: `Əmək haqqı${pay.vacation ? ' və məzuniyyət' : ''}: ${name}`,
     });
+    if (pay.sick) {
+      sickItem ||= roleItem(tx, companyId, 'sickPay', 'Xəstəlik vərəqəsi üzrə müavinət');
+      gross.push({
+        dt: { account: account.code, sk: sk(sickItem) },
+        kt: side533,
+        amount: pay.sick,
+        memo: `Xəstəlik vərəqəsi (işəgötürənin günləri): ${name}`,
+      });
+    }
     for (const key of withheld)
       if (amounts[key])
         kept.push({
@@ -278,6 +323,40 @@ function readLines(
           amount: amounts[key],
           memo: `${labelOf[key]}: ${name}`,
         });
+    // Other deductions (8b): Dt 533 / Kt the account; they do not change the taxes.
+    const deductions = l.deductions.map((d, j): Deduction => {
+      const df = `${f}.deductions.${j}`;
+      const amount = parseMoney(d.amount, `${where}: tutulma`);
+      if (amount <= 0n)
+        throw new DomainError(`${where}: tutulma müsbət olmalıdır.`, `${df}.amount`);
+      const a = chart.require(d.account.trim(), `${df}.account`);
+      if (a.code === '533' || a.code.startsWith('52'))
+        throw new DomainError(
+          `${where}: tutulmanın hesabı 533 və vergi / fond hesabı ola bilməz.`,
+          `${df}.account`,
+        );
+      const dsk = a.subkonto.map((_, n) => (d.sk[n] ?? '').trim());
+      checkSideValues(tx.db, companyId, a, dsk, `${df}.sk`, '');
+      return {
+        amount,
+        account: a.code,
+        sk: dsk,
+        memo: parseText(d.memo, `${where}: tutulmanın məzmunu`, 200, false),
+      };
+    });
+    const deducted = deductions.reduce((s, d) => s + d.amount, 0n);
+    if (deducted > amounts.net)
+      throw new DomainError(
+        `${where}: ${name} — tutulmalar (${formatMinor(deducted)}) ödəniləcəkdən (${formatMinor(amounts.net)}) çoxdur.`,
+        `${f}.deductions`,
+      );
+    for (const d of deductions)
+      kept.push({
+        dt: side533,
+        kt: { account: d.account, sk: d.sk },
+        amount: d.amount,
+        memo: `${d.memo || 'Tutulma'}: ${name}`,
+      });
     const social = sk(socialItem);
     const k = `${account.code}|${social.join('|')}`;
     const s = share.get(k) ?? { account: account.code, sk: social, amounts: new Map() };
@@ -288,6 +367,10 @@ function readLines(
       name,
       salary,
       bonus,
+      vacation: pay.vacation,
+      sick: pay.sick,
+      deductions,
+      deducted,
       amounts,
       expenseAccount: account.code,
       expenseSk,
@@ -385,7 +468,7 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
     );
     tx.db.run('DELETE FROM payroll_lines WHERE document_id=?', id);
   }
-  const { lines, postings } = readLines(tx, cmd.companyId, chart, rates.rates, cmd.lines);
+  const { lines, postings } = readLines(tx, cmd.companyId, chart, rates.rates, month, cmd.lines);
   const version = existing ? Number(existing.version) + 1 : 1;
   if (existing)
     tx.db.run(
@@ -417,7 +500,8 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
     tx.db.run(
       `INSERT INTO payroll_lines(company_id,document_id,line_no,employee_id,salary,bonus,gross,income_tax,
          dsmf_employee,unemployment_employee,medical_employee,net,dsmf_employer,unemployment_employer,
-         medical_employer,expense_account,expense_sk) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         medical_employer,expense_account,expense_sk,vacation,sick,exemption,deducted,deductions)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       cmd.companyId,
       id,
       i + 1,
@@ -429,12 +513,17 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
       l.amounts.dsmfEmployee,
       l.amounts.unemploymentEmployee,
       l.amounts.medicalEmployee,
-      l.amounts.net,
+      l.amounts.net - l.deducted,
       l.amounts.dsmfEmployer,
       l.amounts.unemploymentEmployer,
       l.amounts.medicalEmployer,
       l.expenseAccount,
       JSON.stringify(l.expenseSk),
+      l.vacation,
+      l.sick,
+      l.amounts.exemption,
+      l.deducted,
+      JSON.stringify(l.deductions.map((d) => ({ ...d, amount: formatMinor(d.amount) }))),
     ),
   );
   tx.post(cmd.companyId, chart, { type: PAYROLL, id, number, version }, date, false, postings);
@@ -520,6 +609,11 @@ function lineView(l: Row, names: Map<string, Row>): PayrollLineView {
     unemploymentEmployer: money(l.unemployment_employer),
     medicalEmployer: money(l.medical_employer),
     expenseAccount: str(l.expense_account),
+    vacation: money(l.vacation),
+    sick: money(l.sick),
+    exemption: money(l.exemption),
+    deducted: money(l.deducted),
+    deductions: JSON.parse(str(l.deductions)) as PayrollLineView['deductions'],
   };
 }
 
@@ -529,9 +623,21 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
       .all('SELECT * FROM employees WHERE company_id=?', str(r.company_id))
       .map((e) => [str(e.id), e]),
   );
-  const lines = db
-    .all('SELECT * FROM payroll_lines WHERE document_id=? ORDER BY line_no', str(r.id))
-    .map((l) => lineView(l, names));
+  const rows = db.all(
+    'SELECT * FROM payroll_lines WHERE document_id=? ORDER BY line_no',
+    str(r.id),
+  );
+  const lines = rows.map((l) => lineView(l, names));
+  // A vacation or sick leave changed after the payroll was posted (8c, QERARLAR 2026-10-27 §12).
+  const stale =
+    r.status === 'posted'
+      ? rows
+          .filter((l) => {
+            const pay = absencePay(db, str(r.company_id), str(l.employee_id), str(r.month));
+            return pay.vacation !== l.vacation || pay.sick !== l.sick;
+          })
+          .map((l) => str(names.get(str(l.employee_id))?.name))
+      : [];
   const sum = (k: keyof PayrollLineView) =>
     formatMinor(lines.reduce((s, l) => s + parseMoney(l[k]), 0n));
   return {
@@ -546,6 +652,7 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
     gross: sum('gross'),
     net: sum('net'),
     lines,
+    stale,
   };
 }
 
@@ -565,8 +672,9 @@ export function payrollDocument(db: Db, companyId: string, id: string): PayrollD
 }
 
 /**
- * The lines a new payroll of the month starts with: every employee working in it with a salary,
- * paid by the working days when hired or leaving within the month (Ə4).
+ * The lines a new payroll of the month starts with: every employee working in it with a salary or
+ * with a vacation / sick leave starting in it, paid by the working days worked (hired or leaving
+ * within the month, away on vacation or sick leave — Ə4, Ə11).
  */
 export function payrollFill(db: Db, companyId: string, monthInput: string): PayrollFillLine[] {
   const month = checkMonth(monthInput);
@@ -574,15 +682,270 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
   const last = monthEnd(month);
   return db
     .all(
-      `SELECT * FROM employees WHERE company_id=? AND archived=0 AND salary>0
+      `SELECT * FROM employees WHERE company_id=? AND archived=0
          AND (hired='' OR hired<=?) AND (left_on='' OR left_on>=?) ORDER BY tab_no, name`,
       companyId,
       last,
       first,
     )
-    .map((e) => ({
-      employeeId: str(e.id),
-      name: str(e.name),
-      salary: formatMinor(salaryFor(e.salary as bigint, month, str(e.hired), str(e.left_on))),
-    }));
+    .flatMap((e) => {
+      const id = str(e.id);
+      const pay = absencePay(db, companyId, id, month);
+      const salary = salaryFor(
+        e.salary as bigint,
+        month,
+        str(e.hired),
+        str(e.left_on),
+        awayIn(db, companyId, id, month),
+      );
+      if (!salary && !pay.vacation && !pay.sick) return [];
+      return [
+        {
+          employeeId: id,
+          name: str(e.name),
+          salary: formatMinor(salary),
+          vacation: formatMinor(pay.vacation),
+          sick: formatMinor(pay.sick),
+        },
+      ];
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reports (8b)
+
+/** Credit less debit of an account (one subkonto value when given) over postings in [from, to]. */
+function owed(db: Db, companyId: string, account: string, s1: string, from: string, to: string) {
+  const r = db.get(
+    `SELECT COALESCE(SUM(a),0) AS b FROM (
+       SELECT amount AS a FROM postings WHERE company_id=?1 AND kt_account=?2 AND (?3='' OR kt_s1=?3) AND date BETWEEN ?4 AND ?5
+       UNION ALL SELECT -amount FROM postings WHERE company_id=?1 AND dt_account=?2 AND (?3='' OR dt_s1=?3) AND date BETWEEN ?4 AND ?5)`,
+    companyId,
+    account,
+    s1,
+    from,
+    to,
+  )!;
+  return r.b as bigint;
+}
+
+const dayBefore = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/** The employee's month: owed at the start, accrued, withheld, paid, owed at the end (533). */
+export function payslip(
+  db: Db,
+  companyId: string,
+  employeeId: string,
+  monthInput: string,
+): PayslipView {
+  const month = checkMonth(monthInput);
+  const { first, last } = monthBounds(month);
+  const e = db.get('SELECT * FROM employees WHERE company_id=? AND id=?', companyId, employeeId);
+  if (!e) throw new DomainError('İşçi tapılmadı.', 'employeeId', 'not-found');
+  const opening = owed(db, companyId, '533', employeeId, '0000-01-01', dayBefore(first));
+  const closing = owed(db, companyId, '533', employeeId, '0000-01-01', last);
+  const l = db.get(
+    `SELECT l.* FROM payroll_lines l JOIN payroll_documents d ON d.id=l.document_id
+     WHERE l.company_id=? AND l.employee_id=? AND d.month=? AND d.status='posted'`,
+    companyId,
+    employeeId,
+    month,
+  );
+  const item = (label: string, v: unknown) =>
+    (v as bigint) ? [{ label, amount: formatMinor(v as bigint) }] : [];
+  const accrued = l
+    ? [
+        ...item('Əmək haqqı', l.salary),
+        ...item('Mükafat', l.bonus),
+        ...item('Məzuniyyət', l.vacation),
+        ...item('Xəstəlik vərəqəsi (işəgötürənin günləri)', l.sick),
+      ]
+    : [];
+  const withheld = l
+    ? [
+        ...item('Gəlir vergisi', l.income_tax),
+        ...item('DSMF', l.dsmf_employee),
+        ...item('İşsizlik sığortası', l.unemployment_employee),
+        ...item('İcbari tibbi sığorta', l.medical_employee),
+        ...(
+          JSON.parse(str(l.deductions)) as { amount: string; memo: string; account: string }[]
+        ).map((d) => ({ label: d.memo || `Tutulma (${d.account})`, amount: d.amount })),
+      ]
+    : [];
+  // Everything else on 533 in the month: the payments (bank, cash, operations).
+  const paid = db
+    .all(
+      `SELECT e.date, e.source_number AS number,
+         SUM(CASE WHEN p.dt_account='533' AND p.dt_s1=?2 THEN p.amount ELSE 0 END)
+           - SUM(CASE WHEN p.kt_account='533' AND p.kt_s1=?2 THEN p.amount ELSE 0 END) AS a
+       FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=?1 AND e.source_type<>?5 AND p.date BETWEEN ?3 AND ?4
+         AND ((p.dt_account='533' AND p.dt_s1=?2) OR (p.kt_account='533' AND p.kt_s1=?2))
+       GROUP BY e.id HAVING a<>0 ORDER BY e.date, e.rowid`,
+      companyId,
+      employeeId,
+      first,
+      last,
+      PAYROLL,
+    )
+    .map((r) => ({ date: str(r.date), number: str(r.number), amount: formatMinor(r.a as bigint) }));
+  return {
+    employeeId,
+    name: str(e.name),
+    tabNo: str(e.tab_no),
+    position: str(e.position),
+    month,
+    opening: formatMinor(opening),
+    accrued,
+    withheld,
+    paid,
+    closing: formatMinor(closing),
+  };
+}
+
+/** Settlements with employees on 533 over a period: accrued and withheld by payrolls, paid. */
+export function payrollSettlements(
+  db: Db,
+  companyId: string,
+  fromInput: string,
+  toInput: string,
+): PayrollSettlementRow[] {
+  const from = parseDate(fromInput, 'Başlanğıc');
+  const to = parseDate(toInput, 'Son');
+  const before = dayBefore(from);
+  const rows = new Map<string, { opening: Minor; accrued: Minor; withheld: Minor; paid: Minor }>();
+  const at = (id: string) => {
+    const r = rows.get(id) ?? { opening: 0n, accrued: 0n, withheld: 0n, paid: 0n };
+    rows.set(id, r);
+    return r;
+  };
+  for (const r of db.all(
+    `SELECT p.dt_account AS da, p.dt_s1 AS d1, p.kt_account AS ka, p.kt_s1 AS k1, p.amount AS a, p.date,
+       e.source_type AS t
+     FROM postings p JOIN entries e ON e.id=p.entry_id
+     WHERE p.company_id=? AND p.date<=? AND (p.dt_account='533' OR p.kt_account='533')`,
+    companyId,
+    to,
+  )) {
+    const a = r.a as bigint;
+    const payroll = str(r.t) === PAYROLL;
+    const old = str(r.date) <= before;
+    if (str(r.ka) === '533') {
+      const x = at(str(r.k1));
+      if (old) x.opening += a;
+      else if (payroll) x.accrued += a;
+      else x.paid -= a;
+    }
+    if (str(r.da) === '533') {
+      const x = at(str(r.d1));
+      if (old) x.opening -= a;
+      else if (payroll) x.withheld += a;
+      else x.paid += a;
+    }
+  }
+  const names = new Map(
+    db
+      .all('SELECT id,name FROM employees WHERE company_id=?', companyId)
+      .map((e) => [str(e.id), str(e.name)]),
+  );
+  return [...rows.entries()]
+    .map(([id, x]) => ({
+      employeeId: id,
+      name: names.get(id) ?? id,
+      opening: formatMinor(x.opening),
+      accrued: formatMinor(x.accrued),
+      withheld: formatMinor(x.withheld),
+      paid: formatMinor(x.paid),
+      closing: formatMinor(x.opening + x.accrued - x.withheld - x.paid),
+    }))
+    .filter((r) => [r.opening, r.accrued, r.withheld, r.paid].some((v) => v !== '0.00'))
+    .sort((a, b) => a.name.localeCompare(b.name, 'az'));
+}
+
+/** Taxes and funds of a month: accrued by the payroll, paid (transferred), owed — for the returns. */
+export function payrollTaxes(db: Db, companyId: string, monthInput: string): PayrollTaxesView {
+  const month = checkMonth(monthInput);
+  const { first, last } = monthBounds(month);
+  const accounts: [string, string][] = [
+    ['521.03', 'Gəlir vergisi'],
+    ['522.01', 'DSMF (işçi + işəgötürən)'],
+    ['522.03.1', 'İşsizlik sığortası — işçi'],
+    ['522.03.2', 'İşsizlik sığortası — işəgötürən'],
+    ['522.04.1', 'Tibbi sığorta — işçi'],
+    ['522.04.2', 'Tibbi sığorta — işəgötürən'],
+  ];
+  const rows = accounts.map(([account, label]) => {
+    const opening = owed(db, companyId, account, '', '0000-01-01', dayBefore(first));
+    const closing = owed(db, companyId, account, '', '0000-01-01', last);
+    const accrued = db.get(
+      `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND p.kt_account=? AND e.source_type=? AND p.date BETWEEN ? AND ?`,
+      companyId,
+      account,
+      PAYROLL,
+      first,
+      last,
+    )!.a as bigint;
+    return {
+      account,
+      label,
+      opening: formatMinor(opening),
+      accrued: formatMinor(accrued),
+      paid: formatMinor(opening + accrued - closing),
+      closing: formatMinor(closing),
+    };
+  });
+  const lines = db.get(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(l.gross),0) AS g FROM payroll_lines l
+       JOIN payroll_documents d ON d.id=l.document_id
+     WHERE l.company_id=? AND d.month=? AND d.status='posted'`,
+    companyId,
+    month,
+  )!;
+  return { month, employees: Number(lines.n), base: formatMinor(lines.g as bigint), rows };
+}
+
+/**
+ * The month closing's checks (8b, 8c): employees at work and no payroll posted — a warning; a
+ * payroll whose vacations or sick leaves changed after it was posted — it blocks.
+ */
+export function payrollSignals(
+  db: Db,
+  companyId: string,
+  month: string,
+): { warnings: string[]; blocking: string[] } {
+  const { first, last } = monthBounds(month);
+  const warnings: string[] = [];
+  const blocking: string[] = [];
+  const doc = db.get(
+    "SELECT * FROM payroll_documents WHERE company_id=? AND month=? AND status='posted'",
+    companyId,
+    month,
+  );
+  if (!doc) {
+    const working = Number(
+      db.get(
+        `SELECT COUNT(*) AS n FROM employees WHERE company_id=? AND archived=0 AND salary>0
+           AND (hired='' OR hired<=?) AND (left_on='' OR left_on>=?)`,
+        companyId,
+        last,
+        first,
+      )!.n,
+    );
+    if (working)
+      warnings.push(
+        `${month} ayının əmək haqqı hesablanmayıb (${working} işçi işləyir): Əmək haqqı → Əmək haqqının hesablanması.`,
+      );
+  } else {
+    const stale = documentView(db, doc).stale;
+    if (stale.length)
+      blocking.push(
+        `${str(doc.number)} əmək haqqı sənədi köhnəlib — sonradan dəyişən məzuniyyət / xəstəlik vərəqəsi: ${stale.join(', ')}. Sənədi açıb "İşçilərə görə doldur" və düzəlişi uçota alın.`,
+      );
+  }
+  return { warnings, blocking };
 }

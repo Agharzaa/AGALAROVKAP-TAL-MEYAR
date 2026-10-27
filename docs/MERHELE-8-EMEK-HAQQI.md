@@ -127,3 +127,53 @@ Sürücü, əmək haqqı 1 000,00 ₼, oktyabr 2026, 701:
 6. **Məzuniyyət və xəstəlik** 8b-də lazımdırmı, yoxsa sonra? (Tövsiyə: sonra, ilk aylar əl ilə sətir.)
 
 Mənbələr (§5, yoxlanmalı): [Mercans — 2026 dəyişiklikləri](https://mercans.com/resources/statutory-alerts/tazerbaijan-changes-in-tax-rate-and-social-security-rates-1st-january-2026/), [Caspian Legal Center](https://www.caspianlegalcenter.az/insights/more/payrol-taxes-in-azerbaijan), [TaxRavens — sosial ödənişlər 2026](https://taxravens.com/en/azerbaijan/social-contributions-2026), [busy.az kalkulyatoru](https://busy.az/gross-net-calculator?lang=en).
+
+## 12. Genişləndirmə: 8b və 8c (27.10.2026)
+
+İstifadəçi: "hamısını, hər detalı düşün — gəlir vergisi güzəştləri, xəstəlik vərəqəsi və s." Mənbələr bir-birinə zidd olan yerlərdə qayda parametrdir (dərəcələr dəstində və ya sənəddə), mühasib təsdiq edir. Bütün qaydalar QERARLAR 2026-10-27 §7–§12-də.
+
+**Vəziyyət:** 8b və 8c hazırdır — 0.9.1 (27.10.2026). Testlər: `tests/domain/payroll.test.ts` (Ə10–Ə12), `tests/integration/payroll-8bc.test.ts` (Ə10–Ə15, bağlanış, v17 → v18), `tests/ui` (8c), perf (Ə9).
+
+### 8b — ödəniş, tutulmalar, hesabatlar
+
+1. **Ödəniş.** Bank / kassa sənədi ilə Dt 533 (işçi) — artıq var. Bank çıxarışında əmək haqqı sətri (`salary`) təyinatdakı FİN və ya ad-soyadla işçiyə bağlanır (533-ün subkontosu); tapılmasa — mühasib seçir.
+2. **Başqa tutulmalar** (aliment, icra vərəqəsi, verilmiş avansın / zərərin qaytarılması): sətirdə "Tutulma" — məbləğ, hesab və subkonto (məs. 538 / kontragent + müqavilə, 244 / işçi, 731). Yazılış Dt 533 / Kt seçilən hesab. Gəlir vergisinin və fondların bazasını dəyişmir; ödəniləcəkdən çıxılır.
+3. **Hesabatlar:**
+   - **Əmək haqqı cədvəli** (ay): işçi × hesablanan, mükafat, məzuniyyət, xəstəlik, hər tutulma, ödəniləcək, işəgötürən payları; cəmlər; Excel.
+   - **Hesablaşma vərəqəsi** (işçi × ay): ayın əvvəlinə borc, hesablanıb (növlər üzrə), tutulub, ödənilib (bank / kassa sənədləri), ayın sonuna borc; çap (A5-ə iki).
+   - **İşçilərlə hesablaşmalar** (533, dövr): işçi üzrə əvvəl, hesablanıb, ödənilib, son.
+   - **Vergi və fondlar** (ay): 521.03, 522.01, 522.03.x, 522.04.x — hesablanıb, köçürülüb (bank), borc; bəyannamə üçün işçi sayı və baza.
+4. **Ay bağlanışında yoxlama:** aktiv işçisi (əmək haqqı yazılmış, işləyən) olan şirkətdə ayın uçotdakı əmək haqqı sənədi yoxdursa — xəbərdarlıq.
+5. **Perf:** 300 işçi — sənəd ≤ 1 s, cədvəl ≤ 1 s.
+
+### 8c — güzəştlər, məzuniyyət, xəstəlik vərəqəsi
+
+1. **Gəlir vergisi güzəştləri (VM 102)** işçinin kartında, tarixdən-tarixə (sənəd əsasında):
+   - kateqoriya → aylıq azad məbləğ: **400** (VM 102.2: Vətən müharibəsi və Milli Qəhrəmanlar, müharibə əlilləri I–II qrup, şəhid ailələri, müharibə veteranları, radiasiya xəstəliyi və s.), **200** (VM 102.3: 61–100% sağlamlıq imkanı məhdud, 18 yaşadək əlil, onlara qulluq edən bir valideyn / qəyyum), **100** (VM 102.4), **50** (VM 102.5, əlavə);
+   - 102.7: bir neçə hüquq varsa yalnız ən böyüyü (50 əlavə ilə birlikdə ola bilər);
+   - güzəşt yalnız əsas iş yerində (əmək kitabçası olan yerdə) — kartda "Əsas iş yeri" bayrağı;
+   - 2026 qaydası (gəlir ≤ 2 500 olanda 200 azad) ilə şəxsi güzəşt **birlikdə tətbiq olunmur — ən böyüyü** (VM 102.7 məntiqi; mühasib təsdiq edir, dəyişsə — dəstin parametri).
+2. **Məzuniyyət** (Əmək Məcəlləsi; NK-nin 137 saylı qərarı):
+   - sənəd "Məzuniyyət": işçi, başlama / bitmə (təqvim günləri), növ (əsas / əlavə / ödənişsiz);
+   - orta aylıq = məzuniyyət ayından əvvəlki 12 tam təqvim ayının əmək haqqı + mükafatları (məzuniyyət və xəstəlik ödənişləri daxil deyil) / 12 (az işləyibsə — işlədiyi tam aylar); günlük = orta aylıq / **30,4**; məbləğ = günlük × təqvim günləri; 0,01-ə yuvarlaqlaşdırılır;
+   - ödənişsiz məzuniyyət — yalnız iş günlərini azaldır;
+   - məzuniyyət haqqı əmək haqqıdır: gəlir vergisi və bütün fondlar tutulur; başladığı ayın əmək haqqı sənədinə düşür (bütöv məbləğ, 1C-dəki kimi aylara bölünmür — sadəlik üçün; mühasib təsdiq edir);
+   - həmin ayda məzuniyyət günlərinə düşən iş günləri üçün maaş hesablanmır (mütənasib azalır).
+3. **Xəstəlik vərəqəsi** (NK-nin 189 saylı qərarı, 31 saylı qərarla dəyişiklik, 2026):
+   - sənəd "Xəstəlik vərəqəsi": işçi, vərəqənin nömrəsi, başlama / bitmə (təqvim günləri), staj faizi (60 / 80 / 100, mühasib seçir; standart 100), səbəb (ümumi xəstəlik / istehsalat qəzası — işəgötürənin günahı ilə bütün müddət işəgötürəndən);
+   - orta günlük qazanc = xəstəlik ayından əvvəlki **4 tam rübün** sığortaya cəlb olunan gəliri / həmin dövrün təqvim günləri (01.05.2026-dan; daha əvvəlki hadisə — 12 ay / iş günləri, köhnə qayda); 6 aydan az sığorta stajı — müavinət yoxdur (xəbərdarlıq, mühasib qərar verir);
+   - **ilk 14 təqvim günü işəgötürən ödəyir** — əmək haqqı sənədinə düşür: Dt 701 / 721 ("Xəstəlik vərəqəsi üzrə müavinət") / Kt 533; **gəlir vergisi tutulur, DSMF / işsizlik / tibbi sığorta tutulmur və hesablanmır**;
+   - 15-ci gündən — DSMF ödəyir (2026-dan proaktiv, birbaşa işçiyə): Meyar-da yazılış yoxdur, sənəddə məlumat kimi göstərilir;
+   - həmin günlər üçün maaş hesablanmır;
+   - yuxarı hədd (25 × minimum yaşa görə pensiya, ayda) — dəstin parametri.
+
+### Qəbul testləri (əlavə)
+
+| #   | Yoxlama                                                                                                 | Növ                  |
+| --- | ------------------------------------------------------------------------------------------------------- | -------------------- |
+| Ə10 | Güzəşt 400 / 200 / 100 / 50, ən böyüyü; 2026-nın 200-ü ilə birlikdə ən böyüyü; əsas iş yeri deyil — yox | domain               |
+| Ə11 | Məzuniyyət: 12 ay / 30,4 × gün, az işləyən, mükafat daxil, xəstəlik daxil deyil; ayın maaşı azalır      | domain + integration |
+| Ə12 | Xəstəlik: 4 rüb / təqvim günləri × staj faizi, ilk 14 gün işəgötürən, fondsuz, gəlir vergisi ilə        | domain + integration |
+| Ə13 | Tutulma (aliment 538): Dt 533 / Kt 538, ödəniləcək azalır, vergi bazası dəyişmir                        | integration          |
+| Ə14 | Çıxarışda əmək haqqı sətri FİN ilə işçiyə bağlanır                                                      | integration          |
+| Ə15 | Hesablaşma vərəqəsi və cədvəl: borc qəpikbəqəpik (hesablanıb − tutulub − ödənilib)                      | integration + ui     |

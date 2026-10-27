@@ -43,7 +43,7 @@ const monthLabel = (m: string) => `${monthNames[Number(m.slice(5, 7)) - 1]} ${m.
 const cell = (v: string) => (v === '0.00' ? '' : money(v));
 
 /** Excel and print buttons of a report; `sheet` builds the workbook, `paper` the printed form. */
-function useOutput(file: string, sheet: () => SheetSpec, paper: () => ReactNode) {
+export function useOutput(file: string, sheet: () => SheetSpec, paper: () => ReactNode) {
   const printer = usePrint();
   const { company } = useCatalog(useWindow().companyId);
   const [message, setMessage] = useState('');

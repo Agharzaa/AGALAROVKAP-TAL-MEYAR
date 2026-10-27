@@ -468,6 +468,53 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   );
   assert.equal(flow.reconciled, true);
   time('ƏDV icmalı, ay', 1500, () => q({ type: 'vatSummary', month: '2026-09' }));
+  // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
+  // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
+  if (
+    !db.get(
+      "SELECT 1 FROM payroll_documents WHERE company_id=? AND month='2026-10' AND status='posted'",
+      companyId,
+    )
+  ) {
+    const ctx = { actor: 'perf', correlationId: 'perf' };
+    for (let i = 0; i < 300; i++)
+      ledger.execute(
+        {
+          key: `perf-employee-${Date.now()}-${i}`,
+          type: 'employee.save',
+          companyId,
+          name: `İşçi ${i + 1}`,
+          hired: '2026-01-01',
+          salary: String(800 + i * 10),
+          expenseAccount: '721',
+        },
+        ctx,
+      );
+    const lines = time(
+      'Əmək haqqı: işçilərə görə doldur (300)',
+      3000,
+      () => q({ type: 'payrollFill', month: '2026-10' }) as { employeeId: string }[],
+    );
+    assert.equal(lines.length, 300);
+    time('Əmək haqqının hesablanması (300 işçi)', 3000, () =>
+      ledger.execute(
+        {
+          key: `perf-payroll-${Date.now()}`,
+          type: 'payroll.save',
+          companyId,
+          month: '2026-10',
+          lines,
+        },
+        ctx,
+      ),
+    );
+    const taxes = time(
+      'Vergi və fondlar, ay',
+      1500,
+      () => q({ type: 'payrollTaxes', month: '2026-10' }) as { employees: number },
+    );
+    assert.equal(taxes.employees, 300);
+  }
 });
 
 function generate(db: Db, ledger: Ledger): { companyId: string; banks: string[] } {

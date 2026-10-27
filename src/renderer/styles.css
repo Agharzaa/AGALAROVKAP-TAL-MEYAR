@@ -3443,3 +3443,26 @@ button.step:active {
 .inline-pair input {
   width: 8em;
 }
+
+/* Stage 8b — other deductions of a payroll (alimony, an advance back). */
+.payroll-deductions {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.deduction-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.deduction-row input {
+  width: 10em;
+}
+.deduction-who {
+  min-width: 14em;
+  font-weight: 600;
+}
+.payslip {
+  max-width: 640px;
+}

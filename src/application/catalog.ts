@@ -47,6 +47,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
       'Ofis xərcləri',
       ['Əmək haqqı', 'salary'],
       ['Sosial sığorta ayırmaları', 'socialInsurance'],
+      ['Xəstəlik vərəqəsi üzrə müavinət', 'sickPay'],
       ['Satılmış malların maya dəyəri', 'cogs'],
       ['Məzənnə fərqi', 'fxExpense'],
       ['Amortizasiya', 'depreciation'],
@@ -543,6 +544,18 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
         throw new DomainError(`${code} hesabının subkontosunu seçin.`, `expenseSk.${i}`);
     });
   }
+  // Stage 8c: the exemption is in force from / to a day (the documents it rests on).
+  const exemptionFrom = cmd.exemptionFrom.trim()
+    ? parseDate(cmd.exemptionFrom, 'Güzəştin başlanğıcı')
+    : '';
+  const exemptionTo = cmd.exemptionTo.trim() ? parseDate(cmd.exemptionTo, 'Güzəştin sonu') : '';
+  if (exemptionFrom && exemptionTo && exemptionTo < exemptionFrom)
+    throw new DomainError('Güzəştin sonu başlanğıcından əvvəl ola bilməz.', 'exemptionTo');
+  if ((cmd.exemption !== '0' || cmd.exemptionExtra) && !cmd.mainJob)
+    throw new DomainError(
+      'Gəlir vergisi güzəşti yalnız əsas iş yerində (əmək kitabçası olan yerdə) tətbiq olunur.',
+      'exemption',
+    );
   return saveRow(
     tx,
     'employees',
@@ -560,6 +573,11 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
       salary: String(salary),
       expense_account: code,
       expense_sk: JSON.stringify(expenseSk),
+      main_job: cmd.mainJob ? 1 : 0,
+      exemption: String(BigInt(cmd.exemption) * 100n),
+      exemption_extra: cmd.exemptionExtra ? '5000' : '0',
+      exemption_from: exemptionFrom,
+      exemption_to: exemptionTo,
     },
     name,
   );
@@ -590,6 +608,7 @@ const roleKind = {
   assetSale: 'incomeType',
   salary: 'expenseItem',
   socialInsurance: 'expenseItem',
+  sickPay: 'expenseItem',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -604,6 +623,7 @@ const roleLabel = {
   assetSale: 'əsas vəsaitin satışı (611)',
   salary: 'əmək haqqı (Kt 533)',
   socialInsurance: 'sosial sığorta ayırmaları (Kt 522)',
+  sickPay: 'xəstəlik vərəqəsi üzrə müavinət (Kt 533)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

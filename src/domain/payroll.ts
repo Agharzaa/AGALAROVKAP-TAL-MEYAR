@@ -154,21 +154,46 @@ export function byBrackets(amount: Minor, brackets: readonly Bracket[]): Minor {
 }
 
 export interface PayrollAmounts extends Record<ContributionKey, Minor> {
+  /** Salary, bonus and vacation pay: the base of income tax and of every contribution. */
   gross: Minor;
-  /** Paid to the employee: gross less what is withheld. */
+  /** Sick pay of the employer's days (8c): income tax only, no contributions. */
+  sick: Minor;
+  /** What was taken off the taxable income: the larger relief, plus the additional 50. */
+  exemption: Minor;
+  /** Paid to the employee: gross and sick pay less what is withheld. */
   net: Minor;
 }
 
-/** One employee's month by the rates in force. */
-export function payrollFor(gross: Minor, rates: PayrollRates): PayrollAmounts {
-  const relief = gross <= rates.relief.ifUpTo ? rates.relief.amount : 0n;
-  const taxable = gross > relief ? gross - relief : 0n;
-  const out = { gross } as PayrollAmounts;
+/** An employee's own income tax exemptions (VM 102), per month. */
+export interface Exemption {
+  /** 400 / 200 / 100 (VM 102.2–102.4): only the largest one counts (102.7). */
+  amount: Minor;
+  /** The additional 50 (VM 102.5). */
+  extra: Minor;
+}
+export const noExemption: Exemption = { amount: 0n, extra: 0n };
+
+/**
+ * One employee's month by the rates in force. The 2026 relief (200 of an income up to 2 500) and
+ * the employee's own exemption are not added together: the larger one counts (QERARLAR 2026-10-27
+ * §8), the additional 50 on top.
+ */
+export function payrollFor(
+  gross: Minor,
+  rates: PayrollRates,
+  exemption: Exemption = noExemption,
+  sick: Minor = 0n,
+): PayrollAmounts {
+  const income = gross + sick;
+  const general = income <= rates.relief.ifUpTo ? rates.relief.amount : 0n;
+  const relief = (general > exemption.amount ? general : exemption.amount) + exemption.extra;
+  const taxable = income > relief ? income - relief : 0n;
+  const out = { gross, sick, exemption: income < relief ? income : relief } as PayrollAmounts;
   out.incomeTax = byBrackets(taxable, rates.incomeTax);
   for (const key of contributionKeys)
     if (key !== 'incomeTax') out[key] = byBrackets(gross, rates[key]);
   out.net =
-    gross - out.incomeTax - out.dsmfEmployee - out.unemploymentEmployee - out.medicalEmployee;
+    income - out.incomeTax - out.dsmfEmployee - out.unemploymentEmployee - out.medicalEmployee;
   return out;
 }
 
@@ -185,18 +210,111 @@ export function workdays(from: string, to: string): number {
   return n;
 }
 
+/** Calendar days from `from` to `to`, both included (0 when `to` is earlier). */
+export function calendarDays(from: string, to: string): number {
+  const n = Math.round((day(to).getTime() - day(from).getTime()) / 86_400_000) + 1;
+  return n > 0 ? n : 0;
+}
+
+/** First and last day of a month ("YYYY-MM"). */
+export function monthBounds(month: string): { first: string; last: string } {
+  const end = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
+  return { first: `${month}-01`, last: iso(end) };
+}
+
+/** A period the employee is away (vacation, sick leave): no salary for its working days. */
+export interface Away {
+  from: string;
+  to: string;
+}
+
 /**
  * The salary of a month ("YYYY-MM") for an employee hired / leaving on the given days ('' — not in
- * this month): in proportion to the working days in it (holidays are not counted).
+ * this month) and away on some: in proportion to the working days worked (holidays are not
+ * counted).
  */
-export function salaryFor(salary: Minor, month: string, hired: string, left: string): Minor {
-  const first = `${month}-01`;
-  const end = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
-  const last = iso(end);
+export function salaryFor(
+  salary: Minor,
+  month: string,
+  hired: string,
+  left: string,
+  away: readonly Away[] = [],
+): Minor {
+  const { first, last } = monthBounds(month);
   const from = hired && hired > first ? hired : first;
   const to = left && left < last ? left : last;
   if (from > to) return 0n;
-  if (from === first && to === last) return salary;
+  let worked = workdays(from, to);
+  for (const a of away) {
+    const f = a.from > from ? a.from : from;
+    const t = a.to < to ? a.to : to;
+    if (f <= t) worked -= workdays(f, t);
+  }
   const all = workdays(first, last);
-  return all ? roundHalfAwayFromZero(salary * BigInt(workdays(from, to)), BigInt(all)) : 0n;
+  if (worked <= 0 || !all) return 0n;
+  if (worked === all) return salary;
+  return roundHalfAwayFromZero(salary * BigInt(worked), BigInt(all));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Stage 8c — vacation and sick pay (plan §12, QERARLAR 2026-10-27 §9, §10)
+
+/** The calendar days of a sick leave the employer pays for; the rest goes to DSMF. */
+export const EMPLOYER_SICK_DAYS = 14;
+
+/**
+ * Vacation pay: the average monthly earnings of the 12 full months before (or of the months worked,
+ * when fewer) — or the accountant's figure — over 30,4, times the calendar days.
+ */
+export function vacationPay(
+  months: readonly Minor[],
+  days: number,
+  manualAverage: Minor | null = null,
+): { average: Minor; daily: Minor; amount: Minor } {
+  const used = months.slice(-12);
+  const average =
+    manualAverage ??
+    (used.length
+      ? roundHalfAwayFromZero(
+          used.reduce((s, m) => s + m, 0n),
+          BigInt(used.length),
+        )
+      : 0n);
+  // The daily rate is rounded to the qəpik first, as the accountant computes it by hand.
+  const daily = roundHalfAwayFromZero(average * 10n, 304n);
+  return { average, daily, amount: daily * BigInt(days) };
+}
+
+/**
+ * The four full quarters before the quarter a sick leave starts in: their first and last day (the
+ * base of the average daily earnings from 01.05.2026).
+ */
+export function fourQuartersBefore(start: string): { from: string; to: string } {
+  const y = Number(start.slice(0, 4));
+  const q = Math.floor((Number(start.slice(5, 7)) - 1) / 3);
+  const end = new Date(Date.UTC(y, q * 3, 0));
+  const begin = new Date(Date.UTC(end.getUTCFullYear() - 1, end.getUTCMonth() + 1, 1));
+  return { from: iso(begin), to: iso(end) };
+}
+
+/**
+ * Sick pay of the employer's days: the average daily earnings (the base over its calendar days, or
+ * the accountant's figure) times the service percentage, for the first 14 calendar days — or all of
+ * them when the employer is at fault for an accident at work.
+ */
+export function sickPay(input: {
+  base: Minor;
+  baseDays: number;
+  manualDaily: Minor | null;
+  days: number;
+  percent: number;
+  employerAll: boolean;
+}): { daily: Minor; employerDays: number; fundDays: number; amount: Minor } {
+  const employerDays = input.employerAll ? input.days : Math.min(input.days, EMPLOYER_SICK_DAYS);
+  // The average daily earnings are rounded to the qəpik first, then the percentage and the days.
+  const daily =
+    input.manualDaily ??
+    (input.baseDays > 0 ? roundHalfAwayFromZero(input.base, BigInt(input.baseDays)) : 0n);
+  const amount = roundHalfAwayFromZero(daily * BigInt(input.percent) * BigInt(employerDays), 100n);
+  return { daily, employerDays, fundDays: input.days - employerDays, amount };
 }

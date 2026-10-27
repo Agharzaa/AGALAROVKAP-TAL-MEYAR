@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   BookOpen,
   Calculator,
+  CalendarDays,
   LayoutDashboard,
   Building2,
   FilePlus2,
@@ -161,6 +162,31 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     title: 'Əmək haqqının hesablanması',
     hint: 'Ay üzrə: hesablanan, tutulan vergi və fondlar, ödəniləcək, işəgötürənin payı',
     icon: Calculator,
+  },
+  vacations: {
+    title: 'Məzuniyyətlər',
+    hint: 'Məzuniyyət haqqı: 12 ay / 30,4 × gün; ödənişsiz məzuniyyət',
+    icon: CalendarDays,
+  },
+  sickLeaves: {
+    title: 'Xəstəlik vərəqələri',
+    hint: 'İlk 14 gün işəgötürən, qalanı DSMF; 4 rübün orta günlük qazancı × staj faizi',
+    icon: CalendarDays,
+  },
+  payslip: {
+    title: 'Hesablaşma vərəqəsi',
+    hint: 'İşçi və ay: hesablanıb, tutulub, ödənilib, borc',
+    icon: Reports,
+  },
+  payrollSettlements: {
+    title: 'İşçilərlə hesablaşmalar',
+    hint: '533 işçi üzrə: əvvəl, hesablanıb, tutulub, ödənilib, son',
+    icon: Reports,
+  },
+  payrollTaxes: {
+    title: 'Vergi və fondlar',
+    hint: 'Əmək haqqından: gəlir vergisi, DSMF, işsizlik və tibbi sığorta — hesablanıb, köçürülüb, borc',
+    icon: Reports,
   },
   payrollRates: {
     title: 'Əmək haqqı dərəcələri',
@@ -471,6 +497,8 @@ export const sections: Section[] = [
         title: 'Sənədlər',
         items: [
           { label: 'Əmək haqqının hesablanması', icon: Calculator, action: page('payrolls') },
+          { label: 'Məzuniyyətlər', icon: CalendarDays, action: page('vacations') },
+          { label: 'Xəstəlik vərəqələri', icon: CalendarDays, action: page('sickLeaves') },
         ],
       },
       {
@@ -480,6 +508,16 @@ export const sections: Section[] = [
             label: 'Əmək haqqını hesabla',
             icon: FilePlus2,
             action: { kind: 'view', view: { type: 'payroll' } },
+          },
+          {
+            label: 'Məzuniyyət',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'absence', kind: 'vacation' } },
+          },
+          {
+            label: 'Xəstəlik vərəqəsi',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'absence', kind: 'sick' } },
           },
         ],
       },
@@ -493,7 +531,10 @@ export const sections: Section[] = [
       {
         title: 'Hesabatlar',
         items: [
-          card('533', 'İşçilərlə hesablaşmalar (533)'),
+          { label: 'Hesablaşma vərəqəsi', icon: Reports, action: page('payslip') },
+          { label: 'İşçilərlə hesablaşmalar', icon: Reports, action: page('payrollSettlements') },
+          { label: 'Vergi və fondlar', icon: Reports, action: page('payrollTaxes') },
+          card('533', 'Hesab kartı 533'),
           card('521.03', 'Gəlir vergisi (521.03)'),
           card('522.01', 'DSMF (522.01)'),
         ],
@@ -582,6 +623,7 @@ export function sectionOfView(view: View): string {
     case 'asset':
       return 'assets';
     case 'payroll':
+    case 'absence':
       return 'payroll';
     case 'accountCard': {
       const a = view.account;
@@ -611,6 +653,11 @@ export function sectionOfView(view: View): string {
           return 'assets';
         case 'payrolls':
         case 'payrollRates':
+        case 'vacations':
+        case 'sickLeaves':
+        case 'payslip':
+        case 'payrollSettlements':
+        case 'payrollTaxes':
           return 'payroll';
         case 'operations':
         case 'accounts':
@@ -716,6 +763,14 @@ export function viewTitle(view: View, label?: string): string {
       return view.id
         ? `Əmək haqqının hesablanması${label ? ` ${label}` : ''}`
         : 'Əmək haqqının hesablanması (yeni)';
+    case 'absence': {
+      const kind = {
+        vacation: 'Məzuniyyət',
+        unpaid: 'Ödənişsiz məzuniyyət',
+        sick: 'Xəstəlik vərəqəsi',
+      }[view.kind];
+      return view.id ? `${kind}${label ? ` ${label}` : ''}` : `${kind} (yeni)`;
+    }
     case 'accountCard':
       return `Hesab kartı ${view.account}`;
   }

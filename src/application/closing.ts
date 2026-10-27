@@ -44,6 +44,7 @@ import { depositPaid } from './money.js';
 import { checkMonth, revaluationStep, type RevaluationStep } from './revaluation.js';
 import { expectVersion, loadChart, rowToPosting, type Tx } from './tx.js';
 import { termsOf } from './assets.js';
+import { payrollSignals } from './payroll.js';
 import { checkSideValues } from './subkonto.js';
 import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
 
@@ -820,6 +821,9 @@ function buildPlan(
     () => depreciationStep(db, companyId, chart, month, controls.name),
   );
   blocking.push(...depreciation.blocking);
+  // Stage 8b / 8c: the month's payroll.
+  const payroll = payrollSignals(db, companyId, month);
+  blocking.push(...payroll.blocking.map((t) => signal('closing', t, '533')));
   // A missing month-end rate or two currencies on one key: the revaluation cannot be computed.
   const revaluation = attempt<RevaluationStep | null>('rate', null, () =>
     revaluationStep(db, companyId, month),
@@ -837,7 +841,12 @@ function buildPlan(
     month,
     date: monthEnd(month),
     blocking,
-    warnings: [...controls.warnings(month), ...depreciation.warnings, ...vat.waiting],
+    warnings: [
+      ...controls.warnings(month),
+      ...depreciation.warnings,
+      ...payroll.warnings.map((t) => signal('closing', t, '533')),
+      ...vat.waiting,
+    ],
     fifo,
     depreciation,
     revaluation,

@@ -383,6 +383,20 @@ interface ProposalContext extends ClassifyContext {
   /** Budget classification code → 521 / 522 sub-account and payment kind. */
   budget: Map<string, { account: string; paymentKindId: string }>;
   chart: Chart;
+  /** Stage 8b: employees, for a salary row — by FİN or by name in the purpose / counterparty. */
+  employees: { id: string; name: string; key: string; fin: string }[];
+}
+
+/** The employee a salary row is for: their FİN in the purpose, or their name (8b, Ə14). */
+function employeeOf(ctx: ProposalContext, r: Row): { id: string; name: string; by: string } | null {
+  const purpose = String(r.purpose).toUpperCase();
+  const byFin = ctx.employees.find(
+    (e) => e.fin && new RegExp(`(^|[^A-Z0-9])${e.fin}([^A-Z0-9]|$)`).test(purpose),
+  );
+  if (byFin) return { id: byFin.id, name: byFin.name, by: `FİN ${byFin.fin}` };
+  const text = searchKey(`${String(r.counterparty)} ${String(r.purpose)}`);
+  const byName = ctx.employees.filter((e) => e.key.length > 3 && text.includes(e.key));
+  return byName.length === 1 ? { id: byName[0]!.id, name: byName[0]!.name, by: 'ad, soyad' } : null;
 }
 
 function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext {
@@ -434,6 +448,14 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     ),
     chart: loadChart(db, companyId),
     manual: unlinkedDocuments(db, companyId, String(bank.id)),
+    employees: db
+      .all('SELECT id, name, fin FROM employees WHERE company_id=? AND archived=0', companyId)
+      .map((e) => ({
+        id: String(e.id),
+        name: String(e.name),
+        key: searchKey(String(e.name).trim()),
+        fin: String(e.fin),
+      })),
   };
 }
 
@@ -523,9 +545,15 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       account = '501';
       sk = p ? [p, onlyContract(ctx, p, 'loan')] : [];
       break;
-    case 'salary':
+    case 'salary': {
       account = '533';
+      const e = employeeOf(ctx, r);
+      if (e) {
+        sk = [e.id];
+        notes.push(`İşçi: ${e.name} (${e.by}).`);
+      } else notes.push('İşçi tanınmadı — 533-ün subkontosunu seçin.');
       break;
+    }
     case 'transfer':
       account = '222.01';
       break;

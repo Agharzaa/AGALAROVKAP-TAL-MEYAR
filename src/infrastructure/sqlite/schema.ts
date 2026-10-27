@@ -13,7 +13,7 @@
  */
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1406,6 +1406,66 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
   FROM companies;
 `;
 
+// v18 — payroll 8b / 8c (plan §12, QERARLAR 2026-10-27 §7–§12): the employee's income tax
+// exemptions, vacation and sick leave documents (no postings: their pay goes to the month's
+// payroll), and the payroll line's vacation, sick pay, exemption and deductions.
+
+const v18 = `
+ALTER TABLE employees ADD COLUMN main_job INTEGER NOT NULL DEFAULT 1 CHECK(main_job IN(0,1));
+ALTER TABLE employees ADD COLUMN exemption INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE employees ADD COLUMN exemption_extra INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE employees ADD COLUMN exemption_from TEXT NOT NULL DEFAULT '';
+ALTER TABLE employees ADD COLUMN exemption_to TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE payroll_lines ADD COLUMN vacation INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN sick INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN exemption INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN deducted INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN deductions TEXT NOT NULL DEFAULT '[]';
+
+-- Vacation (paid / unpaid) and sick leave: the period, how the pay was worked out, the pay.
+CREATE TABLE payroll_absences(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN('vacation','unpaid','sick')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  employee_id TEXT NOT NULL,
+  date_from TEXT NOT NULL,
+  date_to TEXT NOT NULL,
+  days INTEGER NOT NULL,
+  sheet_no TEXT NOT NULL DEFAULT '',
+  percent INTEGER NOT NULL DEFAULT 100,
+  employer_all INTEGER NOT NULL DEFAULT 0 CHECK(employer_all IN(0,1)),
+  manual TEXT NOT NULL DEFAULT '',
+  average INTEGER NOT NULL DEFAULT 0,
+  daily INTEGER NOT NULL DEFAULT 0,
+  employer_days INTEGER NOT NULL DEFAULT 0,
+  fund_days INTEGER NOT NULL DEFAULT 0,
+  amount INTEGER NOT NULL DEFAULT 0,
+  basis TEXT NOT NULL DEFAULT '',
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,number_key),
+  FOREIGN KEY(company_id,employee_id) REFERENCES employees(company_id,id)
+);
+CREATE INDEX payroll_absences_employee ON payroll_absences(company_id,employee_id,date_from);
+CREATE TRIGGER payroll_absences_no_delete BEFORE DELETE ON payroll_absences BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER payroll_absences_period BEFORE UPDATE ON payroll_absences
+WHEN OLD.date_from<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+UPDATE items SET role='sickPay' WHERE kind='expenseItem' AND name='Xəstəlik vərəqəsi üzrə müavinət' AND archived=0 AND role=''
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='sickPay');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT lower(hex(randomblob(16))),id,'expenseItem','Xəstəlik vərəqəsi üzrə müavinət','sickPay' FROM companies c
+  WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Xəstəlik vərəqəsi üzrə müavinət');
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1424,4 +1484,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 15, sql: v15 },
   { version: 16, sql: v16, foreignKeysOff: true },
   { version: 17, sql: v17 },
+  { version: 18, sql: v18 },
 ];

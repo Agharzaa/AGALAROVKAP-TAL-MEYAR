@@ -135,10 +135,18 @@ export const payrollRatesInput = z.object({
   medicalEmployer: brackets,
 });
 /** A payroll line (stage 8a): the month's salary (prorated by the form) and a bonus. */
+/** Stage 8b: what is withheld besides taxes (alimony, an advance back): Dt 533 / Kt the account. */
+export const payrollDeductionInput = z.object({
+  amount: decimal,
+  account: code,
+  sk: z.array(z.string().max(120)).max(3).default([]),
+  memo: text(200).default(''),
+});
 export const payrollLineInput = z.object({
   employeeId: id,
   salary: decimal,
   bonus: decimal.default(''),
+  deductions: z.array(payrollDeductionInput).max(5).default([]),
 });
 export type PayrollLineInput = z.infer<typeof payrollLineInput>;
 
@@ -333,7 +341,33 @@ export const commandSchema = z.discriminatedUnion('type', [
     salary: decimal.default(''),
     expenseAccount: code.default(''),
     expenseSk: z.array(z.string().max(120)).max(3).default([]),
+    /** Stage 8c: income tax exemptions (VM 102) — only at the main workplace. */
+    mainJob: z.boolean().default(true),
+    exemption: z.enum(['0', '100', '200', '400']).default('0'),
+    exemptionExtra: z.boolean().default(false),
+    exemptionFrom: z.string().max(10).default(''),
+    exemptionTo: z.string().max(10).default(''),
   }),
+  /** Stage 8c: a vacation (paid / unpaid) or a sick leave; its pay goes to the month's payroll. */
+  z.object({
+    type: z.literal('absence.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    kind: z.enum(['vacation', 'unpaid', 'sick']),
+    number: text(40).default(''),
+    employeeId: id,
+    from: date,
+    to: date,
+    /** Sick leave: the certificate's number, the service percentage, an accident at work. */
+    sheetNo: text(40).default(''),
+    percent: z.number().int().min(0).max(100).default(100),
+    employerAll: z.boolean().default(false),
+    /** The accountant's average (monthly for a vacation, daily for a sick leave); '' — computed. */
+    manual: decimal.default(''),
+    memo: text(500).default(''),
+  }),
+  z.object({ type: z.literal('absence.cancel'), ...base, id, version, reason: text(240) }),
   /** Stage 8a: a set of payroll rates in force from a day (marginal brackets, percent). */
   z.object({
     type: z.literal('payrollRates.save'),
@@ -387,6 +421,7 @@ export const commandSchema = z.discriminatedUnion('type', [
         'assetSale',
         'salary',
         'socialInsurance',
+        'sickPay',
       ])
       .optional(),
   }),

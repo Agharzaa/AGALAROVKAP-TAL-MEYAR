@@ -64,6 +64,8 @@ import { OperationsPage } from './pages/operations';
 import { OperationEditor } from './pages/operation-editor';
 import { AssetEditor } from './pages/asset-editor';
 import { PayrollDocumentsPage, PayrollEditor, PayrollRatesPage } from './pages/payroll';
+import { AbsenceEditor, AbsencesPage } from './pages/absences';
+import { PayrollSettlementsPage, PayrollTaxesPage, PayslipPage } from './pages/payroll-reports';
 import {
   AssetDocumentsPage,
   DepreciationSchedulePage,
@@ -1059,6 +1061,8 @@ function Routed({ win }: { win: Win }) {
       return <AssetEditor kind={v.kind} {...(v.id ? { id: v.id } : {})} />;
     case 'payroll':
       return <PayrollEditor {...(v.id ? { id: v.id } : {})} />;
+    case 'absence':
+      return <AbsenceEditor kind={v.kind} {...(v.id ? { id: v.id } : {})} />;
     case 'accountCard':
       return <CardPage initial={v} />;
     case 'page':
@@ -1131,6 +1135,16 @@ function Routed({ win }: { win: Win }) {
           return <PayrollDocumentsPage />;
         case 'payrollRates':
           return <PayrollRatesPage />;
+        case 'vacations':
+          return <AbsencesPage sick={false} />;
+        case 'sickLeaves':
+          return <AbsencesPage sick />;
+        case 'payslip':
+          return <PayslipPage />;
+        case 'payrollSettlements':
+          return <PayrollSettlementsPage />;
+        case 'payrollTaxes':
+          return <PayrollTaxesPage />;
         case 'lists':
           return <ListsPage />;
         case 'audit':

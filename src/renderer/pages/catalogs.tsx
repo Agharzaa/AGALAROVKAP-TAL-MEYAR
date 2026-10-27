@@ -505,6 +505,11 @@ export function EmployeesPage() {
     salary: '',
     expenseAccount: '',
     expenseSk: [] as string[],
+    mainJob: true,
+    exemption: '0' as EmployeeView['exemption'],
+    exemptionExtra: false,
+    exemptionFrom: '',
+    exemptionTo: '',
   };
   const [f, setF] = useState(empty);
   const rows = (catalog?.employees ?? []).filter((e) =>
@@ -526,6 +531,11 @@ export function EmployeesPage() {
             salary: e.salary === '0.00' ? '' : e.salary,
             expenseAccount: e.expenseAccount,
             expenseSk: e.expenseSk,
+            mainJob: e.mainJob,
+            exemption: e.exemption,
+            exemptionExtra: e.exemptionExtra,
+            exemptionFrom: e.exemptionFrom,
+            exemptionTo: e.exemptionTo,
           },
     );
   };
@@ -651,6 +661,63 @@ export function EmployeesPage() {
                 </Field>
               ),
             )}
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={f.mainJob}
+              onChange={(e) => setF({ ...f, mainJob: e.target.checked })}
+            />{' '}
+            Əsas iş yeri (əmək kitabçası buradadır)
+          </label>
+          <Field
+            label="Gəlir vergisi güzəşti (VM 102)"
+            hint="Aylıq azad məbləğ; bir neçə hüquq varsa ən böyüyü"
+          >
+            <select
+              aria-label="Gəlir vergisi güzəşti"
+              value={f.exemption}
+              disabled={!f.mainJob}
+              onChange={(e) =>
+                setF({ ...f, exemption: e.target.value as EmployeeView['exemption'] })
+              }
+            >
+              <option value="0">Yoxdur</option>
+              <option value="400">
+                400 ₼ — Qəhrəmanlar, müharibə əlilləri I–II qrup, şəhid ailələri, veteranlar…
+              </option>
+              <option value="200">
+                200 ₼ — 61–100% sağlamlıq imkanı məhdud, 18 yaşadək əlil və ona qulluq edən…
+              </option>
+              <option value="100">100 ₼ — VM 102.4</option>
+            </select>
+          </Field>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={f.exemptionExtra}
+              disabled={!f.mainJob}
+              onChange={(e) => setF({ ...f, exemptionExtra: e.target.checked })}
+            />{' '}
+            Əlavə 50 ₼ (VM 102.5)
+          </label>
+          {(f.exemption !== '0' || f.exemptionExtra) && (
+            <>
+              <Field label="Güzəşt — başlanğıc" hint="Sənədin təqdim olunduğu tarix">
+                <DateInput
+                  value={f.exemptionFrom}
+                  onChange={(exemptionFrom) => setF({ ...f, exemptionFrom })}
+                  aria-label="Güzəşt — başlanğıc"
+                />
+              </Field>
+              <Field label="Güzəşt — son" hint="Boş — müddətsiz">
+                <DateInput
+                  value={f.exemptionTo}
+                  onChange={(exemptionTo) => setF({ ...f, exemptionTo })}
+                  aria-label="Güzəşt — son"
+                />
+              </Field>
+            </>
+          )}
           {archiveBox(f.archived, (archived) => setF({ ...f, archived }), !!current)}
         </EditDialog>
       )}

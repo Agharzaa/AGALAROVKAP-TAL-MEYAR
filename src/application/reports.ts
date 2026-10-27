@@ -67,7 +67,16 @@ import {
   fixedAssets,
   fixedAssetView,
 } from './assets.js';
-import { payrollDocument, payrollDocuments, payrollFill, payrollRates } from './payroll.js';
+import {
+  payrollDocument,
+  payrollDocuments,
+  payrollFill,
+  payrollRates,
+  payrollSettlements,
+  payrollTaxes,
+  payslip,
+} from './payroll.js';
+import { absence, absences } from './absences.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const money = (v: bigint) => formatMinor(v);
@@ -1439,6 +1448,11 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             salary: money(r.salary as bigint),
             expenseAccount: str(r.expense_account),
             expenseSk: JSON.parse(str(r.expense_sk)) as string[],
+            mainJob: r.main_job === 1n,
+            exemption: String((r.exemption as bigint) / 100n) as EmployeeView['exemption'],
+            exemptionExtra: (r.exemption_extra as bigint) > 0n,
+            exemptionFrom: str(r.exemption_from),
+            exemptionTo: str(r.exemption_to),
           })),
         items: db
           .all('SELECT * FROM items WHERE company_id=? ORDER BY kind, name', c)
@@ -1488,6 +1502,20 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'payrollFill':
       company(db, q.companyId);
       return payrollFill(db, q.companyId, q.month);
+    case 'absences':
+      company(db, q.companyId);
+      return absences(db, q.companyId, q.kind);
+    case 'absence':
+      return absence(db, q.companyId, q.id);
+    case 'payslip':
+      company(db, q.companyId);
+      return payslip(db, q.companyId, q.employeeId, q.month);
+    case 'payrollSettlements':
+      company(db, q.companyId);
+      return payrollSettlements(db, q.companyId, q.from, q.to);
+    case 'payrollTaxes':
+      company(db, q.companyId);
+      return payrollTaxes(db, q.companyId, q.month);
     case 'invoices': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);
