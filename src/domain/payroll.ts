@@ -341,8 +341,9 @@ export function fourQuartersBefore(start: string): { from: string; to: string } 
 
 /**
  * Sick pay of the employer's days: the average daily earnings (the base over its calendar days, or
- * the accountant's figure) times the service percentage, for the first 14 calendar days — or all of
- * them when the employer is at fault for an accident at work.
+ * the accountant's figure) times the service percentage, for the first 14 calendar days of the
+ * illness (a sheet continuing another one gets what is left of them) — or all of them when the
+ * employer is at fault for an accident at work.
  */
 export function sickPay(input: {
   base: Minor;
@@ -351,8 +352,11 @@ export function sickPay(input: {
   days: number;
   percent: number;
   employerAll: boolean;
+  /** Employer days the earlier sheets of the same illness already took. */
+  employerDaysUsed?: number;
 }): { daily: Minor; employerDays: number; fundDays: number; amount: Minor } {
-  const employerDays = input.employerAll ? input.days : Math.min(input.days, EMPLOYER_SICK_DAYS);
+  const left = Math.max(0, EMPLOYER_SICK_DAYS - (input.employerDaysUsed ?? 0));
+  const employerDays = input.employerAll ? input.days : Math.min(input.days, left);
   // The average daily earnings are rounded to the qəpik first, then the percentage and the days.
   const daily =
     input.manualDaily ??

@@ -6,6 +6,7 @@
  *   Dt 701 / 721 ("Sosial sığorta ayırmaları") / Kt 522.01, 522.03.2, 522.04.2 — the employer's share.
  * One posted document a month: the brackets apply to the employee's whole month.
  */
+import type { WorkCalendar } from '../domain/calendar.js';
 import type { Chart } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
@@ -18,6 +19,7 @@ import {
   salaryFor,
   type ContributionKey,
   type Exemption,
+  type ExtraPay,
   type PayrollRates,
   type RatesInput,
 } from '../domain/payroll.js';
@@ -223,11 +225,46 @@ interface Line {
   sick: Minor;
   /** The timesheet's extra pay (8d). */
   extra: { overtime: Minor; holidayWork: Minor; night: Minor };
+  /** The contract salary, and the salary the working time gave with it (audit, stale lines). */
+  baseSalary: Minor;
+  autoSalary: Minor;
   deductions: Deduction[];
   deducted: Minor;
   amounts: ReturnType<typeof payrollFor>;
   expenseAccount: string;
   expenseSk: string[];
+}
+
+const noExtra = { overtime: 0n, holidayWork: 0n, night: 0n };
+
+/**
+ * What the month's working time gives an employee at the contract salary `base`: the salary for the
+ * days worked — by the month's timesheet when it has the employee (8d), else by the calendar less
+ * the absences — and the timesheet's overtime, day-off and night pay.
+ */
+function workedPay(
+  db: Db,
+  companyId: string,
+  e: Row,
+  month: string,
+  base: Minor,
+  pay: ExtraPay | undefined,
+  cal: WorkCalendar,
+): { salary: Minor; extra: typeof noExtra; byTimesheet: boolean } {
+  const id = str(e.id);
+  const ts = pay ? timesheetPayOf(db, companyId, month, id, base, pay, cal) : null;
+  if (ts)
+    return {
+      salary: ts.salary,
+      extra: { overtime: ts.overtime, holidayWork: ts.holidayWork, night: ts.night },
+      byTimesheet: true,
+    };
+  const away = awayIn(db, companyId, id, month);
+  return {
+    salary: salaryFor(base, month, str(e.hired), str(e.left_on), away, cal),
+    extra: noExtra,
+    byTimesheet: false,
+  };
 }
 
 /** The employee's own exemption in force in the month (8c): only at the main workplace. */
@@ -279,19 +316,10 @@ function readLines(
       throw new DomainError(`${where}: məbləğ mənfi ola bilməz.`, `${f}.salary`);
     // Vacation and sick pay come from their documents (8c), never from the form.
     const pay = absencePay(tx.db, companyId, l.employeeId, month, cal);
-    // The timesheet's overtime, work on days off and night hours, at the contract salary (8d).
-    const ts = timesheetPayOf(
-      tx.db,
-      companyId,
-      month,
-      l.employeeId,
-      e.salary as bigint,
-      rates.pay,
-      cal,
-    );
-    const extra = ts
-      ? { overtime: ts.overtime, holidayWork: ts.holidayWork, night: ts.night }
-      : { overtime: 0n, holidayWork: 0n, night: 0n };
+    // The timesheet's overtime, work on days off and night hours, at the contract salary (8d); the
+    // salary the working time gives is kept to tell when the line goes stale (audit).
+    const worked = workedPay(tx.db, companyId, e, month, e.salary as bigint, rates.pay, cal);
+    const extra = worked.extra;
     const extras = extra.overtime + extra.holidayWork + extra.night;
     if (salary + bonus + pay.vacation + pay.sick + extras <= 0n)
       throw new DomainError(`${where}: ${name} üçün məbləğ yoxdur.`, `${f}.salary`);
@@ -389,6 +417,8 @@ function readLines(
       vacation: pay.vacation,
       sick: pay.sick,
       extra,
+      baseSalary: e.salary as bigint,
+      autoSalary: worked.salary,
       deductions,
       deducted,
       amounts,
@@ -521,8 +551,8 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
       `INSERT INTO payroll_lines(company_id,document_id,line_no,employee_id,salary,bonus,gross,income_tax,
          dsmf_employee,unemployment_employee,medical_employee,net,dsmf_employer,unemployment_employer,
          medical_employer,expense_account,expense_sk,vacation,sick,exemption,deducted,deductions,
-         overtime,holiday_work,night)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         overtime,holiday_work,night,base_salary,auto_salary)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       cmd.companyId,
       id,
       i + 1,
@@ -548,6 +578,8 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
       l.extra.overtime,
       l.extra.holidayWork,
       l.extra.night,
+      l.baseSalary,
+      l.autoSalary,
     ),
   );
   tx.post(cmd.companyId, chart, { type: PAYROLL, id, number, version }, date, false, postings);
@@ -655,37 +687,52 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
     str(r.id),
   );
   const lines = rows.map((l) => lineView(l, names));
-  // A vacation, sick leave or the timesheet changed after the payroll was posted (8c, 8d;
-  // QERARLAR 2026-10-27 §12).
+  // An absence, the timesheet, the calendar or the hire dates changed after the payroll was posted
+  // (8c, 8d; QERARLAR 2026-10-27 §12; audit): what they give now is not what the line was saved
+  // with — at the contract salary of then, so a later raise does not touch an earlier month.
   const companyId = str(r.company_id);
-  const cal = r.status === 'posted' ? loadCalendar(db, companyId) : null;
+  const month = str(r.month);
+  // A closed month's payroll stays as it was closed: nothing there can be saved again.
+  const closed = str(
+    db.get('SELECT closed_through FROM companies WHERE id=?', companyId)?.closed_through,
+  );
+  const cal = r.status === 'posted' && str(r.date) > closed ? loadCalendar(db, companyId) : null;
   const pay = cal ? ratesAt(db, companyId, str(r.date))?.rates.pay : undefined;
-  const stale =
-    cal && pay
-      ? rows
-          .filter((l) => {
-            const id = str(l.employee_id);
-            const a = absencePay(db, companyId, id, str(r.month), cal);
-            const e = names.get(id);
-            const t = timesheetPayOf(
-              db,
-              companyId,
-              str(r.month),
-              id,
-              e?.salary as bigint,
-              pay,
-              cal,
-            );
-            return (
-              a.vacation !== l.vacation ||
-              a.sick !== l.sick ||
-              (t?.overtime ?? 0n) !== l.overtime ||
-              (t?.holidayWork ?? 0n) !== l.holiday_work ||
-              (t?.night ?? 0n) !== l.night
-            );
-          })
-          .map((l) => str(names.get(str(l.employee_id))?.name))
-      : [];
+  const stale: string[] = [];
+  if (cal && pay) {
+    for (const l of rows) {
+      const id = str(l.employee_id);
+      const e = names.get(id);
+      if (!e) continue;
+      const a = absencePay(db, companyId, id, month, cal);
+      const base = (l.base_salary ?? e.salary) as bigint;
+      const w = workedPay(db, companyId, e, month, base, pay, cal);
+      if (
+        a.vacation !== l.vacation ||
+        a.sick !== l.sick ||
+        w.extra.overtime !== l.overtime ||
+        w.extra.holidayWork !== l.holiday_work ||
+        w.extra.night !== l.night ||
+        (l.auto_salary !== null && w.salary !== l.auto_salary)
+      )
+        stale.push(str(e.name));
+    }
+    // A vacation, sick leave or compensation of an employee the payroll has no line for.
+    const listed = new Set(rows.map((l) => str(l.employee_id)));
+    const { first, last } = monthBounds(month);
+    for (const x of db.all(
+      `SELECT DISTINCT employee_id FROM payroll_absences WHERE company_id=? AND status='posted'
+         AND kind<>'unpaid' AND date_from<=? AND date_to>=?`,
+      companyId,
+      last,
+      first,
+    )) {
+      const id = str(x.employee_id);
+      if (listed.has(id)) continue;
+      const a = absencePay(db, companyId, id, month, cal);
+      if (a.vacation || a.sick) stale.push(str(names.get(id)?.name));
+    }
+  }
   const sum = (k: keyof PayrollLineView) =>
     formatMinor(lines.reduce((s, l) => s + parseMoney(l[k]), 0n));
   return {
@@ -742,32 +789,20 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
       const id = str(e.id);
       const pay = absencePay(db, companyId, id, month, cal);
       // By the month's timesheet when there is one (8d), else by the calendar and the absences.
-      const ts = rates
-        ? timesheetPayOf(db, companyId, month, id, e.salary as bigint, rates.rates.pay, cal)
-        : null;
-      const salary =
-        ts?.salary ??
-        salaryFor(
-          e.salary as bigint,
-          month,
-          str(e.hired),
-          str(e.left_on),
-          awayIn(db, companyId, id, month),
-          cal,
-        );
-      const extras = ts ? ts.overtime + ts.holidayWork + ts.night : 0n;
-      if (!salary && !pay.vacation && !pay.sick && !extras) return [];
+      const w = workedPay(db, companyId, e, month, e.salary as bigint, rates?.rates.pay, cal);
+      const extras = w.extra.overtime + w.extra.holidayWork + w.extra.night;
+      if (!w.salary && !pay.vacation && !pay.sick && !extras) return [];
       return [
         {
           employeeId: id,
           name: str(e.name),
-          salary: formatMinor(salary),
+          salary: formatMinor(w.salary),
           vacation: formatMinor(pay.vacation),
           sick: formatMinor(pay.sick),
-          overtime: formatMinor(ts?.overtime ?? 0n),
-          holidayWork: formatMinor(ts?.holidayWork ?? 0n),
-          night: formatMinor(ts?.night ?? 0n),
-          byTimesheet: !!ts,
+          overtime: formatMinor(w.extra.overtime),
+          holidayWork: formatMinor(w.extra.holidayWork),
+          night: formatMinor(w.extra.night),
+          byTimesheet: w.byTimesheet,
         },
       ];
     });
@@ -955,12 +990,21 @@ export function payrollTaxes(db: Db, companyId: string, monthInput: string): Pay
       first,
       last,
     )!.a as bigint;
+    // Transferred: the debit of the month (a credit from elsewhere is owed, not "paid" less).
+    const paid = db.get(
+      `SELECT COALESCE(SUM(amount),0) AS a FROM postings
+       WHERE company_id=? AND dt_account=? AND date BETWEEN ? AND ?`,
+      companyId,
+      account,
+      first,
+      last,
+    )!.a as bigint;
     return {
       account,
       label,
       opening: formatMinor(opening),
       accrued: formatMinor(accrued),
-      paid: formatMinor(opening + accrued - closing),
+      paid: formatMinor(paid),
       closing: formatMinor(closing),
     };
   });
@@ -1009,7 +1053,7 @@ export function payrollSignals(
     const stale = documentView(db, doc).stale;
     if (stale.length)
       blocking.push(
-        `${str(doc.number)} əmək haqqı sənədi köhnəlib — sonradan dəyişən məzuniyyət / xəstəlik vərəqəsi: ${stale.join(', ')}. Sənədi açıb "İşçilərə görə doldur" və düzəlişi uçota alın.`,
+        `${str(doc.number)} əmək haqqı sənədi köhnəlib — sonradan dəyişən məzuniyyət, xəstəlik vərəqəsi, tabel, təqvim və ya işə qəbul / çıxma tarixi: ${stale.join(', ')}. Sənədi açıb "İşçilərə görə doldur" və düzəlişi uçota alın.`,
       );
   }
   return { warnings, blocking };

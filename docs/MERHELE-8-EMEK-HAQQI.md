@@ -115,7 +115,7 @@ Sürücü, əmək haqqı 1 000,00 ₼, oktyabr 2026, 701:
 
 1. **8a — işçilər, dərəcələr, hesablama sənədi** (sxem v17, domen, yazılışlar, forma). Testlər: Ə1–Ə5, Ə8. ✅ (0.9.0, 27.10.2026)
 2. **8b — ödəniş və hesabatlar** (çıxarışda işçi, cədvəl, vərəqə, hesablaşmalar, bağlanış yoxlaması). Testlər: Ə6, Ə7, Ə9.
-3. **Müstəqil audit** (kodu yazmayan sessiya).
+3. **Müstəqil audit** (kodu yazmayan sessiya). ✅ (0.9.3, 27.10.2026; PROJECT_STATE "Mərhələ 8 auditi")
 
 ## 11. Açıq suallar (istifadəçi və mühasib)
 

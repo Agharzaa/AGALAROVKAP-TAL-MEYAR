@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1569,6 +1569,15 @@ CREATE TABLE timesheet_rows(
 );
 `;
 
+// v20 — stage 8 audit: a payroll line keeps the contract salary it was worked out with and the
+// salary the calendar / timesheet gave then, so a later change of an unpaid leave, the timesheet,
+// the calendar or the hire dates makes it stale (a line saved before has NULL: not compared).
+
+const v20 = `
+ALTER TABLE payroll_lines ADD COLUMN base_salary INTEGER;
+ALTER TABLE payroll_lines ADD COLUMN auto_salary INTEGER;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1589,4 +1598,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 17, sql: v17 },
   { version: 18, sql: v18 },
   { version: 19, sql: v19, foreignKeysOff: true },
+  { version: 20, sql: v20 },
 ];

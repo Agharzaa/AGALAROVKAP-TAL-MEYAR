@@ -509,8 +509,9 @@ export function PayrollEditor({ id }: { id?: string }) {
           {fillError && <Notice onClose={() => setFillError('')}>{fillError}</Notice>}
           {doc && doc.stale.length > 0 && (
             <Notice kind="warning">
-              Uçotdan sonra dəyişən məzuniyyət / xəstəlik vərəqəsi: {doc.stale.join(', ')}.
-              "İşçilərə görə doldur" və düzəlişi uçota alın — o vaxtadək ay bağlanmır.
+              Uçotdan sonra dəyişən məzuniyyət, xəstəlik vərəqəsi, tabel, təqvim və ya işə qəbul /
+              çıxma tarixi: {doc.stale.join(', ')}. "İşçilərə görə doldur" və düzəlişi uçota alın —
+              o vaxtadək ay bağlanmır.
             </Notice>
           )}
           {sets.data && !rates && (

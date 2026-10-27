@@ -496,7 +496,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       () => q({ type: 'payrollFill', month: '2026-10' }) as { employeeId: string }[],
     );
     assert.equal(lines.length, 300);
-    time('Əmək haqqının hesablanması (300 işçi)', 3000, () =>
+    const doc = time('Əmək haqqının hesablanması (300 işçi)', 3000, () =>
       ledger.execute(
         {
           key: `perf-payroll-${Date.now()}`,
@@ -507,7 +507,14 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
         },
         ctx,
       ),
+    ) as { id: string };
+    // Audit (stage 8): opening it checks every line for staleness.
+    const view = time(
+      'Əmək haqqı sənədi (300 sətir, köhnəlmə yoxlaması)',
+      1000,
+      () => q({ type: 'payrollDocument', id: doc.id }) as { stale: string[] },
     );
+    assert.deepEqual(view.stale, []);
     const taxes = time(
       'Vergi və fondlar, ay',
       1500,

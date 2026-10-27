@@ -47,6 +47,11 @@ const show = (v: Minor) =>
     .replace('.', ',')
     .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const monthOf = (iso: string) => iso.slice(0, 7);
+const dayBefore = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 const previousMonth = (ym: string) => {
   const [y, m] = ym.split('-').map(Number) as [number, number];
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
@@ -169,12 +174,13 @@ export function vacationBalances(
 }
 
 /**
- * The earnings of every month the payroll was posted for, by month: salary, bonus and vacation pay
- * (the base of the contributions), without sick pay.
+ * The earnings of every month the payroll was posted for, by month: the work — salary, bonus and the
+ * timesheet's overtime, day-off and night pay — and the insured income (the gross, the base of the
+ * contributions: the work and the vacation pay), without sick pay.
  */
 function earnings(db: Db, companyId: string, employeeId: string, from: string, to: string) {
   return db.all(
-    `SELECT d.month, SUM(l.salary + l.bonus) AS work, SUM(l.salary + l.bonus + l.vacation) AS insured
+    `SELECT d.month, SUM(l.gross - l.vacation) AS work, SUM(l.gross) AS insured
      FROM payroll_lines l JOIN payroll_documents d ON d.id=l.document_id
      WHERE l.company_id=? AND l.employee_id=? AND d.status='posted' AND d.month BETWEEN ? AND ?
      GROUP BY d.month ORDER BY d.month`,
@@ -249,8 +255,29 @@ function workOut(
       warning: '',
     };
   }
+  // A sheet that starts the day after another one ends continues the same illness: the 14 employer
+  // days and the four quarters are the illness's, not the sheet's.
+  const chain: Row[] = [];
+  for (let start = from; ;) {
+    const prev = tx.db.get(
+      `SELECT number, date_from, employer_days, employer_all FROM payroll_absences WHERE company_id=?
+         AND employee_id=? AND kind='sick' AND status='posted' AND id<>? AND date_to=?`,
+      companyId,
+      employeeId,
+      id,
+      dayBefore(start),
+    );
+    if (!prev) break;
+    chain.unshift(prev);
+    start = str(prev.date_from);
+  }
+  const employerDaysUsed = chain.reduce(
+    (n, r) => n + (r.employer_all === 1n ? 0 : Number(r.employer_days)),
+    0,
+  );
+  const illness = chain.length ? str(chain[0]!.date_from) : from;
   // Sick leave: the four full quarters before, over their calendar days less earlier sick days.
-  const q = fourQuartersBefore(from);
+  const q = fourQuartersBefore(illness);
   const rows = earnings(tx.db, companyId, employeeId, monthOf(q.from), monthOf(q.to));
   const base = rows.reduce((s, r) => s + (r.insured as bigint), 0n);
   const sickBefore = tx.db
@@ -274,9 +301,20 @@ function workOut(
       'Əvvəlki 4 rüb üçün Meyar-da əmək haqqı yoxdur: orta günlük qazancı əl ilə yazın.',
       'manual',
     );
-  const s = sickPay({ base, baseDays, manualDaily: manual, days, percent, employerAll });
+  const s = sickPay({
+    base,
+    baseDays,
+    manualDaily: manual,
+    days,
+    percent,
+    employerAll,
+    employerDaysUsed,
+  });
+  const continued = chain.length
+    ? `Davamı: ${chain.map((r) => str(r.number)).join(', ')} (xəstəlik ${dmy(illness)}-dən; işəgötürənin ${employerDaysUsed} günü istifadə olunub). `
+    : '';
   const tenure =
-    hired && calendarDays(hired, from) < 183
+    hired && calendarDays(hired, illness) < 183
       ? `Sığorta stajı 6 aydan az ola bilər (işə qəbul ${dmy(hired)}): müavinət hüququnu yoxlayın.`
       : '';
   return {
@@ -285,7 +323,7 @@ function workOut(
     employerDays: s.employerDays,
     fundDays: s.fundDays,
     amount: s.amount,
-    basis: `${
+    basis: `${continued}${
       manual !== null
         ? `Orta günlük (mühasib): ${show(s.daily)} ₼`
         : `${dmy(q.from)} – ${dmy(q.to)}: ${show(base)} ₼ / ${baseDays} gün = ${show(s.daily)} ₼`
