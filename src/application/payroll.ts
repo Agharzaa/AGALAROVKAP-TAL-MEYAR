@@ -37,6 +37,8 @@ import type {
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
 import { absencePay, awayIn } from './absences.js';
+import { loadCalendar } from './calendar.js';
+import { timesheetPayOf } from './timesheets.js';
 import { documentEntry } from './reports.js';
 import { checkMonth } from './revaluation.js';
 import { checkSideValues } from './subkonto.js';
@@ -219,6 +221,8 @@ interface Line {
   bonus: Minor;
   vacation: Minor;
   sick: Minor;
+  /** The timesheet's extra pay (8d). */
+  extra: { overtime: Minor; holidayWork: Minor; night: Minor };
   deductions: Deduction[];
   deducted: Minor;
   amounts: ReturnType<typeof payrollFor>;
@@ -249,6 +253,7 @@ function readLines(
   const salaryItem = roleItem(tx, companyId, 'salary', 'Əmək haqqı');
   const socialItem = roleItem(tx, companyId, 'socialInsurance', 'Sosial sığorta ayırmaları');
   let sickItem = '';
+  const cal = loadCalendar(tx.db, companyId);
   const gross: Posting[] = [];
   const kept: Posting[] = [];
   // The employer's share, summed by expense account and its subkonto.
@@ -273,8 +278,22 @@ function readLines(
     if (salary < 0n || bonus < 0n)
       throw new DomainError(`${where}: məbləğ mənfi ola bilməz.`, `${f}.salary`);
     // Vacation and sick pay come from their documents (8c), never from the form.
-    const pay = absencePay(tx.db, companyId, l.employeeId, month);
-    if (salary + bonus + pay.vacation + pay.sick <= 0n)
+    const pay = absencePay(tx.db, companyId, l.employeeId, month, cal);
+    // The timesheet's overtime, work on days off and night hours, at the contract salary (8d).
+    const ts = timesheetPayOf(
+      tx.db,
+      companyId,
+      month,
+      l.employeeId,
+      e.salary as bigint,
+      rates.pay,
+      cal,
+    );
+    const extra = ts
+      ? { overtime: ts.overtime, holidayWork: ts.holidayWork, night: ts.night }
+      : { overtime: 0n, holidayWork: 0n, night: 0n };
+    const extras = extra.overtime + extra.holidayWork + extra.night;
+    if (salary + bonus + pay.vacation + pay.sick + extras <= 0n)
       throw new DomainError(`${where}: ${name} üçün məbləğ yoxdur.`, `${f}.salary`);
     const code = str(e.expense_account);
     if (!code)
@@ -294,7 +313,7 @@ function readLines(
     const expenseSk = sk(salaryItem);
     checkSideValues(tx.db, companyId, account, expenseSk, `${f}.employeeId`, '');
     const amounts = payrollFor(
-      salary + bonus + pay.vacation,
+      salary + bonus + pay.vacation + extras,
       rates,
       exemptionOf(e, month),
       pay.sick,
@@ -304,7 +323,7 @@ function readLines(
       dt: { account: account.code, sk: expenseSk },
       kt: side533,
       amount: amounts.gross,
-      memo: `Əmək haqqı${pay.vacation ? ' və məzuniyyət' : ''}: ${name}`,
+      memo: `Əmək haqqı${pay.vacation ? ', məzuniyyət' : ''}${extras ? ', artıq iş / bayram / gecə' : ''}: ${name}`,
     });
     if (pay.sick) {
       sickItem ||= roleItem(tx, companyId, 'sickPay', 'Xəstəlik vərəqəsi üzrə müavinət');
@@ -369,6 +388,7 @@ function readLines(
       bonus,
       vacation: pay.vacation,
       sick: pay.sick,
+      extra,
       deductions,
       deducted,
       amounts,
@@ -500,8 +520,9 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
     tx.db.run(
       `INSERT INTO payroll_lines(company_id,document_id,line_no,employee_id,salary,bonus,gross,income_tax,
          dsmf_employee,unemployment_employee,medical_employee,net,dsmf_employer,unemployment_employer,
-         medical_employer,expense_account,expense_sk,vacation,sick,exemption,deducted,deductions)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         medical_employer,expense_account,expense_sk,vacation,sick,exemption,deducted,deductions,
+         overtime,holiday_work,night)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       cmd.companyId,
       id,
       i + 1,
@@ -524,6 +545,9 @@ export function savePayroll(tx: Tx, cmd: CommandOf<'payroll.save'>): CommandResu
       l.amounts.exemption,
       l.deducted,
       JSON.stringify(l.deductions.map((d) => ({ ...d, amount: formatMinor(d.amount) }))),
+      l.extra.overtime,
+      l.extra.holidayWork,
+      l.extra.night,
     ),
   );
   tx.post(cmd.companyId, chart, { type: PAYROLL, id, number, version }, date, false, postings);
@@ -613,6 +637,9 @@ function lineView(l: Row, names: Map<string, Row>): PayrollLineView {
     sick: money(l.sick),
     exemption: money(l.exemption),
     deducted: money(l.deducted),
+    overtime: money(l.overtime),
+    holidayWork: money(l.holiday_work),
+    night: money(l.night),
     deductions: JSON.parse(str(l.deductions)) as PayrollLineView['deductions'],
   };
 }
@@ -628,13 +655,34 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
     str(r.id),
   );
   const lines = rows.map((l) => lineView(l, names));
-  // A vacation or sick leave changed after the payroll was posted (8c, QERARLAR 2026-10-27 §12).
+  // A vacation, sick leave or the timesheet changed after the payroll was posted (8c, 8d;
+  // QERARLAR 2026-10-27 §12).
+  const companyId = str(r.company_id);
+  const cal = r.status === 'posted' ? loadCalendar(db, companyId) : null;
+  const pay = cal ? ratesAt(db, companyId, str(r.date))?.rates.pay : undefined;
   const stale =
-    r.status === 'posted'
+    cal && pay
       ? rows
           .filter((l) => {
-            const pay = absencePay(db, str(r.company_id), str(l.employee_id), str(r.month));
-            return pay.vacation !== l.vacation || pay.sick !== l.sick;
+            const id = str(l.employee_id);
+            const a = absencePay(db, companyId, id, str(r.month), cal);
+            const e = names.get(id);
+            const t = timesheetPayOf(
+              db,
+              companyId,
+              str(r.month),
+              id,
+              e?.salary as bigint,
+              pay,
+              cal,
+            );
+            return (
+              a.vacation !== l.vacation ||
+              a.sick !== l.sick ||
+              (t?.overtime ?? 0n) !== l.overtime ||
+              (t?.holidayWork ?? 0n) !== l.holiday_work ||
+              (t?.night ?? 0n) !== l.night
+            );
           })
           .map((l) => str(names.get(str(l.employee_id))?.name))
       : [];
@@ -680,6 +728,8 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
   const month = checkMonth(monthInput);
   const first = `${month}-01`;
   const last = monthEnd(month);
+  const cal = loadCalendar(db, companyId);
+  const rates = ratesAt(db, companyId, last);
   return db
     .all(
       `SELECT * FROM employees WHERE company_id=? AND archived=0
@@ -690,15 +740,23 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
     )
     .flatMap((e) => {
       const id = str(e.id);
-      const pay = absencePay(db, companyId, id, month);
-      const salary = salaryFor(
-        e.salary as bigint,
-        month,
-        str(e.hired),
-        str(e.left_on),
-        awayIn(db, companyId, id, month),
-      );
-      if (!salary && !pay.vacation && !pay.sick) return [];
+      const pay = absencePay(db, companyId, id, month, cal);
+      // By the month's timesheet when there is one (8d), else by the calendar and the absences.
+      const ts = rates
+        ? timesheetPayOf(db, companyId, month, id, e.salary as bigint, rates.rates.pay, cal)
+        : null;
+      const salary =
+        ts?.salary ??
+        salaryFor(
+          e.salary as bigint,
+          month,
+          str(e.hired),
+          str(e.left_on),
+          awayIn(db, companyId, id, month),
+          cal,
+        );
+      const extras = ts ? ts.overtime + ts.holidayWork + ts.night : 0n;
+      if (!salary && !pay.vacation && !pay.sick && !extras) return [];
       return [
         {
           employeeId: id,
@@ -706,6 +764,10 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
           salary: formatMinor(salary),
           vacation: formatMinor(pay.vacation),
           sick: formatMinor(pay.sick),
+          overtime: formatMinor(ts?.overtime ?? 0n),
+          holidayWork: formatMinor(ts?.holidayWork ?? 0n),
+          night: formatMinor(ts?.night ?? 0n),
+          byTimesheet: !!ts,
         },
       ];
     });
@@ -761,7 +823,10 @@ export function payslip(
     ? [
         ...item('Əmək haqqı', l.salary),
         ...item('Mükafat', l.bonus),
-        ...item('Məzuniyyət', l.vacation),
+        ...item('Məzuniyyət / kompensasiya', l.vacation),
+        ...item('Artıq iş vaxtı', l.overtime),
+        ...item('Bayram / istirahət günü iş', l.holiday_work),
+        ...item('Gecə saatları', l.night),
         ...item('Xəstəlik vərəqəsi (işəgötürənin günləri)', l.sick),
       ]
     : [];

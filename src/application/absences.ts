@@ -1,32 +1,44 @@
 /**
- * Stage 8c — vacations and sick leaves (plan §12, QERARLAR 2026-10-27 §9, §10, §12). They post
- * nothing: the pay is worked out when the document is saved, kept on it with how it was worked out,
- * and goes to the payroll of the month the absence starts in; its working days are not paid as
- * salary. A change after that month's payroll was posted makes the payroll stale (it says so, and
- * the month closing waits for it to be saved again).
+ * Stage 8c / 8d — vacations, sick leaves and the compensation of unused vacation (plan §12, §13;
+ * QERARLAR 2026-10-27 §9, §10, §12, §13). They post nothing: the pay is worked out when the
+ * document is saved, kept on it with how it was worked out, and goes to the payrolls of the months
+ * its paid days fall in (a vacation is split by them; the public holidays in it are not vacation
+ * days, it grows by them); its working days are not paid as salary. A change after such a month's
+ * payroll was posted makes the payroll stale (it says so, and the month closing waits for it to be
+ * saved again). The vacation entitlement and its balance follow from the employee's card.
  */
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
+import { eachDay, vacationDays, vacationEnd, type WorkCalendar } from '../domain/calendar.js';
 import {
   calendarDays,
   fourQuartersBefore,
   monthBounds,
   sickPay,
+  splitByMonth,
+  vacationEarned,
   vacationPay,
   type Away,
 } from '../domain/payroll.js';
 import { numberKey, parseDate, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
-import type { AbsenceView } from '../contracts/queries.js';
+import type { AbsenceView, VacationBalanceRow } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
+import { loadCalendar } from './calendar.js';
 import { expectVersion, type Tx } from './tx.js';
 
-type Kind = 'vacation' | 'unpaid' | 'sick';
-const prefix: Record<Kind, string> = { vacation: 'MZ', unpaid: 'ÖM', sick: 'XV' };
+type Kind = 'vacation' | 'unpaid' | 'sick' | 'compensation';
+const prefix: Record<Kind, string> = {
+  vacation: 'MZ',
+  unpaid: 'ÖM',
+  sick: 'XV',
+  compensation: 'MK',
+};
 export const absenceLabel: Record<Kind, string> = {
   vacation: 'Məzuniyyət',
   unpaid: 'Ödənişsiz məzuniyyət',
   sick: 'Xəstəlik vərəqəsi',
+  compensation: 'Məzuniyyət kompensasiyası',
 };
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
@@ -46,7 +58,7 @@ export function awayIn(db: Db, companyId: string, employeeId: string, month: str
   return db
     .all(
       `SELECT date_from, date_to FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted'
-         AND date_from<=? AND date_to>=?`,
+         AND kind<>'compensation' AND date_from<=? AND date_to>=?`,
       companyId,
       employeeId,
       last,
@@ -55,24 +67,105 @@ export function awayIn(db: Db, companyId: string, employeeId: string, month: str
     .map((r) => ({ from: str(r.date_from), to: str(r.date_to) }));
 }
 
-/** The vacation and sick pay that go to the month's payroll: absences starting in that month. */
+/**
+ * An absence's pay by month (8d): a vacation by its days without the holidays (the daily rate a
+ * day), a sick leave by the employer's days, a compensation in its month.
+ */
+export function monthShare(a: Row, cal: WorkCalendar): Map<string, Minor> {
+  const amount = a.amount as bigint;
+  const from = str(a.date_from);
+  if (a.kind === 'compensation') return new Map([[monthOf(from), amount]]);
+  const all = eachDay(from, str(a.date_to));
+  if (a.kind === 'vacation')
+    return splitByMonth(
+      amount,
+      all.filter((d) => !cal.isHoliday(d)),
+      a.daily as bigint,
+    );
+  if (a.kind === 'sick') return splitByMonth(amount, all.slice(0, Number(a.employer_days)));
+  return new Map();
+}
+
+/**
+ * The vacation (with the compensation) and sick pay that go to the month's payroll: the part of
+ * every posted absence that falls in the month.
+ */
 export function absencePay(
   db: Db,
   companyId: string,
   employeeId: string,
   month: string,
+  cal: WorkCalendar = loadCalendar(db, companyId),
 ): { vacation: Minor; sick: Minor } {
   const { first, last } = monthBounds(month);
-  const r = db.get(
-    `SELECT COALESCE(SUM(CASE WHEN kind='vacation' THEN amount END),0) AS v,
-       COALESCE(SUM(CASE WHEN kind='sick' THEN amount END),0) AS s
-     FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted' AND date_from BETWEEN ? AND ?`,
+  let vacation = 0n;
+  let sick = 0n;
+  for (const a of db.all(
+    `SELECT * FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted'
+       AND kind<>'unpaid' AND date_from<=? AND date_to>=?`,
     companyId,
     employeeId,
-    first,
     last,
-  )!;
-  return { vacation: r.v as bigint, sick: r.s as bigint };
+    first,
+  )) {
+    const part = monthShare(a, cal).get(month) ?? 0n;
+    if (a.kind === 'sick') sick += part;
+    else vacation += part;
+  }
+  return { vacation, sick };
+}
+
+/**
+ * The employee's vacation balance on a day (8d): the days earned by the working years from the
+ * hire date (the current one by the months gone) less the vacation and compensation days of the
+ * posted documents up to that day (but the one being saved).
+ */
+export function vacationBalanceOf(db: Db, e: Row, date: string, exceptId = ''): VacationBalanceRow {
+  const earned = vacationEarned({
+    hired: str(e.hired),
+    tenureFrom: str(e.tenure_from),
+    base: Number(e.vacation_days),
+    extra: Number(e.vacation_extra),
+    date,
+  });
+  const used = Number(
+    db.get(
+      `SELECT COALESCE(SUM(days),0) AS n FROM payroll_absences WHERE company_id=? AND employee_id=?
+         AND status='posted' AND kind IN('vacation','compensation') AND date_from<=? AND id<>?`,
+      str(e.company_id),
+      str(e.id),
+      date,
+      exceptId,
+    )!.n,
+  );
+  return {
+    employeeId: str(e.id),
+    name: str(e.name),
+    hired: str(e.hired),
+    years: earned.years,
+    annual: earned.annual,
+    earned: earned.earned,
+    used,
+    balance: earned.earned - used,
+  };
+}
+
+/** Vacation balances of the employees at work on a day. */
+export function vacationBalances(
+  db: Db,
+  companyId: string,
+  dateInput: string,
+): VacationBalanceRow[] {
+  const date = parseDate(dateInput);
+  return db
+    .all(
+      `SELECT * FROM employees WHERE company_id=? AND archived=0 AND hired<>'' AND hired<=?
+         AND (left_on='' OR left_on>=?) ORDER BY tab_no, name`,
+      companyId,
+      date,
+      date,
+    )
+    .map((e) => vacationBalanceOf(db, e, date));
 }
 
 /**
@@ -127,7 +220,7 @@ function workOut(
       basis: 'Ödənişsiz: yalnız iş günlərinin əmək haqqı hesablanmır.',
       warning: '',
     };
-  if (kind === 'vacation') {
+  if (kind === 'vacation' || kind === 'compensation') {
     // The 12 full calendar months before the vacation month; a month the employee was hired in
     // after its first day is not a full month.
     const last = previousMonth(monthOf(from));
@@ -149,9 +242,10 @@ function workOut(
       fundDays: 0,
       amount: v.amount,
       basis:
-        manual !== null
+        (kind === 'compensation' ? `İstifadə olunmamış ${days} gün. ` : '') +
+        (manual !== null
           ? `Orta aylıq (mühasib): ${show(v.average)} ₼; günlük ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`
-          : `${months.length} ay (${first} – ${last}): ${show(months.reduce((s, m) => s + m, 0n))} ₼ / ${months.length} = ${show(v.average)} ₼; ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`,
+          : `${months.length} ay (${first} – ${last}): ${show(months.reduce((s, m) => s + m, 0n))} ₼ / ${months.length} = ${show(v.average)} ₼; ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`),
       warning: '',
     };
   }
@@ -243,11 +337,17 @@ function staleWarning(tx: Tx, companyId: string, from: string, to: string): stri
 export function saveAbsence(tx: Tx, cmd: CommandOf<'absence.save'>): CommandResult {
   tx.company(cmd.companyId);
   const kind = cmd.kind;
-  const from = parseDate(cmd.from, 'Başlama tarixi');
-  const to = parseDate(cmd.to, 'Bitmə tarixi');
+  const cal = loadCalendar(tx.db, cmd.companyId);
+  const from = parseDate(cmd.from, kind === 'compensation' ? 'Tarix' : 'Başlama tarixi');
+  // A vacation of N days ends by itself, its holidays not counted; a compensation is a day.
+  const to =
+    kind === 'compensation'
+      ? from
+      : kind === 'vacation' && cmd.days
+        ? vacationEnd(cal, from, cmd.days)
+        : parseDate(cmd.to, 'Bitmə tarixi');
   if (to < from) throw new DomainError('Bitmə tarixi başlamadan əvvəl ola bilməz.', 'to');
-  const days = calendarDays(from, to);
-  if (days > 366) throw new DomainError('Müddət bir ildən çox ola bilməz.', 'to');
+  if (calendarDays(from, to) > 366) throw new DomainError('Müddət bir ildən çox ola bilməz.', 'to');
   const memo = parseText(cmd.memo, 'Məzmun', 500, false);
   const existing = cmd.id
     ? tx.db.get('SELECT * FROM payroll_absences WHERE company_id=? AND id=?', cmd.companyId, cmd.id)
@@ -270,20 +370,36 @@ export function saveAbsence(tx: Tx, cmd: CommandOf<'absence.save'>): CommandResu
   if (!employee) throw new DomainError('İşçi tapılmadı.', 'employeeId', 'not-found');
   const name = str(employee.name);
   if (employee.archived === 1n) throw new DomainError(`${name} arxivdədir.`, 'employeeId');
+  const balance = vacationBalanceOf(tx.db, employee, from, cmd.id ?? '');
+  const days =
+    kind === 'vacation'
+      ? vacationDays(cal, from, to)
+      : kind === 'compensation'
+        ? (cmd.days ?? balance.balance)
+        : calendarDays(from, to);
+  if (days <= 0)
+    throw new DomainError(
+      kind === 'compensation'
+        ? `${name}: ${dmy(from)} tarixinə istifadə olunmamış məzuniyyət yoxdur (qalıq ${balance.balance} gün).`
+        : 'Müddətdə məzuniyyət günü yoxdur (yalnız bayramlar).',
+      kind === 'compensation' ? 'days' : 'to',
+    );
   if (
     (str(employee.hired) && from < str(employee.hired)) ||
     (str(employee.left_on) && to > str(employee.left_on))
   )
     throw new DomainError(`${name} bu tarixlərdə işləmir (işə qəbul / çıxma tarixi).`, 'from');
-  const overlap = tx.db.get(
-    `SELECT number, kind FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted' AND id<>?
-       AND date_from<=? AND date_to>=?`,
-    cmd.companyId,
-    cmd.employeeId,
-    cmd.id ?? '',
-    to,
-    from,
-  );
+  const overlap =
+    kind !== 'compensation' &&
+    tx.db.get(
+      `SELECT number, kind FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted' AND id<>?
+       AND kind<>'compensation' AND date_from<=? AND date_to>=?`,
+      cmd.companyId,
+      cmd.employeeId,
+      cmd.id ?? '',
+      to,
+      from,
+    );
   if (overlap)
     throw new DomainError(
       `${name} bu günlərdə ${absenceLabel[overlap.kind as Kind].toLowerCase()}dədir (${str(overlap.number)}).`,
@@ -387,7 +503,16 @@ export function saveAbsence(tx: Tx, cmd: CommandOf<'absence.save'>): CommandResu
     existing && str(existing.date_from) < from ? str(existing.date_from) : from,
     existing && str(existing.date_to) > to ? str(existing.date_to) : to,
   );
-  const warning = [w.warning, stale].filter(Boolean).join(' ');
+  // Beyond the balance: a vacation in advance, or a mistake — the accountant decides.
+  const beyond =
+    (kind === 'vacation' || kind === 'compensation') && days > balance.balance
+      ? `${name}: ${dmy(from)} tarixinə məzuniyyət qalığı ${balance.balance} gündür, sənəd ${days} gün.`
+      : '';
+  const leftOn =
+    kind === 'compensation' && !str(employee.left_on)
+      ? `${name}: işçinin kartında işdən çıxma tarixi yazılmayıb.`
+      : '';
+  const warning = [w.warning, beyond, leftOn, stale].filter(Boolean).join(' ');
   return { id, version, number, ...(warning ? { warning } : {}) };
 }
 

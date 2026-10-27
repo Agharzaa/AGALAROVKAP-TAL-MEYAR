@@ -98,17 +98,18 @@ test('Ə11: vacation — 12 months over 30,4; the month pays it and fewer workin
   const v = absence(f, 'vacation', driver, '2026-11-02', '2026-11-22');
   assert.equal(v.number, 'MZ-000001');
   const a = absenceView(f, v.id!);
-  assert.deepEqual([a.days, a.average, a.daily, a.amount], [21, '1000.00', '32.89', '690.69']);
-  assert.match(a.basis, /9 ay .*9 000,00 ₼ \/ 9 = 1 000,00 ₼.*32,89 ₼ × 21 gün/);
-  // November: 21 working days, 15 of them on vacation → 6 / 21 of the salary.
+  // 2–22 November: 21 calendar days, the holidays of 8 and 9 November are not vacation days (8d).
+  assert.deepEqual([a.days, a.average, a.daily, a.amount], [19, '1000.00', '32.89', '624.91']);
+  assert.match(a.basis, /9 ay .*9 000,00 ₼ \/ 9 = 1 000,00 ₼.*32,89 ₼ × 19 gün/);
+  // November: 19 working days by the calendar (9, 10 November off), 13 on vacation → 6 / 19.
   const nov = fill(f, '2026-11');
   assert.deepEqual(
     nov.filter((l) => l.employeeId === driver).map((l) => [l.salary, l.vacation]),
-    [['285.71', '690.69']],
+    [['315.79', '624.91']],
   );
   const doc = post(f, '2026-11');
   const line = detail(f, doc.id!).lines.find((l) => l.employeeId === driver)!;
-  assert.deepEqual([line.gross, line.vacation, line.incomeTax], ['976.40', '690.69', '23.29']);
+  assert.deepEqual([line.gross, line.vacation, line.incomeTax], ['940.70', '624.91', '22.22']);
   assert.deepEqual(detail(f, doc.id!).stale, []);
   // Overlapping absences are refused.
   assert.throws(
@@ -132,18 +133,19 @@ test('Ə11: vacation — 12 months over 30,4; the month pays it and fewer workin
       }),
     /köhnəlib/,
   );
-  // Filled in again and saved: 14 days of vacation, 10 working days of salary.
+  // Filled in again and saved: 12 days of vacation (2–15 November less the holidays), 11 working days.
   payroll(f, '2026-11', fill(f, '2026-11'), { id: doc.id, version: doc.version });
   const again = detail(f, doc.id!);
   assert.deepEqual(again.stale, []);
   assert.deepEqual(
     again.lines.filter((l) => l.employeeId === driver).map((l) => [l.salary, l.vacation]),
-    [['523.81', '460.46']],
+    [['578.95', '394.68']],
   );
   // Unpaid leave: no pay, only fewer working days.
   const u = absence(f, 'unpaid', driver, '2026-12-01', '2026-12-04');
   assert.equal(absenceView(f, u.id!).amount, '0.00');
-  assert.equal(fill(f, '2026-12').find((l) => l.employeeId === driver)!.salary, '826.09');
+  // December: 22 working days (31 December off), 4 of them unpaid → 18 / 22.
+  assert.equal(fill(f, '2026-12').find((l) => l.employeeId === driver)!.salary, '818.18');
 });
 
 test('Ə12: sick leave — four quarters over their days; 14 days by the employer, income tax only', (t) => {
@@ -157,21 +159,21 @@ test('Ə12: sick leave — four quarters over their days; 14 days by the employe
   const s = absence(f, 'sick', driver, '2026-12-01', '2026-12-25', { sheetNo: 'XV-77' });
   assert.equal(s.number, 'XV-000001');
   const a = absenceView(f, s.id!);
-  // 01.10.2025–30.09.2026: January 681,82 + 8 × 1 000 = 8 681,82 over 365 days → 23,79.
-  assert.deepEqual([a.daily, a.employerDays, a.fundDays, a.amount], ['23.79', 14, 11, '333.06']);
-  assert.match(a.basis, /8 681,82 ₼ \/ 365 gün = 23,79 ₼.*11 gün — DSMF ödəyir/);
+  // 01.10.2025–30.09.2026: January 736,84 (14 of 19 working days) + 8 × 1 000 over 365 days → 23,94.
+  assert.deepEqual([a.daily, a.employerDays, a.fundDays, a.amount], ['23.94', 14, 11, '335.16']);
+  assert.match(a.basis, /8 736,84 ₼ \/ 365 gün = 23,94 ₼.*11 gün — DSMF ödəyir/);
   const doc = post(f, '2026-12');
   const d = detail(f, doc.id!);
   const line = d.lines[0]!;
-  // December: 23 working days, 19 sick → 4 / 23 of the salary; the sick pay bears income tax only.
+  // December: 22 working days, 19 sick → 3 / 22 of the salary; the sick pay bears income tax only.
   assert.deepEqual(
     [line.salary, line.sick, line.gross, line.incomeTax, line.dsmfEmployee, line.net],
-    ['173.91', '333.06', '173.91', '9.21', '5.22', '488.19'],
+    ['136.36', '335.16', '136.36', '8.15', '4.09', '455.87'],
   );
   const sickItem = f.item('expenseItem', 'Xəstəlik vərəqəsi üzrə müavinət');
   assert.ok(
     d.postings.some(
-      (p) => p.dt.account === '701' && p.dt.sk[1] === sickItem && p.amount === '333.06',
+      (p) => p.dt.account === '701' && p.dt.sk[1] === sickItem && p.amount === '335.16',
     ),
   );
   // 80% service and an accident the employer is at fault for: all 25 days by the employer.
@@ -189,7 +191,7 @@ test('Ə12: sick leave — four quarters over their days; 14 days by the employe
     percent: 80,
     employerAll: true,
   });
-  assert.equal(absenceView(f, s2.id!).amount, '475.80');
+  assert.equal(absenceView(f, s2.id!).amount, '478.80');
   // A tenure under 6 months is a warning, not a refusal.
   const fresh = employee(f, 'Yeni', { hired: '2026-10-01' });
   const w = absence(f, 'sick', fresh, '2026-12-01', '2026-12-03', {

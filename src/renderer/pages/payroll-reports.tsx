@@ -3,7 +3,12 @@
  * and the month's taxes and funds. Each is exported to Excel and printed.
  */
 import { useState } from 'react';
-import type { PayrollSettlementRow, PayrollTaxesView, PayslipView } from '../../contracts/queries';
+import type {
+  PayrollSettlementRow,
+  PayrollTaxesView,
+  PayslipView,
+  VacationBalanceRow,
+} from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { MonthFilter, RangeFields, useRange } from '../filters';
@@ -11,7 +16,7 @@ import { day, money, monthTitle, today } from '../format';
 import { useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Picker } from '../picker';
-import { Amount, Empty, Notice } from '../ui';
+import { Amount, DateInput, Empty, Notice } from '../ui';
 import { useWindow } from '../workspace';
 import { useOutput } from './reports';
 
@@ -348,6 +353,100 @@ export function PayrollTaxesPage() {
       }
     >
       {v ? <div className="table-scroll">{table}</div> : <div className="loading">Yüklənir…</div>}
+      {out.sheet}
+    </ModuleFrame>
+  );
+}
+
+/** Stage 8d: vacation balances on a day — the working years, the entitlement, used, left. */
+export function VacationBalancesPage() {
+  const win = useWindow();
+  const [date, setDate] = useState(today());
+  const result = useQuery<VacationBalanceRow[]>(
+    /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? { type: 'vacationBalances', companyId: win.companyId, date }
+      : null,
+  );
+  const rows = result.data ?? [];
+  const head = ['İşçi', 'İşə qəbul', 'İş ili', 'İllik hüquq', 'Qazanılıb', 'İstifadə', 'Qalıq'];
+  const table = (
+    <table className="grid report">
+      <thead>
+        <tr>
+          {head.map((h, i) => (
+            <th key={h} scope="col" className={i > 1 ? 'num' : undefined}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.employeeId}>
+            <th scope="row">{r.name}</th>
+            <td>{day(r.hired)}</td>
+            <td className="num">{r.years + 1}</td>
+            <td className="num">{r.annual}</td>
+            <td className="num">{r.earned}</td>
+            <td className="num">{r.used}</td>
+            <td className="num" aria-label={`${r.name}: qalıq`}>
+              <strong>{r.balance}</strong>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+  const out = useOutput(
+    `Məzuniyyət qalıqları ${date}`,
+    () => ({
+      name: 'Qalıqlar',
+      title: ['Məzuniyyət qalıqları', `${day(date)} tarixinə`],
+      header: head,
+      rows: rows.map((r) => [
+        r.name,
+        day(r.hired),
+        r.years + 1,
+        r.annual,
+        r.earned,
+        r.used,
+        r.balance,
+      ]),
+      widths: [32, 12, 8, 12, 12, 12, 10],
+    }),
+    () => (
+      <>
+        <h1>Məzuniyyət qalıqları · {day(date)}</h1>
+        {table}
+      </>
+    ),
+  );
+  return (
+    <ModuleFrame
+      title={pages.vacationBalances.title}
+      hint={pages.vacationBalances.hint}
+      count={rows.length}
+      onRefresh={result.reload}
+      actions={rows.length > 0 && out.buttons}
+      filters={
+        <label className="filter-dates">
+          <span>Tarixə</span>
+          <DateInput value={date} onChange={setDate} aria-label="Tarix" />
+        </label>
+      }
+      notices={
+        <>
+          {result.error && <Notice>{result.error}</Notice>}
+          {out.notice}
+          <Notice kind="info">
+            Hər iş ili (işə qəbul tarixindən) illik hüquq verir: əsas günlər + staja görə (5–10 il
+            2, 10–15 il 4, 15-dən çox 6) + əlavə; cari il keçən tam aylara mütənasib. İstifadə —
+            məzuniyyət və kompensasiya sənədlərinin günləri (bayramlar daxil deyil).
+          </Notice>
+        </>
+      }
+    >
+      {rows.length ? <div className="table-scroll">{table}</div> : <Empty title="İşçi yoxdur" />}
       {out.sheet}
     </ModuleFrame>
   );

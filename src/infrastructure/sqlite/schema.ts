@@ -11,9 +11,10 @@
  *   transaction as each posting, so reports never scan the journal and can never drift from it
  *   through an application bug (the startup integrity check proves it).
  */
+import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1466,6 +1467,108 @@ INSERT INTO items(id,company_id,kind,name,role)
   WHERE NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=c.id AND j.kind='expenseItem' AND j.name='Xəstəlik vərəqəsi üzrə müavinət');
 `;
 
+// v19 — payroll 8d (plan §13, QERARLAR 2026-10-27 §13): the production calendar (2026 seeded),
+// the timesheet, the vacation entitlement of an employee, the compensation of unused vacation
+// (the absences' kind joins the CHECK: a table rebuild, as SQLite asks) and the timesheet's extra
+// pay on a payroll line.
+
+const v19 = `
+CREATE TABLE work_calendar(
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  date TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN('holiday','rest','work','short')),
+  name TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(company_id,date)
+);
+${calendar2026
+  .map(
+    (d) =>
+      `INSERT INTO work_calendar SELECT id,${q(d.date)},${q(d.kind)},${q(d.name)} FROM companies;`,
+  )
+  .join('\n')}
+
+ALTER TABLE employees ADD COLUMN vacation_days INTEGER NOT NULL DEFAULT 21;
+ALTER TABLE employees ADD COLUMN vacation_extra INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE employees ADD COLUMN tenure_from TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE payroll_lines ADD COLUMN overtime INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN holiday_work INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payroll_lines ADD COLUMN night INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE payroll_absences_v2(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL CHECK(kind IN('vacation','unpaid','sick','compensation')),
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  employee_id TEXT NOT NULL,
+  date_from TEXT NOT NULL,
+  date_to TEXT NOT NULL,
+  days INTEGER NOT NULL,
+  sheet_no TEXT NOT NULL DEFAULT '',
+  percent INTEGER NOT NULL DEFAULT 100,
+  employer_all INTEGER NOT NULL DEFAULT 0 CHECK(employer_all IN(0,1)),
+  manual TEXT NOT NULL DEFAULT '',
+  average INTEGER NOT NULL DEFAULT 0,
+  daily INTEGER NOT NULL DEFAULT 0,
+  employer_days INTEGER NOT NULL DEFAULT 0,
+  fund_days INTEGER NOT NULL DEFAULT 0,
+  amount INTEGER NOT NULL DEFAULT 0,
+  basis TEXT NOT NULL DEFAULT '',
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,kind,number_key),
+  FOREIGN KEY(company_id,employee_id) REFERENCES employees(company_id,id)
+);
+INSERT INTO payroll_absences_v2 SELECT * FROM payroll_absences;
+DROP TABLE payroll_absences;
+ALTER TABLE payroll_absences_v2 RENAME TO payroll_absences;
+CREATE INDEX payroll_absences_employee ON payroll_absences(company_id,employee_id,date_from);
+CREATE TRIGGER payroll_absences_no_delete BEFORE DELETE ON payroll_absences BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER payroll_absences_period BEFORE UPDATE ON payroll_absences
+WHEN OLD.date_from<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+CREATE TABLE timesheets(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  month TEXT NOT NULL,
+  number TEXT NOT NULL,
+  number_key TEXT NOT NULL,
+  date TEXT NOT NULL,
+  memo TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id),
+  UNIQUE(company_id,number_key)
+);
+CREATE UNIQUE INDEX timesheets_month ON timesheets(company_id,month) WHERE status='posted';
+CREATE TRIGGER timesheets_no_delete BEFORE DELETE ON timesheets BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER timesheets_period BEFORE UPDATE ON timesheets
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+
+-- A day a cell: [{"c":"İ","h":800}, …] (code, hours in hundredths); overtime and night hours.
+CREATE TABLE timesheet_rows(
+  company_id TEXT NOT NULL,
+  document_id TEXT NOT NULL,
+  line_no INTEGER NOT NULL,
+  employee_id TEXT NOT NULL,
+  cells TEXT NOT NULL,
+  overtime INTEGER NOT NULL DEFAULT 0,
+  night INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(document_id,line_no),
+  FOREIGN KEY(company_id,document_id) REFERENCES timesheets(company_id,id),
+  FOREIGN KEY(company_id,employee_id) REFERENCES employees(company_id,id)
+);
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1485,4 +1588,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 16, sql: v16, foreignKeysOff: true },
   { version: 17, sql: v17 },
   { version: 18, sql: v18 },
+  { version: 19, sql: v19, foreignKeysOff: true },
 ];

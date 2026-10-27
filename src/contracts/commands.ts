@@ -133,6 +133,13 @@ export const payrollRatesInput = z.object({
   dsmfEmployer: brackets,
   unemploymentEmployer: brackets,
   medicalEmployer: brackets,
+  pay: z
+    .object({
+      overtime: z.string().max(8),
+      holidayWork: z.string().max(8),
+      night: z.string().max(8),
+    })
+    .optional(),
 });
 /** A payroll line (stage 8a): the month's salary (prorated by the form) and a bonus. */
 /** Stage 8b: what is withheld besides taxes (alimony, an advance back): Dt 533 / Kt the account. */
@@ -347,16 +354,60 @@ export const commandSchema = z.discriminatedUnion('type', [
     exemptionExtra: z.boolean().default(false),
     exemptionFrom: z.string().max(10).default(''),
     exemptionTo: z.string().max(10).default(''),
+    /** Stage 8d: annual vacation (base days, extra days) and the start of the tenure. */
+    vacationDays: z.number().int().min(0).max(90).default(21),
+    vacationExtra: z.number().int().min(0).max(90).default(0),
+    tenureFrom: z.string().max(10).default(''),
   }),
+  /** Stage 8d: the production calendar of a year (its special days replace the year's). */
+  z.object({
+    type: z.literal('calendar.save'),
+    ...base,
+    year: z.number().int().min(2000).max(2100),
+    days: z
+      .array(
+        z.object({
+          date,
+          kind: z.enum(['holiday', 'rest', 'work', 'short']),
+          name: text(120).default(''),
+        }),
+      )
+      .max(200),
+  }),
+  /** Stage 8d: a month's timesheet — one row per employee, a cell per day. */
+  z.object({
+    type: z.literal('timesheet.save'),
+    ...base,
+    id: id.optional(),
+    version: version.optional(),
+    month: z.string().max(7),
+    number: text(40).default(''),
+    memo: text(500).default(''),
+    rows: z
+      .array(
+        z.object({
+          employeeId: id,
+          /** "8", "7,5", "E", "E8", "M", "Ö", "X", "Q", "B" or "" — a day each. */
+          cells: z.array(z.string().max(8)).max(31),
+          overtime: decimal.default(''),
+          night: decimal.default(''),
+        }),
+      )
+      .min(1)
+      .max(300),
+  }),
+  z.object({ type: z.literal('timesheet.cancel'), ...base, id, version, reason: text(240) }),
   /** Stage 8c: a vacation (paid / unpaid) or a sick leave; its pay goes to the month's payroll. */
   z.object({
     type: z.literal('absence.save'),
     ...base,
     id: id.optional(),
     version: version.optional(),
-    kind: z.enum(['vacation', 'unpaid', 'sick']),
+    kind: z.enum(['vacation', 'unpaid', 'sick', 'compensation']),
     number: text(40).default(''),
     employeeId: id,
+    /** Stage 8d: a vacation's length (its end follows, holidays not counted); a compensation's days. */
+    days: z.number().int().min(1).max(366).optional(),
     from: date,
     to: date,
     /** Sick leave: the certificate's number, the service percentage, an accident at work. */

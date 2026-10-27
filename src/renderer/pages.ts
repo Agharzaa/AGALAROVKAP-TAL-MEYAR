@@ -163,6 +163,21 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Ay üzrə: hesablanan, tutulan vergi və fondlar, ödəniləcək, işəgötürənin payı',
     icon: Calculator,
   },
+  timesheets: {
+    title: 'Tabel',
+    hint: 'İş vaxtının uçotu: işçi × gün — saat, ezamiyyət, məzuniyyət, xəstəlik, gəlməmə',
+    icon: CalendarDays,
+  },
+  workCalendar: {
+    title: 'İstehsalat təqvimi',
+    hint: 'Bayramlar, köçürülmüş istirahət günləri, qısaldılmış günlər; aylıq norma',
+    icon: CalendarDays,
+  },
+  vacationBalances: {
+    title: 'Məzuniyyət qalıqları',
+    hint: 'İşçi üzrə: iş ili, illik hüquq, qazanılıb, istifadə olunub, qalıq',
+    icon: Reports,
+  },
   vacations: {
     title: 'Məzuniyyətlər',
     hint: 'Məzuniyyət haqqı: 12 ay / 30,4 × gün; ödənişsiz məzuniyyət',
@@ -497,6 +512,7 @@ export const sections: Section[] = [
         title: 'Sənədlər',
         items: [
           { label: 'Əmək haqqının hesablanması', icon: Calculator, action: page('payrolls') },
+          { label: 'Tabel', icon: CalendarDays, action: page('timesheets') },
           { label: 'Məzuniyyətlər', icon: CalendarDays, action: page('vacations') },
           { label: 'Xəstəlik vərəqələri', icon: CalendarDays, action: page('sickLeaves') },
         ],
@@ -519,6 +535,11 @@ export const sections: Section[] = [
             icon: FilePlus2,
             action: { kind: 'view', view: { type: 'absence', kind: 'sick' } },
           },
+          {
+            label: 'Tabel (yeni)',
+            icon: FilePlus2,
+            action: { kind: 'view', view: { type: 'timesheet' } },
+          },
         ],
       },
       {
@@ -526,12 +547,14 @@ export const sections: Section[] = [
         items: [
           { label: 'İşçilər', icon: UserRound, action: page('employees') },
           { label: 'Dərəcələr', icon: Scale, action: page('payrollRates') },
+          { label: 'İstehsalat təqvimi', icon: CalendarDays, action: page('workCalendar') },
         ],
       },
       {
         title: 'Hesabatlar',
         items: [
           { label: 'Hesablaşma vərəqəsi', icon: Reports, action: page('payslip') },
+          { label: 'Məzuniyyət qalıqları', icon: Reports, action: page('vacationBalances') },
           { label: 'İşçilərlə hesablaşmalar', icon: Reports, action: page('payrollSettlements') },
           { label: 'Vergi və fondlar', icon: Reports, action: page('payrollTaxes') },
           card('533', 'Hesab kartı 533'),
@@ -624,6 +647,7 @@ export function sectionOfView(view: View): string {
       return 'assets';
     case 'payroll':
     case 'absence':
+    case 'timesheet':
       return 'payroll';
     case 'accountCard': {
       const a = view.account;
@@ -658,6 +682,9 @@ export function sectionOfView(view: View): string {
         case 'payslip':
         case 'payrollSettlements':
         case 'payrollTaxes':
+        case 'timesheets':
+        case 'workCalendar':
+        case 'vacationBalances':
           return 'payroll';
         case 'operations':
         case 'accounts':
@@ -768,9 +795,12 @@ export function viewTitle(view: View, label?: string): string {
         vacation: 'Məzuniyyət',
         unpaid: 'Ödənişsiz məzuniyyət',
         sick: 'Xəstəlik vərəqəsi',
+        compensation: 'Məzuniyyət kompensasiyası',
       }[view.kind];
       return view.id ? `${kind}${label ? ` ${label}` : ''}` : `${kind} (yeni)`;
     }
+    case 'timesheet':
+      return view.id ? `Tabel${label ? ` ${label}` : ''}` : 'Tabel (yeni)';
     case 'accountCard':
       return `Hesab kartı ${view.account}`;
   }

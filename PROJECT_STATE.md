@@ -611,6 +611,23 @@ Plan: `docs/MERHELE-8-EMEK-HAQQI.md` (istifadəçi bütün tövsiyələri təsdi
 - Testlər Windows-da: `npm run typecheck`, `npm test` 235, `npm run test:ui` 48, `npm run test:perf` (300 işçi: doldurma 14 ms, uçot 49 ms). Electron işlədilmədi.
 - **Növbəti:** mərhələ 8-in müstəqil auditi; mühasibin dərəcələri və qaydaları təsdiqi.
 
+## 0.9.2 — mərhələ 8d: istehsalat təqvimi, tabel, məzuniyyət hüququ (27.10.2026)
+
+İstifadəçi: "məzuniyyət və hər şey 1C-dəkindən yaxşı olmalıdır, işçilərin tabeli də." Plan §13, QERARLAR 2026-10-27 §13.
+
+- **İstehsalat təqvimi** (Əmək haqqı → İstehsalat təqvimi): bayramlar, köçürülmüş istirahət günləri, iş gününə çevrilmiş şənbə / bazar, qısaldılmış günlər; aylıq norma (gün, saat). 2026 — NK-nin 02.12.2025 tarixli 362 saylı qərarı ilə hər şirkətə yazılıb (241 gün, 1 922 saat; nazirliyin cədvəli ilə ay-ay tutuşur); mühasib dəyişə bilər, bağlanmış ayların təqvimi dəyişmir. Maaşın mütənasibliyi (işə qəbul / çıxma, məzuniyyət, xəstəlik) indi təqvimlə — bayramlar və köçürülmüş günlər iş günü deyil.
+- **Tabel** (TB-2026-10; Əmək haqqı → Tabel): işçi × gün şəbəkəsi, xanada saat və ya kod (İ, E, M, Ö, X, Q, B), oxlarla gəzmək; "Doldur" — təqvim, işə qəbul / çıxma, məzuniyyət və xəstəlik sənədlərindən; cəmlər (gün, saat, bayram saatı, artıq iş, gecə, yoxluqlar); Excel və çap. Əmək haqqı tabeldən: maaş × işlənmiş norma saatı / ayın norması; günün normasından artıq saatlar + "Artıq" sütunu × 200%, istirahət / bayram günü saatları × 200%, gecə saatları + 40% (Dərəcələr dəstində, **mühasib təsdiq edir**). Sənədlərə uyğun gəlməyən tabel "köhnəlib", ay bağlanışı bloklanır.
+- **Məzuniyyət 1C-dən rahat:** "başlama + gün" yazılır, bitmə özü çıxır — içinə düşən bayramlar məzuniyyət günü deyil, müddət uzanır (Əmək Məcəlləsi); iki aya düşən məzuniyyətin haqqı günlərinə görə hər ayın əmək haqqına bölünür (günlük × gün, qəpikbəqəpik).
+- **Məzuniyyət hüququ və qalığı:** işçinin kartında illik əsas günlər (21 / 30 / …), əlavə günlər, ümumi əmək stajının başlanğıcı (staja görə +2 / +4 / +6); iş ili işə qəbul tarixindən, cari il keçən tam aylara mütənasib. Formada seçilən işçinin qalığı görünür, qalıqdan artıq məzuniyyət — xəbərdarlıq. Hesabat "Məzuniyyət qalıqları" (tarixə; Excel / çap).
+- **Məzuniyyət kompensasiyası** (MK-000001): işdən çıxanda istifadə olunmamış günlər (boş qalsa — qalıqdan özü) × orta günlük; işdən çıxma ayının əmək haqqına düşür.
+- Xəstəlik müavinəti də iki aya düşəndə işəgötürənin günlərinə görə bölünür.
+- Sxem v19: `work_calendar` (2026), `timesheets` / `timesheet_rows`, işçinin məzuniyyət sahələri, `payroll_absences` növünə `compensation` (cədvəlin yenidən qurulması), əmək haqqı sətrində artıq iş / bayram / gecə.
+- 0.9.1-dəki noyabr / dekabr rəqəmləri təqvimlə dəyişdi (məs. 2–22 noyabr məzuniyyəti 21 yox, 19 gün: 8 və 9 noyabr bayramdır) — testlər yeni, düzgün rəqəmlərlə.
+- 0.9.1-in CI-i e-qaimə yük testində 20,8 s / 20 s ilə dayandı (runner, yerli 2,6 s) — boş commit ilə yenidən: yaşıl, dərc olunub.
+- **Məlum sərhədlər:** 2027 və sonrakı illərin təqvimi mühasib tərəfindən yazılmalıdır (yoxdursa — yalnız şənbə / bazar, xəbərdarlıqla); növbəli (sutkalıq) iş qrafiki və 6 günlük həftə yoxdur; tabelin xanası bir kod.
+- Testlər Windows-da: `npm run typecheck`, `npm test` 244, `npm run test:ui` 49, `npm run test:perf`. Electron işlədilmədi.
+- **Növbəti:** mərhələ 8-in müstəqil auditi; mühasibin dərəcələri, əmsalları və təqvimi təsdiqi.
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -619,7 +636,7 @@ Plan: `docs/MERHELE-8-EMEK-HAQQI.md` (istifadəçi bütün tövsiyələri təsdi
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → ~~7c silinmə və satış~~ (0.8.2) → ~~müstəqil audit~~ (26.10.2026, 8 qüsur düzəldi, 1 açıq sual). Açıq suallar — §11.
-8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → müstəqil audit.
+8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → ~~8d istehsalat təqvimi, tabel, məzuniyyət hüququ və qalığı, kompensasiya~~ (0.9.2) → müstəqil audit.
 
 ## Əmrlər
 

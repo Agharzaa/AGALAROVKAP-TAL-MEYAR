@@ -3134,28 +3134,30 @@ test('stage 8c: a vacation with the accountant’s average goes to the month pay
     await date('Bitmə', `09.${m}.${y}`);
     await user.type(editor.getByRole('textbox', { name: /Orta aylıq qazanc/ }), '1216');
     await user.click(editor.getByRole('button', { name: 'Hesabla və saxla' }));
-    // 1 216 / 30,4 = 40,00 a day × 5 days.
+    // 1 216 / 30,4 = 40,00 a day × the days (the holidays of the calendar not counted, 8d).
     await waitFor(() =>
       assert.match(
         editor.getByRole('status', { name: 'Hesablama' }).textContent ?? '',
-        /40,00 ₼ × 5 gün/,
+        /40,00 ₼ × \d+ gün/,
       ),
     );
-    await editor.findByText(/Məzuniyyət haqqı: 200,00/);
+    const vac = (
+      h.ledger.query({ type: 'absences', companyId: s.companyId }) as { amount: string }[]
+    )[0]!;
+    const shown = vac.amount.replace('.', ',');
+    await editor.findByText(new RegExp(`Məzuniyyət haqqı: ${shown}`));
     // The month's payroll shows it and the fewer working days.
     await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
     await user.click(screen.getByRole('menuitem', { name: 'Əmək haqqını hesabla' }));
     const doc = within(pane());
-    await waitFor(() =>
-      assert.equal(doc.getByLabelText('Sətir 1: məzuniyyət').textContent, '200,00'),
-    );
+    await waitFor(() => assert.equal(doc.getByLabelText('Sətir 1: məzuniyyət').textContent, shown));
     await user.click(doc.getByRole('button', { name: /^Uçota al$/ }));
     await doc.findByText('Sənəd ƏH-000001 uçota alındı.');
     const posted = h.ledger.query({ type: 'payrollDocuments', companyId: s.companyId }) as {
       net: string;
       lines: { vacation: string }[];
     }[];
-    assert.equal(posted[0]!.lines[0]!.vacation, '200.00');
+    assert.equal(posted[0]!.lines[0]!.vacation, vac.amount);
     // The payslip: nothing paid yet — the month's net is owed.
     await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
     await user.click(screen.getByRole('menuitem', { name: 'Hesablaşma vərəqəsi' }));
@@ -3169,7 +3171,76 @@ test('stage 8c: a vacation with the accountant’s average goes to the month pay
         posted[0]!.net.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' '),
       ),
     );
-    await slip.findByText('Məzuniyyət');
+    await slip.findByText('Məzuniyyət / kompensasiya');
+  } finally {
+    h.close();
+  }
+});
+
+test('stage 8d: the timesheet fills itself, a cell typed changes the hours at once; the calendar shows the norms', async () => {
+  const h = harness();
+  const s = seed(h);
+  h.run({
+    type: 'employee.save',
+    companyId: s.companyId,
+    name: 'Sürücü Məmmədov',
+    position: 'Sürücü',
+    fin: '',
+    tabNo: '001',
+    hired: '2025-01-12',
+    left: '',
+    salary: '1000',
+    expenseAccount: '721',
+    expenseSk: [],
+    mainJob: true,
+    exemption: '0',
+    exemptionExtra: false,
+    exemptionFrom: '',
+    exemptionTo: '',
+    vacationDays: 21,
+    vacationExtra: 0,
+    tenureFrom: '',
+    archived: false,
+  });
+  const month = monthsBack(1).iso;
+  const filled = h.ledger.query({ type: 'timesheetFill', companyId: s.companyId, month }) as {
+    days: { workday: boolean; norm: number }[];
+  };
+  const first = filled.days.findIndex((d) => d.workday);
+  const norm = filled.days.reduce((t, d) => t + d.norm, 0);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Tabel' }));
+    const list = within(pane());
+    await list.findByText('Hələ tabel yoxdur');
+    await user.click(list.getByRole('button', { name: 'Tabel' }));
+    const grid = within(pane());
+    const hours = await grid.findByLabelText('Sürücü Məmmədov: saat');
+    assert.equal(hours.textContent, String(norm));
+    const cell = grid.getByRole('textbox', { name: `Sürücü Məmmədov, ${first + 1}` });
+    await user.clear(cell);
+    await user.type(cell, 'Q');
+    await waitFor(() =>
+      assert.equal(
+        grid.getByLabelText('Sürücü Məmmədov: saat').textContent,
+        String(norm - filled.days[first]!.norm),
+      ),
+    );
+    await user.click(grid.getByRole('button', { name: 'Saxla' }));
+    await grid.findByText(`Tabel TB-${month} saxlanıldı.`);
+    const saved = h.ledger.query({ type: 'timesheets', companyId: s.companyId }) as {
+      rows: { absent: { truancy: number } }[];
+    }[];
+    assert.equal(saved[0]!.rows[0]!.absent.truancy, 1);
+    // The production calendar: the year's norms.
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'İstehsalat təqvimi' }));
+    const cal = within(pane());
+    await cal.findByRole('table', { name: 'Aylar üzrə norma' });
+    if (month.startsWith('2026')) await cal.findByText(/2026: 241 iş günü, 1922 saat/);
   } finally {
     h.close();
   }

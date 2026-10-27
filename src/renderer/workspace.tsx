@@ -51,6 +51,9 @@ export type Page =
   | 'payslip'
   | 'payrollSettlements'
   | 'payrollTaxes'
+  | 'timesheets'
+  | 'workCalendar'
+  | 'vacationBalances'
   | 'lists'
   | 'audit'
   | 'settings';
@@ -82,7 +85,9 @@ export type View =
   /** Stage 8a: a month's payroll. */
   | { type: 'payroll'; id?: string }
   /** Stage 8c: a vacation (paid / unpaid) or a sick leave. */
-  | { type: 'absence'; kind: 'vacation' | 'unpaid' | 'sick'; id?: string }
+  | { type: 'absence'; kind: 'vacation' | 'unpaid' | 'sick' | 'compensation'; id?: string }
+  /** Stage 8d: a month's timesheet. */
+  | { type: 'timesheet'; id?: string }
   | { type: 'accountCard'; account: string; sk?: string[]; from?: string; to?: string };
 export interface Win {
   id: string;
@@ -222,7 +227,8 @@ const reusable = (v: View) =>
       v.type === 'cash' ||
       v.type === 'asset' ||
       v.type === 'payroll' ||
-      v.type === 'absence') &&
+      v.type === 'absence' ||
+      v.type === 'timesheet') &&
     !v.id
   );
 

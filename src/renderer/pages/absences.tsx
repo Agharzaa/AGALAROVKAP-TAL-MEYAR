@@ -5,7 +5,8 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { Ban, Check, Plus } from '../icons';
-import type { AbsenceView } from '../../contracts/queries';
+import { vacationDays, vacationEnd, WorkCalendar } from '../../domain/calendar';
+import type { AbsenceView, CalendarView, VacationBalanceRow } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day, money, today } from '../format';
@@ -26,10 +27,11 @@ import {
 } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 
-export type AbsenceKind = 'vacation' | 'unpaid' | 'sick';
+export type AbsenceKind = 'vacation' | 'unpaid' | 'sick' | 'compensation';
 export const absenceTitle: Record<AbsenceKind, string> = {
   vacation: 'Məzuniyyət',
   unpaid: 'Ödənişsiz məzuniyyət',
+  compensation: 'Məzuniyyət kompensasiyası',
   sick: 'Xəstəlik vərəqəsi',
 };
 
@@ -40,6 +42,7 @@ export function AbsencesPage({ sick }: { sick: boolean }) {
   const page = sick ? pages.sickLeaves : pages.vacations;
   const result = useQuery<AbsenceView[]>({ type: 'absences', companyId: win.companyId });
   const rows = (result.data ?? []).filter((a) => (a.kind === 'sick') === sick);
+  // A compensation is a day: its "to" is that day too.
   const open = (kind: AbsenceKind, id?: string) =>
     ws.open({ type: 'absence', kind, ...(id ? { id } : {}) }, win.companyId);
   const columns: Column<AbsenceView>[] = [
@@ -86,6 +89,9 @@ export function AbsencesPage({ sick }: { sick: boolean }) {
             <button type="button" className="button secondary" onClick={() => open('unpaid')}>
               <Plus size={15} /> Ödənişsiz məzuniyyət
             </button>
+            <button type="button" className="button secondary" onClick={() => open('compensation')}>
+              <Plus size={15} /> Kompensasiya (işdən çıxanda)
+            </button>
           </>
         )
       }
@@ -109,6 +115,8 @@ interface Form {
   employeeId: string;
   from: string;
   to: string;
+  /** A vacation's length (its end follows) or a compensation's days; '' — by the dates / balance. */
+  days: string;
   sheetNo: string;
   percent: string;
   employerAll: boolean;
@@ -120,6 +128,7 @@ const blank = (): Form => ({
   employeeId: '',
   from: today(),
   to: today(),
+  days: '',
   sheetNo: '',
   percent: '100',
   employerAll: false,
@@ -131,6 +140,7 @@ const fromView = (a: AbsenceView): Form => ({
   employeeId: a.employeeId,
   from: a.from,
   to: a.to,
+  days: a.kind === 'compensation' ? String(a.days) : '',
   sheetNo: a.sheetNo,
   percent: String(a.percent),
   employerAll: a.employerAll,
@@ -152,6 +162,16 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
   const [warning, setWarning] = useState('');
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
+  // The calendar of the start's year (the end of a vacation of N days) and the vacation balance.
+  const year = Number((form?.from || today()).slice(0, 4));
+  const yearCal = useQuery<CalendarView>({ type: 'calendar', companyId: win.companyId, year });
+  const balances = useQuery<VacationBalanceRow[]>(
+    form &&
+      /^\d{4}-\d{2}-\d{2}$/.test(form.from) &&
+      (kind === 'vacation' || kind === 'compensation')
+      ? { type: 'vacationBalances', companyId: win.companyId, date: form.from }
+      : null,
+  );
   useEffect(() => {
     if (form) return;
     if (id && !doc) return;
@@ -180,7 +200,10 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
       number: form.number,
       employeeId: form.employeeId,
       from: form.from,
-      to: form.to,
+      to: kind === 'compensation' ? form.from : form.to,
+      ...(form.days.trim() && (kind === 'vacation' || kind === 'compensation')
+        ? { days: Number(form.days) }
+        : {}),
       sheetNo: form.sheetNo,
       percent: Number(form.percent) || 0,
       employerAll: form.employerAll,
@@ -198,6 +221,22 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
   const employees = catalog.employees
     .filter((e) => !e.archived)
     .map((e) => ({ value: e.id, label: e.name, ...(e.position ? { hint: e.position } : {}) }));
+  const cal = yearCal.data ? new WorkCalendar(yearCal.data.days) : null;
+  const n = Number(form.days);
+  const end =
+    kind === 'vacation' &&
+    cal &&
+    Number.isInteger(n) &&
+    n > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(form.from)
+      ? vacationEnd(cal, form.from, n)
+      : '';
+  const iso = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const counted =
+    kind === 'vacation' && cal && !end && iso(form.from) && iso(form.to) && form.to >= form.from
+      ? vacationDays(cal, form.from, form.to)
+      : 0;
+  const bal = balances.data?.find((b) => b.employeeId === form.employeeId);
   return (
     <ModuleFrame
       title={viewTitle(win.view, win.label)}
@@ -256,7 +295,14 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
             <input
               maxLength={40}
               value={form.number}
-              placeholder={{ vacation: 'MZ-000001', unpaid: 'ÖM-000001', sick: 'XV-000001' }[kind]}
+              placeholder={
+                {
+                  vacation: 'MZ-000001',
+                  unpaid: 'ÖM-000001',
+                  sick: 'XV-000001',
+                  compensation: 'MK-000001',
+                }[kind]
+              }
               onChange={(e) => set({ number: e.target.value })}
             />
           </Field>
@@ -268,12 +314,68 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
               onChange={(employeeId) => set({ employeeId })}
             />
           </Field>
-          <Field label="Başlama">
-            <DateInput value={form.from} onChange={(from) => set({ from })} aria-label="Başlama" />
-          </Field>
-          <Field label="Bitmə" hint="Daxil olmaqla, təqvim günləri">
-            <DateInput value={form.to} onChange={(to) => set({ to })} aria-label="Bitmə" />
-          </Field>
+          {kind === 'compensation' ? (
+            <>
+              <Field label="Tarix" hint="İşdən çıxma günü">
+                <DateInput
+                  value={form.from}
+                  onChange={(from) => set({ from })}
+                  aria-label="Tarix"
+                />
+              </Field>
+              <Field label="Gün" hint="Boş — istifadə olunmamış qalıq">
+                <input
+                  aria-label="Gün"
+                  inputMode="numeric"
+                  value={form.days}
+                  placeholder={bal ? String(bal.balance) : ''}
+                  onChange={(e) => set({ days: e.target.value.replace(/\D/g, '') })}
+                />
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Başlama">
+                <DateInput
+                  value={form.from}
+                  onChange={(from) => set({ from })}
+                  aria-label="Başlama"
+                />
+              </Field>
+              {kind === 'vacation' && (
+                <Field label="Gün" hint="Bitmə özü çıxır, bayramlar sayılmır">
+                  <input
+                    aria-label="Gün"
+                    inputMode="numeric"
+                    value={form.days}
+                    onChange={(e) => set({ days: e.target.value.replace(/\D/g, '') })}
+                  />
+                </Field>
+              )}
+              <Field
+                label="Bitmə"
+                hint={
+                  end
+                    ? 'Gün sayına görə'
+                    : kind === 'vacation'
+                      ? `Daxil olmaqla; ${counted} məzuniyyət günü (bayramsız)`
+                      : 'Daxil olmaqla, təqvim günləri'
+                }
+              >
+                {end ? (
+                  <input readOnly aria-label="Bitmə" value={day(end)} />
+                ) : (
+                  <DateInput value={form.to} onChange={(to) => set({ to })} aria-label="Bitmə" />
+                )}
+              </Field>
+            </>
+          )}
+          {bal && (
+            <p className="muted" role="status" aria-label="Məzuniyyət qalığı">
+              {day(form.from)} tarixinə qalıq: <strong>{bal.balance} gün</strong> (illik{' '}
+              {bal.annual}, qazanılıb {bal.earned}, istifadə {bal.used})
+            </p>
+          )}
           {sick && (
             <>
               <Field label="Vərəqənin nömrəsi">
@@ -345,8 +447,10 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
           {sick
             ? 'Yazılış bu sənəddə deyil: işəgötürənin ödədiyi ilk 14 gün xəstəliyin başladığı ayın əmək haqqına düşür (Dt 701 / 721 "Xəstəlik vərəqəsi üzrə müavinət" / Kt 533); gəlir vergisi tutulur, DSMF, işsizlik və tibbi sığorta yox. 15-ci gündən DSMF ödəyir. Həmin günlərin maaşı hesablanmır.'
             : kind === 'vacation'
-              ? 'Yazılış bu sənəddə deyil: məzuniyyət haqqı başladığı ayın əmək haqqına düşür və adi əmək haqqı kimi vergiyə və fondlara cəlb olunur. Məzuniyyət günlərinin maaşı hesablanmır.'
-              : 'Ödənişsiz məzuniyyət: yalnız həmin iş günlərinin maaşı hesablanmır.'}{' '}
+              ? 'Yazılış bu sənəddə deyil: məzuniyyət haqqı günlərinə görə ayların əmək haqqına bölünür (bayramlar məzuniyyət günü deyil, müddət uzanır) və adi əmək haqqı kimi vergiyə və fondlara cəlb olunur. Məzuniyyət günlərinin maaşı hesablanmır.'
+              : kind === 'compensation'
+                ? 'Yazılış bu sənəddə deyil: istifadə olunmamış günlər × orta günlük (məzuniyyətdəki kimi) işdən çıxma ayının əmək haqqına düşür.'
+                : 'Ödənişsiz məzuniyyət: yalnız həmin iş günlərinin maaşı hesablanmır.'}{' '}
           Uçotdakı əmək haqqından sonra dəyişsə, əmək haqqı sənədini yenidən saxlayın.
         </PostingRule>
       </form>

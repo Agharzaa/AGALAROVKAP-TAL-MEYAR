@@ -177,3 +177,39 @@ Mənbələr (§5, yoxlanmalı): [Mercans — 2026 dəyişiklikləri](https://mer
 | Ə13 | Tutulma (aliment 538): Dt 533 / Kt 538, ödəniləcək azalır, vergi bazası dəyişmir                        | integration          |
 | Ə14 | Çıxarışda əmək haqqı sətri FİN ilə işçiyə bağlanır                                                      | integration          |
 | Ə15 | Hesablaşma vərəqəsi və cədvəl: borc qəpikbəqəpik (hesablanıb − tutulub − ödənilib)                      | integration + ui     |
+
+## 13. 8d — istehsalat təqvimi, tabel, məzuniyyət hüququ (27.10.2026)
+
+**Vəziyyət:** hazırdır — 0.9.2 (27.10.2026). Testlər: `tests/domain/calendar.test.ts` (Ə16–Ə19), `tests/integration/payroll-8d.test.ts` (Ə16–Ə20, v18 → v19), `tests/ui` (8d).
+
+İstifadəçi: "məzuniyyət və hər şey 1C-dəkindən yaxşı olmalıdır, işçilərin tabeli də." 1C-də olanlardan əlavə Meyar özü edir: məzuniyyətin bitmə tarixi bayramları çıxmaqla özü hesablanır, qalıq günlər hər an görünür, tabel bir düymə ilə sənədlərdən dolur, köhnələn tabel və əmək haqqı bağlanışı saxlayır.
+
+1. **İstehsalat təqvimi** (Əmək haqqı → İstehsalat təqvimi; il üzrə, dəyişdirilə bilər):
+   - gün növləri: bayram (Əmək Məcəlləsi 105), köçürülmüş istirahət günü, iş gününə çevrilmiş istirahət günü, bayramqabağı qısaldılmış gün (1 saat az);
+   - 2026 dəsti NK-nin 02.12.2025 tarixli 362 saylı qərarı və ƏƏSMN-in istehsalat təqvimi ilə: bayramlar — 1–2 yanvar, 20 yanvar, 8 mart, 20–24 mart (Novruz), 20–21 mart (Ramazan), 9 may, 27–28 may (Qurban), 28 may, 15 iyun, 26 iyun, 8 noyabr, 9 noyabr, 31 dekabr; köçürülmüş istirahət günləri — 9, 25, 26, 27, 30 mart, 11, 29 may, 10 noyabr; qısaldılmış günlər — 19 yanvar, 19 mart, 8 may, 26 may, 25 iyun, 30 dekabr;
+   - aylıq norma: iş günləri və saatlar (40 saatlıq həftə); 2026: 241 gün, 1 922 saat;
+   - təqvim olmayan il — yalnız şənbə / bazar istirahət (xəbərdarlıqla).
+2. **Maaşın mütənasibliyi təqvimlə:** işə qəbul / çıxma, məzuniyyət, xəstəlik — iş günləri təqvimə görə (bayramlar və köçürülmüş günlər iş günü deyil).
+3. **Tabel** (TB-2026-10, ayda bir sənəd; işçi × gün):
+   - hər gün: kod və saat — İ (iş), E (ezamiyyət — iş kimi), M (məzuniyyət), Ö (ödənişsiz), X (xəstəlik), Q (üzrsüz gəlməmə), B (istirahət / bayram); sətirdə artıq iş və gecə saatları;
+   - "Doldur": təqvim + işə qəbul / çıxma + məzuniyyət və xəstəlik sənədləri; mühasib hər xananı dəyişə bilər (kod klaviaturadan);
+   - cəmlər: iş günü, saat, norma, bayram günü işlənən saatlar;
+   - əmək haqqı tabeldən: maaş × işlənmiş norma saatları / ayın norma saatı; artıq iş — saatlıq × saat × 2; bayram / istirahət günü iş — saatlıq × saat × 2; gecə — saatlıq × saat × 40% (əmsallar dərəcələr dəstində, mühasib təsdiq edir); tabel yoxdursa — təqvimlə (2-ci bənd);
+   - sənədlərlə uyğunsuzluq (məzuniyyət / xəstəlik sonradan dəyişib) — tabel "köhnəlib", ay bağlanışı bloklanır;
+   - çap / Excel (T-13-ə bənzər forma).
+4. **Məzuniyyət — 1C-dən yaxşı:**
+   - **müddət bayramsız:** məzuniyyət günləri təqvim günləridir, içinə düşən bayramlar sayılmır və müddət uzanır (Əmək Məcəlləsi); formada "başlama + gün sayı" yazılır, bitmə tarixi özü çıxır;
+   - **aylara bölünür:** iki aya düşən məzuniyyətin haqqı günlərə görə hər ayın əmək haqqına düşür (vergi və fondlar həmin ayda);
+   - **hüquq və qalıq:** işçinin kartında illik əsas məzuniyyət (21 / 30 / 42 …), əmək stajının başlanğıcı → staja görə əlavə gün (5–10 il: 2, 10–15 il: 4, 15-dən çox: 6) və digər əlavə günlər; iş ili işə qəbul tarixindən; qalıq = iş illəri üzrə hüquq (cari il — keçən aylara mütənasib) − istifadə olunan; formada qalıq görünür, artıq məzuniyyət — xəbərdarlıq;
+   - **Məzuniyyət qalıqları** hesabatı (tarixə: işçi, iş ili, hüquq, istifadə, qalıq);
+   - **kompensasiya** (işdən çıxanda istifadə olunmamış günlər): sənəd "Məzuniyyət kompensasiyası" — günlər qalıqdan özü dolur, orta günlük məzuniyyətdəki kimi, işdən çıxma ayının əmək haqqına düşür.
+
+### Qəbul testləri (əlavə)
+
+| #   | Yoxlama                                                                                       | Növ                  |
+| --- | --------------------------------------------------------------------------------------------- | -------------------- |
+| Ə16 | 2026 təqvimi: aylıq iş günləri və saatlar (yanvar 19 / 151, mart 14 / 111, il 241 / 1 922)    | domain               |
+| Ə17 | Məzuniyyət martda: 20–24 mart bayramları sayılmır, bitmə uzanır; iki aya bölünür              | domain + integration |
+| Ə18 | Tabel: doldurma (bayram, məzuniyyət, xəstəlik), saatla maaş, artıq iş / bayram / gecə ödənişi | integration          |
+| Ə19 | Qalıq: 21 + staj, iş illəri, istifadə; kompensasiya qalıqdan                                  | integration          |
+| Ə20 | Köhnələn tabel bağlanışı bloklayır; forma: tabel şəbəkəsi, təqvim, qalıq                      | integration + ui     |

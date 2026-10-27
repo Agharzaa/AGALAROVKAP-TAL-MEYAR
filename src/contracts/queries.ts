@@ -33,8 +33,18 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('absences'),
     companyId: id,
-    kind: z.enum(['vacation', 'unpaid', 'sick']).optional(),
+    kind: z.enum(['vacation', 'unpaid', 'sick', 'compensation']).optional(),
   }),
+  /** Stage 8d: the production calendar, timesheets and the vacation balances. */
+  z.object({
+    type: z.literal('calendar'),
+    companyId: id,
+    year: z.number().int().min(2000).max(2100),
+  }),
+  z.object({ type: z.literal('timesheets'), companyId: id }),
+  z.object({ type: z.literal('timesheet'), companyId: id, id }),
+  z.object({ type: z.literal('timesheetFill'), companyId: id, month: z.string().max(7) }),
+  z.object({ type: z.literal('vacationBalances'), companyId: id, date }),
   z.object({ type: z.literal('absence'), companyId: id, id }),
   z.object({ type: z.literal('payslip'), companyId: id, employeeId: id, month: z.string().max(7) }),
   z.object({ type: z.literal('payrollSettlements'), companyId: id, from: date, to: date }),
@@ -332,6 +342,76 @@ export interface EmployeeView {
   exemptionExtra: boolean;
   exemptionFrom: string;
   exemptionTo: string;
+  /** Stage 8d. */
+  vacationDays: number;
+  vacationExtra: number;
+  tenureFrom: string;
+}
+/** Stage 8d: the production calendar of a year. */
+export interface CalendarView {
+  year: number;
+  /** The year has days set by the accountant (or the seeded set). */
+  known: boolean;
+  days: { date: string; kind: 'holiday' | 'rest' | 'work' | 'short'; name: string }[];
+  months: { month: string; workdays: number; hours: number }[];
+  workdays: number;
+  hours: number;
+}
+export interface TimesheetDay {
+  date: string;
+  workday: boolean;
+  holiday: boolean;
+  /** Norm hours of the day. */
+  norm: number;
+  name: string;
+}
+export interface TimesheetRowView {
+  employeeId: string;
+  name: string;
+  tabNo: string;
+  /** As typed: "8", "M", "X", … */
+  cells: string[];
+  /** As typed; with the hours over a day's norm — overtimeTotal. */
+  overtime: string;
+  overtimeTotal: string;
+  night: string;
+  /** Days worked (İ, E), hours on working days, hours on days off, the norm of the month. */
+  days: number;
+  hours: string;
+  holidayHours: string;
+  norm: string;
+  absent: { vacation: number; unpaid: number; sick: number; truancy: number };
+}
+export interface TimesheetView {
+  id: string;
+  version: number;
+  month: string;
+  number: string;
+  date: string;
+  memo: string;
+  status: 'posted' | 'cancelled';
+  rows: TimesheetRowView[];
+  /** Employees whose vacations or sick leaves no longer match the timesheet. */
+  stale: string[];
+}
+export interface TimesheetDetail extends TimesheetView {
+  days: TimesheetDay[];
+}
+export interface TimesheetFill {
+  month: string;
+  days: TimesheetDay[];
+  rows: { employeeId: string; name: string; cells: string[] }[];
+}
+export interface VacationBalanceRow {
+  employeeId: string;
+  name: string;
+  hired: string;
+  /** Full working years and the days a year now (base + tenure + extra). */
+  years: number;
+  annual: number;
+  earned: number;
+  used: number;
+  balance: number;
 }
 /** Stage 8a: a set of payroll rates; `used` — a posted month was computed with it. */
 export interface PayrollRatesView {
@@ -359,6 +439,10 @@ export interface PayrollLineView {
   /** Stage 8b / 8c. */
   vacation: string;
   sick: string;
+  /** Stage 8d: the timesheet's overtime, work on days off, night hours. */
+  overtime: string;
+  holidayWork: string;
+  night: string;
   exemption: string;
   deducted: string;
   deductions: { amount: string; account: string; sk: string[]; memo: string }[];
@@ -385,15 +469,21 @@ export interface PayrollFillLine {
   employeeId: string;
   name: string;
   salary: string;
-  /** Pay of the vacations and sick leaves that start in the month (8c). */
+  /** Pay of the vacations and sick leaves of the month (8c, by month — 8d). */
   vacation: string;
   sick: string;
+  /** The timesheet's extra pay (8d). */
+  overtime: string;
+  holidayWork: string;
+  night: string;
+  /** The salary came from the month's timesheet. */
+  byTimesheet: boolean;
 }
 /** Stage 8c: a vacation or a sick leave. */
 export interface AbsenceView {
   id: string;
   version: number;
-  kind: 'vacation' | 'unpaid' | 'sick';
+  kind: 'vacation' | 'unpaid' | 'sick' | 'compensation';
   number: string;
   employeeId: string;
   employeeName: string;

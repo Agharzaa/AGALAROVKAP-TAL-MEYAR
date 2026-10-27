@@ -510,6 +510,9 @@ export function EmployeesPage() {
     exemptionExtra: false,
     exemptionFrom: '',
     exemptionTo: '',
+    vacationDays: 21,
+    vacationExtra: 0,
+    tenureFrom: '',
   };
   const [f, setF] = useState(empty);
   const rows = (catalog?.employees ?? []).filter((e) =>
@@ -536,6 +539,9 @@ export function EmployeesPage() {
             exemptionExtra: e.exemptionExtra,
             exemptionFrom: e.exemptionFrom,
             exemptionTo: e.exemptionTo,
+            vacationDays: e.vacationDays,
+            vacationExtra: e.vacationExtra,
+            tenureFrom: e.tenureFrom,
           },
     );
   };
@@ -718,6 +724,36 @@ export function EmployeesPage() {
               </Field>
             </>
           )}
+          <Field label="İllik əsas məzuniyyət (gün)" hint="Əmək Məcəlləsi: ən azı 21 təqvim günü">
+            <input
+              inputMode="numeric"
+              aria-label="İllik əsas məzuniyyət"
+              value={String(f.vacationDays)}
+              onChange={(e) =>
+                setF({ ...f, vacationDays: Number(e.target.value.replace(/\D/g, '')) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Əlavə məzuniyyət (gün)" hint="Əmək şəraitinə, uşaqlara görə və s.">
+            <input
+              inputMode="numeric"
+              aria-label="Əlavə məzuniyyət"
+              value={String(f.vacationExtra)}
+              onChange={(e) =>
+                setF({ ...f, vacationExtra: Number(e.target.value.replace(/\D/g, '')) || 0 })
+              }
+            />
+          </Field>
+          <Field
+            label="Ümumi əmək stajının başlanğıcı"
+            hint="Staja görə əlavə gün: 5–10 il 2, 10–15 il 4, 15-dən çox 6"
+          >
+            <DateInput
+              value={f.tenureFrom}
+              onChange={(tenureFrom) => setF({ ...f, tenureFrom })}
+              aria-label="Əmək stajının başlanğıcı"
+            />
+          </Field>
           {archiveBox(f.archived, (archived) => setF({ ...f, archived }), !!current)}
         </EditDialog>
       )}

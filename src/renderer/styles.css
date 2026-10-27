@@ -3466,3 +3466,87 @@ button.step:active {
 .payslip {
   max-width: 640px;
 }
+
+/* Stage 8d — the timesheet grid (employee × day) and the production calendar. */
+.timesheet-grid {
+  font-variant-numeric: tabular-nums;
+}
+.timesheet-grid th.ts-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 13em;
+  background: var(--sheet);
+  text-align: left;
+}
+.timesheet-grid th.ts-day {
+  min-width: 2.6em;
+  padding: 2px 0;
+  text-align: center;
+  line-height: 1.1;
+}
+.timesheet-grid th.ts-day small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+}
+.timesheet-grid .off {
+  background: var(--head);
+}
+.timesheet-grid th.holiday {
+  color: var(--bad);
+  text-decoration: underline;
+}
+.timesheet-grid td.ts-cell {
+  padding: 0;
+}
+.timesheet-grid td.ts-cell input {
+  width: 2.6em;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+}
+.timesheet-grid td.ts-cell input:focus {
+  outline: 2px solid var(--focus);
+  background: var(--select);
+}
+.timesheet-grid td.code-M,
+.timesheet-grid td.code-Ö {
+  background: var(--select-2);
+}
+.timesheet-grid td.code-X {
+  background: var(--row-bad);
+}
+.timesheet-grid td.code-Q {
+  background: var(--row-bad);
+  font-weight: 600;
+}
+.timesheet-grid input.ts-extra {
+  width: 4em;
+  text-align: right;
+}
+.calendar-page {
+  display: grid;
+  grid-template-columns: minmax(16em, 22em) 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.calendar-days {
+  display: grid;
+  gap: 6px;
+}
+.calendar-day {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.calendar-day input:not([aria-label$='tarix']) {
+  min-width: 16em;
+}
+@media (max-width: 900px) {
+  .calendar-page {
+    grid-template-columns: 1fr;
+  }
+}

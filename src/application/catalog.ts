@@ -6,6 +6,7 @@ import { DomainError } from '../domain/errors.js';
 import { numberKey, parseDate, parseTaxId, parseText } from '../domain/values.js';
 import { parseMoney } from '../domain/money.js';
 import { isPayrollExpense } from './payroll.js';
+import { seedCalendar } from './calendar.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
 import { expectVersion, type Tx } from './tx.js';
@@ -102,6 +103,8 @@ export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): Command
     tx.id(),
     id,
   );
+  // Stage 8d: the 2026 production calendar.
+  seedCalendar(tx, id);
   // Stage 8: the 2026 payroll rates, for the accountant to confirm (QERARLAR 2026-10-27 §1).
   tx.db.run(
     "INSERT INTO payroll_rates VALUES(?,'2026-01-01',?,?)",
@@ -551,6 +554,9 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
   const exemptionTo = cmd.exemptionTo.trim() ? parseDate(cmd.exemptionTo, 'Güzəştin sonu') : '';
   if (exemptionFrom && exemptionTo && exemptionTo < exemptionFrom)
     throw new DomainError('Güzəştin sonu başlanğıcından əvvəl ola bilməz.', 'exemptionTo');
+  const tenureFrom = cmd.tenureFrom.trim()
+    ? parseDate(cmd.tenureFrom, 'Əmək stajının başlanğıcı')
+    : '';
   if ((cmd.exemption !== '0' || cmd.exemptionExtra) && !cmd.mainJob)
     throw new DomainError(
       'Gəlir vergisi güzəşti yalnız əsas iş yerində (əmək kitabçası olan yerdə) tətbiq olunur.',
@@ -578,6 +584,9 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
       exemption_extra: cmd.exemptionExtra ? '5000' : '0',
       exemption_from: exemptionFrom,
       exemption_to: exemptionTo,
+      vacation_days: cmd.vacationDays,
+      vacation_extra: cmd.vacationExtra,
+      tenure_from: tenureFrom,
     },
     name,
   );

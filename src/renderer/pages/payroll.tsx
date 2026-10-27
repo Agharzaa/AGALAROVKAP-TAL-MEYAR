@@ -9,6 +9,7 @@ import { formatMinor, parseMoney } from '../../domain/money';
 import {
   contributionKeys,
   contributionLabel,
+  extraPayLabel,
   noExemption,
   parseRates,
   payrollFor,
@@ -134,6 +135,9 @@ interface LineForm {
   /** From the vacation and sick leave documents (8c): shown, never typed. */
   vacation: string;
   sick: string;
+  /** The timesheet's extra pay (8d): overtime, work on days off, night hours. */
+  extra: string;
+  extraTitle: string;
   deductions: DeductionForm[];
 }
 interface Form {
@@ -148,7 +152,13 @@ const blank = (): LineForm => ({
   bonus: '',
   vacation: '0.00',
   sick: '0.00',
+  extra: '0.00',
+  extraTitle: '',
   deductions: [],
+});
+const extraOf = (x: { overtime: string; holidayWork: string; night: string }) => ({
+  extra: formatMinor(parseMoney(x.overtime) + parseMoney(x.holidayWork) + parseMoney(x.night)),
+  extraTitle: `Artıq iş ${x.overtime} · bayram / istirahət günü ${x.holidayWork} · gecə ${x.night}`,
 });
 const toInput = (l: LineForm) => ({
   employeeId: l.employeeId,
@@ -168,6 +178,7 @@ const fromDetail = (d: PayrollDocumentDetail): Form => ({
     bonus: l.bonus === '0.00' ? '' : l.bonus,
     vacation: l.vacation,
     sick: l.sick,
+    ...extraOf(l),
     deductions: l.deductions,
   })),
 });
@@ -181,6 +192,7 @@ const fromFill = (lines: PayrollFillLine[], before: LineForm[]): LineForm[] =>
       bonus: old?.bonus ?? '',
       vacation: l.vacation,
       sick: l.sick,
+      ...extraOf(l),
       deductions: old?.deductions ?? [],
     };
   });
@@ -210,7 +222,10 @@ function compute(
   if (!rates) return null;
   try {
     const a = payrollFor(
-      parseMoney(l.salary || '0') + parseMoney(l.bonus || '0') + parseMoney(l.vacation),
+      parseMoney(l.salary || '0') +
+        parseMoney(l.bonus || '0') +
+        parseMoney(l.vacation) +
+        parseMoney(l.extra),
       rates,
       exemption,
       parseMoney(l.sick),
@@ -390,6 +405,7 @@ export function PayrollEditor({ id }: { id?: string }) {
         'Mükafat',
         'Məzuniyyət',
         'Xəstəlik',
+        'Tabel əlavəsi',
         'Hesablanıb',
         'Güzəşt',
         ...shown.map((k) => contributionLabel[k]),
@@ -408,6 +424,7 @@ export function PayrollEditor({ id }: { id?: string }) {
           { money: l.bonus },
           { money: l.vacation },
           { money: l.sick },
+          { money: l.extra },
           mny(a ? a.gross + a.sick : undefined),
           mny(a?.exemption),
           ...shown.map((k) => mny(a?.[k])),
@@ -563,6 +580,13 @@ export function PayrollEditor({ id }: { id?: string }) {
                   >
                     Xəstəlik
                   </th>
+                  <th
+                    scope="col"
+                    className="num"
+                    title="Tabeldən: artıq iş, bayram / istirahət günü, gecə"
+                  >
+                    Tabel əlavəsi
+                  </th>
                   <th scope="col" className="num">
                     Hesablanıb
                   </th>
@@ -622,6 +646,13 @@ export function PayrollEditor({ id }: { id?: string }) {
                       <td className="num" aria-label={`Sətir ${i + 1}: xəstəlik`}>
                         {zero(l.sick)}
                       </td>
+                      <td
+                        className="num"
+                        aria-label={`Sətir ${i + 1}: tabel əlavəsi`}
+                        title={l.extra === '0.00' ? undefined : l.extraTitle}
+                      >
+                        {zero(l.extra)}
+                      </td>
                       <td className="num">{cell(a, (x) => x.gross + x.sick)}</td>
                       {shown.map((k) => (
                         <td
@@ -676,6 +707,7 @@ export function PayrollEditor({ id }: { id?: string }) {
               <tfoot>
                 <tr>
                   <th scope="row">Cəmi</th>
+                  <td />
                   <td />
                   <td />
                   <td />
@@ -867,6 +899,23 @@ function RatesEditor({
             </span>
           </Field>
         </div>
+        <fieldset className="rate-brackets" aria-label="Tabel üzrə əlavə ödəniş">
+          <legend>Tabel üzrə əlavə ödəniş (saatlıq əmək haqqının faizi)</legend>
+          {(Object.keys(extraPayLabel) as (keyof typeof extraPayLabel)[]).map((k) => (
+            <div key={k} className="rate-bracket">
+              <span className="muted">{extraPayLabel[k]}</span>
+              <input
+                aria-label={extraPayLabel[k]}
+                inputMode="decimal"
+                value={(r.pay ?? rates2026.pay!)[k]}
+                onChange={(e) =>
+                  setR({ ...r, pay: { ...(r.pay ?? rates2026.pay!), [k]: e.target.value } })
+                }
+              />
+              <span className="muted">%</span>
+            </div>
+          ))}
+        </fieldset>
         {contributionKeys.map((key) => (
           <fieldset key={key} className="rate-brackets" aria-label={contributionLabel[key]}>
             <legend>{contributionLabel[key]}</legend>
@@ -1031,6 +1080,14 @@ export function PayrollRatesPage() {
                   <td>{describe(s.rates[k])}</td>
                 </tr>
               ))}
+              <tr>
+                <th scope="row">Tabel: artıq iş / bayram günü / gecə</th>
+                <td>
+                  {(s.rates.pay ?? rates2026.pay!).overtime}% /{' '}
+                  {(s.rates.pay ?? rates2026.pay!).holidayWork}% / +
+                  {(s.rates.pay ?? rates2026.pay!).night}%
+                </td>
+              </tr>
             </tbody>
           </table>
         </section>

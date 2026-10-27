@@ -76,7 +76,9 @@ import {
   payrollTaxes,
   payslip,
 } from './payroll.js';
-import { absence, absences } from './absences.js';
+import { absence, absences, vacationBalances } from './absences.js';
+import { calendarView } from './calendar.js';
+import { timesheet, timesheetFill, timesheets } from './timesheets.js';
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const money = (v: bigint) => formatMinor(v);
@@ -1453,6 +1455,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             exemptionExtra: (r.exemption_extra as bigint) > 0n,
             exemptionFrom: str(r.exemption_from),
             exemptionTo: str(r.exemption_to),
+            vacationDays: Number(r.vacation_days),
+            vacationExtra: Number(r.vacation_extra),
+            tenureFrom: str(r.tenure_from),
           })),
         items: db
           .all('SELECT * FROM items WHERE company_id=? ORDER BY kind, name', c)
@@ -1507,6 +1512,20 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       return absences(db, q.companyId, q.kind);
     case 'absence':
       return absence(db, q.companyId, q.id);
+    case 'calendar':
+      company(db, q.companyId);
+      return calendarView(db, q.companyId, q.year);
+    case 'timesheets':
+      company(db, q.companyId);
+      return timesheets(db, q.companyId);
+    case 'timesheet':
+      return timesheet(db, q.companyId, q.id);
+    case 'timesheetFill':
+      company(db, q.companyId);
+      return timesheetFill(db, q.companyId, q.month);
+    case 'vacationBalances':
+      company(db, q.companyId);
+      return vacationBalances(db, q.companyId, q.date);
     case 'payslip':
       company(db, q.companyId);
       return payslip(db, q.companyId, q.employeeId, q.month);

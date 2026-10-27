@@ -5,6 +5,7 @@
  * after its brackets are summed.
  */
 import { DomainError } from './errors.js';
+import { WorkCalendar, workdaysIn } from './calendar.js';
 import { formatMinor, parseMoney, roundHalfAwayFromZero, type Minor } from './money.js';
 
 /** A bracket applies its rate to the part of the amount above the previous bracket, up to `upTo`. */
@@ -36,15 +37,34 @@ export const contributionLabel: Record<ContributionKey, string> = {
   medicalEmployer: 'Tibbi sığorta — işəgötürən',
 };
 
+/** Pay for time beyond the norm (8d, timesheet), hundredths of a percent of the hourly rate. */
+export interface ExtraPay {
+  /** Overtime: at least twice the hourly rate. */
+  overtime: number;
+  /** Work on a holiday or a day off: at least twice. */
+  holidayWork: number;
+  /** Night hours: a supplement on top of the hours already paid. */
+  night: number;
+}
+export const extraPayLabel: Record<keyof ExtraPay, string> = {
+  overtime: 'Artıq iş vaxtı',
+  holidayWork: 'Bayram / istirahət günü iş',
+  night: 'Gecə saatları (əlavə)',
+};
+
 export interface PayrollRates extends Record<ContributionKey, Bracket[]> {
   /** Income tax is not withheld from `amount` when the month's income is at most `ifUpTo`. */
   relief: { amount: Minor; ifUpTo: Minor };
+  pay: ExtraPay;
 }
 
 /** The rates as they are stored and edited: decimal strings, '' for "no bound". */
 export interface RatesInput extends Record<ContributionKey, { upTo: string; rate: string }[]> {
   relief: { amount: string; ifUpTo: string };
+  /** 8d; a set saved before it has none: 200 / 200 / 40. */
+  pay?: Record<keyof ExtraPay, string>;
 }
+const defaultPay = { overtime: '200', holidayWork: '200', night: '40' };
 
 /**
  * 2026, non-oil and non-state sector (plan §5): the starting set the accountant confirms. Above
@@ -75,6 +95,7 @@ export const rates2026: RatesInput = {
     { upTo: '2500.00', rate: '2' },
     { upTo: '', rate: '0.5' },
   ],
+  pay: defaultPay,
 };
 
 /** "3" / "0.5" / "0,5" (percent) → hundredths of a percent. */
@@ -84,6 +105,15 @@ export function parseRate(value: string, field: string): number {
   const rate = m ? Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0')) : NaN;
   if (!m || rate > 10_000)
     throw new DomainError(`${field}: dərəcə 0–100 faiz olmalıdır (məs. 3 və ya 0,5).`);
+  return rate;
+}
+
+/** A pay percentage (8d): up to 1 000% ("200", "40", "37,5"). */
+export function parsePercent(value: string, field: string): number {
+  const text = value.trim().replace(',', '.');
+  const m = /^(\d{1,4})(?:\.(\d{1,2}))?$/.exec(text);
+  const rate = m ? Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0')) : NaN;
+  if (!m || rate > 100_000) throw new DomainError(`${field}: faiz 0–1 000 olmalıdır.`);
   return rate;
 }
 
@@ -124,6 +154,12 @@ export function parseRates(input: RatesInput): PayrollRates {
   };
   if (out.relief.amount < 0n || out.relief.ifUpTo < 0n)
     throw new DomainError('Güzəşt mənfi ola bilməz.');
+  const pay = { ...defaultPay, ...input.pay };
+  out.pay = {
+    overtime: parsePercent(pay.overtime, extraPayLabel.overtime),
+    holidayWork: parsePercent(pay.holidayWork, extraPayLabel.holidayWork),
+    night: parsePercent(pay.night, extraPayLabel.night),
+  };
   return out;
 }
 
@@ -136,6 +172,11 @@ export function ratesInput(r: PayrollRates): RatesInput {
       rate: formatRate(b.rate),
     }));
   out.relief = { amount: formatMinor(r.relief.amount), ifUpTo: formatMinor(r.relief.ifUpTo) };
+  out.pay = {
+    overtime: formatRate(r.pay.overtime),
+    holidayWork: formatRate(r.pay.holidayWork),
+    night: formatRate(r.pay.night),
+  };
   return out;
 }
 
@@ -230,8 +271,8 @@ export interface Away {
 
 /**
  * The salary of a month ("YYYY-MM") for an employee hired / leaving on the given days ('' — not in
- * this month) and away on some: in proportion to the working days worked (holidays are not
- * counted).
+ * this month) and away on some: in proportion to the working days of the production calendar
+ * worked (8d; without one — Monday to Friday).
  */
 export function salaryFor(
   salary: Minor,
@@ -239,18 +280,19 @@ export function salaryFor(
   hired: string,
   left: string,
   away: readonly Away[] = [],
+  cal: WorkCalendar = new WorkCalendar(),
 ): Minor {
   const { first, last } = monthBounds(month);
   const from = hired && hired > first ? hired : first;
   const to = left && left < last ? left : last;
   if (from > to) return 0n;
-  let worked = workdays(from, to);
+  let worked = workdaysIn(cal, from, to);
   for (const a of away) {
     const f = a.from > from ? a.from : from;
     const t = a.to < to ? a.to : to;
-    if (f <= t) worked -= workdays(f, t);
+    if (f <= t) worked -= workdaysIn(cal, f, t);
   }
-  const all = workdays(first, last);
+  const all = workdaysIn(cal, first, last);
   if (worked <= 0 || !all) return 0n;
   if (worked === all) return salary;
   return roundHalfAwayFromZero(salary * BigInt(worked), BigInt(all));
@@ -317,4 +359,119 @@ export function sickPay(input: {
     (input.baseDays > 0 ? roundHalfAwayFromZero(input.base, BigInt(input.baseDays)) : 0n);
   const amount = roundHalfAwayFromZero(daily * BigInt(input.percent) * BigInt(employerDays), 100n);
   return { daily, employerDays, fundDays: input.days - employerDays, amount };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Stage 8d — the timesheet's pay and an absence's pay by month (plan §13)
+
+/**
+ * Pay by the timesheet: the salary for the norm hours worked, and the extra pay — overtime, work on
+ * a holiday or a day off, night hours — at the hourly rate (salary / norm hours of the month).
+ * Hours are in hundredths.
+ */
+export function timesheetPay(input: {
+  salary: Minor;
+  norm: number;
+  worked: number;
+  overtime: number;
+  holidayWork: number;
+  night: number;
+  pay: ExtraPay;
+}): { salary: Minor; overtime: Minor; holidayWork: Minor; night: Minor } {
+  const norm = BigInt(input.norm);
+  if (norm <= 0n) return { salary: 0n, overtime: 0n, holidayWork: 0n, night: 0n };
+  const part = (hours: number, pct: number) =>
+    roundHalfAwayFromZero(input.salary * BigInt(hours) * BigInt(pct), norm * 10_000n);
+  return {
+    salary:
+      input.worked >= input.norm
+        ? input.salary
+        : roundHalfAwayFromZero(input.salary * BigInt(input.worked), norm),
+    overtime: part(input.overtime, input.pay.overtime),
+    holidayWork: part(input.holidayWork, input.pay.holidayWork),
+    night: part(input.night, input.pay.night),
+  };
+}
+
+/**
+ * An absence's pay split over the months its paid days fall in: each month the daily amount times
+ * its days (or its share), the last one what is left (so the parts add up to the qəpik).
+ */
+export function splitByMonth(
+  amount: Minor,
+  days: readonly string[],
+  /** The amount of a day when the pay is a daily rate times the days (a vacation). */
+  perDay: Minor | null = null,
+): Map<string, Minor> {
+  const count = new Map<string, number>();
+  for (const d of days) count.set(d.slice(0, 7), (count.get(d.slice(0, 7)) ?? 0) + 1);
+  const out = new Map<string, Minor>();
+  const months = [...count.keys()].sort();
+  let left = amount;
+  months.forEach((m, i) => {
+    const part =
+      i === months.length - 1
+        ? left
+        : perDay !== null
+          ? perDay * BigInt(count.get(m)!)
+          : roundHalfAwayFromZero(amount * BigInt(count.get(m)!), BigInt(days.length));
+    out.set(m, part);
+    left -= part;
+  });
+  return out;
+}
+
+/** Vacation entitlement a working year (8d): the base, by tenure (5–10: 2, 10–15: 4, 15+: 6), extra. */
+export function tenureDays(years: number): number {
+  return years >= 15 ? 6 : years >= 10 ? 4 : years >= 5 ? 2 : 0;
+}
+
+/** Whole years from `from` to `to`. */
+export function fullYears(from: string, to: string): number {
+  if (!from || to < from) return 0;
+  let years = Number(to.slice(0, 4)) - Number(from.slice(0, 4));
+  if (to.slice(5) < from.slice(5)) years--;
+  return years;
+}
+
+/** Whole months from `from` to `to`. */
+export function fullMonths(from: string, to: string): number {
+  if (!from || to < from) return 0;
+  let months =
+    (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 +
+    Number(to.slice(5, 7)) -
+    Number(from.slice(5, 7));
+  if (to.slice(8) < from.slice(8)) months--;
+  return months < 0 ? 0 : months;
+}
+
+/** The anniversary of `from` after `years` years. */
+export function addYears(from: string, years: number): string {
+  const y = Number(from.slice(0, 4)) + years;
+  const md = from.slice(5) === '02-29' ? '02-28' : from.slice(5);
+  return `${y}-${md}`;
+}
+
+/**
+ * Vacation days earned by a day: every working year from the hire date its entitlement — the base
+ * days, the days for tenure at the year's start, the extra days; the current year by the full months
+ * gone (rounded to a day).
+ */
+export function vacationEarned(input: {
+  hired: string;
+  tenureFrom: string;
+  base: number;
+  extra: number;
+  date: string;
+}): { years: number; earned: number; annual: number } {
+  const { hired, date } = input;
+  if (!hired || date < hired) return { years: 0, earned: 0, annual: input.base + input.extra };
+  const years = fullYears(hired, date);
+  const annualAt = (k: number) =>
+    input.base + input.extra + tenureDays(fullYears(input.tenureFrom || hired, addYears(hired, k)));
+  let earned = 0;
+  for (let k = 0; k < years; k++) earned += annualAt(k);
+  const current = annualAt(years);
+  earned += Math.round((current * fullMonths(addYears(hired, years), date)) / 12);
+  return { years, earned, annual: current };
 }

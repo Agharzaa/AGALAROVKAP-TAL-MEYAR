@@ -37,6 +37,8 @@ import { cancelOperation, saveOperation } from './operations.js';
 import { cancelAssetDocument, saveAssetDocument, saveFixedAsset } from './assets.js';
 import { cancelPayroll, savePayroll, savePayrollRates } from './payroll.js';
 import { cancelAbsence, saveAbsence } from './absences.js';
+import { saveCalendar } from './calendar.js';
+import { cancelTimesheet, saveTimesheet } from './timesheets.js';
 import { closingControls, runQuery } from './reports.js';
 import { systemClock, Tx, type Clock, type Context } from './tx.js';
 
@@ -186,6 +188,12 @@ export class Ledger {
         return saveAbsence(tx, c);
       case 'absence.cancel':
         return cancelAbsence(tx, c);
+      case 'calendar.save':
+        return saveCalendar(tx, c);
+      case 'timesheet.save':
+        return saveTimesheet(tx, c);
+      case 'timesheet.cancel':
+        return cancelTimesheet(tx, c);
       case 'eqaime.synced':
         return recordDvxSync(tx, c);
       case 'eqaime.apply': {
