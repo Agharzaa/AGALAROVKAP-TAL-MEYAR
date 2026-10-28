@@ -163,3 +163,60 @@ test('audit: two lines of one VAT deposit payment pay the VAT of two invoices, n
     [-10000n, -10000n],
   );
 });
+
+test('audit: the e-qaimə a correction replaced comes back when DVX cancels that correction', (t) => {
+  const f = fixture(t);
+  const supplier = f.partner('Kağız Təchizat MMC', SUPPLIER);
+  const contract = f.contract(supplier, 'A-1', 'purchase');
+  const service = f.product('Rabitə xidməti', 'ay', 'service');
+  const item = f.item('expenseItem', 'Rabitə');
+  const original = doc('MT1', '2026-09-05', SUPPLIER, {
+    net: '100.00',
+    vat: '18.00',
+    base18: '100.00',
+  });
+  const correction = (status: string) =>
+    doc('MT9', '2026-09-08', SUPPLIER, {
+      net: '90.00',
+      vat: '16.20',
+      base18: '90.00',
+      kind: 'Düzəliş qaiməsi',
+      refNumber: 'MT1',
+      status,
+    });
+  load(f, 'purchase', [original, correction('Təsdiqləndi')]);
+  // The correction is booked in place of the original, which steps aside.
+  const inv = f.invoice(
+    'purchase',
+    '2026-09-08',
+    supplier,
+    contract,
+    [{ productId: service, price: '90', expenseItemId: item }],
+    { eqNumber: 'MT9', eqDocumentId: byNumber(f, 'MT9').id },
+  );
+  assert.equal(byNumber(f, 'MT1').bucket, 'ignored');
+  // The buyer refuses the correction in DVX: the original stands again. The accountant cancels
+  // the correction's invoice…
+  load(f, 'purchase', [original, correction('İmtina edildi')]);
+  assert.equal(byNumber(f, 'MT9').bucket, 'conflict');
+  f.exec({
+    type: 'invoice.cancel',
+    companyId: f.companyId,
+    id: inv.id,
+    version: inv.version!,
+    reason: 'DVX-də düzəlişdən imtina',
+  });
+  // …and the original waits to be booked (DVX ↔ uçot counts it as not booked).
+  assert.equal(byNumber(f, 'MT1').bucket, 'proposal');
+  const r = f.query<{ notBooked: { number: string }[] }>({
+    type: 'eqReconcile',
+    companyId: f.companyId,
+    direction: 'purchase',
+    from: '2026-09-01',
+    to: '2026-09-30',
+  });
+  assert.deepEqual(
+    r.notBooked.map((x) => x.number),
+    ['MT1'],
+  );
+});

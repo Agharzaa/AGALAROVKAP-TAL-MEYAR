@@ -838,6 +838,19 @@ export function releaseEq(tx: Tx, companyId: string, invoiceId: string): void {
     tx.clock.now(),
     String(doc.id),
   );
+  // A correction DVX cancelled no longer replaces its original: that one is DVX's word again.
+  if (cancelled && doc.kind === 'correction' && doc.ref_key)
+    tx.db.run(
+      `UPDATE eq_documents SET state='waiting', reason='', version=version+1, updated_at=?
+       WHERE company_id=? AND direction=? AND tax_id=? AND eq_key=? AND state='ignored' AND reason=?
+         AND status NOT IN ('cancelled','rejected')`,
+      tx.clock.now(),
+      companyId,
+      String(doc.direction),
+      String(doc.tax_id),
+      String(doc.ref_key),
+      `DVX: düzəliş e-qaiməsi ${String(doc.eq_number)} ilə əvəz olunub`,
+    );
 }
 
 export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
