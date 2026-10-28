@@ -466,3 +466,12 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`. İstifadəçi (28.10.2026): "növ
 6. **Mənfəət vergisi:** gəlirlər (M/Z) − gəlirdən çıxılan xərclər (uçot amortizasiyası, əsas vəsaitin silinməsi / satışının qalıq dəyəri və "gəlirdən çıxılmır" xərc maddələri xaric) − vergi amortizasiyası − satılan vəsaitlərin vergi qalıq dəyəri ± mühasibin düzəlişləri = vergi tutulan mənfəət; keçmiş illərin zərəri (5 il, VM 121; Meyar-dan əvvəlki — əl ilə) çıxılır; dərəcə 20% (il parametri); il ərzində 521.04-ə ödənilən çıxılır.
 7. **Yazılış dekabr bağlanışının addımıdır:** 801 → 341-dən sonra Dt 901 / Kt 521.04 ("Vergi (haqq)") və Dt 341 / Kt 901, sonra 341 → 343. 2026-10-17 §9-u ("mənfəət vergisi hesablanmır") əvəz edir. Ləğv — storno. M/Z-də "Mənfəət vergisi" və "Xalis mənfəət" sətirləri.
 8. **Gəlirdən çıxılmayan xərclər** xərc maddəsinin bayrağı ilə ("Gəlirdən çıxılmır"); Meyar xərcin növünü təxmin etmir. Təmir limiti (VM 115), təmsilçilik və ezamiyyət normaları — düzəliş sətri ilə.
+
+## 2026-10-29 — Dövriyyə balansı: kontragentlər, səviyyə, dövr, çap və PDF
+
+İstifadəçi (29.10.2026): "531-i açanda kontragent ver, Dt Kt gəlsin, 1C-dəki kimi"; seçim — "subhesab, altında kontragent".
+
+1. **Hesabı açanda kontragentli subhesabları da açıq gəlir** (bir klik): 531 → 531.01 / 531.02 və hər birinin altında kontragentlər öz Dt / Kt saldoları ilə. Müqavilə və sənəd səviyyəsi bağlı qalır; subhesab əl ilə bağlana bilər.
+2. **Detallaşdırma** (1C kimi): Hesablar / Subhesablar / Kontragentlər / Hamısı. Səviyyə seçiləndə əl ilə açılan / bağlanan sətirlər sıfırlanır; "Hamısını yığ" düyməsini "Hesablar" əvəz edir.
+3. **Dövr seçimi:** Ay / Rüb / İl və ‹ › — əvvəlki / növbəti dövr, dərhal tətbiq olunur.
+4. **Çap et və PDF:** hesabat vərəqi (şirkət, başlıq, dövr, ekranda açıq sətirlər, cəmi), A4 albom; PDF masaüstü proqramda birbaşa faylə saxlanılır.

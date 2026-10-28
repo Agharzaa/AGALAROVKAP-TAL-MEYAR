@@ -3478,3 +3478,113 @@ test('stage 9d: an expense item is marked not deductible; the profit tax return 
     h.close();
   }
 });
+
+test('2026-10-29: trial balance — 211 opens with its partners, detail level, period steps, print and PDF', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const y = date.getFullYear();
+  const ym = `${y}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${ym}-01`,
+    memo: 'Başlanğıc',
+    lines: [
+      {
+        dtAccount: '223.01',
+        dtSk: [s.bankAccount],
+        ktAccount: '301',
+        ktSk: [s.founder, s.capitalIn],
+        amount: '30000',
+        memo: '',
+      },
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '223.01',
+        ktSk: [s.bankAccount],
+        amount: '500',
+        memo: '',
+      },
+    ],
+  });
+  const printed = window.print;
+  let prints = 0;
+  window.print = () => void prints++;
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Dövriyyə balansı' })[0]!);
+    const page = within(pane());
+    const rowOf = (re: RegExp) =>
+      [...pane().querySelectorAll('tbody tr')].find((r) => re.test(r.textContent ?? ''));
+    // One click on 211: 211.01 comes open with the partner, as in 1C.
+    await user.click(
+      await page.findByRole('button', {
+        name: 'Aç: Alıcıların və sifarişçilərin qısamüddətli debitor borcları',
+      }),
+    );
+    await page.findByRole('button', {
+      name: 'Bağla: Alıcılar və sifarişçilərlə hesablaşmalar (manatla)',
+    });
+    await waitFor(() => assert.match(rowOf(/Alıcı MMC/)?.textContent ?? '', /500,00/));
+    // Closing 211.01 hides the partner.
+    await user.click(
+      page.getByRole('button', {
+        name: 'Bağla: Alıcılar və sifarişçilərlə hesablaşmalar (manatla)',
+      }),
+    );
+    await waitFor(() => assert.ok(!rowOf(/Alıcı MMC/)));
+
+    // Detail level: everything, then back to accounts only.
+    const detail = page.getByRole('group', { name: 'Detallaşdırma' });
+    await user.click(within(detail).getByRole('button', { name: 'Hamısı' }));
+    await waitFor(() => assert.ok(rowOf(/Kapital Bank/), 'bank account row'));
+    assert.ok(rowOf(/Alıcı MMC/));
+    await user.click(within(detail).getByRole('button', { name: 'Hesablar' }));
+    await waitFor(() => assert.ok(!rowOf(/Alıcı MMC/) && !rowOf(/Kapital Bank/)));
+    await user.click(within(detail).getByRole('button', { name: 'Kontragentlər' }));
+    await waitFor(() => assert.ok(rowOf(/Alıcı MMC/)));
+    assert.ok(!rowOf(/Kapital Bank/), 'a bank account is no partner');
+
+    // Period steps: the year, the year before (empty), back, the month.
+    const steps = page.getByRole('group', { name: 'Dövr seçimi' });
+    await user.click(within(steps).getByRole('button', { name: 'İl' }));
+    await page.findByText(`Dövr: 01.01.${y} – 31.12.${y}`);
+    assert.equal(
+      within(steps).getByRole('button', { name: 'İl' }).getAttribute('aria-pressed'),
+      'true',
+    );
+    await user.click(within(steps).getByRole('button', { name: 'Əvvəlki dövr' }));
+    await page.findByText(`Dövr: 01.01.${y - 1} – 31.12.${y - 1}`);
+    await page.findByText(/qalıq və dövriyyə yoxdur/);
+    await user.click(within(steps).getByRole('button', { name: 'Növbəti dövr' }));
+    await page.findByText(`Dövr: 01.01.${y} – 31.12.${y}`);
+    await user.click(within(steps).getByRole('button', { name: 'Ay' }));
+    await page.findByText(new RegExp(`^Dövr: 01\\.${ym.slice(5)}\\.${y} – `));
+
+    // Print: the report sheet in the print area, the dialog asked once.
+    await user.click(page.getByRole('button', { name: 'Çap et' }));
+    await waitFor(() => assert.equal(prints, 1));
+    const sheet = document.querySelector('.print-sheet')!.textContent ?? '';
+    assert.match(sheet, /Hesablar üzrə dövriyyə-saldo cədvəli/);
+    assert.match(sheet, /Alıcı MMC/);
+    assert.match(sheet, /Cəmi/);
+    assert.match(sheet, /30\s000,00/);
+    act(() => void window.dispatchEvent(new Event('afterprint')));
+
+    // PDF: the same sheet saved as a file.
+    await user.click(page.getByRole('button', { name: 'PDF' }));
+    await page.findByText(/Saxlanıldı: C:\\Hesabatlar\\DBC .*\.pdf/);
+    assert.equal(h.pdfs.length, 1);
+    assert.match(h.pdfs[0]!.name, /^DBC .*\.pdf$/);
+    assert.match(h.pdfs[0]!.sheet, /Hesablar üzrə dövriyyə-saldo cədvəli/);
+    assert.ok(!document.querySelector('.print-sheet'), 'the sheet goes after saving');
+  } finally {
+    window.print = printed;
+    h.close();
+  }
+});

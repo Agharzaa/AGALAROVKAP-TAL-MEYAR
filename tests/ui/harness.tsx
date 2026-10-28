@@ -19,6 +19,7 @@ export function harness(
   const listeners = new Set<(companyId: string) => void>();
   const commands: { type: string }[] = [];
   const saved: { name: string; bytes: Uint8Array }[] = [];
+  const pdfs: { name: string; sheet: string }[] = [];
   let release: (() => void) | undefined;
   let dirty = false;
   // The DVX cabinet window: what the app asked to open, and a way to hand back an export.
@@ -99,6 +100,11 @@ export function harness(
       saved.push({ name, bytes });
       return { ok: true, value: `C:\\Hesabatlar\\${name}` };
     },
+    async savePdf(name) {
+      // What would go to the PDF: the print sheet on screen at that moment.
+      pdfs.push({ name, sheet: document.querySelector('.print-sheet')?.textContent ?? '' });
+      return { ok: true, value: `C:\\Hesabatlar\\${name}` };
+    },
     async version() {
       return 'test';
     },
@@ -173,6 +179,7 @@ export function harness(
     run,
     commands,
     saved,
+    pdfs,
     release: () => release?.(),
     dirty: () => dirty,
     theme: () => theme,

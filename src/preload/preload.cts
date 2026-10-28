@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('meyar', {
   version: () => ipcRenderer.invoke('meyar:version'),
   saveFile: (defaultName: string, bytes: Uint8Array) =>
     ipcRenderer.invoke('meyar:save-file', { defaultName: String(defaultName), bytes }),
+  savePdf: (defaultName: string) => ipcRenderer.invoke('meyar:save-pdf', String(defaultName)),
   setDirty: (dirty: boolean) => ipcRenderer.send('meyar:dirty', dirty === true),
   zoom: (step?: string) =>
     ipcRenderer.invoke(

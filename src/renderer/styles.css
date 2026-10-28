@@ -1593,6 +1593,13 @@ body.dragging * {
 .segmented button + button {
   border-left: 1px solid var(--line);
 }
+.segmented button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.segmented button:disabled:hover {
+  background: transparent;
+}
 .segmented button:hover {
   background: var(--hover);
 }
@@ -3067,6 +3074,32 @@ button.step:active {
   @page {
     size: A4;
     margin: 15mm;
+  }
+  /* The trial balance has eight columns: a landscape sheet (1C prints it so too). */
+  @page wide {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .print-sheet .trial-sheet {
+    page: wide;
+    font-size: 8.5pt;
+  }
+  .print-sheet .trial-sheet h1 {
+    margin-top: 2mm;
+  }
+  .print-sheet .trial-sheet th,
+  .print-sheet .trial-sheet td {
+    padding: 0.6mm 1.5mm;
+  }
+  .print-sheet .trial-sheet th {
+    text-align: center;
+  }
+  .print-sheet .trial-sheet .lvl0.account td,
+  .print-sheet .trial-sheet tfoot td {
+    font-weight: 600;
+  }
+  .print-sheet .trial-sheet .subkonto td:first-child {
+    font-style: italic;
   }
   body > *:not(.print-sheet) {
     display: none !important;

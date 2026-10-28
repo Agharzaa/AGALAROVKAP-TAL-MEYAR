@@ -149,6 +149,13 @@ export const querySchema = z.discriminatedUnion('type', [
     to: date,
     /** Row keys the user opened ("a:211", "a:211|<partner>", …). */
     expand: z.array(z.string().max(400)).max(5000).default([]),
+    /** Rows the user closed although the detail level opens them. */
+    collapse: z.array(z.string().max(400)).max(5000).default([]),
+    /**
+     * 1C's detail level: what is open without a click — nothing, the subaccounts, everything down
+     * to the partners, or every row. Opening an account also opens its subaccounts kept by partner.
+     */
+    detail: z.enum(['accounts', 'subaccounts', 'partners', 'all']).default('accounts'),
     onlyMoved: z.boolean().default(false),
     onlyArising: z.boolean().default(false),
     accounts: z.array(z.string().max(20)).max(200).default([]),

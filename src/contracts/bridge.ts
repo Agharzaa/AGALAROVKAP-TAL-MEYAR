@@ -28,6 +28,11 @@ export interface MeyarBridge {
   version(): Promise<string>;
   /** Asks where to save and writes the bytes (report exports). Null when cancelled. */
   saveFile(defaultName: string, bytes: Uint8Array): Promise<Outcome<string | null>>;
+  /**
+   * Asks where to save and writes the page as printed (the .print-sheet on screen now) as PDF,
+   * A4 landscape. Null when cancelled. Desktop app only.
+   */
+  savePdf?(defaultName: string): Promise<Outcome<string | null>>;
   /** Unsaved-change state of the window, used by the close guard. */
   setDirty(dirty: boolean): void;
   /** Page zoom: one step in or out, back to 100%, or (no step) the current zoom. */

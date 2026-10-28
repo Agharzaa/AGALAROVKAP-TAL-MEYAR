@@ -89,6 +89,9 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       expand: ['a:211', 'a:211.01'],
     }),
   );
+  time('DBC, kontragentlər səviyyəsi (bütün hesablaşma hesabları açıq)', 2000, () =>
+    q({ type: 'trialBalance', from: '2025-01-01', to: '2025-12-31', detail: 'partners' }),
+  );
   time('DBC, 223.01 bank hesabları', 1000, () =>
     q({
       type: 'trialBalance',

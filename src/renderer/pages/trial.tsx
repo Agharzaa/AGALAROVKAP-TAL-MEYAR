@@ -1,26 +1,99 @@
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { FileDown, FoldVertical } from '../icons';
+import { FileDown } from '../icons';
 import type { TrialBalance, TrialRow } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { RangeFields, useRange } from '../filters';
+import { PeriodSteps, RangeFields, useRange } from '../filters';
 import { day, money, qty } from '../format';
 import { useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Picker } from '../picker';
+import { usePrint } from '../print';
 import { Notice } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
 import { workbook } from '../xlsx';
 
 const cell = (v: string) => (v ? money(v) : '');
 
+type Detail = 'accounts' | 'subaccounts' | 'partners' | 'all';
+/** 1C's detail level: what is open without a click. */
+const details: [Detail, string][] = [
+  ['accounts', 'Hesablar'],
+  ['subaccounts', 'Subhesablar'],
+  ['partners', 'Kontragentlər'],
+  ['all', 'Hamısı'],
+];
+
+const TITLE = 'Hesablar üzrə dövriyyə-saldo cədvəli';
+const SIDES = ['Debet', 'Kredit', 'Debet', 'Kredit', 'Debet', 'Kredit'];
+const amounts = (
+  r: Pick<TrialRow, 'openDt' | 'openKt' | 'turnDt' | 'turnKt' | 'closeDt' | 'closeKt'>,
+) => [r.openDt, r.openKt, r.turnDt, r.turnKt, r.closeDt, r.closeKt];
+
+/** The printed form (and the PDF): the rows as open on screen, A4 landscape. */
+function TrialSheet({ tb, company }: { tb: TrialBalance; company: string }) {
+  return (
+    <div className="trial-sheet">
+      <p>{company}</p>
+      <h1>{TITLE}</h1>
+      <p>
+        Dövr: {day(tb.from)} – {day(tb.to)}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th rowSpan={2}>Hesab</th>
+            <th colSpan={2}>Dövrün əvvəlinə saldo</th>
+            <th colSpan={2}>Dövr üzrə dövriyyə</th>
+            <th colSpan={2}>Dövrün sonuna saldo</th>
+          </tr>
+          <tr>
+            {SIDES.map((t, i) => (
+              <th key={i} className="num">
+                {t}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tb.rows.map((r) => (
+            <tr key={r.key} className={`lvl${Math.min(r.level, 4)} ${r.kind}`}>
+              <td style={{ paddingLeft: `${2 + r.level * 4}mm` }}>
+                {r.kind === 'account' ? `${r.account} ${r.label}` : r.label}
+              </td>
+              {amounts(r).map((v, i) => (
+                <td key={i} className="num">
+                  {cell(v)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Cəmi</td>
+            {amounts(tb.totals).map((v, i) => (
+              <td key={i} className="num">
+                {money(v)}
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 export function TrialPage() {
   const win = useWindow();
   const ws = useWorkspace();
   const { catalog } = useCatalog(win.companyId);
   const range = useRange(ws.period);
+  const printer = usePrint();
+  const [detail, setDetail] = useState<Detail>('accounts');
   const [expand, setExpand] = useState<string[]>([]);
+  const [collapse, setCollapse] = useState<string[]>([]);
   const [onlyMoved, setOnlyMoved] = useState(false);
   const [onlyArising, setOnlyArising] = useState(false);
   const [accountsText, setAccountsText] = useState('');
@@ -33,6 +106,8 @@ export function TrialPage() {
     companyId: win.companyId,
     ...range.applied,
     expand,
+    collapse,
+    detail,
     onlyMoved,
     onlyArising,
     accounts,
@@ -42,11 +117,22 @@ export function TrialPage() {
   const rows = tb?.rows ?? [];
   const toggle = (r: TrialRow) => {
     if (!r.expandable) return;
-    setExpand((list) =>
-      list.includes(r.key)
-        ? list.filter((k) => k !== r.key && !k.startsWith(`${r.key}|`))
-        : [...list, r.key],
-    );
+    if (r.expanded) {
+      // Closing drops what was opened inside (its subaccounts and subkonto) and keeps the row
+      // closed even where the detail level would open it.
+      const inside = (k: string) =>
+        k === r.key || k.startsWith(`${r.key}|`) || k.startsWith(`${r.key}.`);
+      setExpand((list) => list.filter((k) => !inside(k)));
+      setCollapse((list) => [...list.filter((k) => k !== r.key), r.key]);
+    } else {
+      setExpand((list) => [...list, r.key]);
+      setCollapse((list) => list.filter((k) => k !== r.key));
+    }
+  };
+  const chooseDetail = (d: Detail) => {
+    setDetail(d);
+    setExpand([]);
+    setCollapse([]);
   };
   const openCard = (r: TrialRow) =>
     ws.open(
@@ -87,15 +173,12 @@ export function TrialPage() {
       openCard(r);
     }
   };
+  const company = `${catalog?.company.name ?? ''} · VÖEN ${catalog?.company.taxId ?? ''}`;
   const exportXlsx = async () => {
     if (!tb) return;
-    const company = catalog?.company;
     const bytes = workbook({
       name: 'Dövriyyə balansı',
-      title: [
-        `${company?.name ?? ''} · VÖEN ${company?.taxId ?? ''}`,
-        `Hesablar üzrə dövriyyə-saldo cədvəli: ${day(tb.from)} – ${day(tb.to)}`,
-      ],
+      title: [company, `${TITLE}: ${day(tb.from)} – ${day(tb.to)}`],
       header: [
         'Hesab',
         'Ad / subkonto',
@@ -113,27 +196,11 @@ export function TrialPage() {
         ...tb.rows.map((r) => [
           r.kind === 'account' ? r.account : '',
           `${'   '.repeat(r.level)}${r.label}`,
-          { money: r.openDt },
-          { money: r.openKt },
-          { money: r.turnDt },
-          { money: r.turnKt },
-          { money: r.closeDt },
-          { money: r.closeKt },
+          ...amounts(r).map((money) => ({ money })),
           { qty: r.closeQty },
           r.closeCur ? `${money(r.closeCur)} ${r.currency}` : '',
         ]),
-        [
-          '',
-          'Cəmi',
-          { money: tb.totals.openDt },
-          { money: tb.totals.openKt },
-          { money: tb.totals.turnDt },
-          { money: tb.totals.turnKt },
-          { money: tb.totals.closeDt },
-          { money: tb.totals.closeKt },
-          '',
-          '',
-        ],
+        ['', 'Cəmi', ...amounts(tb.totals).map((money) => ({ money })), '', ''],
       ],
     });
     try {
@@ -143,6 +210,11 @@ export function TrialPage() {
       setExportMsg((e as Error).message);
     }
   };
+  const savePdf = () =>
+    tb &&
+    printer.pdf(<TrialSheet tb={tb} company={company} />, `DBC ${tb.from} ${tb.to}.pdf`, (o) =>
+      'error' in o ? setExportMsg(o.error) : o.file && setExportMsg(`Saxlanıldı: ${o.file}`),
+    );
   return (
     <ModuleFrame
       title={pages.trial.title}
@@ -159,14 +231,18 @@ export function TrialPage() {
       }}
       actions={
         <>
-          <button
-            type="button"
-            className="button secondary"
-            disabled={!expand.length}
-            onClick={() => setExpand([])}
-          >
-            <FoldVertical size={15} /> Hamısını yığ
-          </button>
+          <div className="segmented" role="group" aria-label="Detallaşdırma">
+            {details.map(([d, label]) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={detail === d}
+                onClick={() => chooseDetail(d)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="button secondary"
@@ -175,11 +251,25 @@ export function TrialPage() {
           >
             <FileDown size={15} /> Excel
           </button>
+          {api.canSavePdf() && (
+            <button type="button" className="button secondary" disabled={!tb} onClick={savePdf}>
+              <FileDown size={15} /> PDF
+            </button>
+          )}
+          <button
+            type="button"
+            className="button secondary"
+            disabled={!tb}
+            onClick={() => tb && printer.print(<TrialSheet tb={tb} company={company} />)}
+          >
+            Çap et
+          </button>
         </>
       }
       filters={
         <>
           <RangeFields range={range} />
+          <PeriodSteps range={range} />
           <label className="filter-text">
             <span>Hesablar</span>
             <input
@@ -236,7 +326,7 @@ export function TrialPage() {
         {/* As in 1C: the report sheet with the company, the title and the period. */}
         <div className="report-head">
           <b>{catalog?.company.name}</b>
-          <h2>Hesablar üzrə dövriyyə-saldo cədvəli</h2>
+          <h2>{TITLE}</h2>
           {tb && (
             <p>
               Dövr: {day(tb.from)} – {day(tb.to)}
@@ -261,7 +351,7 @@ export function TrialPage() {
               </th>
             </tr>
             <tr>
-              {['Debet', 'Kredit', 'Debet', 'Kredit', 'Debet', 'Kredit'].map((t, i) => (
+              {SIDES.map((t, i) => (
                 <th key={i} scope="col" className="num">
                   {t}
                 </th>
@@ -337,21 +427,22 @@ export function TrialPage() {
               <tr>
                 <td className="gut" />
                 <td>Cəmi</td>
-                <td className="num">{money(tb.totals.openDt)}</td>
-                <td className="num">{money(tb.totals.openKt)}</td>
-                <td className="num">{money(tb.totals.turnDt)}</td>
-                <td className="num">{money(tb.totals.turnKt)}</td>
-                <td className="num">{money(tb.totals.closeDt)}</td>
-                <td className="num">{money(tb.totals.closeKt)}</td>
+                {amounts(tb.totals).map((v, i) => (
+                  <td key={i} className="num">
+                    {money(v)}
+                  </td>
+                ))}
               </tr>
             </tfoot>
           )}
         </table>
       </div>
       <p className="table-hint">
-        Sətrə iki dəfə vurun və ya Enter basın — hesab kartı açılır. ← → açır/bağlayır. Debitor və
-        kreditor qalıqları açıq saldo ilə göstərilir.
+        Sətrə iki dəfə vurun və ya Enter basın — hesab kartı açılır. ← → açır/bağlayır. Hesabı
+        açanda kontragentli subhesabları da açıq gəlir. Debitor və kreditor qalıqları açıq saldo ilə
+        göstərilir.
       </p>
+      {printer.sheet}
     </ModuleFrame>
   );
 }

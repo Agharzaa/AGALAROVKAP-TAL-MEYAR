@@ -746,3 +746,54 @@ test('2026-10-25: the trial balance lists the accounts themselves, as in 1C (no 
   // 223's own lines one level below.
   assert.equal(f.row(tb, 'a:223.01')!.level, 1);
 });
+
+test('2026-10-29: opening 531 brings its subaccounts with their partners, as 1C (one click)', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const tb = f.trial('2026-09-01', '2026-09-30', ['a:531', 'a:223']);
+  const sub = f.row(tb, 'a:531.01')!;
+  assert.equal(sub.expanded, true, '531.01 comes open');
+  const partner = f.row(tb, `a:531.01|${s.supplier}`)!;
+  assert.equal(partner.level, 2);
+  assert.equal(partner.kind, 'subkonto');
+  assert.equal(partner.hint, 'Kontragent');
+  assert.equal(partner.expanded, false, 'contracts stay closed');
+  assert.ok(!tb.rows.some((r) => r.key.startsWith(`a:531.01|${s.supplier}|`)));
+  // Bank accounts are no partners: 223.01 stays closed.
+  assert.equal(f.row(tb, 'a:223.01')!.expanded, false);
+  assert.ok(!f.row(tb, `a:223.01|${s.bankK}`));
+  // The user can still close 531.01 by hand.
+  const closed = f.trial('2026-09-01', '2026-09-30', ['a:531'], { collapse: ['a:531.01'] });
+  assert.equal(f.row(closed, 'a:531.01')!.expanded, false);
+  assert.ok(!f.row(closed, `a:531.01|${s.supplier}`));
+});
+
+test('2026-10-29: the detail level of the trial balance (accounts, subaccounts, partners, all)', (t) => {
+  const f = fixture(t);
+  const s = september(f);
+  const totals = f.trial('2026-09-01', '2026-09-30').totals;
+  const at = (detail: string, expand: string[] = [], collapse: string[] = []) =>
+    f.trial('2026-09-01', '2026-09-30', expand, { detail, collapse });
+  // Subaccounts: every account with subaccounts open, no subkonto.
+  const subs = at('subaccounts');
+  assert.equal(f.row(subs, 'a:223')!.expanded, true);
+  assert.ok(f.row(subs, 'a:223.01'));
+  assert.ok(!subs.rows.some((r) => r.kind === 'subkonto'));
+  // Partners: open down to the partners of every settlement account, nothing deeper.
+  const partners = at('partners');
+  assert.ok(f.row(partners, `a:531.01|${s.supplier}`));
+  assert.ok(f.row(partners, `a:211.01|${s.customer}`));
+  assert.ok(f.row(partners, `a:543.01|${s.customer}`));
+  assert.ok(!f.row(partners, `a:223.01|${s.bankK}`), 'bank accounts are not partners');
+  assert.ok(!partners.rows.some((r) => r.sk.length > 1), 'no contracts');
+  // All: every level, down to the documents.
+  const all = at('all');
+  assert.ok(f.row(all, `a:211.01|${s.customer}|${s.c7}|${s.saleDoc}`));
+  assert.ok(f.row(all, `a:223.01|${s.bankK}`));
+  assert.ok(f.row(all, `a:205|${s.paper}`));
+  // A row closed by hand stays closed within the level.
+  const one = at('all', [], ['a:211.01']);
+  assert.ok(!f.row(one, `a:211.01|${s.customer}`));
+  assert.ok(f.row(one, `a:531.01|${s.supplier}`));
+  for (const tb of [subs, partners, all]) assert.deepEqual(tb.totals, totals);
+});

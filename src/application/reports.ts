@@ -478,13 +478,21 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
       : {}),
     ...(q.partnerId ? { partner: { id: q.partnerId, slots: partnerSlots(chart) } } : {}),
   };
-  const expanded = new Set(q.expand);
   // Account level, then roll leaf accounts up into their groups.
   const byAccount = new Map<string, Agg>();
   for (const { key, agg } of aggregate(db, q.companyId, from, to, ['account'], base)) {
     for (let code: string | null = key[0]!; code; code = chart.get(code)?.parentCode ?? null)
       byAccount.set(code, addAgg(byAccount.get(code) ?? emptyAgg(), agg));
   }
+  // A row is open when the user opened it, or when the detail level (`auto`) opens it and the
+  // user did not close it.
+  const explicit = new Set(q.expand);
+  const collapsed = new Set(q.collapse);
+  const isOpen = (key: string, auto: boolean) => explicit.has(key) || (auto && !collapsed.has(key));
+  const keptByPartner = (code: string) =>
+    chart
+      .all()
+      .some((a) => inFamily(a.code, code) && a.subkonto[0] === 'partner' && byAccount.has(a.code));
   const rows: TrialRow[] = [];
   const push = (
     key: string,
@@ -494,6 +502,7 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
     label: string,
     hint: string,
     expandable: boolean,
+    open: boolean,
     sk: string[],
     g: Agg,
     showQty: boolean,
@@ -507,7 +516,7 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
       label,
       hint,
       expandable,
-      expanded: expandable && expanded.has(key),
+      expanded: expandable && open,
       sk,
       openDt: amt(g.openDt),
       openKt: amt(g.openKt),
@@ -544,6 +553,7 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
       const sk = [...prefix, value!];
       const rowKey = `a:${code}|${sk.join('|')}`;
       const more = depth + 1 < account.subkonto.length;
+      const open = more && isOpen(rowKey, q.detail === 'all');
       const currency =
         account.currency && (kind === 'bankAccount' || kind === 'contract')
           ? names.currency(kind, value!)
@@ -556,15 +566,17 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
         names.name(kind, value!),
         subkontoLabel[kind],
         more,
+        open,
         sk,
         agg,
         account.quantitative && kind === 'product',
         currency,
       );
-      if (more && expanded.has(rowKey)) subkontoRows(code, sk, level + 1);
+      if (open) subkontoRows(code, sk, level + 1);
     }
   };
-  const accountRows = (codes: string[], level: number) => {
+  /** `clicked`: the parent was opened by the user, not by the detail level. */
+  const accountRows = (codes: string[], level: number, clicked: boolean) => {
     for (const code of codes.sort(compareCodes)) {
       const g = byAccount.get(code);
       if (!g) continue;
@@ -575,14 +587,22 @@ function trialBalance(db: Db, q: Extract<Query, { type: 'trialBalance' }>): Tria
         .filter((c) => byAccount.has(c));
       const key = `a:${code}`;
       const expandable = kids.length > 0 || account.subkonto.length > 0;
-      push(key, level, 'account', code, account.name, code, expandable, [], g, false, '');
-      if (!expanded.has(key)) continue;
-      if (kids.length) accountRows(kids, level + 1);
-      else if (account.subkonto.length) subkontoRows(code, [], level + 1);
+      const byPartner = !kids.length && account.subkonto[0] === 'partner';
+      const auto =
+        q.detail === 'all' ||
+        (q.detail === 'subaccounts' && kids.length > 0) ||
+        (q.detail === 'partners' && (kids.length ? keptByPartner(code) : byPartner)) ||
+        // As 1C: opening 531 shows 531.01 / 531.02 with their partners at once.
+        (clicked && byPartner);
+      const open = expandable && isOpen(key, auto);
+      push(key, level, 'account', code, account.name, code, expandable, open, [], g, false, '');
+      if (!open) continue;
+      if (kids.length) accountRows(kids, level + 1, explicit.has(key));
+      else subkontoRows(code, [], level + 1);
     }
   };
   const tops = [...byAccount.keys()].filter((c) => !chart.get(c)?.parentCode).sort(compareCodes);
-  accountRows(tops, 0);
+  accountRows(tops, 0, false);
   const total = tops.reduce((s, c) => addAgg(s, byAccount.get(c)!), emptyAgg());
   return {
     from,

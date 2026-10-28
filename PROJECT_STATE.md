@@ -774,3 +774,7 @@ npm run test:perf                                   # MEYAR_PERF_POSTINGS=500000
 MEYAR_DATA_DIR=/tmp/m MEYAR_SMOKE=/tmp/m/smoke.json electron .
 WINEDEBUG=-all npx electron-builder --win nsis --x64 --publish never
 ```
+
+## 0.9.11 — dövriyyə balansı: kontragentlər bir kliklə, detallaşdırma, dövr seçimi, çap və PDF (29.10.2026)
+
+QERARLAR 2026-10-29. Sorğuda `detail` və `collapse`; çap vərəqi `.trial-sheet` (A4 albom), PDF — `meyar:save-pdf` (`webContents.printToPDF`). Testlər: `npm run typecheck`, `npm test` 288, `npm run test:ui` 54, `npm run test:perf` (DBC kontragentlər səviyyəsi, il 573 ms) keçir. PDF-in real Electron-da yoxlanması istifadəçidədir (pəncərə açılmadı).

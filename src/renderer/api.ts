@@ -58,6 +58,15 @@ export const api = {
   async saveFile(defaultName: string, bytes: Uint8Array): Promise<string | null> {
     return unwrap(await bridge().saveFile(defaultName, bytes));
   },
+  /** Whether the bridge saves PDF itself (the desktop app); otherwise print to PDF instead. */
+  canSavePdf(): boolean {
+    return !!(override ?? window.meyar)?.savePdf;
+  },
+  async savePdf(defaultName: string): Promise<string | null> {
+    const b = bridge();
+    if (!b.savePdf) throw new Error('PDF yalnız masaüstü proqramda saxlanılır; "Çap et" seçin.');
+    return unwrap(await b.savePdf(defaultName));
+  },
   version(): Promise<string> {
     return bridge().version();
   },

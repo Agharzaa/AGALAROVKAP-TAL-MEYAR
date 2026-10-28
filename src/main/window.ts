@@ -186,6 +186,33 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
       } satisfies Outcome<string | null>;
     }
   });
+  // A report as printed: the renderer has its .print-sheet on screen; the print stylesheet
+  // hides everything else, so the PDF holds the sheet only.
+  handle('meyar:save-pdf', async (_e, arg) => {
+    try {
+      const safe = path.basename(String(arg)).replace(/[<>:"/\\|?*]/g, '_') || 'hesabat.pdf';
+      const result = await dialog.showSaveDialog(window, {
+        title: 'PDF kimi saxla',
+        defaultPath: safe,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath)
+        return { ok: true, value: null } satisfies Outcome<string | null>;
+      const pdf = await window.webContents.printToPDF({
+        pageSize: 'A4',
+        landscape: true,
+        printBackground: false,
+        preferCSSPageSize: true,
+      });
+      await writeFile(result.filePath, pdf);
+      return { ok: true, value: result.filePath } satisfies Outcome<string | null>;
+    } catch (error) {
+      return {
+        ok: false,
+        error: { message: (error as Error).message, code: 'save' },
+      } satisfies Outcome<string | null>;
+    }
+  });
   // The DVX cabinet (stage 4d): the user signs in there; exports come back to the e-qaimə box.
   handle('meyar:dvx-open', (_e, arg) => {
     const direction = arg === 'sale' ? 'sale' : 'purchase';
