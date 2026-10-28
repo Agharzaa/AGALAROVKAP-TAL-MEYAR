@@ -269,13 +269,43 @@ export interface Away {
   to: string;
 }
 
+/** A contract salary in force from a day ('' — from the start) until the next one (audit 8). */
+export interface SalaryPeriod {
+  from: string;
+  salary: Minor;
+}
+
+/** The periods of a month: each with the part of the month it covers (first day … last day). */
+export function salaryParts(
+  periods: readonly SalaryPeriod[],
+  month: string,
+): { from: string; to: string; salary: Minor }[] {
+  const { first, last } = monthBounds(month);
+  const sorted = [...periods].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+  const out: { from: string; to: string; salary: Minor }[] = [];
+  sorted.forEach((p, i) => {
+    const next = sorted[i + 1]?.from;
+    const from = p.from > first ? p.from : first;
+    const to = next && next <= last ? dayBefore(next) : last;
+    if (from <= to && from <= last) out.push({ from, to, salary: p.salary });
+  });
+  return out;
+}
+
+const dayBefore = (date: string) => {
+  const d = day(date);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return iso(d);
+};
+
 /**
  * The salary of a month ("YYYY-MM") for an employee hired / leaving on the given days ('' — not in
  * this month) and away on some: in proportion to the working days of the production calendar
- * worked (8d; without one — Monday to Friday).
+ * worked (8d; without one — Monday to Friday). A salary changed within the month pays each of its
+ * days at the salary in force on it (audit 8).
  */
 export function salaryFor(
-  salary: Minor,
+  salary: Minor | readonly SalaryPeriod[],
   month: string,
   hired: string,
   left: string,
@@ -283,19 +313,27 @@ export function salaryFor(
   cal: WorkCalendar = new WorkCalendar(),
 ): Minor {
   const { first, last } = monthBounds(month);
-  const from = hired && hired > first ? hired : first;
-  const to = left && left < last ? left : last;
-  if (from > to) return 0n;
-  let worked = workdaysIn(cal, from, to);
-  for (const a of away) {
-    const f = a.from > from ? a.from : from;
-    const t = a.to < to ? a.to : to;
-    if (f <= t) worked -= workdaysIn(cal, f, t);
-  }
+  const parts = salaryParts(typeof salary === 'bigint' ? [{ from: '', salary }] : salary, month);
   const all = workdaysIn(cal, first, last);
-  if (worked <= 0 || !all) return 0n;
-  if (worked === all) return salary;
-  return roundHalfAwayFromZero(salary * BigInt(worked), BigInt(all));
+  if (!all || !parts.length) return 0n;
+  let sum = 0n;
+  let worked = 0;
+  for (const p of parts) {
+    const from = hired && hired > p.from ? hired : p.from;
+    const to = left && left < p.to ? left : p.to;
+    if (from > to) continue;
+    let n = workdaysIn(cal, from, to);
+    for (const a of away) {
+      const f = a.from > from ? a.from : from;
+      const t = a.to < to ? a.to : to;
+      if (f <= t) n -= workdaysIn(cal, f, t);
+    }
+    worked += n;
+    sum += p.salary * BigInt(n);
+  }
+  if (worked <= 0) return 0n;
+  if (parts.length === 1 && worked === all) return parts[0]!.salary;
+  return roundHalfAwayFromZero(sum, BigInt(all));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -374,6 +412,7 @@ export function sickPay(input: {
  * Hours are in hundredths.
  */
 export function timesheetPay(input: {
+  /** The salary the extra pay's hourly rate comes from (in force at the month's end). */
   salary: Minor;
   norm: number;
   worked: number;
@@ -381,14 +420,21 @@ export function timesheetPay(input: {
   holidayWork: number;
   night: number;
   pay: ExtraPay;
+  /** A salary changed within the month (audit 8): the hours worked at each salary. */
+  parts?: readonly { salary: Minor; worked: number }[];
 }): { salary: Minor; overtime: Minor; holidayWork: Minor; night: Minor } {
   const norm = BigInt(input.norm);
   if (norm <= 0n) return { salary: 0n, overtime: 0n, holidayWork: 0n, night: 0n };
   const part = (hours: number, pct: number) =>
     roundHalfAwayFromZero(input.salary * BigInt(hours) * BigInt(pct), norm * 10_000n);
+  const parts = input.parts && input.parts.length > 1 ? input.parts : null;
   return {
-    salary:
-      input.worked >= input.norm
+    salary: parts
+      ? roundHalfAwayFromZero(
+          parts.reduce((s, p) => s + p.salary * BigInt(p.worked), 0n),
+          norm,
+        )
+      : input.worked >= input.norm
         ? input.salary
         : roundHalfAwayFromZero(input.salary * BigInt(input.worked), norm),
     overtime: part(input.overtime, input.pay.overtime),

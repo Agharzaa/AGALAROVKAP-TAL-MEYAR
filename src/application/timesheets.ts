@@ -8,7 +8,13 @@
 import { eachDay, normHours, type WorkCalendar } from '../domain/calendar.js';
 import { DomainError } from '../domain/errors.js';
 import { type Minor } from '../domain/money.js';
-import { monthBounds, timesheetPay, type ExtraPay } from '../domain/payroll.js';
+import {
+  monthBounds,
+  salaryParts,
+  timesheetPay,
+  type ExtraPay,
+  type SalaryPeriod,
+} from '../domain/payroll.js';
 import { numberKey, parseText } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type {
@@ -411,7 +417,7 @@ export function timesheetPayOf(
   companyId: string,
   month: string,
   employeeId: string,
-  salary: Minor,
+  salary: Minor | readonly SalaryPeriod[],
   pay: ExtraPay,
   cal: WorkCalendar,
 ): { salary: Minor; overtime: Minor; holidayWork: Minor; night: Minor } | null {
@@ -425,9 +431,22 @@ export function timesheetPayOf(
   if (!r) return null;
   const days = daysOf(cal, month);
   const { first, last } = monthBounds(month);
-  const t = totals(JSON.parse(str(r.cells)) as Cell[], days);
+  const cells = JSON.parse(str(r.cells)) as Cell[];
+  const t = totals(cells, days);
+  // A salary changed within the month: the hours worked at each one (audit 8).
+  const parts = salaryParts(typeof salary === 'bigint' ? [{ from: '', salary }] : salary, month);
   return timesheetPay({
-    salary,
+    salary: parts.at(-1)?.salary ?? 0n,
+    parts: parts.map((p) => {
+      const at = days.flatMap((d, i) => (d.date >= p.from && d.date <= p.to ? [i] : []));
+      return {
+        salary: p.salary,
+        worked: totals(
+          at.map((i) => cells[i]!),
+          at.map((i) => days[i]!),
+        ).worked,
+      };
+    }),
     norm: normHours(cal, first, last) * 100,
     worked: t.worked,
     overtime: Number(r.overtime) + t.over,

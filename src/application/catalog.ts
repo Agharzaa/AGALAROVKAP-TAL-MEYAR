@@ -5,7 +5,7 @@ import { rates2026 } from '../domain/payroll.js';
 import { DomainError } from '../domain/errors.js';
 import { numberKey, parseDate, parseTaxId, parseText } from '../domain/values.js';
 import { parseMoney } from '../domain/money.js';
-import { isPayrollExpense } from './payroll.js';
+import { isPayrollExpense, salaryPeriods } from './payroll.js';
 import { seedCalendar } from './calendar.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type { Row } from '../infrastructure/sqlite/db.js';
@@ -529,6 +529,12 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
     throw new DomainError('İşdən çıxma tarixi işə qəbuldan əvvəl ola bilməz.', 'left');
   const salary = parseMoney(cmd.salary || '0', 'Aylıq əmək haqqı');
   if (salary < 0n) throw new DomainError('Əmək haqqı mənfi ola bilməz.', 'salary');
+  const salaryFrom = cmd.salaryFrom.trim()
+    ? parseDate(cmd.salaryFrom, 'Yeni maaşın qüvvəyə minmə tarixi')
+    : '';
+  const before = cmd.id
+    ? tx.db.get('SELECT salary FROM employees WHERE company_id=? AND id=?', cmd.companyId, cmd.id)
+    : undefined;
   let expenseSk: string[] = [];
   const code = cmd.expenseAccount.trim();
   if (code) {
@@ -562,7 +568,7 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
       'Gəlir vergisi güzəşti yalnız əsas iş yerində (əmək kitabçası olan yerdə) tətbiq olunur.',
       'exemption',
     );
-  return saveRow(
+  const saved = saveRow(
     tx,
     'employees',
     'İşçi',
@@ -590,6 +596,29 @@ export function saveEmployee(tx: Tx, cmd: CommandOf<'employee.save'>): CommandRe
     },
     name,
   );
+  // The dated salary (audit 8, QERARLAR 2026-10-28 §1): a new employee's from the start, a changed
+  // one from its day — earlier months keep theirs.
+  const id = saved.id!;
+  if (!salaryPeriods(tx.db, cmd.companyId, id).length)
+    tx.db.run('INSERT INTO employee_salaries VALUES(?,?,?,?)', cmd.companyId, id, '', salary);
+  else if (before && before.salary !== salary) {
+    const from = salaryFrom || `${tx.clock.today().slice(0, 7)}-01`;
+    const closed = String(tx.company(cmd.companyId).closed_through);
+    if (from <= closed)
+      throw new DomainError(
+        `Yeni maaş ${from} tarixindən: uçot dövrü ${closed} tarixinədək bağlanıb — tarix açıq dövrdən olmalıdır.`,
+        'salaryFrom',
+        'closed-period',
+      );
+    tx.db.run(
+      'DELETE FROM employee_salaries WHERE company_id=? AND employee_id=? AND valid_from>=?',
+      cmd.companyId,
+      id,
+      from,
+    );
+    tx.db.run('INSERT INTO employee_salaries VALUES(?,?,?,?)', cmd.companyId, id, from, salary);
+  }
+  return saved;
 }
 
 const itemLabels = {

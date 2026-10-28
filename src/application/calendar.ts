@@ -52,6 +52,12 @@ export function saveCalendar(tx: Tx, cmd: CommandOf<'calendar.save'>): CommandRe
         `Gün ${i + 1}: ${date} onsuz da iş günüdür — "iş gününə çevrilmiş" yalnız şənbə / bazar ola bilər.`,
         `days.${i}.kind`,
       );
+    // A shortened day is a working day before a holiday: never a Saturday or a Sunday (audit 8).
+    if (d.kind === 'short' && (w === 0 || w === 6))
+      throw new DomainError(
+        `Gün ${i + 1}: ${date} şənbə / bazardır — qısaldılmış gün yalnız iş günü (B.e.–C.) ola bilər.`,
+        `days.${i}.kind`,
+      );
     return { date, kind: d.kind, name: parseText(d.name, `Gün ${i + 1}: ad`, 120, false) };
   });
   // Months already closed keep their calendar: the payrolls of them were worked out by it.

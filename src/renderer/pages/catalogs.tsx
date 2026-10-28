@@ -503,6 +503,7 @@ export function EmployeesPage() {
     hired: '',
     left: '',
     salary: '',
+    salaryFrom: '',
     expenseAccount: '',
     expenseSk: [] as string[],
     mainJob: true,
@@ -532,6 +533,7 @@ export function EmployeesPage() {
             hired: e.hired,
             left: e.left,
             salary: e.salary === '0.00' ? '' : e.salary,
+            salaryFrom: '',
             expenseAccount: e.expenseAccount,
             expenseSk: e.expenseSk,
             mainJob: e.mainJob,
@@ -617,13 +619,37 @@ export function EmployeesPage() {
               onChange={(e) => setF({ ...f, tabNo: e.target.value })}
             />
           </Field>
-          <Field label="Aylıq əmək haqqı" hint="Əmək müqaviləsi üzrə, vergilərdən əvvəl">
+          <Field
+            label="Aylıq əmək haqqı"
+            hint={
+              current && current.salaries.length > 1
+                ? `Tarixçə: ${current.salaries
+                    .map(
+                      (p) =>
+                        `${p.from ? `${p.from.split('-').reverse().join('.')}-dən` : 'əvvəldən'} ${money(p.salary)}`,
+                    )
+                    .join(' · ')}`
+                : 'Əmək müqaviləsi üzrə, vergilərdən əvvəl'
+            }
+          >
             <input
               inputMode="decimal"
               value={f.salary}
               onChange={(e) => setF({ ...f, salary: e.target.value })}
             />
           </Field>
+          {current && f.salary.trim() !== (current.salary === '0.00' ? '' : current.salary) && (
+            <Field
+              label="Yeni maaş qüvvədədir"
+              hint="Bu tarixdən; boş — cari ayın 1-dən. Əvvəlki aylar köhnə maaşla qalır."
+            >
+              <DateInput
+                value={f.salaryFrom}
+                onChange={(salaryFrom) => setF({ ...f, salaryFrom })}
+                aria-label="Yeni maaşın tarixi"
+              />
+            </Field>
+          )}
           <Field label="İşə qəbul">
             <DateInput
               value={f.hired}

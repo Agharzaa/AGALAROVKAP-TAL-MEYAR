@@ -643,7 +643,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 
 **Qüsur tapılmayan yoxlamalar:** §9 misalı (1 000 → 865,00 / 1 189,00) və pillə sərhədləri; 200 güzəşti ilə şəxsi güzəştin ən böyüyü, 50 üstəlik; xəstəlik müavinəti gəlir vergisinin bazasında və 200 həddində, fondların bazasında deyil; məzuniyyət və kompensasiya tam (vergi + fondlar). Hər tutulma ayrıca qəpiyə yuvarlaqlaşır; aylara bölünmə (məzuniyyət — günlük × gün, sonuncu ay qalan; xəstəlik — işəgötürənin günlərinə mütənasib, sonuncu ay qalan) cəmi qəpikbəqəpik saxlayır, təqvim sonradan dəyişsə də. Tutulmalar: Dt 533 / Kt hesab, vergi bazası dəyişmir, ödəniləcəkdən çox ola bilməz. 533: yazılışların Kt-si = gross + xəstəlik = vərəqənin "hesablanıb"ı, Dt-si = tutulmalar; storno mənfi məbləğlə olduğu üçün hesablaşmalar və vərəqə düzəlişdən sonra şişmir. Bağlı dövr: əmək haqqı, ləğv, yoxluq (köhnə və yeni başlama tarixi), tabel, təqvim (dəyişən gün), dərəcələr (istifadə olunmuş dəst və onun aralığına yeni dəst) — hamısı rədd; trigger-lər də. 2026 təqvimi: 261 iş günü − 20 bayram / köçürülmüş = 241, 241 × 8 − 6 qısaldılmış = 1 922; qısaldılmış günlər bayramdan əvvəlki iş günüdür (7 mart, 14 iyun, 7 noyabr şənbə / bazardır). Miqrasiyalar: v17 / v18 rollar `role=''` və ad üzrə (ad şirkətdə unikal — iki sətir eyni rolu ala bilməz), v19 cədvəli SQLite qaydası ilə yenidən qurur (sütun sırası v18 ilə eyni). İstifadəçinin real bazası (`meyar-v3.sqlite`, sxem v13; yalnız oxunaraq, `VACUUM INTO` surəti üzərində) — v14–v20 birdən keçir; işçi və 533 yazılışı yoxdur, iki şirkətin "Əmək haqqı" elementi `salary` rolunu alır.
 
-**Açıq suallar və müşahidələr (istifadəçiyə və mühasibə, düzəldilmədi):**
+**Açıq suallar — qərarlaşdırılıb (28.10.2026, istifadəçi: "davam et, düzəlt hamısını"; `docs/QERARLAR.md` 2026-10-28) və 0.9.4-də tətbiq olunub.** Auditin ilkin mətni:
 
 1. **Müqavilə maaşı tarixli deyil.** Kartdakı maaş artırılanda keçən açıq ayın əmək haqqını yenidən doldurmaq onu yeni maaşla yazır (qüsur 3 yalnız yalançı "köhnəlib"i aradan qaldırdı). Tövsiyə: maaşın da dərəcələr kimi "tarixdən qüvvədə" tarixçəsi (kiçik mərhələ).
 2. **Orta qazancın ayları:** məzuniyyət ortasına məzuniyyət / xəstəlik olan ayların azalmış maaşı da daxildir (ay tam sayılır). NK-nin 137 saylı qərarına görə belə aylar / günlər çıxılmalı ola bilər — mühasib təsdiq etsin; lazım olarsa günlərlə hesab.
@@ -652,6 +652,16 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 5. Təqvim kitabçasında "qısaldılmış gün" şənbə / bazar ola bilir (onu iş günü edir) — mühasib səhv seçsə xəbərdarlıq yoxdur.
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 251, `npm run test:ui` 49, `npm run test:perf` keçir (300 sətirli sənədin açılışı köhnəlmə yoxlaması ilə 28 ms; hədd 1 s — perf testinə əlavə olundu). Electron və `dvx-smoke` işlədilmədi (pəncərə açır). **0.9.3** main-ə push edilir.
+
+## 0.9.4 — mərhələ 8 auditinin açıq sualları həll olundu (28.10.2026, QERARLAR 2026-10-28)
+
+- **Tarixli maaş** (sxem v21, `employee_salaries`): kartda maaş dəyişəndə "Yeni maaş qüvvədədir" tarixi (boş — cari ayın 1-i), tarixçə kartda görünür; bağlı dövrə tarix qoyulmur. Ayın ortasında dəyişən maaş günlərə (tabeldə — saatlara) görə; köhnəlmə yoxlaması da tarixli maaşla — artım keçən ayı köhnəltmir.
+- **Məzuniyyətin ortası** məzuniyyət / ödənişsiz / xəstəlik günü olan ayları çıxır (qalmırsa — hamısı); əsasda çıxılan aylar.
+- **Davam vərəqəsi** əvvəlki vərəqə dəyişəndə / ləğv ediləndə özü yenidən hesablanır (bağlı dövrdəki — xəbərdarlıq).
+- **Əmək haqqı reyestri:** çıxarışda işçi tanınmayan ödəniş işçilərin 533 borclarının cəminə bərabərdirsə — işçilər üzrə sətirlərə bölünür.
+- **Təqvim:** qısaldılmış gün yalnız B.e.–C.
+- Testlər: `tests/integration/payroll-decisions.test.ts` (5). `npm run typecheck`, `npm test` 256, `npm run test:ui` 49, `npm run test:perf` keçir. Real bazanın (`meyar-v3.sqlite`, v13) surəti v14–v21-ə təmiz keçir. Electron işlədilmədi.
+- **Növbəti:** mühasibin dərəcələri, əmsalları, təqvimi və 2026-10-28 qaydalarını təsdiqi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

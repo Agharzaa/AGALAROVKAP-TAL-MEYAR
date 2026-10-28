@@ -334,6 +334,8 @@ export interface EmployeeView {
   hired: string;
   left: string;
   salary: string;
+  /** The dated contract salary (audit 8): '' — from the start. */
+  salaries: { from: string; salary: string }[];
   expenseAccount: string;
   expenseSk: string[];
   /** Stage 8c. */

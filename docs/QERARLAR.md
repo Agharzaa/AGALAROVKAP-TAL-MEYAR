@@ -393,15 +393,19 @@ Plan: `docs/MERHELE-6-DVX-AVTOMAT.md`. İstifadəçi sualı: "DVX-dən e-qaimən
 15. **Başlıqda ümumi "Dövr" yoxdur** (istifadəçi, 25.10.2026: "ümumi dövr lazım deyil, bölmələrdə o aralıq var"). Hər hesabat və siyahının öz dövr / ay sahəsi var; ilkin dəyər — cari ay, yeni sənədin tarixi — bu gün. "DVX ↔ uçot" tutuşdurmasına öz ay seçicisi verildi.
 16. **Dövriyyə balansı və hesab kartı 1C klassik görünüşdə** (istifadəçinin seçimi, A variantı; 25.10.2026). §14-ü əvəz edir: bölmə / maddə başlıqları **yoxdur** (1C-də yoxdur). Dövriyyə balansı: hesabat vərəqi (şirkət, "Hesablar üzrə dövriyyə-saldo cədvəli", dövr), bütün xanalar xətli, solda qruplama işarələri ⊞ / ⊟, sütunlar "Dövrün əvvəlinə saldo / Dövr üzrə dövriyyə / Dövrün sonuna saldo", birinci səviyyəli hesablar qalın, subkonto kursivlə. Hesab kartı: "<hesab> hesabının kartı", sütunlar Tarix · Sənəd · Əməliyyat (Debet — hesab, subkonto; Kredit — hesab, subkonto) · Dövriyyə Dt / Kt · Cari saldo (D / K, məbləğ); "Dövrün əvvəlinə saldo", "Dövriyyə", "Dövrün sonuna saldo" sətirləri; yuxarı hesabın kartında sətrin öz subhesabı (223.01) görünür.
 17. **Auditdən sonra (25.10.2026, istifadəçi: "proqramçı və baş mühasib kimi audit et"):**
-   - ay bağlanışında ƏDV əvəzləşdirməsi təsdiqlənmiş e-qaimənin DVX-dəki ƏDV-sindən çox ola bilməz; qaimədəki artıq ƏDV 241-də qalır və bağlanış qeydində göstərilir (§13 ilə saxlanılan fərqli qaimə əvəzləşdirməni şişirtməsin);
-   - §13-ün xəbərdarlığı qaimə saxlananda dərhal redaktorda görünür, Ctrl+Enter ilə də pəncərə bağlanmır;
-   - "DVX-dən yenilə" kabinetdə seçilmiş status / növ filtrini götürmür — həmişə bütün statuslar və növlər;
-   - bir səhifənin siyahı cavabı gəlməyibsə yeniləmə "yarımçıq" adlanır; ixrac səhifələməni nəzərə almırsa eyni səhifə təkrar yüklənmir;
-   - DBC-nin Excel sütunları ekrandakı 1C adları ilədir.
+
+- ay bağlanışında ƏDV əvəzləşdirməsi təsdiqlənmiş e-qaimənin DVX-dəki ƏDV-sindən çox ola bilməz; qaimədəki artıq ƏDV 241-də qalır və bağlanış qeydində göstərilir (§13 ilə saxlanılan fərqli qaimə əvəzləşdirməni şişirtməsin);
+- §13-ün xəbərdarlığı qaimə saxlananda dərhal redaktorda görünür, Ctrl+Enter ilə də pəncərə bağlanmır;
+- "DVX-dən yenilə" kabinetdə seçilmiş status / növ filtrini götürmür — həmişə bütün statuslar və növlər;
+- bir səhifənin siyahı cavabı gəlməyibsə yeniləmə "yarımçıq" adlanır; ixrac səhifələməni nəzərə almırsa eyni səhifə təkrar yüklənmir;
+- DBC-nin Excel sütunları ekrandakı 1C adları ilədir.
+
 18. **6c-nin tərkibi** (istifadəçinin seçimi, 25.10.2026; mərhələ 6 §11 sual 4 və 6-ya cavab):
-   - **"Yenilənməyib" xəbərdarlığı — 7 gün** (tövsiyə): İş masasında "DVX N gündür yenilənməyib", əgər istiqamət üzrə son yeniləmə (DVX-dən yenilə və ya Excel faylı) 7 gündən köhnədirsə; ay bağlanışında — bağlanan ayın sonundan sonra heç yenilənməyibsə. Yalnız DVX ilə işləyən istiqamətdə (heç olmasa bir yüklənmə və ya yeniləmə cəhdi olub).
-   - 6c-yə daxildir: son yeniləmənin vaxtı və nəticəsi qutuda (uğursuz cəhd də yazılır), gələn + göndərilən birdən, gedişat və "Ləğv et", "Mallar üzrə" sətirlərinin avtomatik gəlməsi (real formatı ilk real yeniləmədə yoxlanır).
-   - **Göndərmə (Meyar-dan DVX-ə e-qaimə yaratmaq) — sonra, ayrıca mərhələ** (tövsiyə). 6c yalnız oxuyur.
+
+- **"Yenilənməyib" xəbərdarlığı — 7 gün** (tövsiyə): İş masasında "DVX N gündür yenilənməyib", əgər istiqamət üzrə son yeniləmə (DVX-dən yenilə və ya Excel faylı) 7 gündən köhnədirsə; ay bağlanışında — bağlanan ayın sonundan sonra heç yenilənməyibsə. Yalnız DVX ilə işləyən istiqamətdə (heç olmasa bir yüklənmə və ya yeniləmə cəhdi olub).
+- 6c-yə daxildir: son yeniləmənin vaxtı və nəticəsi qutuda (uğursuz cəhd də yazılır), gələn + göndərilən birdən, gedişat və "Ləğv et", "Mallar üzrə" sətirlərinin avtomatik gəlməsi (real formatı ilk real yeniləmədə yoxlanır).
+- **Göndərmə (Meyar-dan DVX-ə e-qaimə yaratmaq) — sonra, ayrıca mərhələ** (tövsiyə). 6c yalnız oxuyur.
+
 19. **6c-4 ("Mallar üzrə" avtomatik) — hələlik edilmir** (istifadəçinin seçimi, tövsiyə; 25.10.2026). Portalın indiki JS-i (25.10.2026, `index.4f35dc7b7e.js`) göstərir ki, e-qaimə siyahısının Excel ixracında "Mallar üzrə" yoxdur: növlər — "Qaimələr üzrə" (`excel`), "Ödəyicilər üzrə" (`excel-batch`), "Qaytarılmış mallar üzrə" (`excel-returned-products-statement`). Mal sətirləri yalnız hər e-qaimənin öz JSON sorğusu ilə (`GET …/v2/invoice/{id}`) və ya `find.<qutu>/byProducts` siyahısı ilə alına bilər — sənədləşdirilməmiş JSON, hər e-qaimə üçün ayrıca sorğu. E-qaimələr qaimə yekunu ilə uçota alınır (MG Transport — xidmətlər); anbar uçotu lazım olan şirkət gələndə bu işə qayıdılır. Mərhələ 6 §11 sual 4-ün davamı: Meyar JSON-u öz çeviricisi ilə oxumur qaydası qüvvədə qalır.
 
 ## 2026-10-26 — Mərhələ 7: əsas vəsaitlər və amortizasiya
@@ -439,3 +443,13 @@ Plan: `docs/MERHELE-8-EMEK-HAQQI.md`. İstifadəçi planı təsdiqlədi, bütün
 11. **Tutulmalar:** sətirdə məbləğ + hesab + subkonto (aliment — 538 / kontragent + müqavilə, avansın qaytarılması — 244 / işçi); Dt 533 / Kt hesab; vergi bazasını dəyişmir.
 12. **Məzuniyyət / xəstəlik sənədi uçotdakı ayın əmək haqqından sonra dəyişsə:** əmək haqqı sənədi "köhnəlib" kimi göstərilir, ay bağlanışı bloklanır — əmək haqqını yenidən saxlamaq (düzəliş) kifayətdir.
 13. **8d (istifadəçi, 27.10.2026: "məzuniyyət və hər şey 1C-dəkindən yaxşı olmalıdır, işçilərin tabeli də"):** istehsalat təqvimi (2026 — NK-nin 362 saylı qərarı), tabel (ayda bir sənəd, işçi × gün, kod + saat), maaş tabelin saatları ilə; artıq iş × 2, bayram / istirahət günü iş × 2, gecə + 40% (dərəcələr dəstində, **mühasib təsdiq edir**); məzuniyyət bayramsız günlərlə və aylara bölünərək; məzuniyyət hüququ (21 + staja görə 2 / 4 / 6 gün + əlavə), qalıq və işdən çıxanda kompensasiya. Plan §13.
+
+## 2026-10-28 — Mərhələ 8 auditinin açıq sualları
+
+İstifadəçi (28.10.2026): "davam et, düzəlt hamısını" — beş sualın hamısı tövsiyə ilə həll olundu (0.9.4). Qaydalar **mühasib təsdiq edir**:
+
+1. **Müqavilə maaşı tarixlidir** (sxem v21, `employee_salaries`). İşçinin kartında maaş dəyişəndə "Yeni maaş qüvvədədir" tarixi yazılır (boş — cari ayın 1-i); əvvəlki aylar köhnə maaşla qalır, bağlı dövrə tarix qoyulmur. Ayın ortasında dəyişən maaş günlərə görə (təqvimlə işləmiş günlər, tabeldə — saatlar) hər günün maaşı ilə; tabelin əlavə ödənişləri ayın sonundakı maaşın saatlığı ilə. Kartda maaşın tarixçəsi görünür.
+2. **Məzuniyyətin orta qazancı:** əvvəlki 12 ayın içində məzuniyyət, ödənişsiz məzuniyyət və ya xəstəlik günü olan ay tam ay sayılmır və çıxılır (işə qəbul ayı kimi); belə ay qalmırsa — hamısı. Əsasda çıxılan aylar yazılır.
+3. **Davam vərəqəsi:** əvvəlki vərəqə dəyişəndə və ya ləğv ediləndə ardınca gələn (bitişik) vərəqələr özü yenidən hesablanır (versiya +1, tarixçə və audit); bağlı dövrdəki davam dəyişmir, xəbərdarlıq deyir.
+4. **Bank çıxarışında əmək haqqı reyestri:** işçi tanınmayan əmək haqqı ödənişi 533 üzrə borcu olan iki və ya daha çox işçinin borclarının cəminə tam bərabərdirsə — bank sənədi işçilər üzrə sətirlərə bölünərək təklif olunur; bərabər deyilsə — mühasib seçir.
+5. **Qısaldılmış gün** istehsalat təqvimində yalnız iş günü (B.e.–C.) ola bilər.

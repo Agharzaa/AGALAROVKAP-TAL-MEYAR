@@ -219,7 +219,7 @@ test('audit: taxes and funds — "paid" is what was transferred, not what is lef
   assert.deepEqual([row.accrued, row.paid, row.closing], ['24.00', '0.00', '34.00']);
 });
 
-test('audit: schema v13 → v20 at once keeps the employees and seeds the payroll', () => {
+test('audit: schema v13 → current at once keeps the employees and seeds the payroll', () => {
   const dir = mkdtempSync(join(tmpdir(), 'meyar-v13-'));
   const path = join(dir, 'm.sqlite');
   const raw = new DatabaseSync(path, { enableForeignKeyConstraints: false });
@@ -237,8 +237,9 @@ INSERT INTO items(id,company_id,kind,name,archived) VALUES('i1','a','expenseItem
       db.get("SELECT role FROM items WHERE id='i1'")!.role,
       Number(db.get("SELECT COUNT(*) AS n FROM payroll_rates WHERE company_id='a'")!.n),
       Number(db.get("SELECT COUNT(*) AS n FROM work_calendar WHERE company_id='a'")!.n),
+      Number(db.get("SELECT COUNT(*) AS n FROM employee_salaries WHERE employee_id='e'")!.n),
     ],
-    [{ fin: '5ABC123', salary: 0n, v: 21n }, 'salary', 1, 31],
+    [{ fin: '5ABC123', salary: 0n, v: 21n }, 'salary', 1, 31, 1],
   );
   db.close();
   rmSync(dir, { recursive: true, force: true });

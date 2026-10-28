@@ -346,6 +346,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     hired: z.string().max(10).default(''),
     left: z.string().max(10).default(''),
     salary: decimal.default(''),
+    /** A changed salary is in force from this day ('' — the current month's first day). */
+    salaryFrom: z.string().max(10).default(''),
     expenseAccount: code.default(''),
     expenseSk: z.array(z.string().max(120)).max(3).default([]),
     /** Stage 8c: income tax exemptions (VM 102) — only at the main workplace. */

@@ -228,13 +228,29 @@ function workOut(
     };
   if (kind === 'vacation' || kind === 'compensation') {
     // The 12 full calendar months before the vacation month; a month the employee was hired in
-    // after its first day is not a full month.
+    // after its first day is not a full month, nor one with a day of vacation, unpaid leave or sick
+    // leave (QERARLAR 2026-10-28 §2) — unless no month is left without one.
     const last = previousMonth(monthOf(from));
     let first = last;
     for (let i = 1; i < 12; i++) first = previousMonth(first);
-    const months = earnings(tx.db, companyId, employeeId, first, last)
-      .filter((r) => !(hired > `${str(r.month)}-01`))
-      .map((r) => r.work as bigint);
+    const away = new Set<string>();
+    for (const r of tx.db.all(
+      `SELECT date_from, date_to FROM payroll_absences WHERE company_id=? AND employee_id=? AND status='posted'
+         AND kind<>'compensation' AND id<>? AND date_from<=? AND date_to>=?`,
+      companyId,
+      employeeId,
+      id,
+      monthBounds(last).last,
+      `${first}-01`,
+    ))
+      for (const d of eachDay(str(r.date_from), str(r.date_to))) away.add(monthOf(d));
+    const full = earnings(tx.db, companyId, employeeId, first, last).filter(
+      (r) => !(hired > `${str(r.month)}-01`),
+    );
+    const worked = full.filter((r) => !away.has(str(r.month)));
+    const used = worked.length ? worked : full;
+    const skipped = full.filter((r) => !used.includes(r)).map((r) => str(r.month));
+    const months = used.map((r) => r.work as bigint);
     if (manual === null && !months.length)
       throw new DomainError(
         'Əvvəlki aylar üçün Meyar-da əmək haqqı yoxdur: orta aylıq qazancı əl ilə yazın.',
@@ -251,7 +267,7 @@ function workOut(
         (kind === 'compensation' ? `İstifadə olunmamış ${days} gün. ` : '') +
         (manual !== null
           ? `Orta aylıq (mühasib): ${show(v.average)} ₼; günlük ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`
-          : `${months.length} ay (${first} – ${last}): ${show(months.reduce((s, m) => s + m, 0n))} ₼ / ${months.length} = ${show(v.average)} ₼; ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`),
+          : `${months.length} ay (${first} – ${last}${skipped.length ? `; məzuniyyət / xəstəlik olan aylar çıxılıb: ${skipped.join(', ')}` : ''}): ${show(months.reduce((s, m) => s + m, 0n))} ₼ / ${months.length} = ${show(v.average)} ₼; ${show(v.average)} / 30,4 = ${show(v.daily)} ₼ × ${days} gün.`),
       warning: '',
     };
   }
@@ -550,8 +566,117 @@ export function saveAbsence(tx: Tx, cmd: CommandOf<'absence.save'>): CommandResu
     kind === 'compensation' && !str(employee.left_on)
       ? `${name}: işçinin kartında işdən çıxma tarixi yazılmayıb.`
       : '';
-  const warning = [w.warning, beyond, leftOn, stale].filter(Boolean).join(' ');
+  const following =
+    kind === 'sick'
+      ? [
+          ...new Set([
+            ...(existing
+              ? [recomputeFollowing(tx, cmd.companyId, employee, str(existing.date_to))]
+              : []),
+            recomputeFollowing(tx, cmd.companyId, employee, to),
+          ]),
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : '';
+  const warning = [w.warning, beyond, leftOn, stale, following].filter(Boolean).join(' ');
   return { id, version, number, ...(warning ? { warning } : {}) };
+}
+
+const dayAfter = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * The sick leaves continuing the one that ends on `end` (QERARLAR 2026-10-28 §3): worked out again,
+ * since the employer days left and the four quarters are the illness's. A sheet in a closed period
+ * stays as it is (the warning says so).
+ */
+function recomputeFollowing(tx: Tx, companyId: string, employee: Row, end: string): string {
+  const closed = str(tx.company(companyId).closed_through);
+  const changed: string[] = [];
+  const kept: string[] = [];
+  const touched: [string, string][] = [];
+  for (let date = end; ;) {
+    const a = tx.db.get(
+      `SELECT * FROM payroll_absences WHERE company_id=? AND employee_id=? AND kind='sick' AND status='posted'
+         AND date_from=?`,
+      companyId,
+      str(employee.id),
+      dayAfter(date),
+    );
+    if (!a) break;
+    date = str(a.date_to);
+    if (str(a.date_from) <= closed) {
+      kept.push(str(a.number));
+      continue;
+    }
+    const manual = str(a.manual) ? parseMoney(str(a.manual)) : null;
+    const w = workOut(
+      tx,
+      companyId,
+      'sick',
+      employee,
+      str(a.date_from),
+      str(a.date_to),
+      Number(a.days),
+      manual,
+      Number(a.percent),
+      a.employer_all === 1n,
+      str(a.id),
+    );
+    if (
+      w.amount === a.amount &&
+      w.daily === a.daily &&
+      w.employerDays === Number(a.employer_days) &&
+      w.basis === str(a.basis)
+    )
+      continue;
+    const version = Number(a.version) + 1;
+    tx.db.run(
+      `UPDATE payroll_absences SET average=?,daily=?,employer_days=?,fund_days=?,amount=?,basis=?,version=?,
+         updated_at=? WHERE id=?`,
+      w.average,
+      w.daily,
+      w.employerDays,
+      w.fundDays,
+      w.amount,
+      w.basis,
+      version,
+      tx.clock.now(),
+      str(a.id),
+    );
+    tx.history(companyId, 'absence', str(a.id), version, 'posted', {
+      kind: 'sick',
+      number: str(a.number),
+      employee: str(employee.name),
+      from: str(a.date_from),
+      to: str(a.date_to),
+      amount: formatMinor(w.amount),
+      basis: w.basis,
+    });
+    tx.audit(
+      companyId,
+      'Yenidən hesablandı',
+      absenceLabel.sick,
+      str(a.id),
+      `${str(a.number)} · əvvəlki vərəqə dəyişdi · ${formatMinor(w.amount)} AZN`,
+    );
+    changed.push(str(a.number));
+    touched.push([str(a.date_from), str(a.date_to)]);
+  }
+  const stale = touched.length
+    ? staleWarning(tx, companyId, touched[0]![0], touched.at(-1)![1])
+    : '';
+  return [
+    changed.length ? `Davam vərəqəsi yenidən hesablandı: ${changed.join(', ')}.` : '',
+    kept.length ? `Bağlı dövrdəki davam vərəqəsi dəyişmədi: ${kept.join(', ')}.` : '',
+    stale,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function cancelAbsence(tx: Tx, cmd: CommandOf<'absence.cancel'>): CommandResult {
@@ -583,7 +708,17 @@ export function cancelAbsence(tx: Tx, cmd: CommandOf<'absence.cancel'>): Command
     cmd.id,
     `${str(row.number)} · ${reason}`,
   );
-  const warning = staleWarning(tx, cmd.companyId, str(row.date_from), str(row.date_to));
+  const employee = tx.db.get(
+    'SELECT * FROM employees WHERE company_id=? AND id=?',
+    cmd.companyId,
+    str(row.employee_id),
+  )!;
+  const warning = [
+    staleWarning(tx, cmd.companyId, str(row.date_from), str(row.date_to)),
+    kind === 'sick' ? recomputeFollowing(tx, cmd.companyId, employee, str(row.date_to)) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return { id: cmd.id, version, ...(warning ? { warning } : {}) };
 }
 

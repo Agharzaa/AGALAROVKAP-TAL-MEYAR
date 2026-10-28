@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1578,6 +1578,21 @@ ALTER TABLE payroll_lines ADD COLUMN base_salary INTEGER;
 ALTER TABLE payroll_lines ADD COLUMN auto_salary INTEGER;
 `;
 
+// v21 — stage 8 audit, open question 1 (QERARLAR 2026-10-28): the contract salary is dated. Every
+// employee starts with the card's salary from the start (''); a change is a row from its day.
+
+const v21 = `
+CREATE TABLE employee_salaries(
+  company_id TEXT NOT NULL,
+  employee_id TEXT NOT NULL,
+  valid_from TEXT NOT NULL,
+  salary INTEGER NOT NULL,
+  PRIMARY KEY(company_id,employee_id,valid_from),
+  FOREIGN KEY(company_id,employee_id) REFERENCES employees(company_id,id)
+);
+INSERT INTO employee_salaries SELECT company_id,id,'',salary FROM employees;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1599,4 +1614,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 18, sql: v18 },
   { version: 19, sql: v19, foreignKeysOff: true },
   { version: 20, sql: v20 },
+  { version: 21, sql: v21 },
 ];

@@ -21,6 +21,7 @@ import {
   type Exemption,
   type ExtraPay,
   type PayrollRates,
+  type SalaryPeriod,
   type RatesInput,
 } from '../domain/payroll.js';
 import { checkPostings, storno, type Posting } from '../domain/posting.js';
@@ -237,33 +238,54 @@ interface Line {
 
 const noExtra = { overtime: 0n, holidayWork: 0n, night: 0n };
 
+/** The employee's dated contract salary (audit 8, QERARLAR 2026-10-28 §1): '' — from the start. */
+export function salaryPeriods(db: Db, companyId: string, employeeId: string): SalaryPeriod[] {
+  return db
+    .all(
+      'SELECT valid_from, salary FROM employee_salaries WHERE company_id=? AND employee_id=? ORDER BY valid_from',
+      companyId,
+      employeeId,
+    )
+    .map((r) => ({ from: str(r.valid_from), salary: r.salary as bigint }));
+}
+
+/** The contract salary in force on a day. */
+export function salaryOn(periods: readonly SalaryPeriod[], date: string): Minor {
+  let out = 0n;
+  for (const p of periods) if (p.from <= date) out = p.salary;
+  return out;
+}
+
 /**
- * What the month's working time gives an employee at the contract salary `base`: the salary for the
- * days worked — by the month's timesheet when it has the employee (8d), else by the calendar less
- * the absences — and the timesheet's overtime, day-off and night pay.
+ * What the month's working time gives an employee at the contract salaries in force in it: the
+ * salary for the days worked — by the month's timesheet when it has the employee (8d), else by the
+ * calendar less the absences — and the timesheet's overtime, day-off and night pay.
  */
 function workedPay(
   db: Db,
   companyId: string,
   e: Row,
   month: string,
-  base: Minor,
   pay: ExtraPay | undefined,
   cal: WorkCalendar,
-): { salary: Minor; extra: typeof noExtra; byTimesheet: boolean } {
+): { salary: Minor; extra: typeof noExtra; byTimesheet: boolean; base: Minor } {
   const id = str(e.id);
-  const ts = pay ? timesheetPayOf(db, companyId, month, id, base, pay, cal) : null;
+  const periods = salaryPeriods(db, companyId, id);
+  const base = salaryOn(periods, monthBounds(month).last);
+  const ts = pay ? timesheetPayOf(db, companyId, month, id, periods, pay, cal) : null;
   if (ts)
     return {
       salary: ts.salary,
       extra: { overtime: ts.overtime, holidayWork: ts.holidayWork, night: ts.night },
       byTimesheet: true,
+      base,
     };
   const away = awayIn(db, companyId, id, month);
   return {
-    salary: salaryFor(base, month, str(e.hired), str(e.left_on), away, cal),
+    salary: salaryFor(periods, month, str(e.hired), str(e.left_on), away, cal),
     extra: noExtra,
     byTimesheet: false,
+    base,
   };
 }
 
@@ -318,7 +340,7 @@ function readLines(
     const pay = absencePay(tx.db, companyId, l.employeeId, month, cal);
     // The timesheet's overtime, work on days off and night hours, at the contract salary (8d); the
     // salary the working time gives is kept to tell when the line goes stale (audit).
-    const worked = workedPay(tx.db, companyId, e, month, e.salary as bigint, rates.pay, cal);
+    const worked = workedPay(tx.db, companyId, e, month, rates.pay, cal);
     const extra = worked.extra;
     const extras = extra.overtime + extra.holidayWork + extra.night;
     if (salary + bonus + pay.vacation + pay.sick + extras <= 0n)
@@ -417,7 +439,7 @@ function readLines(
       vacation: pay.vacation,
       sick: pay.sick,
       extra,
-      baseSalary: e.salary as bigint,
+      baseSalary: worked.base,
       autoSalary: worked.salary,
       deductions,
       deducted,
@@ -689,7 +711,7 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
   const lines = rows.map((l) => lineView(l, names));
   // An absence, the timesheet, the calendar or the hire dates changed after the payroll was posted
   // (8c, 8d; QERARLAR 2026-10-27 §12; audit): what they give now is not what the line was saved
-  // with — at the contract salary of then, so a later raise does not touch an earlier month.
+  // with — at the dated contract salary, so a later raise does not touch an earlier month.
   const companyId = str(r.company_id);
   const month = str(r.month);
   // A closed month's payroll stays as it was closed: nothing there can be saved again.
@@ -705,8 +727,7 @@ function documentView(db: Db, r: Row): PayrollDocumentView {
       const e = names.get(id);
       if (!e) continue;
       const a = absencePay(db, companyId, id, month, cal);
-      const base = (l.base_salary ?? e.salary) as bigint;
-      const w = workedPay(db, companyId, e, month, base, pay, cal);
+      const w = workedPay(db, companyId, e, month, pay, cal);
       if (
         a.vacation !== l.vacation ||
         a.sick !== l.sick ||
@@ -789,7 +810,7 @@ export function payrollFill(db: Db, companyId: string, monthInput: string): Payr
       const id = str(e.id);
       const pay = absencePay(db, companyId, id, month, cal);
       // By the month's timesheet when there is one (8d), else by the calendar and the absences.
-      const w = workedPay(db, companyId, e, month, e.salary as bigint, rates?.rates.pay, cal);
+      const w = workedPay(db, companyId, e, month, rates?.rates.pay, cal);
       const extras = w.extra.overtime + w.extra.holidayWork + w.extra.night;
       if (!w.salary && !pay.vacation && !pay.sick && !extras) return [];
       return [

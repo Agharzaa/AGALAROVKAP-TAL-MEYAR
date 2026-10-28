@@ -399,6 +399,36 @@ function employeeOf(ctx: ProposalContext, r: Row): { id: string; name: string; b
   return byName.length === 1 ? { id: byName[0]!.id, name: byName[0]!.name, by: 'ad, soyad' } : null;
 }
 
+/**
+ * A payment that is exactly what two or more employees are owed on 533 that day: one line per
+ * employee with their balance (a salary register sent to the bank in one transfer).
+ */
+function salaryRegister(ctx: ProposalContext, r: Row): StatementProposal['lines'] {
+  const owed = ctx.db
+    .all(
+      `SELECT s, SUM(a) AS a FROM (
+         SELECT kt_s1 AS s, amount AS a FROM postings WHERE company_id=?1 AND kt_account='533' AND date<=?2
+         UNION ALL SELECT dt_s1, -amount FROM postings WHERE company_id=?1 AND dt_account='533' AND date<=?2)
+       GROUP BY s HAVING SUM(a)>0`,
+      ctx.companyId,
+      String(r.date),
+    )
+    .filter((x) => ctx.employees.some((e) => e.id === String(x.s)));
+  if (owed.length < 2) return undefined;
+  const total = owed.reduce((n, x) => n + (x.a as bigint), 0n);
+  if (total !== (r.amount as bigint)) return undefined;
+  const names = new Map(ctx.employees.map((e) => [e.id, e.name]));
+  return owed
+    .sort((a, b) => names.get(String(a.s))!.localeCompare(names.get(String(b.s))!, 'az'))
+    .map((x) => ({
+      account: '533',
+      sk: [String(x.s)],
+      amount: money(x.a as bigint),
+      cashFlowItem: '',
+      memo: `Əmək haqqı: ${names.get(String(x.s))}`,
+    }));
+}
+
 function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext {
   const company = db.get('SELECT tax_id, closed_through FROM companies WHERE id=?', companyId)!;
   const partners = db.all(
@@ -526,6 +556,7 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
   const suffix = ctx.bankCurrency === 'AZN' ? '.01' : '.02';
   let account = '';
   let sk: string[] = [];
+  let lines: StatementProposal['lines'];
   const p = s.partnerId ?? '';
   switch (s.kind) {
     case 'settlement':
@@ -551,7 +582,15 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       if (e) {
         sk = [e.id];
         notes.push(`İşçi: ${e.name} (${e.by}).`);
-      } else notes.push('İşçi tanınmadı — 533-ün subkontosunu seçin.');
+        break;
+      }
+      // A salary register (QERARLAR 2026-10-28 §4): one payment of what every employee is owed.
+      lines = direction === 'out' ? salaryRegister(ctx, r) : undefined;
+      if (lines)
+        notes.push(
+          `Əmək haqqı reyestri: ${lines.length} işçi — məbləğ 533 üzrə borcların cəminə bərabərdir, işçilərə bölündü.`,
+        );
+      else notes.push('İşçi tanınmadı — 533-ün subkontosunu seçin.');
       break;
     }
     case 'transfer':
@@ -586,6 +625,7 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
     account,
     sk,
     ...(code ? { budgetCode: code } : {}),
+    ...(lines ? { lines } : {}),
     ...(s.createPartner && !p && String(r.counterparty_tax_id)
       ? { newPartner: { name: String(r.counterparty), taxId: String(r.counterparty_tax_id) } }
       : {}),

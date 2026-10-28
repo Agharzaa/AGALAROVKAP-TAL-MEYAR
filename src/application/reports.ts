@@ -1357,6 +1357,16 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       const co = company(db, q.companyId);
       const c = q.companyId;
       const chart = loadChart(db, c);
+      // The dated contract salaries (audit 8), by employee.
+      const salaries = new Map<string, { from: string; salary: bigint }[]>();
+      for (const r of db.all(
+        'SELECT employee_id, valid_from, salary FROM employee_salaries WHERE company_id=? ORDER BY valid_from',
+        c,
+      )) {
+        const list = salaries.get(str(r.employee_id)) ?? [];
+        list.push({ from: str(r.valid_from), salary: r.salary as bigint });
+        salaries.set(str(r.employee_id), list);
+      }
       const used = new Set(
         db
           .all('SELECT DISTINCT account FROM registers WHERE company_id=?', c)
@@ -1448,6 +1458,10 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             hired: str(r.hired),
             left: str(r.left_on),
             salary: money(r.salary as bigint),
+            salaries: (salaries.get(str(r.id)) ?? []).map((p) => ({
+              from: p.from,
+              salary: money(p.salary),
+            })),
             expenseAccount: str(r.expense_account),
             expenseSk: JSON.parse(str(r.expense_sk)) as string[],
             mainJob: r.main_job === 1n,

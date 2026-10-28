@@ -144,7 +144,7 @@ export function BankEditor({
                   ...blank(l.account),
                   sk: l.sk,
                   amount: toField(l.amount),
-                  cashFlowItem: l.cashFlowItem,
+                  cashFlowItem: l.cashFlowItem || blank(l.account).cashFlowItem,
                   memo: l.memo,
                 }))
               : [
