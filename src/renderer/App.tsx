@@ -86,6 +86,7 @@ import { CashBookPage, CashDocumentsPage, CashEditor } from './pages/cash';
 import { RatesPage, RevaluationPage } from './pages/rates';
 import { ClosingPage } from './pages/closing';
 import { CashFlowPage, DashboardPage, ProfitLossPage, VatSummaryPage } from './pages/reports';
+import { DeclarationPage } from './pages/declarations';
 import { StatementsPage } from './pages/statements';
 import { EqaimePage } from './pages/eqaime';
 import { EqMapsPage } from './pages/eq-maps';
@@ -1124,6 +1125,8 @@ function Routed({ win }: { win: Win }) {
           return <CashFlowPage />;
         case 'vatSummary':
           return <VatSummaryPage />;
+        case 'vatReturn':
+          return <DeclarationPage kind="vat" />;
         case 'dashboard':
           return <DashboardPage />;
         case 'products':

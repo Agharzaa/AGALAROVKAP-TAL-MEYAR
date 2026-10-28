@@ -367,7 +367,7 @@ export function cashFlow(
 // ---------------------------------------------------------------------------------------------
 // VAT
 
-interface Vat {
+export interface Vat {
   sales: VatSummaryView['sales'];
   salesVat: bigint;
   purchaseVat: bigint;
@@ -375,7 +375,7 @@ interface Vat {
   waiting: bigint;
 }
 
-function vatOf(db: Db, companyId: string, month: string): Vat {
+export function vatOf(db: Db, companyId: string, month: string): Vat {
   const chart = loadChart(db, companyId);
   const byRate = new Map<string, { base: bigint; vat: bigint }>();
   const at = (rate: string) => {

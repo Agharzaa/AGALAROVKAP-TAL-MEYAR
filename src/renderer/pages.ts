@@ -125,6 +125,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Ay üzrə satış və alış ƏDV-si, ödənilməli ƏDV, DVX ilə tutuşdurma',
     icon: ReceiptText,
   },
+  vatReturn: {
+    title: 'ƏDV bəyannaməsi',
+    hint: 'Bəyannamə üçün rəqəmlər: satış dərəcələr üzrə, hesablanmış və əvəzləşdirilən ƏDV, 521.01, əlavələr',
+    icon: ReceiptText,
+  },
   dashboard: {
     title: 'İdarə paneli',
     hint: 'Ayın əsas göstəriciləri və 12 ayın dinamikası',
@@ -446,6 +451,7 @@ export const sections: Section[] = [
         items: [
           { label: 'Mənfəət və zərər', icon: Reports, action: page('profitLoss') },
           { label: 'ƏDV icmalı', icon: ReceiptText, action: page('vatSummary') },
+          { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
         ],
       },
       {
@@ -581,6 +587,10 @@ export const sections: Section[] = [
         ],
       },
       {
+        title: 'Vergi bəyannamələri',
+        items: [{ label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') }],
+      },
+      {
         title: 'Nəzarət',
         items: [{ label: 'Dəyişiklik tarixçəsi', icon: History, action: page('audit') }],
       },
@@ -696,6 +706,7 @@ export function sectionOfView(view: View): string {
         case 'audit':
         case 'profitLoss':
         case 'vatSummary':
+        case 'vatReturn':
         case 'dashboard':
           return 'reports';
         case 'cashFlow':

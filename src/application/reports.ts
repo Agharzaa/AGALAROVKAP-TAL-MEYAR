@@ -58,6 +58,7 @@ import { rateOn, ratesList } from './rates.js';
 import { revaluationView } from './revaluation.js';
 import { closingList, closingView, nextClosingMonth, type ClosingControls } from './closing.js';
 import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
+import { declaration } from './declarations.js';
 import { settlementBalance } from './stock.js';
 import { loadChart, toAccount } from './tx.js';
 import {
@@ -1613,6 +1614,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
     case 'vatSummary':
       company(db, q.companyId);
       return vatSummary(db, q.companyId, q.month);
+    case 'declaration':
+      company(db, q.companyId);
+      return declaration(db, q.companyId, q.kind, q.period);
     case 'dashboard': {
       company(db, q.companyId);
       const names = new Names(db, q.companyId);

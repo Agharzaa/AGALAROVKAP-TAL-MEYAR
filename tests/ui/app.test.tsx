@@ -3245,3 +3245,59 @@ test('stage 8d: the timesheet fills itself, a cell typed changes the hours at on
     h.close();
   }
 });
+
+test('stage 9a: the VAT return lists sales by rate with their source; a row opens the account card', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-01`,
+    memo: 'İxrac xidməti',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '601',
+        ktSk: [service.id, '0'],
+        amount: '1000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'ƏDV bəyannaməsi' }));
+    const report = within(pane());
+    const row = await report.findByRole('rowheader', {
+      name: 'Sıfır dərəcə ilə vergi tutulan əməliyyatlar',
+    });
+    const cells = within(row.closest('tr')!).getAllByRole('cell');
+    assert.deepEqual(
+      cells.map((c) => c.textContent!.replace(/\s/g, ' ')),
+      ['1 000,00', '', '601, dərəcə 0%'],
+    );
+    // A sale without an invoice: the appendix says the accountant names the document.
+    await report.findByText(/qaiməsiz dövriyyədir/);
+    report.getByText(/ayı bağlanmayıb/);
+    await user.click(report.getByRole('button', { name: /Excel/ }));
+    await report.findByText(new RegExp(`Saxlanıldı: .*ƏDV bəyannaməsi ${month}\.xlsx`));
+    await user.dblClick(row);
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector('.mdi-window.active .mdi-caption')?.textContent,
+        'Hesab kartı 601',
+      ),
+    );
+  } finally {
+    h.close();
+  }
+});

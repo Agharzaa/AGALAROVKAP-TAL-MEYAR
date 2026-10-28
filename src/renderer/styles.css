@@ -3550,3 +3550,18 @@ button.step:active {
     grid-template-columns: 1fr;
   }
 }
+
+/* Stage 9 — a tax return: its sections one under another, each with a caption. */
+.declaration .grid.report + .grid.report {
+  margin-top: 18px;
+}
+.declaration .grid.report caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.declaration .grid.report td.muted {
+  font-size: 12px;
+}

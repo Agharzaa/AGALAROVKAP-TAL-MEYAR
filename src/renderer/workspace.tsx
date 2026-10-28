@@ -36,6 +36,7 @@ export type Page =
   | 'profitLoss'
   | 'cashFlow'
   | 'vatSummary'
+  | 'vatReturn'
   | 'dashboard'
   | 'products'
   | 'employees'

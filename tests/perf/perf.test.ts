@@ -468,6 +468,10 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   );
   assert.equal(flow.reconciled, true);
   time('ƏDV icmalı, ay', 1500, () => q({ type: 'vatSummary', month: '2026-09' }));
+  // V8 (9a): the VAT return of a month — the same registers, plus the month's sale invoices.
+  time('ƏDV bəyannaməsi, ay', 1500, () =>
+    q({ type: 'declaration', kind: 'vat', period: '2026-09' }),
+  );
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

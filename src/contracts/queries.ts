@@ -98,6 +98,16 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cashFlow'), companyId: id, from: date, to: date }),
   /** ƏDV icmalı of a month: sales by rate, purchase VAT, VAT payable, DVX side. */
   z.object({ type: z.literal('vatSummary'), companyId: id, month: z.string().max(7) }),
+  /**
+   * Stage 9: the figures of a tax return — ƏDV (period YYYY-MM), muzdlu iş (YYYY-Q1…Q4), vergi
+   * amortizasiyası and mənfəət vergisi (YYYY).
+   */
+  z.object({
+    type: z.literal('declaration'),
+    companyId: id,
+    kind: z.enum(['vat', 'payroll', 'taxDepreciation', 'profitTax']),
+    period: z.string().max(7),
+  }),
   /** İdarə paneli: the month's figures and the 12 months up to it. */
   z.object({ type: z.literal('dashboard'), companyId: id, month: z.string().max(7) }),
   /** Kassa kitabı: one cashbox, day by day. */
@@ -863,6 +873,44 @@ export interface VatSummaryView {
     bookedVat: string;
     difference: string;
   }[];
+}
+export type DeclarationKind = 'vat' | 'payroll' | 'taxDepreciation' | 'profitTax';
+/** One figure of a return (stage 9): a value per column of its section, and where it comes from. */
+export interface DeclarationRow {
+  key: string;
+  label: string;
+  /** One value per column of the section ('' — no figure there). */
+  values: string[];
+  /** Where the figure comes from: an account and its turnover, a document, a rule. */
+  source: string;
+  total: boolean;
+  level: 0 | 1;
+  /** Double-click opens this account's card for the report's period ('' — none). */
+  account: string;
+}
+export interface DeclarationSection {
+  title: string;
+  columns: string[];
+  rows: DeclarationRow[];
+}
+/** A list behind the figures (documents, employees, assets): text cells, some of them money. */
+export interface DeclarationTable {
+  title: string;
+  columns: string[];
+  money: boolean[];
+  rows: string[][];
+}
+export interface DeclarationView {
+  kind: DeclarationKind;
+  period: string;
+  from: string;
+  to: string;
+  title: string;
+  sections: DeclarationSection[];
+  /** What the accountant should look at before filing; nothing here blocks. */
+  checks: { kind: 'warning' | 'info'; text: string }[];
+  appendices: DeclarationTable[];
+  ms: number;
 }
 export interface DashboardTile {
   key: 'income' | 'profit' | 'money' | 'receivables' | 'payables' | 'vat';

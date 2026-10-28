@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 26.10.2026 (0.8.2, mərhələ 7c). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 28.10.2026 (0.9.5, mərhələ 9a). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -663,6 +663,16 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 251, `npm run test:ui` 49, 
 - Testlər: `tests/integration/payroll-decisions.test.ts` (5). `npm run typecheck`, `npm test` 256, `npm run test:ui` 49, `npm run test:perf` keçir. Real bazanın (`meyar-v3.sqlite`, v13) surəti v14–v21-ə təmiz keçir. Electron işlədilmədi.
 - **Növbəti:** mühasibin dərəcələri, əmsalları, təqvimi və 2026-10-28 qaydalarını təsdiqi.
 
+## 0.9.5 — mərhələ 9a: ƏDV bəyannaməsi üçün rəqəmlər (28.10.2026, QERARLAR 2026-10-28 mərhələ 9)
+
+Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md` (istifadəçi əvvəlcədən icazə verdi; açıq suallarda tövsiyə). Mərhələ 9 — əvvəlki mərhələlərin "sonra"ya saxladığı vergi işləri: ƏDV, muzdlu iş, vergi amortizasiyası (VM 114), mənfəət vergisi. e-taxes XML edilmir (sxem etibarlı mənbədə yoxlanmadı) — rəqəmlər bölmə adları və mənbə ilə, Excel / çap.
+
+- **Bəyannamələr üçün ortaq görünüş** (`declaration` sorğusu, `src/application/declarations.ts`, `src/renderer/pages/declarations.tsx`): bölmələr, hər rəqəmin mənbəyi (hesab, dövriyyə, sənəd), yoxlamalar (bloklamır), əlavələr (sənəd / işçi siyahıları); sətrə iki dəfə klik — dövrün hesab kartı; Excel və çap. Dövr — ay / rüb / il.
+- **ƏDV bəyannaməsi** (Hesabatlar → Vergi bəyannamələri; Mühasibat → Hesabatlar): satış 18% (dəyər, ƏDV), 0%, azad, cəlb olunmayan; hesablanmış, alış ƏDV-si, əvəzləşdirilən (ay bağlanışının 241 → 521.01 addımı), əvəzləşdirilməmiş, ödənilməli və ya "artıq — növbəti aya keçir"; 521.01 tutuşması (əvvəl + Kt − əvəzləşdirmə − köçürmə = son); 0% / azad / cəlb olunmayan satışların qaimə siyahısı (alıcı, VÖEN), qaiməsiz dövriyyə ayrıca. Rəqəmlər ƏDV icmalı ilə eyni hesabdan (`vatOf`).
+- **Yoxlamalar:** ay bağlanmayıb (əvəzləşdirmə hələ yazılmayıb); azad satış + alış ƏDV-si — VM 175 mütənasib bölgü (vergi tutulan pay faizlə; Meyar bölgünü özü etmir); 521.01-in Kt dövriyyəsi ≠ satışın ƏDV-si; DVX ↔ uçot fərqi və ya DVX yüklənməyib.
+- Testlər: `tests/integration/declarations.test.ts` (V1, V2), `tests/ui` (9a), perf (ƏDV bəyannaməsi, ay: 40 ms). `npm run typecheck`, `npm test` 258, `npm run test:ui` 50, `npm run test:perf` keçir. Sxem dəyişməyib (v21). Electron işlədilmədi.
+- **Növbəti:** 9b — muzdlu iş bəyannaməsi və DSMF 8 000-dən yuxarı 11% (sxem v22).
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -671,7 +681,8 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 251, `npm run test:ui` 49, 
 5. **Kassa, məzənnələr, ay bağlanışı, idarə paneli** (`docs/MERHELE-5-AY-BAGLANISI.md`, təsdiqlənib 17.10.2026): ~~5a kassa~~ (0.6.5), ~~5b məzənnələr və yenidən qiymətləndirmə~~ (0.6.6), ~~5c ay bağlanışı~~, ~~5d hesabatlar və idarə paneli~~, ~~müstəqil audit~~, ~~auditin açıq sualları~~, ~~mühasibin §9 təsdiqi~~ (0.7.0, 18.10.2026) — hazır. **Mərhələ 5 bitib.**
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → ~~7c silinmə və satış~~ (0.8.2) → ~~müstəqil audit~~ (26.10.2026, 8 qüsur düzəldi, 1 açıq sual). Açıq suallar — §11.
-8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → ~~8d istehsalat təqvimi, tabel, məzuniyyət hüququ və qalığı, kompensasiya~~ (0.9.2) → müstəqil audit.
+8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → ~~8d istehsalat təqvimi, tabel, məzuniyyət hüququ və qalığı, kompensasiya~~ (0.9.2) → ~~müstəqil audit~~ (0.9.3, 6 qüsur) → ~~auditin açıq sualları~~ (0.9.4) — hazır. **Mərhələ 8 bitib.** Qalan (mühasibdən): dərəcələrin, əmsalların, təqvimin və 2026-10-28 qaydalarının təsdiqi.
+9. **Vergi bəyannamələrinin rəqəmləri** (`docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, 28.10.2026, QERARLAR 2026-10-28 mərhələ 9): 9a ƏDV bəyannaməsi (0.9.5) → 9b muzdlu iş bəyannaməsi və DSMF 11% (0.9.6) → 9c vergi amortizasiyası VM 114 (0.9.7) → 9d mənfəət vergisi, dekabr bağlanışında 901 / 521.04 (0.9.8) → müstəqil audit.
 
 ## Əmrlər
 
