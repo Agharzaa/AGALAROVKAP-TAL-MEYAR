@@ -20,6 +20,7 @@ import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
+import { profitTaxReturn } from './profit-tax.js';
 import { taxDepreciationReturn } from './tax.js';
 
 const money = (m: Minor) => formatMinor(m);
@@ -554,6 +555,8 @@ export function declaration(
       return payrollReturn(db, companyId, period);
     case 'taxDepreciation':
       return taxDepreciationReturn(db, companyId, period);
+    case 'profitTax':
+      return profitTaxReturn(db, companyId, period);
     default:
       throw new DomainError('Bu bəyannamə hələ hazır deyil.', 'kind');
   }

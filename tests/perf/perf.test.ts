@@ -476,6 +476,10 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   time('Vergi amortizasiyası, il (200 vəsait)', 1500, () =>
     q({ type: 'declaration', kind: 'taxDepreciation', period: '2026' }),
   );
+  // V8 (9d): the profit tax of the year — the M/Z turnovers, the tax depreciation, past years.
+  time('Mənfəət vergisi bəyannaməsi, il', 1500, () =>
+    q({ type: 'declaration', kind: 'profitTax', period: '2026' }),
+  );
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

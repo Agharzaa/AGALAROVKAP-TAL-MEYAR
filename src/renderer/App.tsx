@@ -1131,6 +1131,8 @@ function Routed({ win }: { win: Win }) {
           return <DeclarationPage kind="payroll" />;
         case 'taxDepreciation':
           return <DeclarationPage kind="taxDepreciation" />;
+        case 'profitTaxReturn':
+          return <DeclarationPage kind="profitTax" />;
         case 'dashboard':
           return <DashboardPage />;
         case 'products':

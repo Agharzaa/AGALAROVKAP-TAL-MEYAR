@@ -14,7 +14,8 @@
  *      confirmed (through the VAT deposit; individuals, foreign partners and currency invoices
  *      pro rata of what was paid); the rest waits on 241;
  *   5. 6xx / 7xx → 801, per subkonto key;
- *   6. 801 → 341; in December also 341 → 343;
+ *   6. 801 → 341; in December the year's profit tax (Dt 901 / Kt 521.04, 901 → 341; stage 9d) and
+ *      then 341 → 343;
  *   7. the period is closed through the month's end.
  *
  * Each step is its own entry of the closing (source type "closing"); after it 6xx / 7xx / 801
@@ -48,6 +49,7 @@ import { payrollSignals } from './payroll.js';
 import { timesheetSignals } from './timesheets.js';
 import { checkSideValues } from './subkonto.js';
 import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
+import { profitTaxStep } from './profit-tax.js';
 
 export const CLOSING = 'closing';
 
@@ -641,8 +643,8 @@ function resultBalances(
   month: string,
   extra: readonly Posting[],
 ): Map<string, Balance> {
-  const accounts = [...resultAccounts(chart).map((a) => a.code), '801', '341', '343'].filter((c) =>
-    chart.get(c),
+  const accounts = [...resultAccounts(chart).map((a) => a.code), '801', '341', '343', '901'].filter(
+    (c) => chart.get(c),
   );
   const out = new Map<string, Balance>();
   const add = (account: string, sk: readonly string[], amount: bigint) => {
@@ -749,6 +751,8 @@ interface Plan {
   depreciation: Draft & { assets: number };
   revaluation: RevaluationStep | null;
   vat: Draft;
+  /** December (stage 9d): the year's profit tax. */
+  profitTax: (Draft & { tax: bigint }) | null;
   out: CloseOut;
 }
 
@@ -833,12 +837,18 @@ function buildPlan(
   const vat = attempt('closing', { postings: [], notes: [], waiting: [] as Signal[] }, () =>
     vatStep(db, companyId, chart, month),
   );
-  const out = closeOut(db, companyId, chart, month, [
+  const before = [
     ...fifo.postings,
     ...depreciation.postings,
     ...(revaluation?.delta ?? []),
     ...vat.postings,
-  ]);
+  ];
+  const profitTax = month.endsWith('-12')
+    ? attempt<Plan['profitTax']>('closing', null, () =>
+        profitTaxStep(db, companyId, month, before, role(db, companyId, 'vatTax', 'Vergi (haqq)')),
+      )
+    : null;
+  const out = closeOut(db, companyId, chart, month, [...before, ...(profitTax?.postings ?? [])]);
   return {
     month,
     date: monthEnd(month),
@@ -853,6 +863,7 @@ function buildPlan(
     depreciation,
     revaluation,
     vat,
+    profitTax,
     out,
   };
 }
@@ -977,6 +988,17 @@ function steps(plan: Plan, posted: boolean): ClosingStep[] {
   if (december)
     list.push(
       step(
+        'profitTax',
+        'Mənfəət vergisi (901 → 521.04, 901 → 341)',
+        plan.profitTax?.postings ?? [],
+        !plan.profitTax
+          ? 'Hesablanmadı (yuxarıdakı yoxlamaya baxın)'
+          : plan.profitTax.tax
+            ? `İlin mənfəət vergisi ${show(plan.profitTax.tax)}`
+            : 'Mənfəət vergisi yoxdur',
+        plan.profitTax?.notes ?? [],
+      ),
+      step(
         'year',
         'İl bağlanışı (341 → 343)',
         out.year,
@@ -1044,6 +1066,17 @@ export function postClosing(
   post(plan.depreciation.postings);
   const revaluation = plan.revaluation!.write(tx)?.id ?? plan.revaluation!.id;
   post(plan.vat.postings);
+  // December: the profit tax from the books after steps 2–4 (the same figures the plan showed).
+  const profitTax = month.endsWith('-12')
+    ? profitTaxStep(
+        tx.db,
+        cmd.companyId,
+        month,
+        [],
+        role(tx.db, cmd.companyId, 'vatTax', 'Vergi (haqq)'),
+      )
+    : null;
+  if (profitTax) post(profitTax.postings);
   // Steps 5–7 read the books after steps 2–4 (the same figures the plan showed).
   const out = closeOut(tx.db, cmd.companyId, chart, month, []);
   post(out.income);
@@ -1055,7 +1088,7 @@ export function postClosing(
       b.amount !== 0n &&
       (/^[67]/.test(b.account.code) ||
         b.account.code === '801' ||
-        (month.endsWith('-12') && b.account.code === '341')),
+        (month.endsWith('-12') && ['341', '901'].includes(b.account.code))),
   );
   if (open.length)
     throw new DomainError(
@@ -1063,7 +1096,7 @@ export function postClosing(
       undefined,
       'conflict',
     );
-  const done: Plan = { ...plan, out };
+  const done: Plan = { ...plan, profitTax, out };
   const stored = steps(done, true);
   const warnings = plan.warnings.map((w) => w.text);
   const now = tx.clock.now();

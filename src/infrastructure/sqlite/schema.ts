@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1638,6 +1638,13 @@ CREATE TABLE tax_years(
 ALTER TABLE asset_lines ADD COLUMN tax_residual INTEGER;
 `;
 
+// v24 — stage 9d (QERARLAR 2026-10-28 mərhələ 9 §6, §8): an expense item the profit tax does not
+// deduct (fines, sanctions…); every item is deductible until the accountant says otherwise.
+
+const v24 = `
+ALTER TABLE items ADD COLUMN tax_deductible INTEGER NOT NULL DEFAULT 1 CHECK(tax_deductible IN(0,1));
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1662,4 +1669,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 21, sql: v21 },
   { version: 22, sql: v22 },
   { version: 23, sql: v23 },
+  { version: 24, sql: v24 },
 ];

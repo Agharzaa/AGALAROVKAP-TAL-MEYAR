@@ -130,6 +130,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Bəyannamə üçün rəqəmlər: satış dərəcələr üzrə, hesablanmış və əvəzləşdirilən ƏDV, 521.01, əlavələr',
     icon: ReceiptText,
   },
+  profitTaxReturn: {
+    title: 'Mənfəət vergisi bəyannaməsi',
+    hint: 'İl: gəlirlər, gəlirdən çıxılan xərclər, vergi amortizasiyası, keçmiş zərər, vergi, ödənilən',
+    icon: Reports,
+  },
   payrollReturn: {
     title: 'Muzdlu iş bəyannaməsi',
     hint: 'Rüb, ay-ay: gəlir vergisi, DSMF, işsizlik və tibbi sığorta — baza, haqlar, hesablarla tutuşma, işçilər üzrə',
@@ -462,6 +467,7 @@ export const sections: Section[] = [
           { label: 'Mənfəət və zərər', icon: Reports, action: page('profitLoss') },
           { label: 'ƏDV icmalı', icon: ReceiptText, action: page('vatSummary') },
           { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
+          { label: 'Mənfəət vergisi bəyannaməsi', icon: Reports, action: page('profitTaxReturn') },
         ],
       },
       {
@@ -604,6 +610,7 @@ export const sections: Section[] = [
           { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
           { label: 'Muzdlu iş bəyannaməsi', icon: Reports, action: page('payrollReturn') },
           { label: 'Vergi amortizasiyası', icon: Reports, action: page('taxDepreciation') },
+          { label: 'Mənfəət vergisi bəyannaməsi', icon: Reports, action: page('profitTaxReturn') },
         ],
       },
       {
@@ -725,6 +732,7 @@ export function sectionOfView(view: View): string {
         case 'vatSummary':
         case 'vatReturn':
         case 'payrollReturn':
+        case 'profitTaxReturn':
         case 'dashboard':
           return 'reports';
         case 'cashFlow':

@@ -404,7 +404,7 @@ test('A5: a blocking check stops the closing — nothing is written', (t) => {
   );
 });
 
-test('A6: December closes the year — 341 → 343', (t) => {
+test('A6: December closes the year — the profit tax (stage 9d), then 341 → 343', (t) => {
   const f = fixture(t, ':memory:', '2027-01-15');
   const customer = f.partner('Alıcı MMC', '1700000001');
   const cs = f.contract(customer, 'S-1', 'sale');
@@ -423,13 +423,23 @@ test('A6: December closes the year — 341 → 343', (t) => {
     step(v, 'result').postings.map((p) => [p.dt, p.kt, p.amount]),
     [['341', '801', '300.00']],
   );
+  // The year made 600,00: 20% profit tax (QERARLAR 2026-10-28 mərhələ 9 §7), the rest to 343.
+  assert.deepEqual(
+    step(v, 'profitTax').postings.map((p) => [p.dt, p.kt, p.amount]),
+    [
+      ['901', '521.04', '120.00'],
+      ['341', '901', '120.00'],
+    ],
+  );
   assert.deepEqual(
     step(v, 'year').postings.map((p) => [p.dt, p.kt, p.amount]),
-    [['341', '343', '600.00']],
+    [['341', '343', '480.00']],
   );
   close(f, '2026-12');
   assert.equal(balance(f, '341'), '0');
-  assert.equal(balance(f, '343'), '-60000');
+  assert.equal(balance(f, '901'), '0');
+  assert.equal(balance(f, '521.04'), '-12000');
+  assert.equal(balance(f, '343'), '-48000');
   assert.equal(closed(f), '2026-12-31');
 });
 

@@ -1483,6 +1483,7 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
             name: str(r.name),
             role: str(r.role),
             archived: flag(r.archived),
+            taxDeductible: r.tax_deductible !== 0n,
           })),
       };
       return view;

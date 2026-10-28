@@ -717,6 +717,21 @@ export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {
       );
     }
   }
+  // Stage 9d: an expense item the profit tax does not deduct (fines, sanctions…).
+  if (cmd.taxDeductible !== undefined && cmd.kind === 'expenseItem') {
+    const now = cmd.taxDeductible ? 1 : 0;
+    const was = tx.db.get('SELECT tax_deductible FROM items WHERE id=?', result.id)!.tax_deductible;
+    if (BigInt(now) !== was) {
+      tx.db.run('UPDATE items SET tax_deductible=? WHERE id=?', now, result.id);
+      tx.audit(
+        cmd.companyId,
+        'Dəyişdirildi',
+        itemLabels[cmd.kind],
+        result.id,
+        `${name} · ${now ? 'gəlirdən çıxılır' : 'gəlirdən çıxılmır (mənfəət vergisi)'}`,
+      );
+    }
+  }
   return result;
 }
 

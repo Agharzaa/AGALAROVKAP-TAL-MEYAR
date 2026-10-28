@@ -151,10 +151,10 @@ Zərər ilində vergi 0, zərər növbəti illərə keçir (5 il).
 
 ## 9. İcra ardıcıllığı
 
-1. **9a — ƏDV bəyannaməsi** (0.9.5): hesabat, sənəd siyahıları, yoxlamalar, Excel / çap; V1, V2.
-2. **9b — muzdlu iş bəyannaməsi və DSMF 11%** (0.9.6): sxem v22, rüblük hesabat, işçi əlavəsi; V3, V4.
-3. **9c — vergi amortizasiyası** (0.9.7): sxem v23, normalar, əmsal, vəsaitin vergi qalığı, hesabat; V5.
-4. **9d — mənfəət vergisi** (0.9.8): sxem v24, "gəlirdən çıxılmır", il parametrləri, bəyannamə, dekabr bağlanışının addımı, M/Z; V6, V7.
+1. ✅ **9a — ƏDV bəyannaməsi** (0.9.5): hesabat, sənəd siyahıları, yoxlamalar, Excel / çap; V1, V2.
+2. ✅ **9b — muzdlu iş bəyannaməsi və DSMF 11%** (0.9.6): sxem v22, rüblük hesabat, işçi əlavəsi; V3, V4.
+3. ✅ **9c — vergi amortizasiyası** (0.9.7): sxem v23 (`tax_years` — 9d-nin parametrləri də), normalar, əmsal, vəsaitin vergi qalığı, hesabat; V5.
+4. ✅ **9d — mənfəət vergisi** (0.9.8): sxem v24, "gəlirdən çıxılmır", bəyannamə, dekabr bağlanışının addımı, M/Z; V6, V7.
 5. Perf (V8) hər alt-mərhələdə öz hissəsi; real bazanın surəti (V9) hər miqrasiyada.
 6. Müstəqil audit (kodu yazmayan sessiya).
 

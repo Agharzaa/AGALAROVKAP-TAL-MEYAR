@@ -114,7 +114,7 @@ test('V5: schema v22 → v23 — tax years and the tax residual of an opening li
   raw.exec('PRAGMA user_version=22;');
   raw.close();
   const db = new Db(path);
-  assert.equal(Number(db.get('PRAGMA user_version')!.user_version), 23);
+  assert.equal(Number(db.get('PRAGMA user_version')!.user_version), migrations.at(-1)!.version);
   assert.ok(db.all('PRAGMA table_info(asset_lines)').some((c) => c.name === 'tax_residual'));
   assert.equal(Number(db.get('SELECT COUNT(*) AS n FROM tax_years')!.n), 0);
   db.close();

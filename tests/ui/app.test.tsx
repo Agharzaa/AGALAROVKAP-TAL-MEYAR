@@ -3407,3 +3407,74 @@ test('stage 9c: tax depreciation by category; the year’s rates are changed in 
     h.close();
   }
 });
+
+test('stage 9d: an expense item is marked not deductible; the profit tax return leaves it out', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  const fine = h.run({
+    type: 'item.save',
+    companyId: s.companyId,
+    kind: 'expenseItem',
+    name: 'Cərimələr',
+    archived: false,
+  } as never).id;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${month}-01`,
+    memo: 'Xidmət və cərimə',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '601',
+        ktSk: [service.id, '0'],
+        amount: '1000',
+        memo: '',
+      },
+      {
+        dtAccount: '731',
+        dtSk: [fine],
+        ktAccount: '211.01',
+        ktSk: [s.customer, s.contract, ''],
+        amount: '100',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Mənfəət vergisi bəyannaməsi' }));
+    const report = within(pane());
+    const tax = async () =>
+      within((await report.findByRole('rowheader', { name: 'Mənfəət vergisi' })).closest('tr')!)
+        .getAllByRole('cell')[0]!
+        .textContent!.replace(/\s/g, ' ');
+    // (1 000 − 100) × 20%.
+    assert.equal(await tax(), '180,00');
+    h.run({
+      type: 'item.save',
+      companyId: s.companyId,
+      id: fine,
+      version: 1,
+      kind: 'expenseItem',
+      name: 'Cərimələr',
+      archived: false,
+      taxDeductible: false,
+    } as never);
+    await user.click(report.getByRole('button', { name: /Yenilə/ }));
+    // The fine is not deducted: 1 000 × 20%.
+    await waitFor(async () => assert.equal(await tax(), '200,00'));
+    report.getByRole('rowheader', { name: 'çıxılır: Cərimələr' });
+  } finally {
+    h.close();
+  }
+});

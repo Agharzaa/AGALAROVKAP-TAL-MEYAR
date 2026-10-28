@@ -571,6 +571,8 @@ export interface ItemView {
   /** Role in posting rules ("vatTax", "cogs"…), empty for ordinary elements. */
   role: string;
   archived: boolean;
+  /** An expense item (stage 9d): deducted from income for the profit tax. */
+  taxDeductible: boolean;
 }
 export interface Catalog {
   company: CompanyView;
@@ -771,6 +773,7 @@ export type ClosingStepKey =
   | 'vat'
   | 'income'
   | 'result'
+  | 'profitTax'
   | 'year'
   | 'lock';
 export interface ClosingStep {

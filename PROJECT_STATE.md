@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 28.10.2026 (0.9.7, mərhələ 9c). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 28.10.2026 (0.9.8, mərhələ 9d). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -693,6 +693,17 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md` (istifadəçi əvvəlcədən icaz�
 - 0.9.5-in CI-i e-qaimə yük testində 36,8 s / 20 s ilə dayandı (məlum flaky; qalan addımlar keçdi); 0.9.6 onu əhatə edir.
 - **Növbəti:** 9d — mənfəət vergisi bəyannaməsi, dekabr bağlanışında 901 / 521.04 (sxem v24).
 
+## 0.9.8 — mərhələ 9d: mənfəət vergisi, dekabr bağlanışında 901 / 521.04 (28.10.2026, QERARLAR 2026-10-28 mərhələ 9 §6–§8)
+
+- **Mənfəət vergisi bəyannaməsi** (Hesabatlar → Vergi bəyannamələri; Mühasibat → Hesabatlar; il; `src/application/profit-tax.ts`): gəlirlər (601 — 602–604 çıxılmaqla, 611, 631; M/Z ilə eyni dövriyyə); gəlirdən çıxılan xərclər = 7xx − uçot amortizasiyası ("Amortizasiya" maddəsi) − silinən / satılan vəsaitlərin uçot qalıq dəyəri ("Əsas vəsaitlərin silinməsi") − "gəlirdən çıxılmır" maddələri; vergi amortizasiyası və çıxan vəsaitlərin vergi qalıq dəyəri (9c); düzəlişlər; vergi tutulan mənfəət və ya zərər; keçmiş illərin zərəri (Meyar-ın əvvəlki illəri, 5 il, köhnədən başlayaraq + Meyar-dan əvvəlki zərər əl ilə); vergiyə cəlb olunan × dərəcə (20%, parametr); il ərzində 521.04-ə ödənilən; ödənilməli və ya artıq.
+- **Dekabr bağlanışının yeni addımı** "Mənfəət vergisi" (801 → 341-dən sonra, 341 → 343-dən əvvəl): Dt 901 / Kt 521.04 ("Vergi (haqq)") — ilin vergisi (901-də başqa sənədlə yazılan varsa, yalnız fərq), Dt 341 / Kt 901 — 901 sıfırlanır; sonra 341 → 343 xalis mənfəət. Addım bağlanışın 2–4 addımlarından sonrakı uçotla hesablanır (baxışda — həmin addımların planı ilə). Ləğv — storno. Bağlanışdan sonra dekabrda 901 sıfır olmalıdır, yoxsa heç nə saxlanmır.
+- **M/Z:** ildə 901 dövriyyəsi olanda "901 · Cari mənfəət vergisi" və "Xalis mənfəət (zərər)" sətirləri (901 → 341 yazılışı çıxılır).
+- **Xərc maddəsi:** "Gəlirdən çıxılmır (mənfəət vergisi: cərimə, sanksiya…)" bayrağı (Siyahılar → Xərc maddələri). Sxem **v24**: `items.tax_deductible` (hamısı 1 — çıxılır). Real bazanın surəti (v13) v14 → v24-ə təmiz keçir.
+- **Davranış dəyişikliyi:** dekabr bağlanışı indi mənfəət vergisini yazır (QERARLAR 2026-10-17 §9 əvəz olunub); A6 testi (341 → 343) buna görə yeniləndi: 600,00 mənfəət → 120,00 vergi, 343-ə 480,00.
+- Testlər: `tests/integration/profit-tax.test.ts` (V6 §8 misalı qəpikbəqəpik: vergi 7 099,99, ödənilməli 4 099,99, M/Z xalis 32 900,01; ləğv və yenidən bağlanış; zərərin 5 il köçürülməsi, əl ilə zərər və düzəliş; v23 → v24), `closing.test.ts` A6, `tests/ui` (9d), perf. `npm run typecheck`, `npm test` 275, `npm run test:ui` 53, `npm run test:perf` keçir. Electron işlədilmədi.
+- **Mərhələ 9-un məlum sərhədləri:** e-taxes XML yoxdur (rəqəmlər bölmə adları ilə); VM 175 mütənasib bölgü — yalnız xəbərdarlıq; cari vergi ödəmələrinin (avans) hesablanması, VM 115 təmir limiti, təmsilçilik / ezamiyyət normaları — düzəliş sətri ilə; normadan aşağı vergi amortizasiyasının gələcəyə keçməsi (VM 114.4) yoxdur; Meyar-dan əvvəlki zərər hər il üçün ayrıca yazılır (köçürülmür).
+- **Növbəti:** mərhələ 9-un müstəqil auditi (kodu yazmayan sessiya); mühasibin VM 114 qaydalarını, 100 ₼ həddini, 20% və DSMF 11% təsdiqi.
+
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 
 2. ~~Qaimələr~~ — hazır (0.4.0, 0.4.1).
@@ -702,7 +713,7 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md` (istifadəçi əvvəlcədən icaz�
 6. **DVX e-qaimələrinin avtomatik gəlməsi** (`docs/MERHELE-6-DVX-AVTOMAT.md`, təsdiqlənib 22.10.2026): kabinetə bir dəfə giriş → "DVX-dən yenilə" kabinetin öz Excel ixracını özü istəyir, Excel yolu ehtiyatdır. ~~6a sessiya və diaqnostika~~ (0.7.3, 0.7.4), ~~6b DVX-dən yenilə~~ (0.7.5–0.7.6, real DVX ilə işləyir), ~~6c-1 son yeniləmə və xəbərdarlıq~~ (0.7.13), ~~6c-2 gedişat və ləğv~~ (0.7.14), ~~6c-3 hər iki istiqamət birdən~~ (0.7.15); 6c-4 "Mallar üzrə" edilmir (QERARLAR 2026-10-25 §19: portalın Excel ixracında yoxdur). **Növbəti:** mərhələ 6-nın müstəqil auditi (kodu yazmayan sessiya) və D10 — istifadəçi ilə real yeniləmə (son yeniləmə, gedişat, ləğv, İş masası düyməsi).
 7. **Əsas vəsaitlər və amortizasiya** (`docs/MERHELE-7-ESAS-VESAITLER.md`, təsdiqlənib 26.10.2026, QERARLAR 2026-10-26): kitabça, istismara vermə (113 → 111), başlanğıc qalıqlar, amortizasiya ay bağlanışının addımı kimi, silinmə və satış, hesabatlar. ~~7a kitabça, istismara vermə, başlanğıc qalıqlar~~ (0.8.0) → ~~7b amortizasiya ay bağlanışında~~ (0.8.1) → ~~7c silinmə və satış~~ (0.8.2) → ~~müstəqil audit~~ (26.10.2026, 8 qüsur düzəldi, 1 açıq sual). Açıq suallar — §11.
 8. **Əmək haqqı** (`docs/MERHELE-8-EMEK-HAQQI.md`, təsdiqlənib 27.10.2026, QERARLAR 2026-10-27): işçilər, dərəcələr cədvəli (2026 pillələri), ay üzrə hesablama sənədi (533, 521.03, 522.xx), ödəniş bank / kassa ilə, hesabatlar. ~~8a işçilər, dərəcələr, hesablama sənədi~~ (0.9.0) → ~~8b ödəniş, tutulmalar, hesabatlar~~ + ~~8c güzəştlər, məzuniyyət, xəstəlik vərəqəsi~~ (0.9.1) → ~~8d istehsalat təqvimi, tabel, məzuniyyət hüququ və qalığı, kompensasiya~~ (0.9.2) → ~~müstəqil audit~~ (0.9.3, 6 qüsur) → ~~auditin açıq sualları~~ (0.9.4) — hazır. **Mərhələ 8 bitib.** Qalan (mühasibdən): dərəcələrin, əmsalların, təqvimin və 2026-10-28 qaydalarının təsdiqi.
-9. **Vergi bəyannamələrinin rəqəmləri** (`docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, 28.10.2026, QERARLAR 2026-10-28 mərhələ 9): 9a ƏDV bəyannaməsi (0.9.5) → 9b muzdlu iş bəyannaməsi və DSMF 11% (0.9.6) → 9c vergi amortizasiyası VM 114 (0.9.7) → 9d mənfəət vergisi, dekabr bağlanışında 901 / 521.04 (0.9.8) → müstəqil audit.
+9. **Vergi bəyannamələrinin rəqəmləri** (`docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, 28.10.2026, QERARLAR 2026-10-28 mərhələ 9): ~~9a ƏDV bəyannaməsi~~ (0.9.5) → ~~9b muzdlu iş bəyannaməsi və DSMF 11%~~ (0.9.6) → ~~9c vergi amortizasiyası VM 114~~ (0.9.7) → ~~9d mənfəət vergisi, dekabr bağlanışında 901 / 521.04~~ (0.9.8) → müstəqil audit.
 
 ## Əmrlər
 

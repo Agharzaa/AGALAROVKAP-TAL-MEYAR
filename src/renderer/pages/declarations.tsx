@@ -21,7 +21,7 @@ const pageOf: Record<DeclarationKind, Page> = {
   vat: 'vatReturn',
   payroll: 'payrollReturn',
   taxDepreciation: 'taxDepreciation',
-  profitTax: 'vatReturn',
+  profitTax: 'profitTaxReturn',
 };
 const unit: Record<DeclarationKind, 'month' | 'quarter' | 'year'> = {
   vat: 'month',

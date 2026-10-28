@@ -498,6 +498,8 @@ export const commandSchema = z.discriminatedUnion('type', [
         'sickPay',
       ])
       .optional(),
+    /** Stage 9d, an expense item: false — not deducted from income for the profit tax; omitted keeps. */
+    taxDeductible: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('operation.save'),

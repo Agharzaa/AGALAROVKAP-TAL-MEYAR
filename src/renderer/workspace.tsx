@@ -39,6 +39,7 @@ export type Page =
   | 'vatReturn'
   | 'payrollReturn'
   | 'taxDepreciation'
+  | 'profitTaxReturn'
   | 'dashboard'
   | 'products'
   | 'employees'

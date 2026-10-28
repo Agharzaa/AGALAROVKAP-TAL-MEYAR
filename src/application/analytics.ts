@@ -62,7 +62,7 @@ const inList = (codes: readonly string[]) =>
 // ---------------------------------------------------------------------------------------------
 // 6xx / 7xx turnovers by month
 
-interface Turnover {
+export interface Turnover {
   account: string;
   s1: string;
   s2: string;
@@ -74,7 +74,7 @@ interface Turnover {
  * Debit − credit of every 6xx / 7xx key per month, from the registers, without the closing's
  * own entries to 801.
  */
-function resultTurnovers(db: Db, companyId: string, months: readonly string[]): Turnover[] {
+export function resultTurnovers(db: Db, companyId: string, months: readonly string[]): Turnover[] {
   const index = new Map(months.map((m, i) => [m, i]));
   const out = new Map<string, Turnover>();
   const add = (account: string, s1: string, s2: string, month: string, amount: bigint) => {
@@ -221,6 +221,38 @@ export function profitLoss(db: Db, companyId: string, year: string, name: NameOf
   const months = monthsUpTo(`${year}-12`, 12);
   const chart = loadChart(db, companyId);
   const built = buildProfitLoss(chart, resultTurnovers(db, companyId, months), 12, name);
+  // Stage 9d: the profit tax (901, without its close to 341) and the net result, when there is one.
+  const tax = months.map(() => 0n);
+  for (const r of db.all(
+    `SELECT substr(date,1,7) AS m, SUM(CASE WHEN dt_account='901' THEN amount ELSE -amount END) AS a
+     FROM postings WHERE company_id=? AND (dt_account='901' OR kt_account='901')
+       AND dt_account<>'341' AND kt_account<>'341' AND date BETWEEN ? AND ? GROUP BY m`,
+    companyId,
+    `${year}-01-01`,
+    `${year}-12-31`,
+  ))
+    tax[months.indexOf(String(r.m))]! += r.a as bigint;
+  if (tax.some((v) => v !== 0n)) {
+    const row = (key: string, label: string, values: bigint[], total: boolean): ReportRow => ({
+      key,
+      label,
+      level: 0,
+      total,
+      account: total ? '' : '901',
+      sk: [],
+      values: values.map(money),
+      sum: money(sumOf(values)),
+    });
+    built.rows.push(
+      row('a:901', `901 · ${chart.get('901')?.name ?? 'Mənfəət vergisi'}`, tax, false),
+      row(
+        't:net',
+        'Xalis mənfəət (zərər)',
+        built.result.map((v, i) => v - tax[i]!),
+        true,
+      ),
+    );
+  }
   return { year, months, rows: built.rows, ms: Math.round(performance.now() - started) };
 }
 

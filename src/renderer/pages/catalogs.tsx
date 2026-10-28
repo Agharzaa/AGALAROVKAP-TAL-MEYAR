@@ -842,12 +842,14 @@ export function ListsPage() {
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
   const [role, setRole] = useState<Role>('');
+  const [deductible, setDeductible] = useState(true);
   const rows = (catalog?.items ?? []).filter((i) => i.kind === kind && matches(search, i.name));
   const open = (i: ItemView | 'new') => {
     setEdit(i);
     setName(i === 'new' ? '' : i.name);
     setArchived(i === 'new' ? false : i.archived);
     setRole(i === 'new' ? '' : (i.role as Role));
+    setDeductible(i === 'new' ? true : i.taxDeductible);
   };
   const roles = kindRoles[kind];
   const current = edit && edit !== 'new' ? edit : null;
@@ -893,6 +895,7 @@ export function ListsPage() {
             name,
             archived,
             ...(roles ? { role } : {}),
+            ...(kind === 'expenseItem' ? { taxDeductible: deductible } : {}),
           })}
         >
           <Field label="Ad" wide>
@@ -917,6 +920,16 @@ export function ListsPage() {
                 ))}
               </select>
             </Field>
+          )}
+          {kind === 'expenseItem' && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={!deductible}
+                onChange={(e) => setDeductible(!e.target.checked)}
+              />{' '}
+              Gəlirdən çıxılmır (mənfəət vergisi: cərimə, sanksiya…)
+            </label>
           )}
           {archiveBox(archived, setArchived, !!current)}
         </EditDialog>
