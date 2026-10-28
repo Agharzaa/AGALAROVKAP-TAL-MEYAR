@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 28.10.2026 (0.9.6, mərhələ 9b). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 28.10.2026 (0.9.7, mərhələ 9c). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -681,6 +681,17 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md` (istifadəçi əvvəlcədən icaz�
 - Rüb filtri: il + rüb (yarımçıq il yazılanda rüb itmir).
 - Testlər: `tests/integration/declarations-payroll.test.ts` (V3, V4, v21 → v22), `tests/domain/payroll.test.ts` (10 000 → işəgötürən 1 434,00; 9 000 → 886,00 / 1 324,00), `tests/ui` (9b), perf (muzdlu iş, rüb, 300 işçi: 4 ms). `npm run typecheck`, `npm test` 262, `npm run test:ui` 51, `npm run test:perf` keçir. Electron işlədilmədi.
 - **Növbəti:** 9c — vergi amortizasiyası (VM 114, sxem v23).
+
+## 0.9.7 — mərhələ 9c: vergi amortizasiyası, VM 114 (28.10.2026, QERARLAR 2026-10-28 mərhələ 9 §5)
+
+- **Kateqoriyalar** vəsaitin qrupundan (7a): bina, tikili, qurğu 7%; maşın və avadanlıq 20%; hesablama texnikası 25%; nəqliyyat 25%; digər 20% — VM 114.3-ün yuxarı normaları; mühasib il üzrə aşağı norma seçə bilər. Mikro / kiçik sahibkar əmsalı 2 / 1,5 (VM 114.3-1, 114.3-2).
+- **Hesablama** (`src/domain/tax.ts`): azalan qalıq — il sonuna qalıq dəyər × norma × əmsal, vəsait üzrə (kateqoriya cəmi eynidir), qəpiyə yuvarlaqlaşdırılır. Vergi dəyəri: istismara vermə — ilkin dəyər; başlanğıc qalıq — yeni "Vergi qalıq dəyəri" sahəsi (boş — ilkin − yığılmış, bəyannamədə qeyd). İl ərzində daxil olan tam il; silinən / satılan həmin il amortizasiyasız, vergi qalıq dəyəri ilə çıxır (satış qiyməti ƏDV-siz saxlanılır — 9d üçün). Kateqoriyanın qalığı 100 ₼-dan az — tam silinir (parametr). Heç nə yazılmır: vergi amortizasiyası mənfəət vergisi bəyannaməsinin rəqəmidir.
+- **Hesabat "Vergi amortizasiyası"** (Əsas vəsaitlər → Hesabatlar; Hesabatlar → Vergi bəyannamələri; il): kateqoriyalar üzrə ilin əvvəlinə qalıq, daxil olan, çıxan, il sonuna qalıq, norma, amortizasiya, silinən qalıq, növbəti ilə qalıq; uçotla müqayisə (ay bağlanışlarının Kt 112-si); vəsaitlər üzrə əlavə.
+- **Parametrlər** (hesabatda "Parametrlər" düyməsi; 9d ilə ortaq): normalar, əmsal, silinmə həddi, mənfəət vergisinin dərəcəsi, Meyar-dan əvvəlki zərər, düzəlişlər. Bağlanmış ilin parametrləri dəyişmir.
+- **Sxem v23:** `tax_years` (ilin vergi parametrləri), `asset_lines.tax_residual`. Real bazanın surəti (v13) v14 → v23-ə təmiz keçir.
+- Testlər: `tests/domain/tax.test.ts`, `tests/integration/tax.test.ts` (V5, v22 → v23), `tests/ui` (9c: parametrlərdə norma dəyişir, rəqəm yenilənir), perf (vergi amortizasiyası, il: 2 ms). `npm run typecheck`, `npm test` 270, `npm run test:ui` 52, `npm run test:perf` keçir. Electron işlədilmədi.
+- 0.9.5-in CI-i e-qaimə yük testində 36,8 s / 20 s ilə dayandı (məlum flaky; qalan addımlar keçdi); 0.9.6 onu əhatə edir.
+- **Növbəti:** 9d — mənfəət vergisi bəyannaməsi, dekabr bağlanışında 901 / 521.04 (sxem v24).
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

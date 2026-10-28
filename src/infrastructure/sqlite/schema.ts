@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 22;
+export const SCHEMA_VERSION = 23;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1617,6 +1617,27 @@ INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,det
 DROP TABLE dsmf_kept;
 `;
 
+// v23 — stage 9c / 9d (QERARLAR 2026-10-28 mərhələ 9 §5–§7): the tax parameters of a year — the
+// VM 114 rates chosen per category ('{}' — the highest ones), the micro / small business
+// coefficient, the write-off threshold, the profit tax rate, losses of years before Meyar and the
+// accountant's adjustments; and the tax residual an opening balance takes over (NULL — the books').
+
+const v23 = `
+CREATE TABLE tax_years(
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  year TEXT NOT NULL,
+  rates TEXT NOT NULL DEFAULT '{}',
+  coefficient INTEGER NOT NULL DEFAULT 100,
+  write_off INTEGER NOT NULL DEFAULT 10000,
+  profit_rate INTEGER NOT NULL DEFAULT 2000,
+  losses INTEGER NOT NULL DEFAULT 0,
+  adjustments TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(company_id,year)
+);
+ALTER TABLE asset_lines ADD COLUMN tax_residual INTEGER;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1640,4 +1661,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 20, sql: v20 },
   { version: 21, sql: v21 },
   { version: 22, sql: v22 },
+  { version: 23, sql: v23 },
 ];

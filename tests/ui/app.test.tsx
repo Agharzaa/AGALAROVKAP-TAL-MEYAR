@@ -3348,3 +3348,62 @@ test('stage 9b: the muzdlu iş return opens on the quarter, by months; another q
     h.close();
   }
 });
+
+test('stage 9c: tax depreciation by category; the year’s rates are changed in the parameters', async () => {
+  const h = harness();
+  const s = seed(h);
+  const year = String(new Date().getFullYear());
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const depreciation = catalog.items.find((i) => i.role === 'depreciation')!.id;
+  const kamaz = h.run({
+    type: 'fixedAsset.save',
+    companyId: s.companyId,
+    name: 'Kamaz',
+    group: 'transport',
+    archived: false,
+  } as never).id;
+  h.run({
+    type: 'asset.save',
+    companyId: s.companyId,
+    kind: 'opening',
+    date: `${year}-01-01`,
+    lines: [
+      {
+        assetId: kamaz,
+        cost: '60000',
+        accumulated: '10000',
+        taxResidual: '40000',
+        lifeMonths: 60,
+        remainingMonths: 48,
+        expenseAccount: '721',
+        expenseSk: [depreciation],
+        counterAccount: '343',
+        counterSk: [],
+      },
+    ],
+  } as never);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əsas vəsaitlər' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Vergi amortizasiyası' }));
+    const report = within(pane());
+    const cells = async () =>
+      within((await report.findByRole('rowheader', { name: 'Amortizasiya' })).closest('tr')!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent!.replace(/\s/g, ' '));
+    // Transport (the 4th category): 40 000 × 25%.
+    assert.equal((await cells())[3], '10 000,00');
+    await user.click(report.getByRole('button', { name: 'Parametrlər' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const rate = dialog.getByLabelText('Norma: Nəqliyyat vasitələri');
+    await user.clear(rate);
+    await user.type(rate, '20');
+    await user.click(dialog.getByRole('button', { name: 'Saxla' }));
+    await waitFor(async () => assert.equal((await cells())[3], '8 000,00'));
+    assert.equal(screen.queryByRole('dialog'), null);
+  } finally {
+    h.close();
+  }
+});

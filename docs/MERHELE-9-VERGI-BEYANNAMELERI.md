@@ -45,13 +45,11 @@ Status: **təsdiqlənib** (28.10.2026). İstifadəçi əvvəlcədən icazə verd
 
 - **Sxem v22 (9b):** `payroll_rates`-in 2026 başlanğıc dəstində `dsmfEmployer` hələ ilkin iki pillədirsə (22% / 15%) və həmin şirkətdə gross-u 8 000-dən çox olan uçotdakı əmək haqqı sətri yoxdursa — üçüncü pillə (8 000-dən yuxarı 11%) əlavə olunur. Dəst istifadə olunubsa (8 000-dən yuxarı sətir var) — dəyişmir, audit jurnalına və bəyannamənin yoxlamasına xəbərdarlıq. Yeni bazalar dəsti üç pillə ilə alır.
 - **Sxem v23 (9c):**
-  - `tax_depreciation_rates(company_id, year, category, rate, PRIMARY KEY(company_id, year, category))` — il üzrə seçilmiş norma (yüzdə birlə, 25% → 2500); yoxdursa — VM 114.3-ün yuxarı norması;
-  - `companies.tax_coefficient` — 100 / 150 / 200 (adi / kiçik / mikro sahibkar, VM 114.3-1, 114.3-2);
+  - `tax_years(company_id, year, rates, coefficient, write_off, profit_rate, losses, adjustments, updated_at)` — ilin vergi parametrləri (9c və 9d birlikdə): kateqoriya üzrə seçilmiş norma (JSON, yüzdə birlə, 25% → 2500; yazılmayıbsa — VM 114.3-ün yuxarı norması), əmsal 100 / 150 / 200 (adi / kiçik / mikro sahibkar, VM 114.3-1, 114.3-2), silinmə həddi (10 000 qəpik), mənfəət vergisinin dərəcəsi (2000 = 20%), Meyar-dan əvvəlki illərin zərəri, mühasibin düzəlişləri (JSON: [{label, amount}]); bağlanmış ilin parametrləri dəyişmir;
   - `asset_lines.tax_residual` — başlanğıc qalıq sənədində vəsaitin Meyar-dan əvvəlki vergi qalıq dəyəri (NULL — ilkin dəyər − yığılmış amortizasiya götürülür); istismara vermədə vergi dəyəri = ilkin dəyər.
   - Vergi kateqoriyası vəsaitin qrupundan: `buildings` → bina, tikili, qurğu (7%), `machinery` → maşın və avadanlıq (20%), `computers` → hesablama texnikası (25%), `transport` → nəqliyyat vasitələri (25%), `other` → digər (20%).
 - **Sxem v24 (9d):**
   - `items.tax_deductible` (xərc maddəsi; 1 — standart, 0 — "gəlirdən çıxılmır": cərimə, sanksiya, limitdən artıq təmsilçilik və s.);
-  - `profit_tax_years(company_id, year, rate, losses, adjustments, updated_at)` — il üzrə dərəcə (2000 = 20%), keçmiş illərin köçürülən zərəri (əl ilə, Meyar-dan əvvəlki illər), düzəlişlər (JSON: [{label, amount}] — mühasibin əlavə gəlir / çıxılmayan xərc sətirləri).
   - Dekabr bağlanışının addımı `profitTax` (yeni `ClosingStepKey`).
 
 Ayrı "bəyannamə sənədi" saxlanılmır: rəqəmlər hər dəfə uçotdan hesablanır (bağlanmış dövrdə dəyişmir). Mənfəət vergisinin yazılışı dekabr bağlanışının içindədir.

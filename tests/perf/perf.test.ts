@@ -472,6 +472,10 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   time('ƏDV bəyannaməsi, ay', 1500, () =>
     q({ type: 'declaration', kind: 'vat', period: '2026-09' }),
   );
+  // V8 (9c): the tax depreciation of the year — the 200 assets of the opening balance.
+  time('Vergi amortizasiyası, il (200 vəsait)', 1500, () =>
+    q({ type: 'declaration', kind: 'taxDepreciation', period: '2026' }),
+  );
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

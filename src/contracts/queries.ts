@@ -317,6 +317,8 @@ export interface AssetLineView {
   expenseSk: string[];
   counterAccount: string;
   counterSk: string[];
+  /** Opening balance (stage 9c): the tax residual taken over ('' — cost less depreciation). */
+  taxResidual: string;
 }
 export interface AssetDocumentView {
   id: string;
@@ -910,7 +912,24 @@ export interface DeclarationView {
   /** What the accountant should look at before filing; nothing here blocks. */
   checks: { kind: 'warning' | 'info'; text: string }[];
   appendices: DeclarationTable[];
+  /** Vergi amortizasiyası and mənfəət vergisi: the year's parameters, edited on the page. */
+  params?: TaxYearView;
   ms: number;
+}
+/** The tax parameters of a year (stage 9c / 9d), as decimal strings. */
+export interface TaxYearView {
+  year: string;
+  /** Saved by the accountant (false — the defaults). */
+  saved: boolean;
+  /** The year is closed: its parameters do not change. */
+  locked: boolean;
+  /** Per category: the rate chosen and the code's highest one (percent). */
+  rates: { category: string; label: string; rate: string; max: string }[];
+  coefficient: string;
+  writeOff: string;
+  profitRate: string;
+  losses: string;
+  adjustments: { label: string; amount: string }[];
 }
 export interface DashboardTile {
   key: 'income' | 'profit' | 'money' | 'receivables' | 'payables' | 'vat';

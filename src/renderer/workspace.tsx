@@ -38,6 +38,7 @@ export type Page =
   | 'vatSummary'
   | 'vatReturn'
   | 'payrollReturn'
+  | 'taxDepreciation'
   | 'dashboard'
   | 'products'
   | 'employees'

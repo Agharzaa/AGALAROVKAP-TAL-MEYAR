@@ -34,6 +34,8 @@ interface LineForm {
   expenseSk: string[];
   counterAccount: string;
   counterSk: string[];
+  /** Opening balance (stage 9c): the tax residual value; '' — cost less depreciation. */
+  taxResidual: string;
 }
 interface Form {
   number: string;
@@ -55,6 +57,7 @@ const blank = (kind: Kind): LineForm => ({
   expenseSk: [],
   counterAccount: kind === 'opening' ? '343' : '',
   counterSk: [],
+  taxResidual: '',
 });
 
 function fromDetail(d: AssetDocumentDetail): Form {
@@ -75,6 +78,7 @@ function fromDetail(d: AssetDocumentDetail): Form {
       expenseSk: l.expenseSk,
       counterAccount: l.counterAccount,
       counterSk: l.counterSk,
+      taxResidual: l.taxResidual,
     })),
   };
 }
@@ -93,6 +97,7 @@ function toInput(kind: Kind, l: LineForm): AssetLineInput {
     expenseSk: kind === 'disposal' ? [] : l.expenseSk,
     counterAccount: kind === 'opening' ? l.counterAccount : '',
     counterSk: kind === 'opening' ? l.counterSk : [],
+    taxResidual: kind === 'opening' ? l.taxResidual : '',
   };
 }
 
@@ -411,6 +416,14 @@ export function AssetEditor({ kind, id }: { kind: Kind; id?: string }) {
                       inputMode="numeric"
                       value={l.remainingMonths}
                       onChange={(e) => setLine(i, { remainingMonths: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Vergi qalıq dəyəri" hint="VM 114; boş — ilkin dəyər − yığılmış">
+                    <input
+                      aria-label={`Sətir ${i + 1}: vergi qalıq dəyəri`}
+                      inputMode="decimal"
+                      value={l.taxResidual}
+                      onChange={(e) => setLine(i, { taxResidual: e.target.value })}
                     />
                   </Field>
                 </>

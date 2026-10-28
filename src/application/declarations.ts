@@ -20,6 +20,7 @@ import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
+import { taxDepreciationReturn } from './tax.js';
 
 const money = (m: Minor) => formatMinor(m);
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
@@ -551,6 +552,8 @@ export function declaration(
       return vatReturn(db, companyId, period);
     case 'payroll':
       return payrollReturn(db, companyId, period);
+    case 'taxDepreciation':
+      return taxDepreciationReturn(db, companyId, period);
     default:
       throw new DomainError('Bu bəyannamə hələ hazır deyil.', 'kind');
   }

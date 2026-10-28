@@ -158,6 +158,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Əsas vəsait və ay üzrə: yazılmış və proqnoz',
     icon: Reports,
   },
+  taxDepreciation: {
+    title: 'Vergi amortizasiyası',
+    hint: 'VM 114: kateqoriyalar üzrə il sonuna qalıq dəyər, norma, amortizasiya; uçotla müqayisə',
+    icon: Reports,
+  },
   assetDisposals: {
     title: 'Əsas vəsaitlərin silinməsi',
     hint: 'Silinmə: yığılmış amortizasiya 111-dən, qalıq dəyər 731-ə',
@@ -507,6 +512,7 @@ export const sections: Section[] = [
         title: 'Hesabatlar',
         items: [
           { label: 'Amortizasiya cədvəli', icon: Reports, action: page('depreciationSchedule') },
+          { label: 'Vergi amortizasiyası', icon: Reports, action: page('taxDepreciation') },
           card('111', 'Əsas vəsaitlərin dəyəri (111)'),
           card('112', 'Yığılmış amortizasiya (112)'),
           card('113', 'Kapitallaşdırılan məsrəflər (113)'),
@@ -597,6 +603,7 @@ export const sections: Section[] = [
         items: [
           { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
           { label: 'Muzdlu iş bəyannaməsi', icon: Reports, action: page('payrollReturn') },
+          { label: 'Vergi amortizasiyası', icon: Reports, action: page('taxDepreciation') },
         ],
       },
       {
@@ -693,6 +700,7 @@ export function sectionOfView(view: View): string {
         case 'assetOpenings':
         case 'assetDisposals':
         case 'depreciationSchedule':
+        case 'taxDepreciation':
           return 'assets';
         case 'payrolls':
         case 'payrollRates':

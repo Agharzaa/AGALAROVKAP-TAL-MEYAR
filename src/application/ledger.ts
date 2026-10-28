@@ -36,6 +36,7 @@ import { applyEq, bulkEqMap, createEqPartners, learnEq, linkEq, saveEqMap } from
 import { cancelOperation, saveOperation } from './operations.js';
 import { cancelAssetDocument, saveAssetDocument, saveFixedAsset } from './assets.js';
 import { cancelPayroll, savePayroll, savePayrollRates } from './payroll.js';
+import { saveTaxYear } from './tax.js';
 import { cancelAbsence, saveAbsence } from './absences.js';
 import { saveCalendar } from './calendar.js';
 import { cancelTimesheet, saveTimesheet } from './timesheets.js';
@@ -180,6 +181,8 @@ export class Ledger {
         return cancelAssetDocument(tx, c);
       case 'payrollRates.save':
         return savePayrollRates(tx, c);
+      case 'taxYear.save':
+        return saveTaxYear(tx, c);
       case 'payroll.save':
         return savePayroll(tx, c);
       case 'payroll.cancel':

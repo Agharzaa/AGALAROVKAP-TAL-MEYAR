@@ -119,6 +119,8 @@ export const assetLineInput = z.object({
   /** Opening balance: the counter account (e.g. 343) with its subkonto. */
   counterAccount: z.string().max(20).default(''),
   counterSk: z.array(z.string().max(120)).max(3).default([]),
+  /** Opening balance (stage 9c): the tax residual value taken over ('' — cost less depreciation). */
+  taxResidual: decimal.default(''),
 });
 export type AssetLineInput = z.infer<typeof assetLineInput>;
 
@@ -421,6 +423,25 @@ export const commandSchema = z.discriminatedUnion('type', [
     memo: text(500).default(''),
   }),
   z.object({ type: z.literal('absence.cancel'), ...base, id, version, reason: text(240) }),
+  /**
+   * Stage 9c / 9d: the tax parameters of a year — VM 114 rates per category (percent), the micro /
+   * small business coefficient, the write-off threshold, the profit tax rate, losses carried from
+   * years before Meyar, the accountant's adjustments (+ income, − deduction).
+   */
+  z.object({
+    type: z.literal('taxYear.save'),
+    ...base,
+    year: z.string().max(4),
+    rates: z.record(z.string().max(20), z.string().max(8)),
+    coefficient: z.string().max(4).default('1'),
+    writeOff: decimal.default('100'),
+    profitRate: z.string().max(8).default('20'),
+    losses: decimal.default('0'),
+    adjustments: z
+      .array(z.object({ label: text(160), amount: decimal }))
+      .max(30)
+      .default([]),
+  }),
   /** Stage 8a: a set of payroll rates in force from a day (marginal brackets, percent). */
   z.object({
     type: z.literal('payrollRates.save'),

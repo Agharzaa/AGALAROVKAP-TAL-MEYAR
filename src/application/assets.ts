@@ -344,6 +344,8 @@ interface Line {
   expenseSk: string[];
   counterAccount: string;
   counterSk: string[];
+  /** Opening balance (stage 9c): the tax residual taken over; null — cost less depreciation. */
+  taxResidual: Minor | null;
 }
 
 function readLines(
@@ -393,6 +395,7 @@ function readLines(
         expenseSk: item,
         counterAccount: '',
         counterSk: [],
+        taxResidual: null,
       });
       return;
     }
@@ -479,6 +482,7 @@ function readLines(
         expenseSk,
         counterAccount: '',
         counterSk: [],
+        taxResidual: null,
       });
       return;
     }
@@ -502,6 +506,11 @@ function readLines(
         `${where}: amortizasiya olunacaq dəyər qalıb — qalan ayları yazın.`,
         `${f}.remainingMonths`,
       );
+    const taxResidual = l.taxResidual.trim()
+      ? parseMoney(l.taxResidual, `${where}: vergi qalıq dəyəri`)
+      : null;
+    if (taxResidual !== null && taxResidual < 0n)
+      throw new DomainError(`${where}: vergi qalıq dəyəri mənfi ola bilməz.`, `${f}.taxResidual`);
     const counter = chart.require(l.counterAccount.trim(), `${f}.counterAccount`);
     if (['111', '112', '113'].includes(counter.code))
       throw new DomainError(`${where}: qarşı hesab başqa olmalıdır.`, `${f}.counterAccount`);
@@ -530,6 +539,7 @@ function readLines(
       expenseSk,
       counterAccount: counter.code,
       counterSk,
+      taxResidual,
     });
   });
   checkPostings(chart, postings, 'lines');
@@ -547,6 +557,7 @@ const describeLines = (lines: readonly Line[]) =>
     months: l.months,
     expense: [l.expenseAccount, ...l.expenseSk],
     ...(l.counterAccount ? { counter: [l.counterAccount, ...l.counterSk] } : {}),
+    ...(l.taxResidual !== null ? { taxResidual: formatMinor(l.taxResidual) } : {}),
   }));
 
 export function saveAssetDocument(tx: Tx, cmd: CommandOf<'asset.save'>): CommandResult {
@@ -627,8 +638,8 @@ export function saveAssetDocument(tx: Tx, cmd: CommandOf<'asset.save'>): Command
   lines.forEach((l, i) =>
     tx.db.run(
       `INSERT INTO asset_lines(company_id,document_id,line_no,asset_id,product_id,quantity,cost,accumulated,
-         salvage,life_months,months,expense_account,expense_sk,counter_account,counter_sk)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         salvage,life_months,months,expense_account,expense_sk,counter_account,counter_sk,tax_residual)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       cmd.companyId,
       id,
       i + 1,
@@ -644,6 +655,7 @@ export function saveAssetDocument(tx: Tx, cmd: CommandOf<'asset.save'>): Command
       JSON.stringify(l.expenseSk),
       l.counterAccount,
       JSON.stringify(l.counterSk),
+      l.taxResidual,
     ),
   );
   tx.post(cmd.companyId, chart, { type: ASSET, id, number, version }, date, false, postings);
@@ -839,6 +851,7 @@ function documentView(db: Db, r: Row): AssetDocumentView {
       expenseSk: JSON.parse(str(l.expense_sk)) as string[],
       counterAccount: str(l.counter_account),
       counterSk: JSON.parse(str(l.counter_sk)) as string[],
+      taxResidual: l.tax_residual === null ? '' : formatMinor(l.tax_residual as bigint),
     }));
   return {
     id: str(r.id),

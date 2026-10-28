@@ -5,13 +5,14 @@
  * card for the period.
  */
 import { useState } from 'react';
-import type { DeclarationKind, DeclarationView } from '../../contracts/queries';
+import type { DeclarationKind, DeclarationView, TaxYearView } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { MonthFilter } from '../filters';
 import { money } from '../format';
-import { useQuery } from '../hooks';
+import { useMutation, useQuery } from '../hooks';
+import { Plus } from '../icons';
 import { pages } from '../pages';
-import { Amount, Empty, Notice } from '../ui';
+import { Amount, Empty, Field, Modal, Notice } from '../ui';
 import { usePeriod, useWindow, useWorkspace, type Page } from '../workspace';
 import type { Cell } from '../xlsx';
 import { useOutput } from './reports';
@@ -19,7 +20,7 @@ import { useOutput } from './reports';
 const pageOf: Record<DeclarationKind, Page> = {
   vat: 'vatReturn',
   payroll: 'payrollReturn',
-  taxDepreciation: 'vatReturn',
+  taxDepreciation: 'taxDepreciation',
   profitTax: 'vatReturn',
 };
 const unit: Record<DeclarationKind, 'month' | 'quarter' | 'year'> = {
@@ -89,6 +90,7 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
   const win = useWindow();
   const ws = useWorkspace();
   const [period, setPeriod] = useState(initial(kind, usePeriod().from));
+  const [editing, setEditing] = useState(false);
   const valid = pattern[unit[kind]].test(period);
   const view = useQuery<DeclarationView>(
     valid ? { type: 'declaration', companyId: win.companyId, kind, period } : null,
@@ -224,7 +226,18 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
       title={meta.title}
       hint={v ? `${v.title} · ${v.ms} ms · sətrə iki dəfə klik — hesab kartı` : meta.hint}
       onRefresh={view.reload}
-      actions={v && out.buttons}
+      actions={
+        v && (
+          <>
+            {v.params && (
+              <button type="button" className="button secondary" onClick={() => setEditing(true)}>
+                Parametrlər
+              </button>
+            )}
+            {out.buttons}
+          </>
+        )
+      }
       filters={<PeriodFilter kind={kind} value={period} onChange={setPeriod} />}
       notices={
         <>
@@ -246,6 +259,148 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
         <div className="table-scroll declaration">{body}</div>
       )}
       {out.sheet}
+      {editing && v?.params && (
+        <TaxYearDialog
+          params={v.params}
+          onClose={() => {
+            setEditing(false);
+            view.reload();
+          }}
+        />
+      )}
     </ModuleFrame>
+  );
+}
+
+/** The year's tax parameters (9c / 9d): VM 114 rates, the coefficient, the profit tax. */
+function TaxYearDialog({ params, onClose }: { params: TaxYearView; onClose: () => void }) {
+  const win = useWindow();
+  const m = useMutation();
+  const [p, setP] = useState(params);
+  const locked = params.locked;
+  const save = async () => {
+    const done = await m.run({
+      type: 'taxYear.save',
+      companyId: win.companyId,
+      year: p.year,
+      rates: Object.fromEntries(p.rates.map((r) => [r.category, r.rate])),
+      coefficient: p.coefficient,
+      writeOff: p.writeOff,
+      profitRate: p.profitRate,
+      losses: p.losses,
+      adjustments: p.adjustments,
+    });
+    if (done) onClose();
+  };
+  const setAdjustment = (i: number, patch: object) =>
+    setP({ ...p, adjustments: p.adjustments.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
+  return (
+    <Modal
+      title={`Vergi parametrləri · ${p.year}`}
+      subtitle={locked ? 'İl bağlanıb — parametrlər dəyişdirilmir' : 'Mühasib təsdiq edir'}
+      onClose={onClose}
+    >
+      <form className="dialog-form" noValidate onSubmit={(e) => (e.preventDefault(), void save())}>
+        <fieldset className="form-grid" disabled={locked || m.busy}>
+          {p.rates.map((r, i) => (
+            <Field key={r.category} label={r.label} hint={`VM 114.3: ${r.max}%-dək`}>
+              <input
+                aria-label={`Norma: ${r.label}`}
+                inputMode="decimal"
+                value={r.rate}
+                onChange={(e) =>
+                  setP({
+                    ...p,
+                    rates: p.rates.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)),
+                  })
+                }
+              />
+            </Field>
+          ))}
+          <Field label="Əmsal" hint="Kiçik sahibkar 1,5, mikro 2 (VM 114.3-1, 114.3-2)">
+            <select
+              aria-label="Əmsal"
+              value={p.coefficient}
+              onChange={(e) => setP({ ...p, coefficient: e.target.value })}
+            >
+              {['1', '1,5', '2'].map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Kateqoriya silinir, qalıq azdırsa" hint="₼">
+            <input
+              aria-label="Silinmə həddi"
+              inputMode="decimal"
+              value={p.writeOff}
+              onChange={(e) => setP({ ...p, writeOff: e.target.value })}
+            />
+          </Field>
+          <Field label="Mənfəət vergisinin dərəcəsi" hint="%">
+            <input
+              aria-label="Mənfəət vergisinin dərəcəsi"
+              inputMode="decimal"
+              value={p.profitRate}
+              onChange={(e) => setP({ ...p, profitRate: e.target.value })}
+            />
+          </Field>
+          <Field label="Keçmiş illərin zərəri (Meyar-dan əvvəl)" hint="VM 121: 5 il">
+            <input
+              aria-label="Keçmiş illərin zərəri"
+              inputMode="decimal"
+              value={p.losses}
+              onChange={(e) => setP({ ...p, losses: e.target.value })}
+            />
+          </Field>
+        </fieldset>
+        <fieldset className="lines" disabled={locked || m.busy}>
+          <legend>Düzəlişlər (+ gəlir / gəlirdən çıxılmayan xərc, − çıxılan)</legend>
+          {p.adjustments.map((a, i) => (
+            <div key={i} className="inline-pair">
+              <input
+                aria-label={`Düzəliş ${i + 1}: ad`}
+                value={a.label}
+                onChange={(e) => setAdjustment(i, { label: e.target.value })}
+              />
+              <input
+                aria-label={`Düzəliş ${i + 1}: məbləğ`}
+                inputMode="decimal"
+                value={a.amount}
+                onChange={(e) => setAdjustment(i, { amount: e.target.value })}
+              />
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() => setP({ ...p, adjustments: p.adjustments.filter((_, j) => j !== i) })}
+              >
+                Sil
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="button secondary small"
+            onClick={() =>
+              setP({ ...p, adjustments: [...p.adjustments, { label: '', amount: '' }] })
+            }
+          >
+            <Plus size={13} /> Düzəliş
+          </button>
+        </fieldset>
+        {m.error && <Notice>{m.error.message}</Notice>}
+        <div className="form-actions">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Ləğv et
+          </button>
+          {!locked && (
+            <button type="submit" className="button primary" disabled={m.busy}>
+              Saxla
+            </button>
+          )}
+        </div>
+      </form>
+    </Modal>
   );
 }
