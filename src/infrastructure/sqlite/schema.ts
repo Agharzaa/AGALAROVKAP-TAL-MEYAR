@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1593,6 +1593,30 @@ CREATE TABLE employee_salaries(
 INSERT INTO employee_salaries SELECT company_id,id,'',salary FROM employees;
 `;
 
+// v22 — stage 9b (QERARLAR 2026-10-28 mərhələ 9 §2): above 8 000 the employer's DSMF is 11%. The
+// 2026 starting set gets the third bracket where it still has the first two of 0.9.0 and no posted
+// payroll under it went above 8 000 (a set in use is not changed: its amounts stay as posted).
+
+const oldEmployerDsmf = '[{"upTo":"200.00","rate":"22"},{"upTo":"","rate":"15"}]';
+const v22 = `
+CREATE TEMP TABLE dsmf_kept AS SELECT r.company_id FROM payroll_rates r
+  WHERE r.valid_from='2026-01-01' AND json_extract(r.rates,'$.dsmfEmployer')=${q(oldEmployerDsmf)}
+    AND EXISTS(SELECT 1 FROM payroll_lines l JOIN payroll_documents d ON d.id=l.document_id
+      WHERE l.company_id=r.company_id AND d.status='posted' AND l.gross>800000 AND d.month>='2026-01'
+        AND d.month<COALESCE((SELECT substr(MIN(x.valid_from),1,7) FROM payroll_rates x
+          WHERE x.company_id=r.company_id AND x.valid_from>'2026-01-01'),'9999-99'));
+UPDATE payroll_rates SET rates=json_set(rates,'$.dsmfEmployer',
+    json('[{"upTo":"200.00","rate":"22"},{"upTo":"8000.00","rate":"15"},{"upTo":"","rate":"11"}]')),
+    updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  WHERE valid_from='2026-01-01' AND json_extract(rates,'$.dsmfEmployer')=${q(oldEmployerDsmf)}
+    AND company_id NOT IN(SELECT company_id FROM dsmf_kept);
+INSERT INTO audit(company_id,at,actor,correlation_id,action,entity,entity_id,detail)
+  SELECT company_id,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'system','migration-22','Yeniləndi','Əmək haqqı dərəcələri',company_id,
+  '2026 dəsti dəyişdirilmədi: uçotdakı əmək haqqında 8 000-dən çox gəlir var. İşəgötürənin DSMF-si 8 000-dən yuxarı 11%-dir (DVX 2026) — mühasib yeni dəst yazır.'
+  FROM dsmf_kept;
+DROP TABLE dsmf_kept;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1615,4 +1639,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 19, sql: v19, foreignKeysOff: true },
   { version: 20, sql: v20 },
   { version: 21, sql: v21 },
+  { version: 22, sql: v22 },
 ];

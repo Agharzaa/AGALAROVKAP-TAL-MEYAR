@@ -3301,3 +3301,50 @@ test('stage 9a: the VAT return lists sales by rate with their source; a row open
     h.close();
   }
 });
+
+test('stage 9b: the muzdlu iş return opens on the quarter, by months; another quarter is chosen', async () => {
+  const h = harness();
+  const s = seed(h);
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const group = catalog.items.find((i) => i.role === 'defaultProductGroup')!.id;
+  h.run({
+    type: 'employee.save',
+    companyId: s.companyId,
+    name: 'Sürücü Məmmədov',
+    position: 'Sürücü',
+    fin: '5AAA111',
+    tabNo: '001',
+    hired: '2026-01-12',
+    left: '',
+    salary: '1000',
+    expenseAccount: '701',
+    expenseSk: [group, ''],
+    archived: false,
+  });
+  const lines = h.ledger.query({ type: 'payrollFill', companyId: s.companyId, month: '2026-04' });
+  h.run({ type: 'payroll.save', companyId: s.companyId, month: '2026-04', lines } as never);
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Əmək haqqı' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Muzdlu iş bəyannaməsi' }));
+    const report = within(pane());
+    await report.findByRole('rowheader', { name: 'Gəlir vergisi' });
+    await user.clear(report.getByLabelText('İl'));
+    await user.type(report.getByLabelText('İl'), '2026');
+    await user.selectOptions(report.getByLabelText('Rüb'), 'Q2');
+    await report.findAllByRole('columnheader', { name: '2026-04' });
+    const tax = report.getByRole('rowheader', { name: 'Gəlir vergisi' }).closest('tr')!;
+    assert.deepEqual(
+      within(tax)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+      ['24,00', '0,00', '0,00', '24,00', '521.03'],
+    );
+    report.getByText(/2026-05: uçotda əmək haqqı sənədi yoxdur/);
+    report.getByRole('cell', { name: '5AAA111' });
+  } finally {
+    h.close();
+  }
+});

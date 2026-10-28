@@ -68,7 +68,7 @@ const defaultPay = { overtime: '200', holidayWork: '200', night: '40' };
 
 /**
  * 2026, non-oil and non-state sector (plan §5): the starting set the accountant confirms. Above
- * 8 000 the DSMF keeps its rates until the accountant says otherwise (QERARLAR 2026-10-27 §1).
+ * 8 000 the employer's DSMF is 11% (DVX's 2026 leaflet; QERARLAR 2026-10-28 mərhələ 9 §2).
  */
 export const rates2026: RatesInput = {
   incomeTax: [
@@ -88,7 +88,8 @@ export const rates2026: RatesInput = {
   ],
   dsmfEmployer: [
     { upTo: '200.00', rate: '22' },
-    { upTo: '', rate: '15' },
+    { upTo: '8000.00', rate: '15' },
+    { upTo: '', rate: '11' },
   ],
   unemploymentEmployer: [{ upTo: '', rate: '0.5' }],
   medicalEmployer: [

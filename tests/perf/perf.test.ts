@@ -525,6 +525,16 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       () => q({ type: 'payrollTaxes', month: '2026-10' }) as { employees: number },
     );
     assert.equal(taxes.employees, 300);
+    // V8 (9b): the muzdlu iş return of the quarter — 300 employees, the appendix by employee.
+    const quarter = time(
+      'Muzdlu iş bəyannaməsi, rüb (300 işçi)',
+      1500,
+      () =>
+        q({ type: 'declaration', kind: 'payroll', period: '2026-Q4' }) as {
+          appendices: { rows: unknown[] }[];
+        },
+    );
+    assert.equal(quarter.appendices[0]!.rows.length, 300);
   }
 });
 

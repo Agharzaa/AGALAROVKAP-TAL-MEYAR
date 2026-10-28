@@ -18,7 +18,7 @@ import { useOutput } from './reports';
 
 const pageOf: Record<DeclarationKind, Page> = {
   vat: 'vatReturn',
-  payroll: 'vatReturn',
+  payroll: 'payrollReturn',
   taxDepreciation: 'vatReturn',
   profitTax: 'vatReturn',
 };
@@ -48,7 +48,8 @@ function PeriodFilter({
 }) {
   const u = unit[kind];
   if (u === 'month') return <MonthFilter value={value} onChange={onChange} />;
-  const year = value.slice(0, 4);
+  // A quarter is "2026-Q3"; the year may be half typed ("20-Q3"), the quarter is kept.
+  const [year = '', quarter = 'Q1'] = value.split('-');
   return (
     <>
       <label className="filter-text">
@@ -60,7 +61,7 @@ function PeriodFilter({
           value={year}
           onChange={(e) => {
             const y = e.target.value.replace(/\D/g, '');
-            onChange(u === 'year' ? y : `${y}${value.slice(4)}`);
+            onChange(u === 'year' ? y : `${y}-${quarter}`);
           }}
         />
       </label>
@@ -69,7 +70,7 @@ function PeriodFilter({
           <span>Rüb</span>
           <select
             aria-label="Rüb"
-            value={value.slice(5)}
+            value={quarter}
             onChange={(e) => onChange(`${year}-${e.target.value}`)}
           >
             {['Q1', 'Q2', 'Q3', 'Q4'].map((q) => (

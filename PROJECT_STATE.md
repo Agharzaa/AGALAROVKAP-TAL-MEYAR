@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 28.10.2026 (0.9.5, mərhələ 9a). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 28.10.2026 (0.9.6, mərhələ 9b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -672,6 +672,15 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md` (istifadəçi əvvəlcədən icaz�
 - **Yoxlamalar:** ay bağlanmayıb (əvəzləşdirmə hələ yazılmayıb); azad satış + alış ƏDV-si — VM 175 mütənasib bölgü (vergi tutulan pay faizlə; Meyar bölgünü özü etmir); 521.01-in Kt dövriyyəsi ≠ satışın ƏDV-si; DVX ↔ uçot fərqi və ya DVX yüklənməyib.
 - Testlər: `tests/integration/declarations.test.ts` (V1, V2), `tests/ui` (9a), perf (ƏDV bəyannaməsi, ay: 40 ms). `npm run typecheck`, `npm test` 258, `npm run test:ui` 50, `npm run test:perf` keçir. Sxem dəyişməyib (v21). Electron işlədilmədi.
 - **Növbəti:** 9b — muzdlu iş bəyannaməsi və DSMF 8 000-dən yuxarı 11% (sxem v22).
+
+## 0.9.6 — mərhələ 9b: muzdlu iş bəyannaməsi, DSMF 8 000-dən yuxarı 11% (28.10.2026)
+
+- **DSMF:** 8 000 ₼-dan yuxarı hissədən işəgötürənin payı **11%** (DVX-nin 2026 flayeri: "1214 manat + 8000 manatdan yuxarı hissənin 11%-i"; QERARLAR 2026-10-28 mərhələ 9 §2 — 2026-10-27 §1-in açıq qalan qeydini əvəz edir). 2026 başlanğıc dəsti üç pillədir: 22% (200-dək), 15% (200–8 000), 11% (8 000-dən yuxarı). İşçinin payı dəyişmir (10%).
+- **Sxem v22:** 2026 dəsti hələ 0.9.0-ın iki pilləsidirsə və onunla 8 000-dən çox gross-u olan uçotdakı əmək haqqı yoxdursa — üçüncü pillə əlavə olunur; istifadə olunmuş dəst dəyişmir (audit jurnalında qeyd, mühasib yeni dəst yazır). Real bazanın surəti (v13) v14 → v22-yə təmiz keçir, bütövlük `ok`.
+- **Muzdlu iş bəyannaməsi** (Əmək haqqı → Hesabatlar; Hesabatlar → Vergi bəyannamələri; rüb, ay-ay + rüb): işçi sayı, hesablanmış gəlir (əmək haqqı + xəstəlik müavinəti), güzəşt, vergi tutulan gəlir, gəlir vergisi; DSMF və işsizlik bazası (müavinətsiz), DSMF / işsizlik / tibbi — işçi və işəgötürən, tibbi baza 2 500-dək və yuxarı; 521.03 / 522.xx ilə tutuşma (rübün əvvəlinə borc, hesablanıb, köçürülüb, son); işçilər üzrə əlavə (FİN, ad, tabel №, ay: gəlir, vergi, DSMF, işsizlik, tibbi). Yoxlamalar: FİN-i olmayan işçi, ayın əmək haqqı yoxdur, yazılışlar ≠ bəyannamə, 8 000-dən çox gəlir + dəstdə 11% pilləsi yoxdur.
+- Rüb filtri: il + rüb (yarımçıq il yazılanda rüb itmir).
+- Testlər: `tests/integration/declarations-payroll.test.ts` (V3, V4, v21 → v22), `tests/domain/payroll.test.ts` (10 000 → işəgötürən 1 434,00; 9 000 → 886,00 / 1 324,00), `tests/ui` (9b), perf (muzdlu iş, rüb, 300 işçi: 4 ms). `npm run typecheck`, `npm test` 262, `npm run test:ui` 51, `npm run test:perf` keçir. Electron işlədilmədi.
+- **Növbəti:** 9c — vergi amortizasiyası (VM 114, sxem v23).
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

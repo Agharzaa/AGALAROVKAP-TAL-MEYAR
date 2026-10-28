@@ -1127,6 +1127,8 @@ function Routed({ win }: { win: Win }) {
           return <VatSummaryPage />;
         case 'vatReturn':
           return <DeclarationPage kind="vat" />;
+        case 'payrollReturn':
+          return <DeclarationPage kind="payroll" />;
         case 'dashboard':
           return <DashboardPage />;
         case 'products':

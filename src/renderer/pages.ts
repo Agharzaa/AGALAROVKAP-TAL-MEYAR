@@ -130,6 +130,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Bəyannamə üçün rəqəmlər: satış dərəcələr üzrə, hesablanmış və əvəzləşdirilən ƏDV, 521.01, əlavələr',
     icon: ReceiptText,
   },
+  payrollReturn: {
+    title: 'Muzdlu iş bəyannaməsi',
+    hint: 'Rüb, ay-ay: gəlir vergisi, DSMF, işsizlik və tibbi sığorta — baza, haqlar, hesablarla tutuşma, işçilər üzrə',
+    icon: Reports,
+  },
   dashboard: {
     title: 'İdarə paneli',
     hint: 'Ayın əsas göstəriciləri və 12 ayın dinamikası',
@@ -563,6 +568,7 @@ export const sections: Section[] = [
           { label: 'Məzuniyyət qalıqları', icon: Reports, action: page('vacationBalances') },
           { label: 'İşçilərlə hesablaşmalar', icon: Reports, action: page('payrollSettlements') },
           { label: 'Vergi və fondlar', icon: Reports, action: page('payrollTaxes') },
+          { label: 'Muzdlu iş bəyannaməsi', icon: Reports, action: page('payrollReturn') },
           card('533', 'Hesab kartı 533'),
           card('521.03', 'Gəlir vergisi (521.03)'),
           card('522.01', 'DSMF (522.01)'),
@@ -588,7 +594,10 @@ export const sections: Section[] = [
       },
       {
         title: 'Vergi bəyannamələri',
-        items: [{ label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') }],
+        items: [
+          { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
+          { label: 'Muzdlu iş bəyannaməsi', icon: Reports, action: page('payrollReturn') },
+        ],
       },
       {
         title: 'Nəzarət',
@@ -707,6 +716,7 @@ export function sectionOfView(view: View): string {
         case 'profitLoss':
         case 'vatSummary':
         case 'vatReturn':
+        case 'payrollReturn':
         case 'dashboard':
           return 'reports';
         case 'cashFlow':

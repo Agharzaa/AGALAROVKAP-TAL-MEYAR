@@ -18,6 +18,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
+import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
 
 const money = (m: Minor) => formatMinor(m);
@@ -287,6 +288,257 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
 }
 
 // ---------------------------------------------------------------------------------------------
+// Muzdlu iş (§5.2)
+
+const quarterMonths = (period: string): string[] => {
+  const m = /^(\d{4})-Q([1-4])$/.exec(period);
+  if (!m) throw new DomainError('Rüb düzgün deyil (məs. 2026-Q3).', 'period');
+  const first = (Number(m[2]) - 1) * 3 + 1;
+  return [0, 1, 2].map((i) => `${m[1]}-${String(first + i).padStart(2, '0')}`);
+};
+
+const liabilities: [string, string, (keyof Totals)[]][] = [
+  ['521.03', 'Gəlir vergisi', ['incomeTax']],
+  ['522.01', 'DSMF (işçi + işəgötürən)', ['dsmfEmployee', 'dsmfEmployer']],
+  ['522.03.1', 'İşsizlik sığortası — işçi', ['unemploymentEmployee']],
+  ['522.03.2', 'İşsizlik sığortası — işəgötürən', ['unemploymentEmployer']],
+  ['522.04.1', 'Tibbi sığorta — işçi', ['medicalEmployee']],
+  ['522.04.2', 'Tibbi sığorta — işəgötürən', ['medicalEmployer']],
+];
+
+interface Totals {
+  employees: bigint;
+  income: bigint;
+  exemption: bigint;
+  taxable: bigint;
+  incomeTax: bigint;
+  base: bigint;
+  dsmfEmployee: bigint;
+  dsmfEmployer: bigint;
+  unemploymentEmployee: bigint;
+  unemploymentEmployer: bigint;
+  medicalLow: bigint;
+  medicalHigh: bigint;
+  medicalEmployee: bigint;
+  medicalEmployer: bigint;
+}
+const zeroTotals = (): Totals => ({
+  employees: 0n,
+  income: 0n,
+  exemption: 0n,
+  taxable: 0n,
+  incomeTax: 0n,
+  base: 0n,
+  dsmfEmployee: 0n,
+  dsmfEmployer: 0n,
+  unemploymentEmployee: 0n,
+  unemploymentEmployer: 0n,
+  medicalLow: 0n,
+  medicalHigh: 0n,
+  medicalEmployee: 0n,
+  medicalEmployer: 0n,
+});
+
+export function payrollReturn(db: Db, companyId: string, period: string): DeclarationView {
+  const started = performance.now();
+  const months = quarterMonths(period);
+  const from = `${months[0]}-01`;
+  const to = monthEnd(months[2]!);
+  const per = months.map(zeroTotals);
+  const people = new Map<string, { name: string; fin: string; tab: string; cells: bigint[][] }>();
+  const checks: DeclarationView['checks'] = [];
+  const missingFin = new Set<string>();
+  months.forEach((month, i) => {
+    const rates = ratesAt(db, companyId, monthEnd(month));
+    const medicalBound = rates?.rates.medicalEmployee[0]?.upTo ?? null;
+    const dsmfTop = rates?.rates.dsmfEmployer.at(-1);
+    const lines = db.all(
+      `SELECT l.*, e.name, e.fin, e.tab_no FROM payroll_lines l
+         JOIN payroll_documents d ON d.id=l.document_id
+         JOIN employees e ON e.company_id=l.company_id AND e.id=l.employee_id
+       WHERE l.company_id=? AND d.month=? AND d.status='posted' ORDER BY e.name`,
+      companyId,
+      month,
+    );
+    if (!lines.length) {
+      checks.push({ kind: 'info', text: `${month}: uçotda əmək haqqı sənədi yoxdur.` });
+      return;
+    }
+    const t = per[i]!;
+    for (const l of lines) {
+      const gross = l.gross as bigint;
+      const sick = l.sick as bigint;
+      const exemption = l.exemption as bigint;
+      const low = medicalBound === null || gross <= medicalBound ? gross : medicalBound;
+      t.employees += 1n;
+      t.income += gross + sick;
+      t.exemption += exemption;
+      t.taxable += gross + sick - exemption;
+      t.incomeTax += l.income_tax as bigint;
+      t.base += gross;
+      t.dsmfEmployee += l.dsmf_employee as bigint;
+      t.dsmfEmployer += l.dsmf_employer as bigint;
+      t.unemploymentEmployee += l.unemployment_employee as bigint;
+      t.unemploymentEmployer += l.unemployment_employer as bigint;
+      t.medicalLow += low;
+      t.medicalHigh += gross - low;
+      t.medicalEmployee += l.medical_employee as bigint;
+      t.medicalEmployer += l.medical_employer as bigint;
+      if (gross > 800_000n && (!dsmfTop || dsmfTop.rate !== 1100))
+        checks.push({
+          kind: 'warning',
+          text: `${month}: ${String(l.name)} — gəlir 8 000 ₼-dan çoxdur, dərəcələr dəstində işəgötürənin DSMF-si 8 000-dən yuxarı 11% deyil (DVX 2026). Mühasib yoxlayır.`,
+        });
+      const id = String(l.employee_id);
+      const p = people.get(id) ?? {
+        name: String(l.name),
+        fin: String(l.fin),
+        tab: String(l.tab_no),
+        cells: months.map(() => [0n, 0n, 0n, 0n, 0n, 0n]),
+      };
+      const c = p.cells[i]!;
+      c[0]! += gross + sick;
+      c[1]! += l.income_tax as bigint;
+      c[2]! += (l.dsmf_employee as bigint) + (l.dsmf_employer as bigint);
+      c[3]! += (l.unemployment_employee as bigint) + (l.unemployment_employer as bigint);
+      c[4]! += (l.medical_employee as bigint) + (l.medical_employer as bigint);
+      people.set(id, p);
+      if (!String(l.fin)) missingFin.add(String(l.name));
+    }
+  });
+  const columns = [...months, 'Rüb'];
+  const line = (
+    key: keyof Totals,
+    label: string,
+    source: string,
+    extra: Partial<DeclarationRow> = {},
+  ) =>
+    row(
+      `p:${key}`,
+      label,
+      [
+        ...per.map((t) => (key === 'employees' ? String(t[key]) : t[key])),
+        key === 'employees' ? '' : per.reduce((s, t) => s + t[key], 0n),
+      ],
+      source,
+      extra,
+    );
+  const income: DeclarationSection = {
+    title: 'Gəlir vergisi (VM 101)',
+    columns,
+    rows: [
+      line('employees', 'İşçi sayı', 'uçotdakı əmək haqqı sətirləri'),
+      line('income', 'Hesablanmış gəlir', 'əmək haqqı + xəstəlik müavinəti (işəgötürənin günləri)'),
+      line('exemption', 'Güzəşt (azad olunan)', 'VM 102, 200 ₼ (≤ 2 500)', { level: 1 }),
+      line('taxable', 'Vergi tutulan gəlir', 'hesablanmış − güzəşt'),
+      line('incomeTax', 'Gəlir vergisi', '521.03', { total: true, account: '521.03' }),
+    ],
+  };
+  const funds: DeclarationSection = {
+    title: 'Sosial sığorta, işsizlik və tibbi sığorta',
+    columns,
+    rows: [
+      line('base', 'DSMF və işsizlik bazası', 'əmək haqqı (xəstəlik müavinəti xaric)'),
+      line('dsmfEmployee', 'DSMF — işçi', '522.01', { level: 1, account: '522.01' }),
+      line('dsmfEmployer', 'DSMF — işəgötürən', '522.01', { level: 1, account: '522.01' }),
+      line('unemploymentEmployee', 'İşsizlik — işçi', '522.03.1', {
+        level: 1,
+        account: '522.03.1',
+      }),
+      line('unemploymentEmployer', 'İşsizlik — işəgötürən', '522.03.2', {
+        level: 1,
+        account: '522.03.2',
+      }),
+      line('medicalLow', 'Tibbi sığorta bazası — 2 500 ₼-dək', 'əmək haqqı'),
+      line('medicalHigh', 'Tibbi sığorta bazası — 2 500 ₼-dan yuxarı', 'əmək haqqı'),
+      line('medicalEmployee', 'Tibbi sığorta — işçi', '522.04.1', {
+        level: 1,
+        account: '522.04.1',
+      }),
+      line('medicalEmployer', 'Tibbi sığorta — işəgötürən', '522.04.2', {
+        level: 1,
+        account: '522.04.2',
+      }),
+    ],
+  };
+  // The books: accrued by the payroll documents = the return; paid and owed by account.
+  const ledgerRows: DeclarationRow[] = [];
+  for (const [account, label, keys] of liabilities) {
+    const accrued = db.get(
+      `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND p.kt_account=? AND e.source_type='payroll' AND p.date BETWEEN ? AND ?`,
+      companyId,
+      account,
+      from,
+      to,
+    )!.a as bigint;
+    const t = turnover(db, companyId, account, months[0]!, months[2]!);
+    const opening = owedAt(db, companyId, account, previousMonth(months[0]!));
+    const declared = keys.reduce((s, k) => s + per.reduce((x, p) => x + p[k], 0n), 0n);
+    ledgerRows.push(
+      row(
+        `l:${account}`,
+        `${account} · ${label}`,
+        [opening, accrued, t.debit, opening + t.credit - t.debit],
+        account,
+        {
+          account,
+        },
+      ),
+    );
+    if (accrued !== declared)
+      checks.push({
+        kind: 'warning',
+        text: `${account}: əmək haqqı yazılışları ${money(accrued)}, bəyannamədə ${money(declared)} — fərq var.`,
+      });
+  }
+  const ledger: DeclarationSection = {
+    title: 'Hesablarla tutuşma (rüb)',
+    columns: ['Rübün əvvəlinə borc', 'Hesablanıb', 'Köçürülüb (Dt)', 'Rübün sonuna borc'],
+    rows: ledgerRows,
+  };
+  if (missingFin.size)
+    checks.push({
+      kind: 'warning',
+      text: `FİN-i yazılmayan işçilər (bəyannamənin əlavəsi FİN tələb edir): ${[...missingFin].join(', ')}.`,
+    });
+  const appendix: DeclarationTable = {
+    title: 'İşçilər üzrə (ay-ay: gəlir, gəlir vergisi, DSMF, işsizlik, tibbi — işçi + işəgötürən)',
+    columns: [
+      'FİN',
+      'İşçi',
+      'Tabel №',
+      'Ay',
+      'Gəlir',
+      'Gəlir vergisi',
+      'DSMF',
+      'İşsizlik',
+      'Tibbi',
+    ],
+    money: [false, false, false, false, true, true, true, true, true],
+    rows: [...people.values()]
+      .sort((a, b) => a.name.localeCompare(b.name, 'az'))
+      .flatMap((p) =>
+        months
+          .map((m, i) => ({ m, c: p.cells[i]! }))
+          .filter((x) => x.c.some((v) => v !== 0n))
+          .map((x) => [p.fin, p.name, p.tab, x.m, ...x.c.slice(0, 5).map(money)]),
+      ),
+  };
+  return {
+    kind: 'payroll',
+    period,
+    from,
+    to,
+    title: `Muzdlu iş bəyannaməsi üçün rəqəmlər · ${period.replace('-Q', ', ')}-ci rüb`,
+    sections: [income, funds, ledger],
+    checks,
+    appendices: [appendix],
+    ms: Math.round(performance.now() - started),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 
 export function declaration(
   db: Db,
@@ -297,6 +549,8 @@ export function declaration(
   switch (kind) {
     case 'vat':
       return vatReturn(db, companyId, period);
+    case 'payroll':
+      return payrollReturn(db, companyId, period);
     default:
       throw new DomainError('Bu bəyannamə hələ hazır deyil.', 'kind');
   }

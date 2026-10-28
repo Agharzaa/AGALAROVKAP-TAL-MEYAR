@@ -44,12 +44,19 @@ test('Ə2: the bracket bounds — the 200 relief ends above 2 500; 10% and 14% o
   // 2 500,01: no relief — 2 500 × 3% + 0,01 × 10%.
   assert.equal(show(250_001n).incomeTax, '75.00');
   assert.equal(show(800_000n).incomeTax, '625.00');
-  // 10 000: 75 + 550 + 2 000 × 14%; medical 2 500 × 2% + 7 500 × 0,5%; DSMF 6 + 9 800 × 10%.
+  // 10 000: 75 + 550 + 2 000 × 14%; medical 2 500 × 2% + 7 500 × 0,5%; DSMF 6 + 9 800 × 10%; the
+  // employer 44 + 7 800 × 15% + 2 000 × 11% (DVX 2026; QERARLAR 2026-10-28 mərhələ 9 §2).
   const big = show(1_000_000n);
   assert.deepEqual(
     [big.incomeTax, big.medicalEmployee, big.dsmfEmployee, big.dsmfEmployer],
-    ['905.00', '87.50', '986.00', '1514.00'],
+    ['905.00', '87.50', '986.00', '1434.00'],
   );
+  // V4: 9 000 — the employee 886, the employer 1 214 + 1 000 × 11%; 8 000 itself — 1 214.
+  assert.deepEqual(
+    [show(900_000n).dsmfEmployee, show(900_000n).dsmfEmployer],
+    ['886.00', '1324.00'],
+  );
+  assert.equal(show(800_000n).dsmfEmployer, '1214.00');
   // Rounded once, after the brackets: 6,00 + 103,457 → 109,46.
   assert.equal(show(123_457n).dsmfEmployee, '109.46');
   assert.equal(show(123_457n).incomeTax, '31.04');
