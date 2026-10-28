@@ -295,9 +295,10 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       continue;
     }
     const id = String(old.id);
-    if (old.content_hash !== s.hash) {
+    const differs = old.content_hash !== s.hash;
+    if (differs) {
       // DVX does not change an e-qaimə's amounts (a correction is a new e-qaimə): keep the stored
-      // one untouched and say what came.
+      // one untouched and say what came. Its status is still DVX's word (a cancel is not lost).
       const note = `${now.slice(0, 10)} · ${fileName}: tarix ${s.date}, ƏDV-siz ${money(s.net)}, ƏDV ${money(s.vat)} — uçotdakı: tarix ${String(old.date)}, ƏDV-siz ${money(old.net as bigint)}, ƏDV ${money(old.vat as bigint)}`;
       tx.db.run(
         "UPDATE eq_documents SET conflict=?, resolved='', updated_at=?, version=version+1 WHERE id=?",
@@ -307,7 +308,6 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       );
       tx.audit(cmd.companyId, 'Ziddiyyət', 'E-qaimə', id, `${s.number}: ${note}`);
       conflicts++;
-      continue;
     }
     let changed = false;
     if (old.status !== s.status || old.dvx_status !== s.dvxStatus) {
@@ -339,11 +339,12 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       );
       changed = true;
     }
-    if (old.lines === '' && s.lines) {
+    // Lines and header complete only what matches the stored amounts.
+    if (!differs && old.lines === '' && s.lines) {
       tx.db.run('UPDATE eq_documents SET lines=? WHERE id=?', s.lines, id);
       changed = true;
     }
-    if (old.header_full === 0n && cmd.report === 'invoices') {
+    if (!differs && old.header_full === 0n && cmd.report === 'invoices') {
       tx.db.run(
         `UPDATE eq_documents SET kind=?, kind_text=?, ref_key=?, total=?, base_18=?, base_0=?, base_exempt=?,
            base_nontaxable=?, excise=?, road_tax=?, note=?, header_full=1 WHERE id=?`,
@@ -379,7 +380,7 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
         id,
       );
       updated++;
-    } else same++;
+    } else if (!differs) same++;
   }
   tx.db.run(
     'UPDATE eq_imports SET added=?, updated=?, same=?, conflicts=? WHERE id=?',
