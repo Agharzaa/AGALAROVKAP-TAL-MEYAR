@@ -332,12 +332,25 @@ export function buildMoneyPostings(
     sk: [d.holder.id],
     ...(foreign ? { currency, curAmount: cur } : {}),
   });
-  const push = (counter: Side, amount: Minor, holderCur: Minor, memo: string) =>
+  // What earlier lines of this document already settle on each invoice key: the ledger does not
+  // hold this document yet, so a later automatic line would see those invoices still open.
+  const taken = new Map<string, Minor>();
+  const push = (counter: Side, amount: Minor, holderCur: Minor, memo: string) => {
+    const [partner, contract, document] = counter.sk;
+    if (
+      inFamily(counter.account, settlementFamily[d.direction]) &&
+      document?.startsWith('invoice:')
+    ) {
+      const k = `${counter.account}|${partner}|${contract}|${document}`;
+      const v = chart.get(counter.account)?.currency ? (counter.curAmount ?? 0n) : amount;
+      taken.set(k, (taken.get(k) ?? 0n) + v);
+    }
     out.push(
       d.direction === 'in'
         ? { dt: holderSide(holderCur), kt: counter, amount, memo }
         : { dt: counter, kt: holderSide(holderCur), amount, memo },
     );
+  };
 
   d.lines.forEach((l, i) => {
     const where = `Sətir ${i + 1}`;
@@ -381,7 +394,21 @@ export function buildMoneyPostings(
       );
       return;
     }
-    autoSettle(tx, companyId, chart, d, l, values, where, field, memo, counterCurrency, push, self);
+    autoSettle(
+      tx,
+      companyId,
+      chart,
+      d,
+      l,
+      values,
+      where,
+      field,
+      memo,
+      counterCurrency,
+      push,
+      self,
+      taken,
+    );
   });
 
   out.forEach((p, i) => {
@@ -418,6 +445,8 @@ function autoSettle(
   counterCurrency: (cur: Minor) => Pick<Side, 'currency' | 'curAmount'>,
   push: (counter: Side, amount: Minor, holderCur: Minor, memo: string) => void,
   self: string,
+  /** Settled by earlier lines of this document, per account|partner|contract|invoice. */
+  taken: ReadonlyMap<string, Minor>,
 ) {
   const direction = d.direction;
   const currency = d.holder.currency;
@@ -436,7 +465,16 @@ function autoSettle(
     companyId,
     partner,
   )?.kind;
-  const invoices = openInvoices(tx, companyId, direction, l.account, partner, contract, d.date);
+  // A deposit document's earlier lines paid VAT (as depositPaid counts it once posted).
+  const deposit = inFamily(d.holder.account.code, '224');
+  const invoices = openInvoices(tx, companyId, direction, l.account, partner, contract, d.date).map(
+    (inv) => {
+      const t = taken.get(`${l.account.code}|${partner}|${contract}|${inv.document}`) ?? 0n;
+      return t
+        ? { ...inv, open: inv.open - t, vatOpen: deposit ? inv.vatOpen - t : inv.vatOpen }
+        : inv;
+    },
+  );
   const { allocations, left } = allocatePayment(
     invoices,
     l.amount,
