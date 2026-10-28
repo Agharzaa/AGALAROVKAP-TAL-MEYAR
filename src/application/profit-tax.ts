@@ -89,17 +89,41 @@ function yearCore(db: Db, companyId: string, year: number, extra: readonly Posti
         amount: -p.amount,
       });
   }
-  const depreciation = itemsWith(db, companyId, "role='depreciation'");
+  // The books' depreciation is what a 6xx / 7xx key got against 112 (the month closings, or by
+  // hand), whatever expense item the asset posts it to (audit 0.9.9: not the item's role).
+  const key = (account: string, s1: string, s2: string) => `${account}|${s1}|${s2}`;
+  const booked = new Map<string, Minor>();
+  const addBooked = (k: string, amount: Minor) => booked.set(k, (booked.get(k) ?? 0n) + amount);
+  for (const r of db.all(
+    `SELECT dt_account AS a, dt_s1 AS s1, dt_s2 AS s2, SUM(amount) AS x FROM postings
+     WHERE company_id=? AND (kt_account='112' OR kt_account LIKE '112.%')
+       AND substr(dt_account,1,1) IN ('6','7') AND date BETWEEN ? AND ?
+     GROUP BY dt_account, dt_s1, dt_s2`,
+    companyId,
+    `${year}-01-01`,
+    `${year}-12-31`,
+  ))
+    addBooked(key(str(r.a), str(r.s1), str(r.s2)), r.x as bigint);
+  for (const p of extra)
+    if (/^[67]/.test(p.dt.account) && inFamily(p.kt.account, '112'))
+      addBooked(key(p.dt.account, p.dt.sk[0] ?? '', p.dt.sk[1] ?? ''), p.amount);
   const disposal = itemsWith(db, companyId, "role='assetDisposal'");
   const excluded = itemsWith(db, companyId, 'tax_deductible=0');
   const has = (map: Map<string, string>, t: { s1: string; s2: string }) =>
     map.has(t.s1) ? t.s1 : map.has(t.s2) ? t.s2 : '';
+  const byKey = new Map<string, { account: string; s1: string; s2: string; amount: Minor }>();
+  for (const t of turnovers) {
+    const k = key(t.account, t.s1, t.s2);
+    const x = byKey.get(k) ?? { ...t, amount: 0n };
+    x.amount += t.amount;
+    byKey.set(k, x);
+  }
   const income = new Map<string, Minor>();
   let expenses = 0n;
   let booksDepreciation = 0n;
   let booksDisposal = 0n;
   const nonDeductible = new Map<string, Minor>();
-  for (const t of turnovers) {
+  for (const [k, t] of byKey) {
     if (t.account.startsWith('6')) {
       const family = ['601', '602', '603', '604'].some((f) => inFamily(t.account, f))
         ? '601'
@@ -108,11 +132,13 @@ function yearCore(db: Db, companyId: string, year: number, extra: readonly Posti
       continue;
     }
     expenses += t.amount;
-    if (has(depreciation, t)) booksDepreciation += t.amount;
-    else if (has(disposal, t)) booksDisposal += t.amount;
+    const dep = booked.get(k) ?? 0n;
+    booksDepreciation += dep;
+    const rest = t.amount - dep;
+    if (has(disposal, t)) booksDisposal += rest;
     else {
       const item = has(excluded, t);
-      if (item) nonDeductible.set(item, (nonDeductible.get(item) ?? 0n) + t.amount);
+      if (item) nonDeductible.set(item, (nonDeductible.get(item) ?? 0n) + rest);
     }
   }
   const dep = taxDepreciationYear(db, companyId, year);
@@ -178,14 +204,29 @@ export function profitTaxFigures(
     core.taxable <= 0n ? 0n : lossesAvailable < core.taxable ? lossesAvailable : core.taxable;
   const base = core.taxable > 0n ? core.taxable - lossesUsed : 0n;
   const tax = roundHalfAwayFromZero(base * BigInt(core.params.profitRate), 10_000n);
-  // Paid: the year's debit of 521.04, but not the closing's own correction of the tax.
-  const paid = db.get(
+  // Paid: the year's debit of 521.04 for the tax itself (not interest or sanctions), not the
+  // closing's own correction; what was owed at the year's start (last year's tax) is settled
+  // first, an overpayment counts (audit 0.9.9).
+  const kind = str(
+    db.get("SELECT id FROM items WHERE company_id=? AND role='vatTax'", companyId)?.id,
+  );
+  const debit = db.get(
     `SELECT COALESCE(SUM(p.amount),0) AS d FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE p.company_id=? AND p.dt_account='521.04' AND e.source_type<>'closing' AND p.date BETWEEN ? AND ?`,
+     WHERE p.company_id=? AND p.dt_account='521.04' AND p.dt_s1=? AND e.source_type<>'closing'
+       AND p.date BETWEEN ? AND ?`,
     companyId,
+    kind,
     `${year}-01-01`,
     `${year}-12-31`,
   )!.d as bigint;
+  const opening = db.get(
+    `SELECT COALESCE(SUM(debit-credit),0) AS b FROM registers
+     WHERE company_id=? AND account='521.04' AND s1=? AND month<?`,
+    companyId,
+    kind,
+    `${year}-01`,
+  )!.b as bigint;
+  const paid = debit + opening > 0n ? debit + opening : 0n;
   const { params, ...rest } = core;
   return {
     year,
@@ -288,6 +329,22 @@ export function profitTaxReturn(db: Db, companyId: string, period: string): Decl
       kind: 'warning',
       text: 'Uçotda amortizasiya var, vergi amortizasiyası yoxdur — əsas vəsaitlərin başlanğıc qalığını yoxlayın.',
     });
+  if (closed) {
+    // What the closings posted on 901 (without its close to 341), as the M/Z shows it.
+    const posted = db.get(
+      `SELECT COALESCE(SUM(CASE WHEN dt_account='901' THEN amount ELSE -amount END),0) AS a
+       FROM postings WHERE company_id=? AND (dt_account='901' OR kt_account='901')
+         AND dt_account<>'341' AND kt_account<>'341' AND date BETWEEN ? AND ?`,
+      companyId,
+      `${year}-01-01`,
+      `${year}-12-31`,
+    )!.a as bigint;
+    if (posted !== f.tax)
+      checks.push({
+        kind: 'warning',
+        text: `Uçotda ${year}-ci ilin mənfəət vergisi ${money(posted)} yazılıb, indiki hesablama ${money(f.tax)}: bağlanışdan sonra xərc maddəsinin bayrağı, vəsaitin qrupu və ya sənəd dəyişib. Dekabr bağlanışını ləğv edib yenidən bağlayın.`,
+      });
+  }
   const view = taxYearView(db, companyId, year);
   if (!view.saved)
     checks.push({
@@ -393,9 +450,15 @@ export function profitTaxReturn(db: Db, companyId: string, period: string): Decl
             closed ? `AB-${year}-12 · 901 / 521.04` : 'dekabr bağlanışında yazılır',
             { total: true, account: '521.04' },
           ),
-          r('t:paid', 'İl ərzində ödənilib (521.04, Dt)', f.paid, '521.04 · Dt dövriyyə', {
-            account: '521.04',
-          }),
+          r(
+            't:paid',
+            'İl ərzində ödənilib (521.04, Dt)',
+            f.paid,
+            '521.04 · "Vergi (haqq)" Dt − ilin əvvəlinə borc',
+            {
+              account: '521.04',
+            },
+          ),
           r(
             't:payable',
             payable >= 0n ? 'Ödənilməli' : 'Artıq ödənilib',

@@ -18,6 +18,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
+import { plannedVatOffset } from './closing.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
 import { profitTaxReturn } from './profit-tax.js';
@@ -131,7 +132,10 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
     ],
   };
 
-  const payable = v.salesVat - v.offset;
+  // An open month: what its closing plan offsets now (it changes until the month is closed).
+  const planned = closed ? null : plannedVatOffset(db, companyId, month);
+  const offset = planned ?? v.offset;
+  const payable = v.salesVat - offset;
   const vatSection: DeclarationSection = {
     title: 'ƏDV-nin hesablanması',
     columns: ['Məbləğ'],
@@ -149,14 +153,24 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
       row(
         'v:offset',
         'Əvəzləşdirilən ƏDV',
-        [v.offset],
-        closed ? `AB-${month} · 241 → 521.01` : 'ay bağlanışında yazılır',
+        [offset],
+        closed
+          ? `AB-${month} · 241 → 521.01`
+          : planned === null
+            ? 'ay bağlanışında yazılır'
+            : 'ay bağlanışının planı (hələ yazılmayıb)',
         { account: '241' },
       ),
-      row('v:waiting', 'Əvəzləşdirilməmiş (241-də, ayın sonuna)', [v.waiting], '241 · qalıq', {
-        level: 1,
-        account: '241',
-      }),
+      row(
+        'v:waiting',
+        'Əvəzləşdirilməmiş (241-də, ayın sonuna)',
+        [v.waiting - (planned ?? 0n)],
+        '241 · qalıq',
+        {
+          level: 1,
+          account: '241',
+        },
+      ),
       row(
         'v:payable',
         payable >= 0n ? 'Büdcəyə ödənilməli ƏDV' : 'Artıq — növbəti aya keçir',
@@ -248,7 +262,7 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
   if (!closed)
     checks.push({
       kind: 'warning',
-      text: `${month} ayı bağlanmayıb: alış ƏDV-sinin əvəzləşdirilməsi ay bağlanışında yazılır, "Əvəzləşdirilən" bağlanışdan sonra dəqiqdir.`,
+      text: `${month} ayı bağlanmayıb: alış ƏDV-sinin əvəzləşdirilməsi ay bağlanışında yazılır, "Əvəzləşdirilən" bağlanışın indiki planıdır, bağlanışdan sonra dəqiqdir.`,
     });
   if (base('exempt') && v.purchaseVat) {
     const taxable = base('18') + base('0');

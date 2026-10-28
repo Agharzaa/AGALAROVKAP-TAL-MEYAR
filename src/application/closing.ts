@@ -474,6 +474,21 @@ function shares(
 // ---------------------------------------------------------------------------------------------
 // Step 4 — purchase VAT offset
 
+/**
+ * What the month's closing would offset (Dt 521.01 / Kt 241) if it ran now: the ƏDV return of an
+ * open month (plan §5.1, audit 0.9.9); null when the plan cannot be computed.
+ */
+export function plannedVatOffset(db: Db, companyId: string, month: string): Minor | null {
+  try {
+    return vatStep(db, companyId, loadChart(db, companyId), month)
+      .postings.filter((p) => p.dt.account === '521.01')
+      .reduce((s, p) => s + p.amount, 0n);
+  } catch (e) {
+    if (e instanceof DomainError) return null;
+    throw e;
+  }
+}
+
 function vatStep(
   db: Db,
   companyId: string,

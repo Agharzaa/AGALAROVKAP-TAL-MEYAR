@@ -156,7 +156,7 @@ Zərər ilində vergi 0, zərər növbəti illərə keçir (5 il).
 3. ✅ **9c — vergi amortizasiyası** (0.9.7): sxem v23 (`tax_years` — 9d-nin parametrləri də), normalar, əmsal, vəsaitin vergi qalığı, hesabat; V5.
 4. ✅ **9d — mənfəət vergisi** (0.9.8): sxem v24, "gəlirdən çıxılmır", bəyannamə, dekabr bağlanışının addımı, M/Z; V6, V7.
 5. Perf (V8) hər alt-mərhələdə öz hissəsi; real bazanın surəti (V9) hər miqrasiyada.
-6. Müstəqil audit (kodu yazmayan sessiya).
+6. ✅ Müstəqil audit (0.9.9, `PROJECT_STATE.md` "Mərhələ 9 auditi"): 5 qüsur düzəldi, 6 açıq sual.
 
 ## 10. Açıq suallar — tövsiyə ilə qərarlaşdırılıb
 

@@ -193,7 +193,10 @@ export function taxAssets(db: Db, companyId: string): TaxAssetInfo[] {
         id: str(l.asset_id),
         name: `${str(l.inventory_no)} ${str(l.name)}`,
         category: taxCategoryOf(str(l.asset_group)),
-        inYear: Number(str(l.doc_date).slice(0, 4)),
+        // An opening balance of 31.12 is the residual the next year starts with (audit 0.9.9).
+        inYear:
+          Number(str(l.doc_date).slice(0, 4)) +
+          (opening && str(l.doc_date).endsWith('-12-31') ? 1 : 0),
         inDate: str(l.doc_date),
         value: opening ? ((l.tax_residual as bigint | null) ?? books) : (l.cost as bigint),
         fromBooks: opening && l.tax_residual === null,

@@ -57,7 +57,7 @@ function dvx(
   } as never);
 }
 
-function september(f: F) {
+export function september(f: F) {
   const kapital = f.partner('Kapital Bank ASC', '9900003611');
   const founder = f.partner('Təsisçi', '', 'individual');
   const capital = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
@@ -121,7 +121,8 @@ test('V1: ƏDV return — sales by rate, accrued, offset by the closing, 521.01 
     ['v:accrued', 'v:purchase', 'v:offset', 'v:waiting', 'v:payable'].map(
       (k) => figures(before, k)[0],
     ),
-    ['360.00', '180.00', '0.00', '180.00', '360.00'],
+    // The open month shows what its closing plan offsets (audit 0.9.9, plan §5.1).
+    ['360.00', '180.00', '180.00', '0.00', '180.00'],
   );
   assert.ok(before.checks.some((c) => /bağlanmayıb/.test(c.text)));
   // VM 175: exempt sales and purchase VAT — the taxable share 2 300 / 2 350.
