@@ -86,7 +86,21 @@ export function example(f: F) {
   ]);
   f.bank('out', '2026-08-10', bank, [B('531.01', [office, co], '35000')]);
   f.bank('out', '2026-09-30', bank, [B('751', [kapital, loan], '1000')]);
-  return { kapital, founder, dealer, office, customer, loan, cd, co, cs, bank, capital };
+  return {
+    kapital,
+    founder,
+    dealer,
+    office,
+    customer,
+    loan,
+    cd,
+    co,
+    cs,
+    bank,
+    capital,
+    truck,
+    actros,
+  };
 }
 
 test('F1: the §8 example — the balance sheet to the penny after the December closing', (t) => {
@@ -370,4 +384,87 @@ test('F5: changes in equity — capital paid in, the profit, dividends, a transf
   );
   const income = declaration(f, 'incomeStatement', '2027');
   assert.deepEqual(figures(income, 'i:net'), ['-200.00', '58200.03']);
+});
+
+test('F6: the cash flow (direct method) — the §8 example by activity; the truck paid is investing', (t) => {
+  const f = fixture(t, ':memory:', '2028-01-15');
+  const { bank, kapital, loan, customer, cs, truck, actros } = example(f);
+  closeThrough(f, 12);
+  const v = declaration(f, 'cashFlowStatement', '2026');
+  const k = (key: string) => figures(v, key)[0];
+  assert.deepEqual(
+    ['f:o:sales', 'f:o:in', 'f:o:goods', 'f:o:interest', 'f:o:out', 'f:o:net'].map(k),
+    ['100000.00', '100000.00', '-35000.00', '-1000.00', '-36000.00', '64000.00'],
+  );
+  assert.deepEqual(['f:i:buy', 'f:i:net'].map(k), ['-30000.00', '-30000.00']);
+  assert.deepEqual(['f:f:shares', 'f:f:borrow', 'f:f:net'].map(k), [
+    '10000.00',
+    '20000.00',
+    '30000.00',
+  ]);
+  assert.deepEqual(['f:increase', 'f:opening', 'f:fx', 'f:closing', 'f:balance'].map(k), [
+    '64000.00',
+    '0.00',
+    '0.00',
+    '64000.00',
+    '64000.00',
+  ]);
+  assert.equal(rowOf(v, 'f:i:buy').source, '531 (əsas vəsait qaiməsi)');
+  assert.equal(rowOf(v, 'f:o:goods').source, '531');
+  assert.deepEqual(v.checks, []);
+  // 2027: the customer pays the rest, the loan is repaid, the tax paid, money moved bank → cash.
+  const B = f.bankLine;
+  const vatTax = f.catalog().items.find((i) => i.role === 'vatTax')!.id;
+  f.bank('in', '2027-02-01', bank, [B('211.01', [customer, cs], '20000')]);
+  f.bank('out', '2027-02-02', bank, [B('501', [kapital, loan], '20000')]);
+  f.bank('out', '2027-03-25', bank, [B('521.04', [vatTax], '13300')]);
+  f.bank('out', '2027-04-01', bank, [B('222.01', [], '500')]);
+  f.cash('in', '2027-04-01', f.cashbox(), [B('222.01', [], '500')]);
+  // The truck is sold (7c; its depreciation up to the sale is posted first) and paid for: the
+  // money of that invoice is investing too.
+  closeThrough(f, 4, 2027);
+  f.invoice('sale', '2027-05-10', customer, cs, [
+    { productId: truck, quantity: '1', price: '30000', vatRate: 'exempt', assetId: actros },
+  ]);
+  f.bank('in', '2027-05-20', bank, [B('211.01', [customer, cs], '30000')]);
+  const next = declaration(f, 'cashFlowStatement', '2027');
+  const n = (key: string) => figures(next, key);
+  assert.deepEqual(n('f:o:sales'), ['20000.00', '100000.00']);
+  assert.deepEqual(n('f:o:profitTax'), ['-13300.00', '0.00']);
+  assert.deepEqual(n('f:f:repay'), ['-20000.00', '0.00']);
+  assert.deepEqual(n('f:opening'), ['64000.00', '0.00']);
+  assert.deepEqual(n('f:i:sell'), ['30000.00', '0.00']);
+  assert.deepEqual(n('f:i:buy'), ['0.00', '-30000.00']);
+  assert.deepEqual(n('f:closing'), ['80700.00', '64000.00']);
+  assert.deepEqual(n('f:balance'), ['80700.00', '64000.00']);
+  // The balance sheet's cross-checks: all zero.
+  const sheet = declaration(f, 'balanceSheet', '2027');
+  for (const key of ['c:cash', 'c:equity', 'c:profit'])
+    assert.deepEqual(figures(sheet, key), ['0.00', '0.00'], key);
+});
+
+test('F6: the revaluation of a currency account is the effect of exchange rates', (t) => {
+  const f = fixture(t);
+  const kapital = f.partner('Kapital Bank ASC', '9900003611');
+  const founder = f.partner('Təsisçi', '', 'individual');
+  const capital = f.item('capitalChange', 'Nizamnamə kapitalına qoyuluş');
+  const rates = (date: string, rate: string) =>
+    f.exec({
+      type: 'rates.save',
+      companyId: f.companyId,
+      date,
+      source: 'manual',
+      rates: [{ currency: 'USD', rate }],
+    });
+  rates('2026-09-01', '1.7');
+  rates('2026-09-30', '1.71');
+  const usd = f.bankAccount(kapital, 'AZ12AIIB38060019449999999901', '223.02', 'USD', 'USD');
+  f.bank('in', '2026-09-01', usd, [f.bankLine('301', [founder, capital], '1000')]);
+  close(f, '2026-09');
+  const v = declaration(f, 'cashFlowStatement', '2026');
+  assert.deepEqual(
+    ['f:f:shares', 'f:increase', 'f:fx', 'f:closing', 'f:balance'].map((key) => figures(v, key)[0]),
+    ['1700.00', '1700.00', '10.00', '1710.00', '1710.00'],
+  );
+  assert.deepEqual(v.checks, []);
 });

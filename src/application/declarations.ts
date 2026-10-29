@@ -22,7 +22,7 @@ import { plannedVatOffset } from './closing.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
 import { profitTaxReturn } from './profit-tax.js';
-import { balanceSheet, equityStatement, incomeStatement } from './financial.js';
+import { balanceSheet, cashFlowStatement, equityStatement, incomeStatement } from './financial.js';
 import { taxDepreciationReturn } from './tax.js';
 
 const money = (m: Minor) => formatMinor(m);
@@ -578,6 +578,8 @@ export function declaration(
       return incomeStatement(db, companyId, period);
     case 'equityStatement':
       return equityStatement(db, companyId, period);
+    case 'cashFlowStatement':
+      return cashFlowStatement(db, companyId, period);
     default:
       throw new DomainError('Bu bəyannamə hələ hazır deyil.', 'kind');
   }

@@ -495,6 +495,11 @@ export const sections: Section[] = [
           },
           { label: 'Mənfəət və ya zərər (MHBS)', icon: Reports, action: page('incomeStatement') },
           { label: 'Kapitalda dəyişikliklər', icon: Reports, action: page('equityStatement') },
+          {
+            label: 'Pul vəsaitlərinin hərəkəti (birbaşa)',
+            icon: Wallet,
+            action: page('cashFlowStatement'),
+          },
         ],
       },
       {
@@ -650,6 +655,11 @@ export const sections: Section[] = [
           },
           { label: 'Mənfəət və ya zərər (MHBS)', icon: Reports, action: page('incomeStatement') },
           { label: 'Kapitalda dəyişikliklər', icon: Reports, action: page('equityStatement') },
+          {
+            label: 'Pul vəsaitlərinin hərəkəti (birbaşa)',
+            icon: Wallet,
+            action: page('cashFlowStatement'),
+          },
         ],
       },
       {

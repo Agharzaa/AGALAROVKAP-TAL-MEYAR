@@ -3723,3 +3723,52 @@ test('stage 10b: the IFRS income statement and the changes in equity open from t
     h.close();
   }
 });
+
+test('stage 10c: the cash flow by the direct method opens from the menu, by activity', async () => {
+  const h = harness();
+  const s = seed(h);
+  const year = new Date().getFullYear();
+  h.run({
+    type: 'bank.save',
+    companyId: s.companyId,
+    direction: 'in',
+    number: '',
+    date: `${year}-01-10`,
+    bankAccountId: s.bankAccount,
+    rate: '',
+    bankReference: '',
+    counterpartyName: '',
+    counterpartyTaxId: '',
+    purpose: '',
+    lines: [
+      { account: '301', sk: [s.founder, s.capitalIn], amount: '5000', cashFlowItem: '', memo: '' },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Pul vəsaitlərinin hərəkəti (birbaşa)' }),
+    );
+    const report = within(pane());
+    const cells = async (name: string) =>
+      within((await report.findByRole('rowheader', { name })).closest('tr')!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent!.replace(/\s/g, ' '));
+    assert.deepEqual(
+      await cells('Səhmlərin və digər kapital alətlərinin buraxılmasından daxilolmalar'),
+      ['5 000,00', '0,00', '301'],
+    );
+    assert.deepEqual((await cells('Balansın 22-ci maddəsi (yoxlama)')).slice(0, 2), [
+      '5 000,00',
+      '0,00',
+    ]);
+    report.getByRole('table', {
+      name: 'Maliyyələşdirmə üzrə fəaliyyətdən pul vəsaitlərinin hərəkəti',
+    });
+  } finally {
+    h.close();
+  }
+});

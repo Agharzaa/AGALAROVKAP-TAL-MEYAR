@@ -517,6 +517,13 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     () => q({ type: 'declaration', kind: 'equityStatement', period: '2026' }) as DeclarationView,
   );
   assert.ok(!equity.checks.some((c) => /bərabər deyil|fərqlənir/.test(c.text)));
+  // F8 (10c): the cash flow by the direct method — the money postings of two years by their other side.
+  const direct = time(
+    'Pul vəsaitlərinin hərəkəti (birbaşa), il',
+    1000,
+    () => q({ type: 'declaration', kind: 'cashFlowStatement', period: '2026' }) as DeclarationView,
+  );
+  assert.deepEqual(direct.checks, []);
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

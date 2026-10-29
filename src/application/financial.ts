@@ -174,6 +174,51 @@ export interface Position {
 
 /** The balance at the end of a month (YYYY-MM), from the registers. */
 export function positionAt(db: Db, companyId: string, chart: Chart, month: string): Position {
+  return positionsAt(db, companyId, chart, [month])[0]!;
+}
+
+/**
+ * The balances at the ends of several months in one pass over the registers: one row per account
+ * and first subkonto, a sum per month end. An active-passive account opens by partner / employee
+ * when that is its first subkonto, by sub-account otherwise.
+ */
+export function positionsAt(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  months: readonly string[],
+): Position[] {
+  const cols = months
+    .map(
+      (_, i) =>
+        `SUM(CASE WHEN month<=?${i + 3} THEN debit-credit ELSE 0 END) AS b${i},
+         MAX(month<=?${i + 3}) AS n${i}`,
+    )
+    .join(', ');
+  const rows = db.all(
+    `SELECT account, s1, ${cols} FROM registers WHERE company_id=?1 AND month<=?2
+     GROUP BY account, s1`,
+    companyId,
+    [...months].sort().at(-1)!,
+    ...months,
+  );
+  return months.map((_, i) =>
+    build(
+      chart,
+      rows.map((r) => ({
+        account: String(r.account),
+        s1: String(r.s1),
+        b: r[`b${i}`] as bigint,
+        booked: Number(r[`n${i}`]) === 1,
+      })),
+    ),
+  );
+}
+
+function build(
+  chart: Chart,
+  rows: { account: string; s1: string; b: bigint; booked: boolean }[],
+): Position {
   const lines = new Map<string, bigint>();
   const sources = new Map<string, Set<string>>();
   const byTop = new Map<string, bigint>();
@@ -186,19 +231,11 @@ export function positionAt(db: Db, companyId: string, chart: Chart, month: strin
   let unclosed = 0n;
   let residue = 0n;
   let any = false;
-  // One row per account and first subkonto; an active-passive account opens by partner / employee
-  // when that is its first subkonto, by sub-account otherwise.
-  const rows = db.all(
-    `SELECT account, s1, SUM(debit-credit) AS b FROM registers WHERE company_id=? AND month<=?
-     GROUP BY account, s1`,
-    companyId,
-    month,
-  );
   const opened = new Map<string, bigint>();
   for (const r of rows) {
-    any = true;
-    const code = String(r.account);
-    const b = r.b as bigint;
+    if (r.booked) any = true;
+    const code = r.account;
+    const b = r.b;
     if (!b) continue;
     residue += b;
     const top = code.slice(0, 3);
@@ -214,7 +251,7 @@ export function positionAt(db: Db, companyId: string, chart: Chart, month: strin
       a?.nature === 'active-passive' &&
       cls !== '3' &&
       (a.subkonto[0] === 'partner' || a.subkonto[0] === 'employee');
-    const k = split ? `${code}|${String(r.s1)}` : code;
+    const k = split ? `${code}|${r.s1}` : code;
     opened.set(k, (opened.get(k) ?? 0n) + b);
   }
   for (const [k, b] of opened) {
@@ -231,6 +268,60 @@ export function positionAt(db: Db, companyId: string, chart: Chart, month: strin
   }
   if (unclosed) add('34', unclosed, 'bağlanmamış nəticə (6xx–9xx)');
   return { lines, sources, unclosed, byTop, residue, any };
+}
+
+/** The ends of the year and of the two before it: two years of statements and their openings. */
+const yearEnds = (year: string) => [0, 1, 2].map((d) => `${Number(year) - d}-12`);
+
+/**
+ * Balances by month, each read once within one statement (a year's end opens the next); the
+ * month ends it will read are taken in one pass over the registers.
+ */
+function positions(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  prefetch: readonly string[],
+): (month: string) => Position {
+  const read = positionsAt(db, companyId, chart, prefetch);
+  const seen = new Map(prefetch.map((m, i) => [m, read[i]!]));
+  return (month) => {
+    let p = seen.get(month);
+    if (!p) seen.set(month, (p = positionAt(db, companyId, chart, month)));
+    return p;
+  };
+}
+
+/**
+ * The statements against each other (plan §5.5), per year: the cash flow's end against line 22,
+ * the changes in equity (opening + changes − closing), the M/Z's net profit against equity's.
+ */
+function crossChecks(
+  db: Db,
+  companyId: string,
+  years: string[],
+  at: (month: string) => Position,
+): { cash: bigint[]; equity: bigint[]; profit: bigint[] } {
+  const investing = investmentInvoices(db, companyId);
+  const cash: bigint[] = [];
+  const equity: bigint[] = [];
+  const profit: bigint[] = [];
+  const flows = cashYears(db, companyId, years, investing, at);
+  const results = resultsOf(db, companyId, years);
+  for (const [i, y] of years.entries()) {
+    const c = flows[i]!;
+    cash.push(c.opening + [...c.flows.values()].reduce((s, v) => s + v, 0n) - c.closing);
+    const e = equityYear(db, companyId, y, at);
+    let off = 0n;
+    for (const col of COLUMNS) {
+      let v = (e.open.get(col) ?? 0n) - (e.close.get(col) ?? 0n);
+      for (const m of e.moves.values()) v += m.get(col) ?? 0n;
+      off += v < 0n ? -v : v;
+    }
+    equity.push(off);
+    profit.push(netOf(results[i]!) - (e.moves.get('profit')?.get('34') ?? 0n));
+  }
+  return { cash, equity, profit };
 }
 
 const sumLines = (p: Position, part: Part) =>
@@ -257,10 +348,11 @@ export function balanceSheet(db: Db, companyId: string, period: string): Declara
   const started = performance.now();
   const year = checkYear(period);
   const previous = String(Number(year) - 1);
-  const chart = loadChart(db, companyId);
-  const now = positionAt(db, companyId, chart, `${year}-12`);
-  const before = positionAt(db, companyId, chart, `${previous}-12`);
+  const at = positions(db, companyId, loadChart(db, companyId), yearEnds(year));
+  const now = at(`${year}-12`);
+  const before = at(`${previous}-12`);
   const both = [now, before];
+  const cross = crossChecks(db, companyId, [year, previous], at);
   const columns = [`Hesabat dövrü (31.12.${year})`, `Əvvəlki dövr (31.12.${previous})`];
   const blank = ['', ''];
 
@@ -378,8 +470,39 @@ export function balanceSheet(db: Db, companyId: string, period: string): Declara
         closed.map((c, i) => (both[i]!.any ? (c ? 'bəli' : 'xeyr') : '—')),
         'ay bağlanışı',
       ),
+      row(
+        'c:cash',
+        'Pul hərəkətinin sonu − 22-ci maddə',
+        cross.cash,
+        'pul vəsaitlərinin hərəkəti (birbaşa)',
+      ),
+      row(
+        'c:equity',
+        'Kapital: əvvələ qalıq + dəyişikliklər − sona qalıq',
+        cross.equity,
+        'kapitalda dəyişikliklər',
+      ),
+      row(
+        'c:profit',
+        'M/Z xalis mənfəət − kapitalın xalis mənfəəti',
+        cross.profit,
+        'mənfəət və ya zərər, kapitalda dəyişikliklər',
+      ),
     ],
   };
+  const statements: [bigint[], string][] = [
+    [cross.cash, 'pul hərəkətinin sonu balansın 22-ci maddəsindən fərqlənir'],
+    [cross.equity, 'kapitalda dəyişikliklər balansın kapitalı ilə tutuşmur'],
+    [
+      cross.profit,
+      'M/Z-nin xalis mənfəəti kapitaldakı xalis mənfəətdən fərqlənir (801 / 341-ə əl ilə yazılış)',
+    ],
+  ];
+  for (const [values, text] of statements)
+    values.forEach((v, i) => {
+      if (v)
+        checks.push({ kind: 'warning', text: `${[year, previous][i]}: ${text} — ${money(v)}.` });
+    });
   t.forEach((x, i) => {
     const d = x.assets - x.equity - x.liabilities;
     if (d)
@@ -444,21 +567,29 @@ interface Result {
   tax: bigint;
 }
 
-function resultOf(db: Db, companyId: string, year: string): Result {
-  const groups = new Map<string, bigint>();
-  const sources = new Map<string, Set<string>>();
-  for (const t of resultTurnovers(db, companyId, MONTHS_OF(year))) {
-    const v = -t.values.reduce((s, x) => s + x, 0n);
-    if (!v) continue;
-    const group = t.account.slice(0, 2);
-    groups.set(group, (groups.get(group) ?? 0n) + v);
-    const s = sources.get(group) ?? new Set<string>();
-    s.add(t.account.slice(0, 3));
-    sources.set(group, s);
-  }
-  const tax = bookedProfitTax(db, companyId, year).reduce((s, x) => s + x, 0n);
-  return { groups, sources, tax };
+/** The result of each year, from one read of the turnovers of all their months. */
+function resultsOf(db: Db, companyId: string, years: readonly string[]): Result[] {
+  // The turnovers read a range of months: the years go in their order.
+  const ordered = [...years].sort();
+  const turnovers = resultTurnovers(db, companyId, ordered.flatMap(MONTHS_OF));
+  return years.map((year) => {
+    const y = ordered.indexOf(year);
+    const groups = new Map<string, bigint>();
+    const sources = new Map<string, Set<string>>();
+    for (const t of turnovers) {
+      const v = -t.values.slice(y * 12, y * 12 + 12).reduce((s, x) => s + x, 0n);
+      if (!v) continue;
+      const group = t.account.slice(0, 2);
+      groups.set(group, (groups.get(group) ?? 0n) + v);
+      const s = sources.get(group) ?? new Set<string>();
+      s.add(t.account.slice(0, 3));
+      sources.set(group, s);
+    }
+    const tax = bookedProfitTax(db, companyId, year).reduce((s, x) => s + x, 0n);
+    return { groups, sources, tax };
+  });
 }
+const netOf = (r: Result) => [...r.groups.values()].reduce((s, v) => s + v, 0n) - r.tax;
 
 /** The form's lines; each takes the groups listed (a group the form has no line for — 61 / 73). */
 const INCOME: (
@@ -495,7 +626,7 @@ export function incomeStatement(db: Db, companyId: string, period: string): Decl
   const started = performance.now();
   const year = checkYear(period);
   const previous = String(Number(year) - 1);
-  const both = [resultOf(db, companyId, year), resultOf(db, companyId, previous)];
+  const both = resultsOf(db, companyId, [year, previous]);
   const columns = [`Hesabat dövrü (${year})`, `Əvvəlki dövr (${previous})`];
   const rows: DeclarationRow[] = [];
   const running = [0n, 0n];
@@ -690,17 +821,12 @@ export function equityStatement(db: Db, companyId: string, period: string): Decl
     'Cəmi',
   ];
   const checks: DeclarationView['checks'] = [];
-  // The year before's end is this year's opening: each balance is read once.
-  const positions = new Map<string, Position>();
-  const at = (month: string) => {
-    let p = positions.get(month);
-    if (!p) positions.set(month, (p = positionAt(db, companyId, chart, month)));
-    return p;
-  };
+  const at = positions(db, companyId, chart, yearEnds(year));
   const withTotal = (m: Map<string, bigint> | undefined) => {
     const v = COLUMNS.map((c) => m?.get(c) ?? 0n);
     return [...v, v.reduce((s, x) => s + x, 0n)];
   };
+  const results = resultsOf(db, companyId, [year, previous]);
   const section = (y: string, title: string): DeclarationSection => {
     const e = equityYear(db, companyId, y, at);
     const rows: DeclarationRow[] = [
@@ -764,8 +890,7 @@ export function equityStatement(db: Db, companyId: string, period: string): Decl
         kind: 'warning',
         text: `${ordinal(y)} il: kapitalda təsnif olunmamış dəyişiklik var (${[...e.otherSources].sort().join(', ')}) — mühasib onu "uçot siyasətində dəyişikliklər / səhvlər" və ya başqa sətrə köçürür.`,
       });
-    const net = resultOf(db, companyId, y);
-    const pl = [...net.groups.values()].reduce((s, v) => s + v, 0n) - net.tax;
+    const pl = netOf(results[y === year ? 0 : 1]!);
     const profit = e.moves.get('profit')?.get('34') ?? 0n;
     if (profit !== pl)
       checks.push({
@@ -784,6 +909,309 @@ export function equityStatement(db: Db, companyId: string, period: string): Decl
       section(previous, `Əvvəlki hesabat dövrü (${previous})`),
       section(year, `Hesabat dövrü (${year})`),
     ],
+    checks,
+    appendices: [],
+    ms: Math.round(performance.now() - started),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pul vəsaitlərinin hərəkəti haqqında hesabat (annex 4, the direct method; plan §5.3)
+
+type Flow =
+  | 'o:sales'
+  | 'o:royalty'
+  | 'o:otherIn'
+  | 'o:goods'
+  | 'o:staff'
+  | 'o:profitTax'
+  | 'o:taxes'
+  | 'o:interest'
+  | 'o:otherOut'
+  | 'i:sell'
+  | 'i:buy'
+  | 'i:loanIn'
+  | 'i:loanOut'
+  | 'f:shares'
+  | 'f:buyback'
+  | 'f:borrow'
+  | 'f:repay'
+  | 'f:dividends'
+  | 'fx';
+
+const under = (code: string, families: readonly string[]) =>
+  families.some((f) => code === f || code.startsWith(f.length === 2 ? f : `${f}.`));
+/** Settlement accounts whose document subkonto names the invoice paid (plan §5.3). */
+const SETTLEMENT = ['211', '531', '243', '543'];
+
+/**
+ * The line of the form a money posting goes to, by the account on its other side and its
+ * direction (QERARLAR 2026-10-29 mərhələ 10 §6). `investment`: the other side is a settlement
+ * account whose invoice books a long-term asset (113 / 111 bought, a fixed asset sold).
+ */
+function flowOf(other: string, inflow: boolean, investment: boolean, source: string): Flow {
+  if (source === 'revaluation') return 'fx';
+  if (investment) return inflow ? 'i:sell' : 'i:buy';
+  const cls = other[0]!;
+  if (under(other, ['17', '18', '23'])) return inflow ? 'i:loanIn' : 'i:loanOut';
+  if (cls === '1') return inflow ? 'i:sell' : 'i:buy';
+  if (under(other, ['30', '31', '32'])) return inflow ? 'f:shares' : 'f:buyback';
+  if (under(other, ['534', '344', '343', '341'])) return inflow ? 'o:otherIn' : 'f:dividends';
+  if (cls === '4' || under(other, ['50'])) return inflow ? 'f:borrow' : 'f:repay';
+  if (inflow) return under(other, ['211', '543', '60']) ? 'o:sales' : 'o:otherIn';
+  if (under(other, ['531', '243', '241', '242', '20'])) return 'o:goods';
+  if (under(other, ['533', '522', '521.03'])) return 'o:staff';
+  if (under(other, ['521.04'])) return 'o:profitTax';
+  if (under(other, ['521'])) return 'o:taxes';
+  if (under(other, ['751'])) return 'o:interest';
+  if (cls === '7') return 'o:goods';
+  return 'o:otherOut';
+}
+
+interface CashYear {
+  flows: Map<Flow, bigint>;
+  sources: Map<Flow, Set<string>>;
+  opening: bigint;
+  closing: bigint;
+}
+
+/** The invoices whose entries book a long-term asset (1xx), as the document subkonto names them. */
+function investmentInvoices(db: Db, companyId: string): Set<string> {
+  return new Set(
+    db
+      .all(
+        `SELECT DISTINCT e.source_id AS id FROM postings p JOIN entries e ON e.id=p.entry_id
+         WHERE p.company_id=? AND p.dt_account>='1' AND p.dt_account<'2' AND e.source_type='invoice'`,
+        companyId,
+      )
+      .map((r) => `invoice:${String(r.id)}`),
+  );
+}
+
+/** The cash flow of each year (consecutive years), from one query. */
+function cashYears(
+  db: Db,
+  companyId: string,
+  years: readonly string[],
+  investing: Set<string>,
+  at: (month: string) => Position,
+): CashYear[] {
+  const out = years.map(() => ({
+    flows: new Map<Flow, bigint>(),
+    sources: new Map<Flow, Set<string>>(),
+  }));
+  // Money is the whole group 22 (221–224, 222 too) — the balance sheet's line 22; a posting
+  // between two of its accounts moves nothing. Summed in SQL by the other side's account (and
+  // the invoice, for a settlement account), the direction and whether the entry is a revaluation.
+  const side = (other: 'dt' | 'kt') =>
+    `SELECT substr(p.date,1,4) AS y, p.${other}_account AS other,
+       CASE WHEN substr(p.${other}_account,1,3) IN (${SETTLEMENT.map((c) => `'${c}'`).join(',')}) THEN p.${other}_s3 ELSE '' END AS doc,
+       p.entry_id IN (SELECT id FROM entries WHERE company_id=?1 AND source_type='revaluation') AS fx,
+       SUM(p.amount) AS a
+     FROM postings p
+     WHERE p.company_id=?1 AND p.${other === 'kt' ? 'dt' : 'kt'}_account>='22'
+       AND p.${other === 'kt' ? 'dt' : 'kt'}_account<'23' AND p.date BETWEEN ?2 AND ?3
+       AND NOT (p.${other}_account>='22' AND p.${other}_account<'23')
+     GROUP BY 1, 2, 3, 4`;
+  for (const p of db.all(
+    `SELECT 1 AS inflow, * FROM (${side('kt')}) UNION ALL SELECT 0, * FROM (${side('dt')})`,
+    companyId,
+    `${[...years].sort()[0]}-01-01`,
+    `${[...years].sort().at(-1)}-12-31`,
+  )) {
+    const { flows, sources } = out[years.indexOf(String(p.y))]!;
+    const inflow = Number(p.inflow) === 1;
+    const other = String(p.other);
+    const doc = String(p.doc);
+    const investment = !!doc && investing.has(doc);
+    const flow = flowOf(other, inflow, investment, Number(p.fx) === 1 ? 'revaluation' : '');
+    const a = p.a as bigint;
+    flows.set(flow, (flows.get(flow) ?? 0n) + (inflow ? a : -a));
+    const s = sources.get(flow) ?? new Set<string>();
+    s.add(investment ? `${other.slice(0, 3)} (əsas vəsait qaiməsi)` : other.slice(0, 3));
+    sources.set(flow, s);
+  }
+  const money22 = (month: string) => at(month).lines.get('22') ?? 0n;
+  return years.map((year, i) => ({
+    ...out[i]!,
+    opening: money22(`${Number(year) - 1}-12`),
+    closing: money22(`${year}-12`),
+  }));
+}
+
+const CASH: {
+  title: string;
+  key: string;
+  net: string;
+  lines: { flow: Flow; label: string }[];
+  /** Operating: the inflows and the outflows have their own totals. */
+  split?: { in: string; out: string };
+}[] = [
+  {
+    title: 'Əməliyyat fəaliyyətindən pul vəsaitlərinin hərəkəti',
+    key: 'o',
+    net: 'Əməliyyat fəaliyyətindən yaranan pul vəsaitlərinin xalis hərəkəti',
+    split: {
+      in: 'Əməliyyat fəaliyyətindən cəmi daxilolmalar',
+      out: 'Əməliyyat fəaliyyətindən cəmi xaricolmalar',
+    },
+    lines: [
+      {
+        flow: 'o:sales',
+        label: 'Malların satışından və xidmətlərin göstərilməsindən daxilolmalar',
+      },
+      { flow: 'o:royalty', label: 'Royaltilər, yığımlar və komisyon haqları üzrə daxilolmalar' },
+      { flow: 'o:otherIn', label: 'Digər gəlirlərdən daxilolmalar' },
+      { flow: 'o:goods', label: 'Mallar və xidmətlərə görə xaricolmalar' },
+      { flow: 'o:staff', label: 'İşçilərin mükafatlandırılması ilə əlaqədar ödənişlər' },
+      { flow: 'o:profitTax', label: 'Mənfəət vergisi ödənişi üzrə xaricolmalar' },
+      { flow: 'o:taxes', label: 'Digər vergilərə görə xaricolmalar' },
+      {
+        flow: 'o:interest',
+        label: 'Əməliyyat fəaliyyətindən yaranan faiz ödənişləri üzrə xaricolmalar',
+      },
+      { flow: 'o:otherOut', label: 'Digər ödənişlərə görə xaricolmalar' },
+    ],
+  },
+  {
+    title: 'İnvestisiya fəaliyyətindən yaranan pul vəsaitlərinin hərəkəti',
+    key: 'i',
+    net: 'İnvestisiya fəaliyyətindən yaranan pul vəsaitlərinin xalis hərəkəti',
+    lines: [
+      {
+        flow: 'i:sell',
+        label:
+          'Torpaq, tikili və avadanlıqların, qeyri-maddi və digər uzunmüddətli aktivlərin satışından daxilolmalar',
+      },
+      {
+        flow: 'i:buy',
+        label:
+          'Torpaq, tikili və avadanlıqların, qeyri-maddi və digər uzunmüddətli aktivlərin əldə edilməsi üçün xaricolmalar',
+      },
+      {
+        flow: 'i:loanIn',
+        label: 'Digər tərəflərə verilmiş borcların qaytarılmasından daxilolmalar',
+      },
+      { flow: 'i:loanOut', label: 'Digər tərəflərə verilmiş borclara görə xaricolmalar' },
+    ],
+  },
+  {
+    title: 'Maliyyələşdirmə üzrə fəaliyyətdən pul vəsaitlərinin hərəkəti',
+    key: 'f',
+    net: 'Maliyyələşdirmə üzrə fəaliyyətdən yaranan pul vəsaitlərinin xalis hərəkəti',
+    lines: [
+      {
+        flow: 'f:shares',
+        label: 'Səhmlərin və digər kapital alətlərinin buraxılmasından daxilolmalar',
+      },
+      {
+        flow: 'f:buyback',
+        label: 'Müəssisənin öz səhmlərinin əldə edilməsi və ya geri alınması üzrə xaricolmalar',
+      },
+      { flow: 'f:borrow', label: 'Borcların alınmasından daxilolmalar' },
+      {
+        flow: 'f:repay',
+        label: 'Borc şəklində alınmış məbləğlərin qaytarılması üzrə xaricolmalar',
+      },
+      { flow: 'f:dividends', label: 'Dividendlər və oxşar ödəmələr şəklində xaricolmalar' },
+    ],
+  },
+];
+const INFLOWS: readonly Flow[] = ['o:sales', 'o:royalty', 'o:otherIn'];
+
+export function cashFlowStatement(db: Db, companyId: string, period: string): DeclarationView {
+  const started = performance.now();
+  const year = checkYear(period);
+  const previous = String(Number(year) - 1);
+  const at = positions(db, companyId, loadChart(db, companyId), yearEnds(year));
+  const investing = investmentInvoices(db, companyId);
+  const both = cashYears(db, companyId, [year, previous], investing, at);
+  const columns = [`Hesabat dövrü (${year})`, `Əvvəlki dövr (${previous})`];
+  const value = (c: CashYear, f: Flow) => c.flows.get(f) ?? 0n;
+  const net = both.map(() => 0n);
+  const sections: DeclarationSection[] = CASH.map((part) => {
+    const rows: DeclarationRow[] = [];
+    const total = both.map(() => 0n);
+    const line = (flow: Flow, label: string) => {
+      const all = new Set<string>();
+      for (const c of both) for (const s of c.sources.get(flow) ?? []) all.add(s);
+      const values = both.map((c) => value(c, flow));
+      values.forEach((v, i) => (total[i]! += v));
+      rows.push(row(`f:${flow}`, label, values, [...all].sort().join(', ')));
+    };
+    if (part.split) {
+      for (const l of part.lines.filter((x) => INFLOWS.includes(x.flow))) line(l.flow, l.label);
+      rows.push(row(`f:${part.key}:in`, part.split.in, [...total], '', { total: true }));
+      const inflow = [...total];
+      for (const l of part.lines.filter((x) => !INFLOWS.includes(x.flow))) line(l.flow, l.label);
+      rows.push(
+        row(
+          `f:${part.key}:out`,
+          part.split.out,
+          total.map((v, i) => v - inflow[i]!),
+          '',
+          {
+            total: true,
+          },
+        ),
+      );
+    } else for (const l of part.lines) line(l.flow, l.label);
+    rows.push(row(`f:${part.key}:net`, part.net, total, '', { total: true }));
+    total.forEach((v, i) => (net[i]! += v));
+    return { title: part.title, columns, rows };
+  });
+  const fx = both.map((c) => value(c, 'fx'));
+  const closing = both.map((c, i) => c.opening + net[i]! + fx[i]!);
+  sections.push({
+    title: 'Pul vəsaitlərinin və onların ekvivalentlərinin hərəkəti',
+    columns,
+    rows: [
+      row('f:increase', 'Pul vəsaitləri və onların ekvivalentlərinin artması (azalması)', net, '', {
+        total: true,
+      }),
+      row(
+        'f:opening',
+        'İlin əvvəlinə pul vəsaitləri və onların ekvivalentləri',
+        both.map((c) => c.opening),
+        '22 · balans',
+      ),
+      row(
+        'f:fx',
+        'Xarici valyutaların məzənnələrinin dəyişməsinin təsiri',
+        fx,
+        'yenidən qiymətləndirmə (YQ)',
+      ),
+      row('f:closing', 'İlin sonuna pul vəsaitləri və onların ekvivalentləri', closing, '', {
+        total: true,
+      }),
+      row(
+        'f:balance',
+        'Balansın 22-ci maddəsi (yoxlama)',
+        both.map((c) => c.closing),
+        '221–224',
+      ),
+    ],
+  });
+  const checks: DeclarationView['checks'] = [];
+  both.forEach((c, i) => {
+    if (closing[i] !== c.closing)
+      checks.push({
+        kind: 'warning',
+        text: `${[year, previous][i]}: pul hərəkətinin sonu (${money(closing[i]!)}) balansın 22-ci maddəsindən (${money(c.closing)}) fərqlənir.`,
+      });
+  });
+  return {
+    kind: 'cashFlowStatement',
+    period: year,
+    from: `${year}-01-01`,
+    to: `${year}-12-31`,
+    title: header(
+      db,
+      companyId,
+      'Pul vəsaitlərinin hərəkəti haqqında hesabat (birbaşa metod)',
+      year,
+    ),
+    sections,
     checks,
     appendices: [],
     ms: Math.round(performance.now() - started),

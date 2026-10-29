@@ -202,10 +202,10 @@ Balansda ayrıca bölmə "Yoxlamalar" — hər yoxlamanın rəqəmi iki tarix ü
 
 ## 9. İcra ardıcıllığı
 
-1. **10a — Maliyyə vəziyyəti haqqında hesabat və yoxlamalar** (0.9.12): balans, açılmış qalıqlar, bağlanmamış nəticə, yoxlamalar bölməsi, menyu; F1–F3, F7 (balans), F8 (balans).
-2. **10b — M/Z (MHBS) və kapitalda dəyişikliklər** (0.9.13): F4, F5, UI, perf.
-3. **10c — Pul vəsaitlərinin hərəkəti (birbaşa)** və hesabatlararası yoxlamalar (0.9.14): F6, UI, perf; F9 real baza ilə.
-4. **Müstəqil audit** (kodu yazmayan sessiya) — növbəti addım.
+1. ✅ **10a — Maliyyə vəziyyəti haqqında hesabat və yoxlamalar** (0.9.12): balans, açılmış qalıqlar, bağlanmamış nəticə, yoxlamalar bölməsi, menyu; F1–F3, F7 (balans), F8 (balans).
+2. ✅ **10b — M/Z (MHBS) və kapitalda dəyişikliklər** (0.9.13): F4, F5, UI, perf.
+3. ✅ **10c — Pul vəsaitlərinin hərəkəti (birbaşa)** və hesabatlararası yoxlamalar (0.9.14): F6, UI, perf; F9 real baza ilə.
+4. **Müstəqil audit** (kodu yazmayan sessiya, proqramçı və baş mühasib gözü ilə) — **növbəti addım**; sonra mühasibin §5 qaydalarını və §8 misalını təsdiqi.
 
 ## 10. Mövcud hesabatlarla fərqlər (bilərəkdən)
 
