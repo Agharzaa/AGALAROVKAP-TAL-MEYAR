@@ -215,13 +215,9 @@ function buildProfitLoss(chart: Chart, turnovers: Turnover[], n: number, name: N
   return { rows, income, expense, result: running };
 }
 
-export function profitLoss(db: Db, companyId: string, year: string, name: NameOf): ProfitLossView {
-  if (!/^\d{4}$/.test(year)) throw new DomainError('İl düzgün deyil.', 'year');
-  const started = performance.now();
+/** The profit tax booked on 901 per month of the year, without its close to 341 (stage 9d). */
+export function bookedProfitTax(db: Db, companyId: string, year: string): bigint[] {
   const months = monthsUpTo(`${year}-12`, 12);
-  const chart = loadChart(db, companyId);
-  const built = buildProfitLoss(chart, resultTurnovers(db, companyId, months), 12, name);
-  // Stage 9d: the profit tax (901, without its close to 341) and the net result, when there is one.
   const tax = months.map(() => 0n);
   for (const r of db.all(
     `SELECT substr(date,1,7) AS m, SUM(CASE WHEN dt_account='901' THEN amount ELSE -amount END) AS a
@@ -232,6 +228,17 @@ export function profitLoss(db: Db, companyId: string, year: string, name: NameOf
     `${year}-12-31`,
   ))
     tax[months.indexOf(String(r.m))]! += r.a as bigint;
+  return tax;
+}
+
+export function profitLoss(db: Db, companyId: string, year: string, name: NameOf): ProfitLossView {
+  if (!/^\d{4}$/.test(year)) throw new DomainError('İl düzgün deyil.', 'year');
+  const started = performance.now();
+  const months = monthsUpTo(`${year}-12`, 12);
+  const chart = loadChart(db, companyId);
+  const built = buildProfitLoss(chart, resultTurnovers(db, companyId, months), 12, name);
+  // Stage 9d: the profit tax (901, without its close to 341) and the net result, when there is one.
+  const tax = bookedProfitTax(db, companyId, year);
   if (tax.some((v) => v !== 0n)) {
     const row = (key: string, label: string, values: bigint[], total: boolean): ReportRow => ({
       key,

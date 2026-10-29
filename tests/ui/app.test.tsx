@@ -3656,3 +3656,70 @@ test('stage 10a: the balance sheet opens from the menu, lines with their source;
     h.close();
   }
 });
+
+test('stage 10b: the IFRS income statement and the changes in equity open from the menu', async () => {
+  const h = harness();
+  const s = seed(h);
+  const year = new Date().getFullYear();
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as Catalog;
+  const service = catalog.items.find((i) => i.kind === 'incomeType' && i.name === 'Xidmət satışı')!;
+  const line = (
+    dtAccount: string,
+    dtSk: string[],
+    ktAccount: string,
+    ktSk: string[],
+    amount: string,
+  ) => ({
+    dtAccount,
+    dtSk,
+    ktAccount,
+    ktSk,
+    amount,
+    memo: '',
+  });
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${year}-01-10`,
+    memo: '',
+    lines: [
+      line('223.01', [s.bankAccount], '301', [s.founder, s.capitalIn], '5000'),
+      line('211.01', [s.customer, s.contract, ''], '601', [service.id, '0'], '1200'),
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Mənfəət və ya zərər (MHBS)' }));
+    const report = within(pane());
+    const cells = async (name: string) =>
+      within((await report.findByRole('rowheader', { name })).closest('tr')!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent!.replace(/\s/g, ' '));
+    assert.deepEqual(await cells('60 · Əsas əməliyyat gəlirləri'), ['1 200,00', '0,00', '601']);
+    assert.deepEqual((await cells('341 · Hesabat dövründə xalis mənfəət (zərər)')).slice(0, 2), [
+      '1 200,00',
+      '0,00',
+    ]);
+    report.getByText(/ilin dekabrı bağlanmayıb: mənfəət vergisi/);
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Kapitalda dəyişikliklər' }));
+    const equity = within(pane());
+    const closing = await waitFor(() => {
+      const rows = equity.getAllByRole('rowheader', { name: 'İlin sonuna qalıq' });
+      assert.equal(rows.length, 2);
+      return rows[1]!;
+    });
+    assert.deepEqual(
+      within(closing.closest('tr')!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent!.replace(/\s/g, ' ')),
+      ['5 000,00', '0,00', '0,00', '0,00', '1 200,00', '6 200,00', `balans 31.12.${year}`],
+    );
+  } finally {
+    h.close();
+  }
+});

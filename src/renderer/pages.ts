@@ -493,6 +493,8 @@ export const sections: Section[] = [
             icon: Scale,
             action: page('balanceSheet'),
           },
+          { label: 'Mənfəət və ya zərər (MHBS)', icon: Reports, action: page('incomeStatement') },
+          { label: 'Kapitalda dəyişikliklər', icon: Reports, action: page('equityStatement') },
         ],
       },
       {
@@ -646,6 +648,8 @@ export const sections: Section[] = [
             icon: Scale,
             action: page('balanceSheet'),
           },
+          { label: 'Mənfəət və ya zərər (MHBS)', icon: Reports, action: page('incomeStatement') },
+          { label: 'Kapitalda dəyişikliklər', icon: Reports, action: page('equityStatement') },
         ],
       },
       {

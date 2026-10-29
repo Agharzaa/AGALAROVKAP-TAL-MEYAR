@@ -507,6 +507,16 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   );
   const control = sheet.sections.flatMap((x) => x.rows).find((r) => r.key === 'c:balance')!;
   assert.deepEqual(control.values, ['0.00', '0.00']);
+  // F8 (10b): the IFRS income statement (the M/Z turnovers, two years) and the changes in equity.
+  time('Mənfəət və ya zərər (MHBS), il', 1000, () =>
+    q({ type: 'declaration', kind: 'incomeStatement', period: '2026' }),
+  );
+  const equity = time(
+    'Kapitalda dəyişikliklər, il',
+    1000,
+    () => q({ type: 'declaration', kind: 'equityStatement', period: '2026' }) as DeclarationView,
+  );
+  assert.ok(!equity.checks.some((c) => /bərabər deyil|fərqlənir/.test(c.text)));
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

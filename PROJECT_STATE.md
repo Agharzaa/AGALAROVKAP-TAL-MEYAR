@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 29.10.2026 (0.9.12, mərhələ 10a). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 29.10.2026 (0.9.13, mərhələ 10b). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -789,5 +789,13 @@ Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`, QERARLAR 2026-10-29 (mərhələ 
 - **Aktiv-passiv hesablar açılmış qalıqla** (kontragent / işçi üzrə, qalanı subhesab üzrə): öhdəliyin Dt qalığı → 24 (4xx → 19), aktivin Kt qalığı → 54 (22 → 50, 1xx → 44). 112 11-də çıxılır.
 - **Bağlanmamış nəticə:** dekabr bağlanmayıbsa 6xx / 7xx / 801 / 901-in qalığı 34-də, xəbərdarlıqla — balans ilin ortasında da tutuşur.
 - **Yoxlamalar** (bölmə və xəbərdarlıqlar): aktivlər − (kapital + öhdəliklər), bağlanmamış nəticə, 341 / 801 / 901 / 6xx–7xx qalığı, dekabr bağlanıb; əvvəlki il üçün uçot yoxdursa məlumat.
-- Testlər: `tests/integration/financial.test.ts` (F1 §8 misalı qəpikbəqəpik — 126 500,03; dekabrdan əvvəl 127 333,36 və heç nə bağlanmayanda 134 000,00; F2 açılmış qalıqlar; F3 əvvəlki il; il şəkilçisi), `tests/ui` (10a), perf (balans, il: 119 ms). `npm run typecheck`, `npm test` 294, `npm run test:ui` 55, `npm run test:perf` keçir. Real bazanın surəti (v13 → v24): iki şirkət, xətasız, balans tutuşur (MG Transport 2026: 33 963,81, dekabr bağlanmayıb). Electron işlədilmədi.
-- **Növbəti:** 10b — mənfəət və ya zərər (MHBS) və kapitalda dəyişikliklər.
+- Testlər: `tests/integration/financial.test.ts` (F1 §8 misalı qəpikbəqəpik — 126 500,03; dekabrdan əvvəl 127 333,36 və heç nə bağlanmayanda 134 000,00; F2 açılmış qalıqlar; F3 əvvəlki il; il şəkilçisi), `tests/ui` (10a), perf (balans, il: 119 ms). `npm run typecheck`, `npm test` 294, `npm run test:ui` 55, `npm run test:perf` keçir. Real bazanın surəti (v13 → v24): iki şirkət, xətasız, balans tutuşur. Electron işlədilmədi.
+- 0.9.12-nin CI-i yaşıldır.
+
+### 0.9.13 — 10b: mənfəət və ya zərər (MHBS) və kapitalda dəyişikliklər (29.10.2026)
+
+- **Mənfəət və ya zərər haqqında hesabat** (Q-01, əlavə 2, xərclərin funksiyaları üzrə; hesabat ili və əvvəlki il): 60, 70, ümumi mənfəət, 61, 71, 72, 73, 62 və 74, əməliyyat mənfəəti, 63 və 75 (altında maliyyə gəlirləri / xərcləri), 64 və 76, 81, vergiqoymadan əvvəl, 90 (901, 901 → 341 çıxılır), 341 xalis mənfəət, digər məcmu gəlir, məcmu gəlir. M/Z-nin (5d) turnover-lərindən — vergiqoymadan əvvəl və xalis mənfəət M/Z ilə eynidir; xərclər mənfi. Dekabr bağlanmayıbsa xəbərdarlıq (vergi hələ yoxdur). 901-in sorğusu `bookedProfitTax`-a çıxarıldı (M/Z ilə ortaq).
+- **Kapitalda dəyişikliklər** (əlavə 3; 30 / 31 / 32 / 33 / 34 / cəmi; əvvəlki və hesabat ili ayrıca bölmə): ilin əvvəlinə (balans), "uçot siyasəti / səhvlər" (0 — mühasib), xalis mənfəət (6xx–9xx-in kapitaldan kənar yazılışları = bağlanmamış nəticənin dəyişməsi + 3xx ilə köçürmələr), kapital qoyuluşu (30x / 31x), dividendlər (34x ↔ 534), geri alınmış kapital, maddələr arası köçürmə (məs. 343 → 301), sair məcmu gəlir (33x), "digər (təsnif olunmayıb)" — yalnız varsa, xəbərdarlıqla; ilin sonuna = balansın kapitalı. Yoxlamalar: əvvəl + dəyişikliklər = son (sütun üzrə), xalis mənfəət = M/Z.
+- Testlər: `financial.test.ts` (F4 §8 misalı: 60 = 120 000,00, vergiqoymadan əvvəl 71 500,03, 90 = −13 300,00, xalis 58 200,03 — M/Z ilə eyni; dekabr açıq — 79 000,00; F5: 2026 qoyuluş 10 000 + mənfəət 58 200,03; 2027 dividend −5 000, 343 → 301 köçürməsi 20 000, təsnif olunmamış −300 (343 ↔ 223), xərc −200 → 62 700,03 = balans), `tests/ui` (10b), perf.
+- `npm run typecheck`, `npm test` 297, `npm run test:ui` 56, `npm run test:perf` (balans 117 ms, M/Z MHBS 159 ms, kapitalda dəyişikliklər 471 ms — iki il, balanslar bir dəfə oxunur) keçir. Real bazanın surəti: iki şirkət, xətasız, kapitalda yoxlama xəbərdarlığı yoxdur. Sxem dəyişmir. Electron işlədilmədi.
+- **Növbəti:** 10c — pul vəsaitlərinin hərəkəti (birbaşa metod) və hesabatlararası yoxlamalar.

@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ordinal } from '../../src/application/financial.js';
+import type { DeclarationView, ProfitLossView } from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 import { declaration, figures } from './declarations.test.js';
 
@@ -244,4 +245,129 @@ test('the year’s suffix follows the last spoken numeral', () => {
       '2100-cü',
     ],
   );
+});
+
+const rowOf = (v: DeclarationView, key: string) =>
+  v.sections.flatMap((s) => s.rows).find((r) => r.key === key)!;
+
+test('F4: the income statement (IFRS form, by function) — the §8 example, the same as the M/Z', (t) => {
+  const f = fixture(t, ':memory:', '2027-01-15');
+  example(f);
+  closeThrough(f, 12);
+  const v = declaration(f, 'incomeStatement', '2026');
+  const k = (key: string) => figures(v, key)[0];
+  assert.deepEqual(
+    ['i:60', 'i:70', 'i:gross', 'i:61', 'i:71', 'i:72', 'i:73', 'i:62', 'i:operating'].map(k),
+    ['120000.00', '-7499.97', '112500.03', '0.00', '0.00', '-40000.00', '0.00', '0.00', '72500.03'],
+  );
+  assert.deepEqual(
+    ['i:63', 'i:75', 'i:64', 'i:81', 'i:before', 'i:90', 'i:net', 'i:oci', 'i:total'].map(k),
+    [
+      '-1000.00',
+      '-1000.00',
+      '0.00',
+      '0.00',
+      '71500.03',
+      '-13300.00',
+      '58200.03',
+      '0.00',
+      '58200.03',
+    ],
+  );
+  assert.equal(figures(v, 'i:net')[1], '0.00');
+  assert.equal(rowOf(v, 'i:60').source, '601');
+  assert.equal(rowOf(v, 'i:60').account, '601');
+  assert.deepEqual(v.checks, []);
+  // The M/Z of stage 5d gives the same result before tax and the same net profit.
+  const pl = f.query<ProfitLossView>({ type: 'profitLoss', companyId: f.companyId, year: '2026' });
+  const sum = (key: string) => pl.rows.find((r) => r.key === key)!.sum;
+  assert.deepEqual([sum('t:result'), sum('t:net')], [k('i:before'), k('i:net')]);
+  // December open: no tax yet, a warning says so.
+  const g = fixture(t, ':memory:', '2027-01-15');
+  example(g);
+  const open = declaration(g, 'incomeStatement', '2026');
+  assert.deepEqual(
+    ['i:before', 'i:90', 'i:net'].map((key) => figures(open, key)[0]),
+    ['79000.00', '0.00', '79000.00'],
+  );
+  assert.match(open.checks[0]!.text, /2026-cı ilin dekabrı bağlanmayıb: mənfəət vergisi/);
+});
+
+test('F5: changes in equity — capital paid in, the profit, dividends, a transfer, an unclassified change', (t) => {
+  const f = fixture(t, ':memory:', '2028-01-15');
+  const { founder, capital, bank } = example(f);
+  closeThrough(f, 12);
+  let v = declaration(f, 'equityStatement', '2026');
+  const k = (x: DeclarationView, key: string) => figures(x, key);
+  assert.deepEqual(k(v, 'e:2026:open'), ['0.00', '0.00', '0.00', '0.00', '0.00', '0.00']);
+  assert.deepEqual(k(v, 'e:2026:profit'), ['0.00', '0.00', '0.00', '0.00', '58200.03', '58200.03']);
+  assert.deepEqual(k(v, 'e:2026:contrib'), [
+    '10000.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '10000.00',
+  ]);
+  assert.deepEqual(k(v, 'e:2026:close'), [
+    '10000.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '58200.03',
+    '68200.03',
+  ]);
+  assert.deepEqual(k(v, 'e:2026:change'), k(v, 'e:2026:close'));
+  assert.equal(v.sections[0]!.title, 'Əvvəlki hesabat dövrü (2025)');
+  assert.ok(!v.sections[1]!.rows.some((r) => r.key === 'e:2026:other'));
+  assert.deepEqual(v.checks, []);
+  // 2027: a dividend declared and paid, part of the profit turned into capital, a past error
+  // corrected through 343 (unclassified — the accountant moves it), an expense of 200.
+  const L = f.line;
+  const B = f.bankLine;
+  const fees = f.item('expenseItem', 'Bank xidmətləri');
+  f.operation('2027-03-01', [L('343', [], '534.01', [], '5000')]);
+  f.bank('out', '2027-03-10', bank, [B('534.01', [], '5000')]);
+  f.operation('2027-04-01', [L('343', [], '301', [founder, capital], '20000')]);
+  f.operation('2027-05-01', [L('343', [], '223.01', [bank], '300')]);
+  f.bank('out', '2027-05-02', bank, [B('721', [fees], '200')]);
+  v = declaration(f, 'equityStatement', '2027');
+  assert.deepEqual(k(v, 'e:2027:open'), k(v, 'e:2026:close'));
+  assert.deepEqual(k(v, 'e:2027:profit'), ['0.00', '0.00', '0.00', '0.00', '-200.00', '-200.00']);
+  assert.deepEqual(k(v, 'e:2027:dividends'), [
+    '0.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '-5000.00',
+    '-5000.00',
+  ]);
+  assert.deepEqual(k(v, 'e:2027:transfers'), [
+    '20000.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '-20000.00',
+    '0.00',
+  ]);
+  assert.deepEqual(k(v, 'e:2027:other'), ['0.00', '0.00', '0.00', '0.00', '-300.00', '-300.00']);
+  assert.deepEqual(k(v, 'e:2027:close'), [
+    '30000.00',
+    '0.00',
+    '0.00',
+    '0.00',
+    '32700.03',
+    '62700.03',
+  ]);
+  assert.equal(rowOf(v, 'e:2027:other').source, '343 ↔ 223');
+  // The closing equals the balance sheet's equity; the checks name the unclassified change only.
+  const sheet = declaration(f, 'balanceSheet', '2027');
+  assert.equal(figures(sheet, 'b:t3')[0], '62700.03');
+  assert.equal(v.checks.length, 1);
+  assert.match(
+    v.checks[0]!.text,
+    /2027-ci il: kapitalda təsnif olunmamış dəyişiklik var \(343 ↔ 223\)/,
+  );
+  const income = declaration(f, 'incomeStatement', '2027');
+  assert.deepEqual(figures(income, 'i:net'), ['-200.00', '58200.03']);
 });
