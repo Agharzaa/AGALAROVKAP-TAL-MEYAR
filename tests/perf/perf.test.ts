@@ -16,6 +16,7 @@ import type {
   CashFlowView,
   ClosingView,
   DashboardView,
+  DeclarationView,
   IntegrityView,
   ProfitLossView,
   TrialBalance,
@@ -498,6 +499,14 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   time('Mənfəət vergisi bəyannaməsi, il', 1500, () =>
     q({ type: 'declaration', kind: 'profitTax', period: '2026' }),
   );
+  // F8 (10a): the balance sheet of the year and the year before — the registers by account.
+  const sheet = time(
+    'Maliyyə vəziyyəti haqqında hesabat, il',
+    1000,
+    () => q({ type: 'declaration', kind: 'balanceSheet', period: '2026' }) as DeclarationView,
+  );
+  const control = sheet.sections.flatMap((x) => x.rows).find((r) => r.key === 'c:balance')!;
+  assert.deepEqual(control.values, ['0.00', '0.00']);
   // Ə9 (8b): a month's payroll of 300 employees — filled in, posted, the taxes and funds report.
   // A reused MEYAR_PERF_DB keeps its October payroll: skipped.
   if (

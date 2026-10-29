@@ -1133,6 +1133,11 @@ function Routed({ win }: { win: Win }) {
           return <DeclarationPage kind="taxDepreciation" />;
         case 'profitTaxReturn':
           return <DeclarationPage kind="profitTax" />;
+        case 'balanceSheet':
+        case 'incomeStatement':
+        case 'equityStatement':
+        case 'cashFlowStatement':
+          return <DeclarationPage kind={v.page} />;
         case 'dashboard':
           return <DashboardPage />;
         case 'products':

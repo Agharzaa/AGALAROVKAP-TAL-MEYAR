@@ -475,3 +475,16 @@ Plan: `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`. İstifadəçi (28.10.2026): "növ
 2. **Detallaşdırma** (1C kimi): Hesablar / Subhesablar / Kontragentlər / Hamısı. Səviyyə seçiləndə əl ilə açılan / bağlanan sətirlər sıfırlanır; "Hamısını yığ" düyməsini "Hesablar" əvəz edir.
 3. **Dövr seçimi:** Ay / Rüb / İl və ‹ › — əvvəlki / növbəti dövr, dərhal tətbiq olunur.
 4. **Çap et və PDF:** hesabat vərəqi (şirkət, başlıq, dövr, ekranda açıq sətirlər, cəmi), A4 albom; PDF masaüstü proqramda birbaşa faylə saxlanılır.
+
+## 2026-10-29 — Mərhələ 10: illik maliyyə hesabatları
+
+Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`. İstifadəçi növbəti mərhələ kimi illik maliyyə hesabatlarını seçdi (Meyar-da balans yoxdur) və əvvəlcədən icazə verdi — açıq suallarda tövsiyə seçildi. Mənbə: Maliyyə Nazirliyinin 30.01.2017-ci il tarixli Q-01 qərarı ("MHBS və Kommersiya Təşkilatları üçün MMUS-a əsasən mühasibat uçotunun aparılması Qaydaları", əlavələr 1–4). Mənbənin birbaşa demədiyi qaydalar Meyar-ındır və **mühasib təsdiq edir**:
+
+1. **Formalar Q-01-in əlavələridir:** maliyyə vəziyyəti haqqında hesabat (1), mənfəət və ya zərər — xərclərin funksiyaları üzrə (2), kapitalda dəyişikliklər (3), pul vəsaitlərinin hərəkəti — birbaşa metod (4). Hesabat ili və əvvəlki il; rəqəmlər forma maddələri ilə, mənbə ilə, Excel / çap. Hesabat saxlanılmır, sxem dəyişmir. Uçot siyasəti və izahlı qeydlər, xarakter üzrə M/Z, dolayı metod, e-uçot portalına göndərmə — sonra.
+2. **Balansın maddəsi hesab kodunun ilk iki rəqəmidir** (formanın maddə nömrələri hesab planının qruplarıdır: 10–19, 20–24, 30–34, 40–44, 50–54). Kontr-hesab (112) öz maddəsində çıxılır.
+3. **Aktiv-passiv hesablar açılmış qalıqla:** birinci subkontosu kontragent / işçi olan hesab onlar üzrə, qalanı subhesab üzrə. Öhdəlik hesabının Dt qalığı → 24 (4xx → 19); aktiv hesabının Kt qalığı → 54 (22 overdraft → 50, 1xx → 44).
+4. **Dekabr bağlanmayıbsa** 6xx / 7xx / 801 / 901-in qalığı 34-də "bağlanmamış nəticə" kimi göstərilir, xəbərdarlıqla; hesabat yenə tutuşur.
+5. **M/Z (MHBS)** mövcud M/Z-nin turnover-lərindən: 60 = 601 − 602 − 603 − 604, 70, 61, 71, 72, 73, 63 və 75 (631 − 751), 90 = 901, 341 xalis mənfəət; xərclər mənfi.
+6. **Pul vəsaitləri — 22-ci qrupun hamısı** (221–224, 222 daxil); hərəkət pul hesablarının yazılışlarından, qarşı hesab və istiqamət üzrə (plan §5.3 cədvəli). Əsas vəsait qaiməsinə ödəniş (hesablaşma sənədi üzrə qaimədə 1xx hesabı var) — investisiya; faiz ödənişi — əməliyyat; 521.03 / 522 — işçilər; YQ — məzənnə təsiri. Mövcud "Pul vəsaitlərinin hərəkəti" (maddələr üzrə) dəyişmir.
+7. **Kapitalda dəyişikliklər:** 30 / 31 / 32 / 33 / 34 / cəmi; xalis mənfəət — 6xx–9xx-in kapitaldan kənar hesablarla yazılışları; kapital qoyuluşu — 30x / 31x; dividend — 34x ↔ 534; maddələr arası köçürmə; sair məcmu gəlir — 33x; qalan 34x hərəkəti "təsnif olunmayıb" sətrində, xəbərdarlıqla (mühasib "səhvlər üzrə düzəliş" sətrinə özü köçürür).
+8. **Yoxlamalar** (bloklamır): balans tutuşur; dekabr bağlanıb; bağlanışdan sonra 341 / 801 / 901 / 6xx / 7xx = 0; pul hərəkətinin sonu = balansın 22-si; M/Z xalis mənfəət = kapitalın xalis mənfəəti; kapitalın sonu = balansın kapitalı.

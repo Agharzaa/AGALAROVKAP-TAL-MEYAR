@@ -100,12 +100,21 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vatSummary'), companyId: id, month: z.string().max(7) }),
   /**
    * Stage 9: the figures of a tax return — ƏDV (period YYYY-MM), muzdlu iş (YYYY-Q1…Q4), vergi
-   * amortizasiyası and mənfəət vergisi (YYYY).
+   * amortizasiyası and mənfəət vergisi (YYYY); stage 10 — the financial statements of a year (YYYY).
    */
   z.object({
     type: z.literal('declaration'),
     companyId: id,
-    kind: z.enum(['vat', 'payroll', 'taxDepreciation', 'profitTax']),
+    kind: z.enum([
+      'vat',
+      'payroll',
+      'taxDepreciation',
+      'profitTax',
+      'balanceSheet',
+      'incomeStatement',
+      'equityStatement',
+      'cashFlowStatement',
+    ]),
     period: z.string().max(7),
   }),
   /** İdarə paneli: the month's figures and the 12 months up to it. */
@@ -886,7 +895,16 @@ export interface VatSummaryView {
     difference: string;
   }[];
 }
-export type DeclarationKind = 'vat' | 'payroll' | 'taxDepreciation' | 'profitTax';
+export type DeclarationKind =
+  | 'vat'
+  | 'payroll'
+  | 'taxDepreciation'
+  | 'profitTax'
+  /** Stage 10: the annual financial statements (Q-01 annexes 1–4), on the same page. */
+  | 'balanceSheet'
+  | 'incomeStatement'
+  | 'equityStatement'
+  | 'cashFlowStatement';
 /** One figure of a return (stage 9): a value per column of its section, and where it comes from. */
 export interface DeclarationRow {
   key: string;

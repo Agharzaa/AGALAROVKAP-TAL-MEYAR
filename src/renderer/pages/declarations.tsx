@@ -22,12 +22,20 @@ const pageOf: Record<DeclarationKind, Page> = {
   payroll: 'payrollReturn',
   taxDepreciation: 'taxDepreciation',
   profitTax: 'profitTaxReturn',
+  balanceSheet: 'balanceSheet',
+  incomeStatement: 'incomeStatement',
+  equityStatement: 'equityStatement',
+  cashFlowStatement: 'cashFlowStatement',
 };
 const unit: Record<DeclarationKind, 'month' | 'quarter' | 'year'> = {
   vat: 'month',
   payroll: 'quarter',
   taxDepreciation: 'year',
   profitTax: 'year',
+  balanceSheet: 'year',
+  incomeStatement: 'year',
+  equityStatement: 'year',
+  cashFlowStatement: 'year',
 };
 const pattern = { month: /^\d{4}-\d{2}$/, quarter: /^\d{4}-Q[1-4]$/, year: /^\d{4}$/ };
 

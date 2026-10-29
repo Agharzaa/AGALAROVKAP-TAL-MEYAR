@@ -140,6 +140,26 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Rüb, ay-ay: gəlir vergisi, DSMF, işsizlik və tibbi sığorta — baza, haqlar, hesablarla tutuşma, işçilər üzrə',
     icon: Reports,
   },
+  balanceSheet: {
+    title: 'Maliyyə vəziyyəti haqqında hesabat',
+    hint: 'Balans (Q-01, əlavə 1): aktivlər, kapital, öhdəliklər — il sonuna və əvvəlki il sonuna; yoxlamalar',
+    icon: Scale,
+  },
+  incomeStatement: {
+    title: 'Mənfəət və ya zərər (MHBS)',
+    hint: 'Q-01, əlavə 2, xərclərin funksiyaları üzrə: hesabat ili və əvvəlki il',
+    icon: Reports,
+  },
+  equityStatement: {
+    title: 'Kapitalda dəyişikliklər',
+    hint: 'Q-01, əlavə 3: nizamnamə kapitalı, ehtiyatlar, bölüşdürülməmiş mənfəət — iki il',
+    icon: Reports,
+  },
+  cashFlowStatement: {
+    title: 'Pul vəsaitlərinin hərəkəti (birbaşa)',
+    hint: 'Q-01, əlavə 4, birbaşa metod: əməliyyat, investisiya, maliyyələşdirmə — iki il',
+    icon: Wallet,
+  },
   dashboard: {
     title: 'İdarə paneli',
     hint: 'Ayın əsas göstəriciləri və 12 ayın dinamikası',
@@ -468,6 +488,11 @@ export const sections: Section[] = [
           { label: 'ƏDV icmalı', icon: ReceiptText, action: page('vatSummary') },
           { label: 'ƏDV bəyannaməsi', icon: ReceiptText, action: page('vatReturn') },
           { label: 'Mənfəət vergisi bəyannaməsi', icon: Reports, action: page('profitTaxReturn') },
+          {
+            label: 'Maliyyə vəziyyəti haqqında hesabat',
+            icon: Scale,
+            action: page('balanceSheet'),
+          },
         ],
       },
       {
@@ -614,6 +639,16 @@ export const sections: Section[] = [
         ],
       },
       {
+        title: 'Maliyyə hesabatları',
+        items: [
+          {
+            label: 'Maliyyə vəziyyəti haqqında hesabat',
+            icon: Scale,
+            action: page('balanceSheet'),
+          },
+        ],
+      },
+      {
         title: 'Nəzarət',
         items: [{ label: 'Dəyişiklik tarixçəsi', icon: History, action: page('audit') }],
       },
@@ -733,6 +768,10 @@ export function sectionOfView(view: View): string {
         case 'vatReturn':
         case 'payrollReturn':
         case 'profitTaxReturn':
+        case 'balanceSheet':
+        case 'incomeStatement':
+        case 'equityStatement':
+        case 'cashFlowStatement':
         case 'dashboard':
           return 'reports';
         case 'cashFlow':

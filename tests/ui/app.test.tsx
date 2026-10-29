@@ -3588,3 +3588,71 @@ test('2026-10-29: trial balance — 211 opens with its partners, detail level, p
     h.close();
   }
 });
+
+test('stage 10a: the balance sheet opens from the menu, lines with their source; another year is chosen', async () => {
+  const h = harness();
+  const s = seed(h);
+  const year = new Date().getFullYear();
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${year}-01-10`,
+    memo: 'Nizamnamə kapitalı',
+    lines: [
+      {
+        dtAccount: '223.01',
+        dtSk: [s.bankAccount],
+        ktAccount: '301',
+        ktSk: [s.founder, s.capitalIn],
+        amount: '5000',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Hesabatlar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Maliyyə vəziyyəti haqqında hesabat' }));
+    const report = within(pane());
+    const cells = async (name: string) =>
+      within((await report.findByRole('rowheader', { name })).closest('tr')!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent!.replace(/\s/g, ' '));
+    assert.deepEqual(await cells('22 · Pul vəsaitləri və onların ekvivalentləri'), [
+      '5 000,00',
+      '0,00',
+      '223',
+    ]);
+    assert.deepEqual((await cells('CƏMİ KAPİTAL VƏ ÖHDƏLİKLƏR')).slice(0, 2), ['5 000,00', '0,00']);
+    report.getByText(new RegExp(`${year - 1}-c. il üçün uçot yoxdur`));
+    // The next year: this year's end is its opening column.
+    const field = report.getByLabelText('İl');
+    await user.clear(field);
+    await user.type(field, String(year + 1));
+    await waitFor(async () =>
+      assert.deepEqual((await cells('30 · Ödənilmiş nominal (nizamnamə) kapital')).slice(0, 2), [
+        '5 000,00',
+        '5 000,00',
+      ]),
+    );
+    await user.click(report.getByRole('button', { name: /Excel/ }));
+    await report.findByText(
+      new RegExp(`Saxlanıldı: .*Maliyyə vəziyyəti haqqında hesabat ${year + 1}\.xlsx`),
+    );
+    // A line of one account opens its card.
+    await user.dblClick(
+      await report.findByRole('rowheader', { name: '30 · Ödənilmiş nominal (nizamnamə) kapital' }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector('.mdi-window.active .mdi-caption')?.textContent,
+        'Hesab kartı 301',
+      ),
+    );
+  } finally {
+    h.close();
+  }
+});

@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 28.10.2026 (0.9.8, mərhələ 9d). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 29.10.2026 (0.9.12, mərhələ 10a). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -778,3 +778,16 @@ WINEDEBUG=-all npx electron-builder --win nsis --x64 --publish never
 ## 0.9.11 — dövriyyə balansı: kontragentlər bir kliklə, detallaşdırma, dövr seçimi, çap və PDF (29.10.2026)
 
 QERARLAR 2026-10-29. Sorğuda `detail` və `collapse`; çap vərəqi `.trial-sheet` (A4 albom), PDF — `meyar:save-pdf` (`webContents.printToPDF`). Testlər: `npm run typecheck`, `npm test` 288, `npm run test:ui` 54, `npm run test:perf` (DBC kontragentlər səviyyəsi, il 573 ms) keçir. PDF-in real Electron-da yoxlanması istifadəçidədir (pəncərə açılmadı).
+
+## Mərhələ 10 — illik maliyyə hesabatları
+
+Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`, QERARLAR 2026-10-29 (mərhələ 10). Mənbə: Maliyyə Nazirliyinin Q-01 qərarı (30.01.2017, "MHBS və Kommersiya Təşkilatları üçün MMUS-a əsasən mühasibat uçotunun aparılması Qaydaları"), əlavələr 1–4 — e-qanun.az-da oxundu. Formanın maddə nömrələri hesab planının iki rəqəmli qruplarıdır (10, 11 … 54), Meyar balansı hesab kodunun ilk iki rəqəmi ilə doldurur. Hesabatlar saxlanılmır, sxem dəyişmir (v24); bəyannamələrin ortaq görünüşündə (`declaration` sorğusu, yeni növlər) açılır.
+
+### 0.9.12 — 10a: maliyyə vəziyyəti haqqında hesabat və yoxlamalar (29.10.2026)
+
+- **Balans** (Hesabatlar → Maliyyə hesabatları; Mühasibat → Hesabatlar; `src/application/financial.ts`): formanın bütün maddələri (1 / 10–19, 2 / 20–24, 3 / 30–34, 4 / 40–44, 5 / 50–54), il sonuna və əvvəlki il sonuna, registrlərdən; mənbə sütununda maddəyə düşən hesablar, tək hesablı maddədə iki klik — hesab kartı; başlıqda şirkət və VÖEN; Excel və çap.
+- **Aktiv-passiv hesablar açılmış qalıqla** (kontragent / işçi üzrə, qalanı subhesab üzrə): öhdəliyin Dt qalığı → 24 (4xx → 19), aktivin Kt qalığı → 54 (22 → 50, 1xx → 44). 112 11-də çıxılır.
+- **Bağlanmamış nəticə:** dekabr bağlanmayıbsa 6xx / 7xx / 801 / 901-in qalığı 34-də, xəbərdarlıqla — balans ilin ortasında da tutuşur.
+- **Yoxlamalar** (bölmə və xəbərdarlıqlar): aktivlər − (kapital + öhdəliklər), bağlanmamış nəticə, 341 / 801 / 901 / 6xx–7xx qalığı, dekabr bağlanıb; əvvəlki il üçün uçot yoxdursa məlumat.
+- Testlər: `tests/integration/financial.test.ts` (F1 §8 misalı qəpikbəqəpik — 126 500,03; dekabrdan əvvəl 127 333,36 və heç nə bağlanmayanda 134 000,00; F2 açılmış qalıqlar; F3 əvvəlki il; il şəkilçisi), `tests/ui` (10a), perf (balans, il: 119 ms). `npm run typecheck`, `npm test` 294, `npm run test:ui` 55, `npm run test:perf` keçir. Real bazanın surəti (v13 → v24): iki şirkət, xətasız, balans tutuşur (MG Transport 2026: 33 963,81, dekabr bağlanmayıb). Electron işlədilmədi.
+- **Növbəti:** 10b — mənfəət və ya zərər (MHBS) və kapitalda dəyişikliklər.
