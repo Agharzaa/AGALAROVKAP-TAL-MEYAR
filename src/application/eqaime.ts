@@ -295,7 +295,21 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
       continue;
     }
     const id = String(old.id);
-    const differs = old.content_hash !== s.hash;
+    let differs = old.content_hash !== s.hash;
+    // The two DVX reports round differently (QERARLAR 2026-10-31): "Mallar üzrə" sums rounded
+    // lines, "Qaimələr üzrə" rounds the header — a few qəpik on an e-qaimə of several lines, the
+    // same date. Not a conflict: the stored amounts stay as DVX wrote them first.
+    if (differs && pennyApart(old, s)) {
+      differs = false;
+      if (old.header_full === 0n)
+        tx.audit(
+          cmd.companyId,
+          'Qəpik fərqi',
+          'E-qaimə',
+          id,
+          `${s.number}: "Mallar üzrə" ilə "Qaimələr üzrə" arasında yuvarlaqlaşdırma fərqi — ƏDV-siz ${money(old.net as bigint)} / ${money(s.net)}, ƏDV ${money(old.vat as bigint)} / ${money(s.vat)}; ziddiyyət sayılmır`,
+        );
+    }
     if (differs) {
       // DVX does not change an e-qaimə's amounts (a correction is a new e-qaimə): keep the stored
       // one untouched and say what came. Its status is still DVX's word (a cancel is not lost).
@@ -398,6 +412,22 @@ export function importEq(tx: Tx, cmd: CommandOf<'eqaime.import'>): CommandResult
     `${fileName} · ${label[cmd.direction]} · ${dates[0]}–${dates[dates.length - 1]} · yeni ${added}, yenilənən ${updated}, dəyişməyən ${same}, ziddiyyət ${conflicts}, rədd ${rejected.length}`,
   );
   return { id: importId, added, updated, same, conflicts, rejected };
+}
+
+/**
+ * The stored e-qaimə and the one in the file differ only by the rounding of the two reports: the
+ * e-qaimə has goods lines ("Mallar üzrə" was loaded), the same date, and the amounts are no more
+ * qəpik apart than it has lines. Without lines the reports print the same header — a conflict.
+ */
+function pennyApart(old: Row, s: Staged): boolean {
+  if (String(old.date) !== s.date) return false;
+  const lines = String(old.lines || s.lines || '');
+  if (!lines) return false;
+  const room = BigInt((JSON.parse(lines) as unknown[]).length);
+  const apart = (a: bigint, b: bigint) => (a > b ? a - b : b - a);
+  const net = apart(old.net as bigint, s.net);
+  const vat = apart(old.vat as bigint, s.vat);
+  return (net > 0n || vat > 0n) && net <= room && vat <= room;
 }
 
 function document(tx: Tx, companyId: string, id: string): Row {

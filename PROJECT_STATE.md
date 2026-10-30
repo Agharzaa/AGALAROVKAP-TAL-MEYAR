@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 30.10.2026 (0.9.18). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 31.10.2026 (0.9.19). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -780,6 +780,14 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **Ay bağlanışı:** sənəd varsa olduğu kimi götürür (addımda "uçotdadır", Doldur fərqlidirsə qeyd), yoxdursa doldurub uçota alır (ƏDV yazılışları artıq bağlanışın deyil, sənədindir); bağlanışın ləğvi sənədi saxlayır. ƏDV icmalı və bəyannaməsi — `source_type IN (closing, vatOffset)`; açıq ayda bağlanışın planı yalnız sənəd yoxdursa.
 - **Sxem v25:** `vat_offsets`. Real bazanın surəti (`meyar-v3.sqlite`, v13 → v25, `VACUUM INTO`): bütövlük `ok`, MG Transport — 126 namizəd qaimə, sənəd görünüşü ≤ 23 ms.
 - Testlər: `tests/integration/vat-offset.test.ts` (+4: Doldur və əl ilə əlavə / dəyişmə / silmə, bağlanış sənədi götürür; hədlər; bağlanış sənədi yaradır, ləğvdən sonra qalır; bəyannamə sənədi bir dəfə sayır), `tests/ui` (əl ilə əlavə, məbləğ, uçot, silmə). `npm run typecheck`, `npm test` 311, `npm run test:ui` 58, `npm run test:perf` keçir. Electron işlədilmədi.
+
+## 0.9.19 — DVX-dən yükləmə: əvvəlki 2 ay və qəpik fərqi (31.10.2026, QERARLAR 2026-10-31)
+
+İstifadəçi: "e-qaimələri və bank daxilolmalarını mükəmməlləşdirmək lazımdır" — seçim: DVX-dən yükləmə, bank çıxarışı, ƏDV depozit ödənişi, rahatlıq. Bu versiya — DVX hissəsi; bank çıxarışı və depozit üçün real bank faylı, rahatlıq üçün konkret ekranlar istifadəçidən gözlənilir.
+
+- **Dövr** (`openPeriod`, `src/domain/eqaime.ts`): açıq dövr + əvvəlki 2 ay; bağlanış yoxdursa 1 yanvar, yanvarda 1 dekabr.
+- **Qəpik fərqi** (`pennyApart`, `src/application/eqaime.ts`): mal sətirli e-qaimədə, eyni tarixlə, sətir sayı qədər qəpik — ziddiyyət deyil; saxlanan məbləğ dəyişmir (trigger), başlıq tamamlanır.
+- Testlər: `tests/domain/dvx-export.test.ts` (dövr), `tests/integration/eqaime-bank-audit.test.ts` (qəpik fərqi; 10 qəpik / 2 sətir — ziddiyyət). `npm run typecheck`, `npm test` 312, `npm run test:ui` 58, `npm run test:perf` (e-qaimə yükü 2,8 s) keçir. Electron işlədilmədi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

@@ -1,6 +1,6 @@
 # Mühasib üçün suallar — təsdiq gözləyən qaydalar
 
-Vəziyyət: **0.9.18** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
+Vəziyyət: **0.9.19** (31.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
 
 **Necə istifadə etmək:** cədvəldə hər sətir üçün son sütuna "Təsdiq" və ya "Dəyiş: …" yazın. Ətraflı izah cədvəldən sonradır (eyni nömrə ilə). Meyar hazırda hər yerdə **tövsiyəni** tətbiq edir; "Təsdiq" — heç nə dəyişmir, "Dəyiş" — proqramçı yeni versiyada düzəldir. Rəqəmli misallar MG Transport üçün təxminidir (sürücü maaşı, tır, daşıma xidməti) — qaydanı göstərmək üçün.
 
@@ -430,6 +430,8 @@ Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmiş
 
 ### 31. ⚠ "DVX-dən yenilə" dövrü
 
+**0.9.19-da edildi** (istifadəçi, 31.10.2026): açıq dövr + əvvəlki 2 ay; bağlanış yoxdursa 1 yanvar, yanvarda 1 dekabr. Mühasib təsdiq edir.
+
 - **Nə soruşulur:** yeniləmə yalnız açıq dövrü alır; heç bir bağlanış yoxdursa — cari ilin 1 yanvarından. Ona görə yanvarda dekabrın gec təsdiqlənən / ləğv edilən e-qaimələri gəlmir; bağlı aylarda DVX-də sonradan ləğv edilmiş e-qaimə yalnız Excel ilə görünür.
 - **Niyə vacibdir:** MG Transport-un ən vacib sahəsidir. Müştəri 28.12.2026 tarixli 11 800 ₼-lıq e-qaiməni 10.01.2027-də ləğv edir → Meyar-da dekabr gəliri və 1 800 ₼ ƏDV qalır, DVX ilə fərq gec tapılır.
 - **Meyar indi:** yuxarıdakı kimi.
@@ -438,6 +440,8 @@ Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmiş
 - **Mühasib yoxlasın:** e-qaimənin ləğvi / düzəlişi üçün DVX-nin müddətləri; bağlanmış aya düşən ləğvin uçotda necə əks etdirildiyi (düzəliş hansı ayda).
 
 ### 32. "Mallar üzrə" ilə "Qaimələr üzrə" arasında qəpik fərqi
+
+**0.9.19-da edildi:** mal sətirli e-qaimədə sətir sayı qədər qəpik fərq ziddiyyət sayılmır (məbləğ DVX-in ilk yazdığı kimi qalır). Real "Mallar üzrə" faylı ilə yoxlanmalıdır.
 
 - **Nə soruşulur:** DVX məbləğləri 4 onluqdur. "Mallar üzrə" faylında e-qaimənin cəmi yuvarlaqlaşdırılmış sətirlərin cəmidir, "Qaimələr üzrə"də başlığın özü yuvarlaqlaşdırılır — bir neçə sətirli e-qaimədə 1–2 qəpik fərq ola bilər. Belə e-qaimə həmişəlik "Ziddiyyət"də qalır və avtomatik keçmir.
 - **Niyə vacibdir:** 3 sətirli yanacaq e-qaiməsi 1 180,01 / 1 180,00 → əl ilə keçirmək lazımdır.

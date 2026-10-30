@@ -487,14 +487,28 @@ export function minorOf(text: string): Minor {
   return negative ? -v : v;
 }
 
+/** The first day of the month `back` months before that of an ISO day. */
+function monthStart(iso: string, back: number): string {
+  const [y, m] = iso.split('-').map(Number) as [number, number];
+  const total = y * 12 + (m - 1) - back;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+}
+
 /**
- * The open period of "DVX-dən yenilə" (stage 6b; QERARLAR 2026-10-22 §3): from the day after the
- * closed period (or 1 January of this year) to today; ISO days.
+ * The period of "DVX-dən yenilə" (stage 6b; QERARLAR 2026-10-22 §3, 2026-10-31): the open period
+ * and the two months before it, to today — e-qaimələr DVX confirms or cancels late (December's in
+ * January, a closed month's) come in with their status; nothing is booked in a closed month by
+ * itself. No closing yet: 1 January of this year, in January from 1 December. ISO days.
  */
 export function openPeriod(closedThrough: string, today: string): { from: string; to: string } {
-  if (!closedThrough) return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  if (!closedThrough) {
+    const january = `${today.slice(0, 4)}-01-01`;
+    const previous = monthStart(today, 1);
+    return { from: previous < january ? previous : january, to: today };
+  }
   const d = new Date(`${closedThrough}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   const next = d.toISOString().slice(0, 10);
-  return { from: next < today ? next : today, to: today };
+  const open = next < today ? next : today;
+  return { from: monthStart(open, 2), to: today };
 }

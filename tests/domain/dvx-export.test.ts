@@ -71,19 +71,28 @@ test('6b: Gələnlər are the inbox, Göndərilənlər the outbox; the whole per
   assert.throws(() => exportRequest('sale', '22.10.2026', '2026-10-01'), /dövr/);
 });
 
-test('6b: the open period runs from the day after the closed one (or 1 January) to today', () => {
+test('6b / 2026-10-31: the open period and the two months before it, to today', () => {
+  // Closed through September: August and September again (late statuses), then October.
   assert.deepEqual(openPeriod('2026-09-30', '2026-10-22'), {
-    from: '2026-10-01',
+    from: '2026-08-01',
     to: '2026-10-22',
   });
+  // Across the year: closed through December — November and December of last year.
   assert.deepEqual(openPeriod('2025-12-31', '2026-03-05'), {
-    from: '2026-01-01',
+    from: '2025-11-01',
     to: '2026-03-05',
   });
+  // Closed in the middle of a month: from that month two months back.
+  assert.deepEqual(openPeriod('2026-02-14', '2026-03-05'), {
+    from: '2025-12-01',
+    to: '2026-03-05',
+  });
+  // No closing: 1 January; in January from 1 December (December's late e-qaimələr).
   assert.deepEqual(openPeriod('', '2026-10-22'), { from: '2026-01-01', to: '2026-10-22' });
-  // Closed through today (or later): only today is asked, nothing earlier.
+  assert.deepEqual(openPeriod('', '2027-01-10'), { from: '2026-12-01', to: '2027-01-10' });
+  // Closed through today (or later): today's month and the two before it.
   assert.deepEqual(openPeriod('2026-10-22', '2026-10-22'), {
-    from: '2026-10-22',
+    from: '2026-08-01',
     to: '2026-10-22',
   });
 });

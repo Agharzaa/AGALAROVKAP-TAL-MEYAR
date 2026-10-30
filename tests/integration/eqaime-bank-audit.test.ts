@@ -220,3 +220,63 @@ test('audit: the e-qaimə a correction replaced comes back when DVX cancels that
     ['MT1'],
   );
 });
+
+test('2026-10-31: "Mallar üzrə" and "Qaimələr üzrə" a qəpik apart is rounding, not a conflict', (t) => {
+  const f = fixture(t);
+  f.partner('Yanacaq MMC', SUPPLIER);
+  const line = (net: string, vat: string) => ({
+    code: '',
+    name: 'Dizel',
+    unit: 'litr',
+    quantity: '1',
+    price: net,
+    net,
+    vat,
+    vatRate: '18',
+  });
+  const goods = (number: string, lines: ReturnType<typeof line>[], net: string, vat: string) =>
+    f.exec({
+      type: 'eqaime.import',
+      directionConfirmed: true,
+      companyId: f.companyId,
+      direction: 'purchase',
+      report: 'goods',
+      source: 'file',
+      fileName: `goods-${++files}.xlsx`,
+      fileHash: String(files).padStart(64, 'b'),
+      documents: [doc(number, '2026-09-05', SUPPLIER, { net, vat, lines })],
+    });
+  // Three lines rounded one by one: 33.34 × 3 = 100.02 against the header's 100.01.
+  goods(
+    'MT1',
+    [line('33.34', '6.00'), line('33.34', '6.00'), line('33.34', '6.00')],
+    '100.02',
+    '18.00',
+  );
+  goods('MT2', [line('50.00', '9.00'), line('50.10', '9.00')], '100.10', '18.00');
+  const r = load(f, 'purchase', [
+    doc('MT1', '2026-09-05', SUPPLIER, { net: '100.01', vat: '18.00', base18: '100.01' }),
+    doc('MT2', '2026-09-05', SUPPLIER, { net: '100.00', vat: '18.00', base18: '100.00' }),
+  ]);
+  assert.equal(r.conflicts, 1, 'MT2 is 10 qəpik apart with 2 lines — still a conflict');
+  const one = f.db.get("SELECT net, conflict, header_full FROM eq_documents WHERE eq_number='MT1'")!;
+  // The stored amounts stay as DVX wrote them first; the header is completed.
+  assert.deepEqual([one.net, one.conflict, one.header_full], [10002n, '', 1n]);
+  assert.notEqual(f.db.get("SELECT conflict FROM eq_documents WHERE eq_number='MT2'")!.conflict, '');
+  // Loaded again, either report: rounding, nothing new.
+  assert.equal(
+    load(f, 'purchase', [
+      doc('MT1', '2026-09-05', SUPPLIER, { net: '100.01', vat: '18.00', base18: '100.01' }),
+    ]).conflicts,
+    0,
+  );
+  assert.equal(
+    goods(
+      'MT1',
+      [line('33.34', '6.00'), line('33.34', '6.00'), line('33.34', '6.00')],
+      '100.02',
+      '18.00',
+    ).conflicts,
+    0,
+  );
+});
