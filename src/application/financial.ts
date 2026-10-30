@@ -711,10 +711,15 @@ export function incomeStatement(db: Db, companyId: string, period: string): Decl
 const COLUMNS = ['30', '31', '32', '33', '34'] as const;
 type Movement = 'profit' | 'contrib' | 'dividends' | 'buyback' | 'transfers' | 'oci' | 'other';
 
-/** The equity line of an account in "extended equity": 3xx by its group, 6xx–9xx (the result) 34. */
+/**
+ * The equity line of an account in "extended equity": 3xx by its group, the closing's 8xx / 9xx
+ * (801, 901) 34. 6xx / 7xx are outside: the M/Z counts them whatever their other side, so a
+ * 6xx / 7xx ↔ 34x posting (a past error corrected into this year's income) is the year's profit
+ * and its 34x side a movement of its own.
+ */
 function equityLine(code: string): string | null {
   const cls = code[0]!;
-  if (cls >= '6' && cls <= '9') return '34';
+  if (cls === '8' || cls === '9') return '34';
   if (cls !== '3') return null;
   const g = code.slice(0, 2);
   return (COLUMNS as readonly string[]).includes(g) ? g : '33';
@@ -747,7 +752,8 @@ function equityYear(
   };
   const otherSources = new Set<string>();
   // The result: credit − debit of 6xx–9xx over the year (the change of what stands unclosed),
-  // less what moved between them and 3xx (the closing's 801 → 341, 341 → 901): that stays in 34.
+  // less what moved between 8xx / 9xx and 3xx (the closing's 801 → 341, 341 → 901): that stays
+  // in 34.
   let profit = after.unclosed - before.unclosed;
   for (const p of db.all(
     `SELECT dt_account AS d, kt_account AS k, amount AS a FROM postings
@@ -765,8 +771,8 @@ function equityYear(
     const a = p.a as bigint;
     const ld = equityLine(d);
     const lk = equityLine(k);
-    const result = (code: string) => code[0]! >= '6' && code[0]! <= '9';
-    // Between 3xx and the result: the result side leaves the year's profit.
+    const result = (code: string) => code[0]! === '8' || code[0]! === '9';
+    // Between 3xx and the closing's accounts: that side leaves the year's profit.
     if (result(d)) profit += a;
     if (result(k)) profit -= a;
     if (ld && lk) {
@@ -975,15 +981,21 @@ interface CashYear {
   closing: bigint;
 }
 
-/** The invoices whose entries book a long-term asset (1xx), as the document subkonto names them. */
+/**
+ * The invoices whose entries book a long-term asset (1xx) on either side — bought (Dt 113) or
+ * sold (Kt 111, with or without Dt 112) — as the document subkonto names them. Only what stands
+ * after corrections counts: a storno nets its 1xx away.
+ */
 function investmentInvoices(db: Db, companyId: string): Set<string> {
+  const side = (s: 'dt' | 'kt') =>
+    `SELECT e.source_id AS id, p.${s}_account AS a, '${s}' AS s, SUM(p.amount) AS t
+     FROM postings p JOIN entries e ON e.id=p.entry_id
+     WHERE p.company_id=?1 AND p.${s}_account>='1' AND p.${s}_account<'2'
+       AND e.source_type='invoice'
+     GROUP BY 1, 2`;
   return new Set(
     db
-      .all(
-        `SELECT DISTINCT e.source_id AS id FROM postings p JOIN entries e ON e.id=p.entry_id
-         WHERE p.company_id=? AND p.dt_account>='1' AND p.dt_account<'2' AND e.source_type='invoice'`,
-        companyId,
-      )
+      .all(`SELECT DISTINCT id FROM (${side('dt')} UNION ALL ${side('kt')}) WHERE t<>0`, companyId)
       .map((r) => `invoice:${String(r.id)}`),
   );
 }
