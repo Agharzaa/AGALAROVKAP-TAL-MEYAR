@@ -32,6 +32,7 @@ export type Page =
   | 'cashboxes'
   | 'rates'
   | 'revaluation'
+  | 'vatOffset'
   | 'closing'
   | 'profitLoss'
   | 'cashFlow'

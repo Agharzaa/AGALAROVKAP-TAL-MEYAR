@@ -1,6 +1,6 @@
 # Mühasib üçün suallar — təsdiq gözləyən qaydalar
 
-Vəziyyət: **0.9.17** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
+Vəziyyət: **0.9.18** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
 
 **Necə istifadə etmək:** cədvəldə hər sətir üçün son sütuna "Təsdiq" və ya "Dəyiş: …" yazın. Ətraflı izah cədvəldən sonradır (eyni nömrə ilə). Meyar hazırda hər yerdə **tövsiyəni** tətbiq edir; "Təsdiq" — heç nə dəyişmir, "Dəyiş" — proqramçı yeni versiyada düzəldir. Rəqəmli misallar MG Transport üçün təxminidir (sürücü maaşı, tır, daşıma xidməti) — qaydanı göstərmək üçün.
 
@@ -88,6 +88,8 @@ Alışın ƏDV-si qaimə uçota alınanda 241-ə (kontragent, qaimə, dərəcə 
 Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmişdi; o misalda əvəzləşdirmə yox idi (alışın ƏDV-si e-qaiməsiz idi, 241-də qaldı). Ona görə aşağıdakı qaydaların heç biri hələ mühasib tərəfindən təsdiqlənməyib.
 
 **0.9.17-də dəyişdi** (istifadəçi, 30.10.2026; QERARLAR 2026-10-30): ƏDV ödəyicisi olan fərdi sahibkarın ƏDV-si yalnız depozitdən ödənəndə əvəzləşdirilir (Ə2); ödəniş azalanda (qaytarma, storno) və ya DVX e-qaiməni ləğv edəndə bağlanış əvəzləşdirməni özü geri alır (Ə6); avansla əvvəlcədən depozitdən ödənilmiş ƏDV e-qaimə təsdiqlənən ayda əvəzləşdirilir (Ə5) — testlə yoxlanıb.
+
+**0.9.18-dən əvəzləşdirmə ayrıca sənəddir** — Mühasibat → Dövr → "ƏDV əvəzləşdirilməsi" (ƏƏ-2026-10): "Doldur" bu qaydalarla sətirləri yığır, mühasib sətir əlavə edir, silir, məbləği dəyişir; ay bağlanışı sənədi olduğu kimi götürür. Qayda Meyar-ın bilmədiyi halda (məs. ƏDV adi bank hesabından birbaşa malsatanın ƏDV hesabına ödənib, idxal) — sətir əl ilə.
 
 ### Ə1. ⚠ Hansı ƏDV əvəzləşdirilir
 

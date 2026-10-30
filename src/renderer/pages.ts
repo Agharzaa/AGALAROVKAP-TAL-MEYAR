@@ -105,6 +105,11 @@ export const pages: Record<Page, { title: string; hint: string; icon: LucideIcon
     hint: 'Ay sonu valyuta qalıqları AMB məzənnəsi ilə: 611 / 731',
     icon: Scale,
   },
+  vatOffset: {
+    title: 'ƏDV əvəzləşdirilməsi',
+    hint: 'Ay üzrə ödənilmiş gələn e-qaimələrin ƏDV-si: Doldur, əl ilə düzəliş, 241 → 521.01',
+    icon: ReceiptText,
+  },
   closing: {
     title: 'Ay bağlanışı',
     hint: 'FIFO, yenidən qiymətləndirmə, ƏDV, 6xx / 7xx → 801 → 341 və dövrün bağlanması',
@@ -478,6 +483,7 @@ export const sections: Section[] = [
             icon: Scale,
             action: page('revaluation'),
           },
+          { label: 'ƏDV əvəzləşdirilməsi', icon: ReceiptText, action: page('vatOffset') },
           { label: 'Dövrün bağlanması', icon: Lock, action: page('settings') },
         ],
       },
@@ -772,6 +778,7 @@ export function sectionOfView(view: View): string {
         case 'operations':
         case 'accounts':
         case 'revaluation':
+        case 'vatOffset':
         case 'closing':
           return 'ledger';
         case 'trial':

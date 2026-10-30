@@ -690,6 +690,23 @@ export const commandSchema = z.discriminatedUnion('type', [
     reason: text(240),
   }),
   z.object({
+    type: z.literal('vatOffset.save'),
+    ...base,
+    /** "2026-10": ƏƏ-2026-10, posted on the month's last day; again = storno + new postings. */
+    month: z.string().max(7),
+    /** The posted document's version, when it is saved again. */
+    version: version.optional(),
+    /** An invoice and the VAT offset (minus — taken back). */
+    lines: z.array(z.object({ invoiceId: id, amount: decimal })).max(2000),
+  }),
+  z.object({
+    type: z.literal('vatOffset.cancel'),
+    ...base,
+    id,
+    version,
+    reason: text(240),
+  }),
+  z.object({
     type: z.literal('closing.post'),
     ...base,
     /** "2026-09": every step in one transaction, then the period is closed through the month's end. */

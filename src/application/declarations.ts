@@ -19,6 +19,7 @@ import type {
 import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
 import { plannedVatOffset, plannedVatPostings } from './closing.js';
+import { postedVatOffset } from './vat-offset.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
 import { profitTaxReturn } from './profit-tax.js';
@@ -105,18 +106,19 @@ function offsetLists(
   const offset = new Map<string, bigint>();
   const add = (document: string, amount: bigint) =>
     offset.set(document, (offset.get(document) ?? 0n) + amount);
-  if (closed)
-    for (const r of db.all(
-      `SELECT p.kt_s2 AS d, SUM(p.amount) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
-       WHERE p.company_id=? AND e.source_type='closing' AND p.dt_account='521.01' AND p.kt_account='241'
+  // Posted: the closing's entries (before 0.9.18) and the VAT offset document; an open month
+  // without the document — also what its closing would post.
+  for (const r of db.all(
+    `SELECT p.kt_s2 AS d, SUM(p.amount) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND e.source_type IN ('closing','vatOffset') AND p.dt_account='521.01' AND p.kt_account='241'
          AND p.date BETWEEN ? AND ? GROUP BY p.kt_s2`,
-      companyId,
-      `${month}-01`,
-      monthEnd(month),
-    ))
-      add(String(r.d), r.a as bigint);
-  else
-    for (const p of plannedVatPostings(db, companyId, month) ?? []) add(p.kt.sk[1] ?? '', p.amount);
+    companyId,
+    `${month}-01`,
+    monthEnd(month),
+  ))
+    add(String(r.d), r.a as bigint);
+  const planned = closed ? [] : (plannedVatPostings(db, companyId, month) ?? []);
+  for (const p of planned) add(p.kt.sk[1] ?? '', p.amount);
   // On 241 at the month's end (an open month: less what its closing would offset).
   const open = new Map<string, bigint>();
   for (const r of db.all(
@@ -125,7 +127,9 @@ function offsetLists(
     companyId,
     month,
   )) {
-    const left = (r.b as bigint) - (closed ? 0n : (offset.get(String(r.s2)) ?? 0n));
+    const left =
+      (r.b as bigint) -
+      planned.filter((p) => p.kt.sk[1] === String(r.s2)).reduce((s, p) => s + p.amount, 0n);
     if (left > 0n) open.set(String(r.s2), left);
   }
   const invoice = (document: string) =>
@@ -224,8 +228,10 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
   };
 
   // An open month: what its closing plan offsets now (it changes until the month is closed).
+  // What is posted (the ƏƏ- document, or the closing's entries) and what the closing still adds.
   const planned = closed ? null : plannedVatOffset(db, companyId, month);
-  const offset = planned ?? v.offset;
+  const vatDoc = postedVatOffset(db, companyId, month);
+  const offset = v.offset + (planned ?? 0n);
   const payable = v.salesVat - offset;
   const vatSection: DeclarationSection = {
     title: 'ƏDV-nin hesablanması',
@@ -245,11 +251,13 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
         'v:offset',
         'Əvəzləşdirilən ƏDV',
         [offset],
-        closed
-          ? `AB-${month} · 241 → 521.01`
-          : planned === null
-            ? 'ay bağlanışında yazılır'
-            : 'ay bağlanışının planı (hələ yazılmayıb)',
+        vatDoc
+          ? `${String(vatDoc.number)} · 241 → 521.01`
+          : closed
+            ? `AB-${month} · 241 → 521.01`
+            : planned === null
+              ? 'ay bağlanışında yazılır'
+              : 'ay bağlanışının planı (hələ yazılmayıb)',
         { account: '241' },
       ),
       row(

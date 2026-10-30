@@ -466,7 +466,7 @@ export function vatOf(db: Db, companyId: string, month: string): Vat {
   )!.d as bigint;
   const offset = db.get(
     `SELECT COALESCE(SUM(p.amount),0) AS a FROM entries e JOIN postings p ON p.entry_id=e.id
-     WHERE e.company_id=? AND e.source_type='closing' AND e.date BETWEEN ? AND ?
+     WHERE e.company_id=? AND e.source_type IN ('closing','vatOffset') AND e.date BETWEEN ? AND ?
        AND p.kt_account IN (${list}) AND p.dt_account='521.01'`,
     companyId,
     `${month}-01`,

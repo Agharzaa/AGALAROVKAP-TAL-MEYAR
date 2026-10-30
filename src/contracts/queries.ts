@@ -87,6 +87,8 @@ export const querySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rate'), companyId: id, currency: z.string().max(3), date }),
   /** Revaluation of the month: the posted one and what posting now would write. */
   z.object({ type: z.literal('revaluation'), companyId: id, month: z.string().max(7) }),
+  /** The month's purchase VAT offset document (ƏƏ-): the posted one and what "Doldur" fills. */
+  z.object({ type: z.literal('vatOffset'), companyId: id, month: z.string().max(7) }),
   /** Month closing (stage 5c): the posted one, or what closing now would do. */
   z.object({ type: z.literal('closing'), companyId: id, month: z.string().max(7) }),
   z.object({ type: z.literal('closings'), companyId: id }),
@@ -745,6 +747,56 @@ export interface RevaluationLine {
   booked: string;
   value: string;
   difference: string;
+}
+/** A line of the VAT offset document: the invoice, the figures behind it and the amount. */
+export interface VatOffsetLineView {
+  invoiceId: string;
+  number: string;
+  date: string;
+  partner: string;
+  taxId: string;
+  /** E-qaimə series and number on the invoice ('' — none bound). */
+  eq: string;
+  /** The invoice's VAT on 241. */
+  invoiceVat: string;
+  /** Left on 241 before this document. */
+  open: string;
+  /** Offset before this document. */
+  offset: string;
+  /** VAT paid by the month's end (through the deposit, or pro rata). */
+  paid: string;
+  /** DVX confirmed the e-qaimə. */
+  confirmed: boolean;
+  /** What "Doldur" offsets for it. */
+  proposal: string;
+  /** The line's amount (minus — taken back). */
+  amount: string;
+}
+export interface VatOffsetView {
+  month: string;
+  date: string;
+  number: string;
+  /** In a closed period: nothing can be saved or cancelled. */
+  closed: boolean;
+  error: string;
+  notes: string[];
+  /** Invoices whose VAT waits (e-qaimə not confirmed). */
+  waiting: string[];
+  /** "Doldur": the lines the closing's rule gives now. */
+  proposal: VatOffsetLineView[];
+  proposalTotal: string;
+  /** Every invoice with VAT left on 241 or offset before: what a line can be added for. */
+  candidates: VatOffsetLineView[];
+  posted: {
+    id: string;
+    version: number;
+    number: string;
+    total: string;
+    lines: VatOffsetLineView[];
+    /** "Doldur" now gives other lines (edited by hand, or payments changed since). */
+    differs: boolean;
+    updatedAt: string;
+  } | null;
 }
 export interface RevaluationView {
   month: string;

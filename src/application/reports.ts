@@ -56,6 +56,7 @@ import { eqMaps } from './eqaime-book.js';
 import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
 import { rateOn, ratesList } from './rates.js';
 import { revaluationView } from './revaluation.js';
+import { vatOffsetView } from './vat-offset.js';
 import { closingList, closingView, nextClosingMonth, type ClosingControls } from './closing.js';
 import { cashFlow, dashboard, profitLoss, vatSummary } from './analytics.js';
 import { declaration } from './declarations.js';
@@ -1613,6 +1614,9 @@ export function runQuery(db: Db, q: Query, today: string, now: string): unknown 
       const names = new Names(db, q.companyId);
       return revaluationView(db, q.companyId, q.month, (k, v) => names.name(k as never, v));
     }
+    case 'vatOffset':
+      company(db, q.companyId);
+      return vatOffsetView(db, q.companyId, q.month);
     case 'closing':
       company(db, q.companyId);
       return closingView(db, q.companyId, q.month, today, closingControls(db, q.companyId));

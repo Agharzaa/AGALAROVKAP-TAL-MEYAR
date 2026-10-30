@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { EqDocumentInputDto } from '../../src/contracts/commands.js';
-import type { ClosingView } from '../../src/contracts/queries.js';
+import type { ClosingView, DeclarationView, VatOffsetView } from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 
 type F = ReturnType<typeof fixture>;
@@ -24,7 +24,7 @@ const notes = (f: F, month: string) =>
   view(f, month)
     .steps.find((s) => s.key === 'vat')!
     .notes.join(' ');
-/** Debit − credit of 241 for the invoice; and 521.01's debit from the closings. */
+/** Debit − credit of 241 for the invoice; and what the closings and ƏƏ- documents offset. */
 const left241 = (f: F, id: string) =>
   f.db.get(
     "SELECT COALESCE(SUM(debit-credit),0) AS b FROM registers WHERE account='241' AND s2=?",
@@ -33,7 +33,7 @@ const left241 = (f: F, id: string) =>
 const offsetByClosings = (f: F) =>
   f.db.get(
     `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE e.source_type='closing' AND p.dt_account='521.01' AND p.kt_account='241'`,
+     WHERE e.source_type IN ('closing','vatOffset') AND p.dt_account='521.01' AND p.kt_account='241'`,
   )!.a;
 
 let hash = 0;
@@ -212,4 +212,186 @@ test('DVX cancels a confirmed e-qaimə after the offset: the closing takes the V
   close(f, '2026-10');
   assert.equal(left241(f, inv.id), 90000n);
   assert.equal(offsetByClosings(f), 0n);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The ƏƏ- document: "Doldur", lines by hand, the closing takes it as it is
+
+const doc = (f: F, month: string) =>
+  f.query<VatOffsetView>({ type: 'vatOffset', companyId: f.companyId, month });
+const save = (f: F, month: string, lines: [string, string][], version?: number) =>
+  f.exec({
+    type: 'vatOffset.save',
+    companyId: f.companyId,
+    month,
+    ...(version !== undefined ? { version } : {}),
+    lines: lines.map(([invoiceId, amount]) => ({ invoiceId, amount })),
+  });
+
+test('ƏƏ-: Doldur, then lines added, changed and deleted by hand; the closing takes it as it is', (t) => {
+  const { f, bankK, deposit, buy, confirmed, pay } = setup(t);
+  const paid = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  pay('2026-09-10', bankK, '5000');
+  pay('2026-09-10', deposit, '900');
+  // A second one: DVX has not confirmed it, nothing paid through the deposit — by hand only.
+  const other = buy('2026-09-20', 'MT2609002');
+  const v0 = doc(f, '2026-09');
+  assert.equal(v0.posted, null);
+  assert.equal(v0.number, 'ƏƏ-2026-09');
+  assert.deepEqual(
+    v0.proposal.map((l) => [l.invoiceId, l.amount, l.paid, l.confirmed]),
+    [[paid.id, '900.00', '900.00', true]],
+  );
+  assert.deepEqual(
+    v0.candidates.map((l) => [l.invoiceId, l.open, l.proposal, l.confirmed]),
+    [
+      [paid.id, '900.00', '900.00', true],
+      [other.id, '900.00', '0.00', false],
+    ],
+  );
+  // Filled, one amount changed, one line added by hand.
+  const r1 = save(f, '2026-09', [
+    [paid.id, '800'],
+    [other.id, '450'],
+  ]);
+  assert.equal(r1.number, 'ƏƏ-2026-09');
+  assert.deepEqual([left241(f, paid.id), left241(f, other.id)], [10000n, 45000n]);
+  const v1 = doc(f, '2026-09');
+  assert.equal(v1.posted!.total, '1250.00');
+  assert.equal(v1.posted!.differs, true);
+  assert.deepEqual(
+    v1.proposal.map((l) => [l.invoiceId, l.amount]),
+    [[paid.id, '900.00']],
+    'Doldur leaves the document itself out',
+  );
+  assert.throws(() => save(f, '2026-09', [[paid.id, '900']]), /artıq uçotdadır/);
+  // The first line deleted: storno of the previous postings, the rest posted again.
+  const r2 = save(f, '2026-09', [[other.id, '450']], r1.version);
+  assert.equal(r2.version, 2);
+  assert.deepEqual([left241(f, paid.id), left241(f, other.id)], [90000n, 45000n]);
+  // The closing takes the document as it is: nothing more offset, a note that Doldur differs.
+  const step = view(f, '2026-09').steps.find((s) => s.key === 'vat')!;
+  assert.deepEqual(
+    step.postings.map((p) => [p.ktSk[1], p.amount]),
+    [[`invoice:${other.id}`, '450.00']],
+  );
+  assert.match(step.summary, /ƏƏ-2026-09 \(uçotdadır\) · 1 qaimə · 450,00/);
+  assert.match(step.notes.join(' '), /"Doldur" indi başqa nəticə verir \(1 qaimə · 900,00\)/);
+  close(f, '2026-09');
+  assert.deepEqual([left241(f, paid.id), left241(f, other.id)], [90000n, 45000n]);
+  assert.throws(() => save(f, '2026-09', [], r2.version), /bağlanıb/);
+  // October's Doldur goes on from what September's document offset.
+  assert.deepEqual(
+    doc(f, '2026-10').proposal.map((l) => [l.invoiceId, l.amount, l.offset]),
+    [[paid.id, '900.00', '0.00']],
+  );
+});
+
+test('ƏƏ-: a line cannot offset more than is on 241, nor take back more than was offset', (t) => {
+  const { f, bankK, deposit, buy, confirmed, pay } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  pay('2026-09-10', bankK, '5000');
+  pay('2026-09-10', deposit, '900');
+  assert.throws(
+    () => save(f, '2026-09', [[inv.id, '900.01']]),
+    /900\.00 AZN-dir, 900\.01 əvəzləşdirilə bilməz/,
+  );
+  assert.throws(
+    () => save(f, '2026-09', [[inv.id, '-1']]),
+    /0\.00 AZN-dir, 1\.00 geri alına bilməz/,
+  );
+  assert.throws(() => save(f, '2026-09', [[inv.id, '0']]), /sıfır ola bilməz/);
+  assert.throws(
+    () =>
+      save(f, '2026-09', [
+        [inv.id, '100'],
+        [inv.id, '200'],
+      ]),
+    /artıq var/,
+  );
+  // Saving again: the document's own offset is room again (900 → 900 is allowed).
+  const r = save(f, '2026-09', [[inv.id, '900']]);
+  save(f, '2026-09', [[inv.id, '900']], r.version);
+  assert.equal(left241(f, inv.id), 0n);
+  // A month later, taking back no more than was offset.
+  close(f, '2026-09');
+  assert.throws(() => save(f, '2026-10', [[inv.id, '-900.01']]), /geri alına bilməz/);
+  save(f, '2026-10', [[inv.id, '-300']]);
+  assert.equal(left241(f, inv.id), 30000n);
+});
+
+test('ƏƏ-: the closing fills and posts it when there is none; it stays when the closing is cancelled', (t) => {
+  const { f, bankK, deposit, buy, confirmed, pay } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  pay('2026-09-10', bankK, '5000');
+  pay('2026-09-10', deposit, '900');
+  assert.match(
+    view(f, '2026-09').steps.find((s) => s.key === 'vat')!.summary,
+    /ƏƏ-2026-09 \(uçota alınacaq\) · 1 qaimə · 900,00/,
+  );
+  close(f, '2026-09');
+  const posted = doc(f, '2026-09').posted!;
+  assert.deepEqual(
+    posted.lines.map((l) => [l.invoiceId, l.amount]),
+    [[inv.id, '900.00']],
+  );
+  assert.equal(posted.differs, false);
+  assert.equal(left241(f, inv.id), 0n);
+  assert.equal(
+    f.db.get(
+      `SELECT COUNT(*) AS n FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE e.source_type='closing' AND p.kt_account='241'`,
+    )!.n,
+    0n,
+    'the offset is the document’s, not the closing’s',
+  );
+  const c = view(f, '2026-09').posted!;
+  f.exec({
+    type: 'closing.cancel',
+    companyId: f.companyId,
+    id: c.id,
+    version: c.version,
+    reason: 'yoxlama',
+  });
+  assert.equal(doc(f, '2026-09').posted!.id, posted.id, 'the document stays');
+  assert.equal(left241(f, inv.id), 0n);
+  f.exec({
+    type: 'vatOffset.cancel',
+    companyId: f.companyId,
+    id: posted.id,
+    version: posted.version,
+    reason: 'yenidən',
+  });
+  assert.equal(doc(f, '2026-09').posted, null);
+  assert.equal(left241(f, inv.id), 90000n);
+  close(f, '2026-09');
+  assert.equal(left241(f, inv.id), 0n);
+  assert.notEqual(doc(f, '2026-09').posted!.id, posted.id);
+});
+
+test('ƏƏ-: the ƏDV return of an open month counts the posted document once', (t) => {
+  const { f, bankK, deposit, buy, confirmed, pay } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  pay('2026-09-10', bankK, '5000');
+  pay('2026-09-10', deposit, '900');
+  const figure = (key: string) =>
+    f
+      .query<DeclarationView>({
+        type: 'declaration',
+        companyId: f.companyId,
+        kind: 'vat',
+        period: '2026-09',
+      })
+      .sections.flatMap((s) => s.rows)
+      .find((r) => r.key === key)!.values[0];
+  assert.equal(figure('v:offset'), '900.00', 'the plan before the document');
+  save(f, '2026-09', [[inv.id, '600']]);
+  assert.deepEqual(
+    ['v:offset', 'v:waiting'].map((k) => figure(k)),
+    ['600.00', '300.00'],
+  );
 });

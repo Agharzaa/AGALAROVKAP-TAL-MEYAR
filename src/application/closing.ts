@@ -51,6 +51,15 @@ import { timesheetSignals } from './timesheets.js';
 import { checkSideValues } from './subkonto.js';
 import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
 import { profitTaxStep } from './profit-tax.js';
+import {
+  postedVatOffset,
+  sameVatLines,
+  vatOffsetLines,
+  vatOffsetNumber,
+  vatOffsetPostings,
+  writeVatOffset,
+  type VatOffsetLine,
+} from './vat-offset.js';
 
 export const CLOSING = 'closing';
 
@@ -476,8 +485,9 @@ function shares(
 // Step 4 — purchase VAT offset
 
 /**
- * What the month's closing would offset (Dt 521.01 / Kt 241) if it ran now: the ƏDV return of an
- * open month (plan §5.1, audit 0.9.9); null when the plan cannot be computed.
+ * What the month's closing would still offset (Dt 521.01 / Kt 241) if it ran now: the ƏDV return
+ * of an open month (plan §5.1, audit 0.9.9); nothing once the month's VAT offset document (ƏƏ-) is
+ * posted — the closing takes it as it is; null when the plan cannot be computed.
  */
 export function plannedVatOffset(db: Db, companyId: string, month: string): Minor | null {
   return plannedVatPostings(db, companyId, month)?.reduce((s, p) => s + p.amount, 0n) ?? null;
@@ -485,6 +495,7 @@ export function plannedVatOffset(db: Db, companyId: string, month: string): Mino
 
 /** The same plan line by line (Kt 241 by invoice): the return's list of offset e-qaimələr. */
 export function plannedVatPostings(db: Db, companyId: string, month: string): Posting[] | null {
+  if (postedVatOffset(db, companyId, month)) return [];
   try {
     return vatStep(db, companyId, loadChart(db, companyId), month).postings.filter(
       (p) => p.dt.account === '521.01',
@@ -495,17 +506,42 @@ export function plannedVatPostings(db: Db, companyId: string, month: string): Po
   }
 }
 
-function vatStep(
+/** A purchase invoice the VAT offset looked at: the figures behind its line of "Doldur". */
+export interface VatInvoice {
+  invoiceId: string;
+  partner: string;
+  /** The invoice's VAT on 241 (less what was taken back to it from 521.01). */
+  invoiceVat: Minor;
+  /** Left on 241 before this month's VAT offset document. */
+  open: Minor;
+  /** Offset so far (Dt 521.01 / Kt 241, less back), before this month's document. */
+  offset: Minor;
+  /** VAT paid by the month's end: through the deposit (less refunds), or pro rata. */
+  paid: Minor;
+  /** DVX: the confirmed e-qaimə's VAT; null — not confirmed. */
+  dvxVat: Minor | null;
+  /** What "Doldur" offsets this month (minus — taken back). */
+  amount: Minor;
+}
+
+/**
+ * The month's purchase VAT offset as "Doldur" computes it (QERARLAR 2026-10-17 §6, 2026-10-30):
+ * the closing step, and the VAT offset document (ƏƏ-) when the accountant fills it. `exclude` —
+ * the month's posted document, whose own postings are left out (it is being filled again).
+ */
+export function vatStep(
   db: Db,
   companyId: string,
   chart: Chart,
   month: string,
-): Draft & { waiting: Signal[] } {
+  exclude = '',
+): Draft & { waiting: Signal[]; invoices: VatInvoice[] } {
   const end = monthEnd(month);
   const postings: Posting[] = [];
   const notes: string[] = [];
   const waiting: Signal[] = [];
-  if (!chart.get('241') || !chart.get('521.01')) return { postings, notes, waiting };
+  const invoices: VatInvoice[] = [];
+  if (!chart.get('241') || !chart.get('521.01')) return { postings, notes, waiting, invoices };
   const docs = new Map<
     string,
     { partner: string; keys: { rate: string; d: bigint; c: bigint }[] }
@@ -522,24 +558,37 @@ function vatStep(
     docs.set(String(r.s2), doc);
   }
   // What was offset so far, by invoice: Dt 521.01 / Kt 241 and back (any source, storno with a
-  // minus), and what the closings themselves offset, by rate — the most a closing takes back.
+  // minus), and what the closings and VAT offset documents offset, by rate — the most taken back.
   const offsets = new Map<string, { kt: bigint; dt: bigint; closing: Map<string, bigint> }>();
   const offsetOf = (document: string) => {
     let o = offsets.get(document);
     if (!o) offsets.set(document, (o = { kt: 0n, dt: 0n, closing: new Map() }));
     return o;
   };
+  // A line the accountant set by hand in a VAT offset document (not what "Doldur" gave) is his
+  // decision: the rule never takes it back by itself.
+  const manual = new Set<string>();
   for (const r of db.all(
-    `SELECT p.kt_s2 AS d, p.kt_s3 AS r, e.source_type='closing' AS own, SUM(p.amount) AS a
+    "SELECT id, lines FROM vat_offsets WHERE company_id=? AND status='posted' AND month<=?",
+    companyId,
+    month,
+  ))
+    for (const l of JSON.parse(String(r.lines)) as { invoiceId: string; auto?: boolean }[])
+      if (l.auto === false) manual.add(`${String(r.id)}|invoice:${l.invoiceId}`);
+  const ruleMade = (type: string, source: string, document: string) =>
+    type === 'closing' || (type === 'vatOffset' && !manual.has(`${source}|${document}`));
+  for (const r of db.all(
+    `SELECT p.kt_s2 AS d, p.kt_s3 AS r, e.source_type AS t, e.source_id AS sid, SUM(p.amount) AS a
      FROM postings p JOIN entries e ON e.id=p.entry_id
      WHERE p.company_id=? AND p.dt_account='521.01' AND p.kt_account='241' AND p.kt_s2 LIKE 'invoice:%'
-       AND p.date<=? GROUP BY p.kt_s2, p.kt_s3, own`,
+       AND p.date<=? GROUP BY p.kt_s2, p.kt_s3, e.source_type, e.source_id`,
     companyId,
     end,
   )) {
     const o = offsetOf(String(r.d));
     o.kt += r.a as bigint;
-    if (r.own) o.closing.set(String(r.r), (o.closing.get(String(r.r)) ?? 0n) + (r.a as bigint));
+    if (ruleMade(String(r.t), String(r.sid), String(r.d)))
+      o.closing.set(String(r.r), (o.closing.get(String(r.r)) ?? 0n) + (r.a as bigint));
   }
   for (const r of db.all(
     `SELECT dt_s2 AS d, SUM(amount) AS a FROM postings
@@ -549,6 +598,24 @@ function vatStep(
     end,
   ))
     offsetOf(String(r.d)).dt += r.a as bigint;
+  // The document being filled again: as if its postings were not there.
+  if (exclude)
+    for (const r of db.all(
+      `SELECT p.kt_s2 AS d, p.kt_s3 AS r, SUM(p.amount) AS a
+       FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND e.source_type='vatOffset' AND e.source_id=?
+         AND p.dt_account='521.01' AND p.kt_account='241' GROUP BY p.kt_s2, p.kt_s3`,
+      companyId,
+      exclude,
+    )) {
+      const a = r.a as bigint;
+      const key = docs.get(String(r.d))?.keys.find((k) => k.rate === String(r.r));
+      if (key) key.c -= a;
+      const o = offsetOf(String(r.d));
+      o.kt -= a;
+      if (ruleMade('vatOffset', exclude, String(r.d)))
+        o.closing.set(String(r.r), (o.closing.get(String(r.r)) ?? 0n) - a);
+    }
   const payables = chart
     .all()
     .filter((a) => a.code.startsWith('531') && chart.postable(a.code))
@@ -558,141 +625,160 @@ function vatStep(
   let unpaid = 0;
   let unpaidVat = 0n;
   for (const [document, doc] of docs) {
-    const debit = doc.keys.reduce((s, k) => s + k.d, 0n);
-    const credit = doc.keys.reduce((s, k) => s + k.c, 0n);
-    const open = debit - credit;
-    const offset0 = offsets.get(document);
-    const byClosing = [...(offset0?.closing.values() ?? [])].reduce((s, a) => s + a, 0n);
-    if (open <= 0n && byClosing <= 0n) continue;
-    const inv = db.get(
-      `SELECT i.*, p.kind AS partner_kind, p.name AS partner_name FROM invoices i
+    let seen: Omit<VatInvoice, 'amount'> | undefined;
+    const from = postings.length;
+    try {
+      const debit = doc.keys.reduce((s, k) => s + k.d, 0n);
+      const credit = doc.keys.reduce((s, k) => s + k.c, 0n);
+      const open = debit - credit;
+      const offset0 = offsets.get(document);
+      const byClosing = [...(offset0?.closing.values() ?? [])].reduce((s, a) => s + a, 0n);
+      if (open <= 0n && byClosing <= 0n) continue;
+      const inv = db.get(
+        `SELECT i.*, p.kind AS partner_kind, p.name AS partner_name FROM invoices i
          JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
        WHERE i.company_id=? AND i.id=? AND i.direction='purchase' AND i.status='posted'`,
-      companyId,
-      document.slice('invoice:'.length),
-    );
-    if (!inv) continue;
-    const label = `${String(inv.number)} · ${dmy(String(inv.date))} · ${String(inv.partner_name)}`;
-    const confirmed = db.get(
-      `SELECT SUM(vat) AS vat FROM eq_documents WHERE company_id=? AND direction='purchase'
+        companyId,
+        document.slice('invoice:'.length),
+      );
+      if (!inv) continue;
+      const label = `${String(inv.number)} · ${dmy(String(inv.date))} · ${String(inv.partner_name)}`;
+      const confirmed = db.get(
+        `SELECT SUM(vat) AS vat FROM eq_documents WHERE company_id=? AND direction='purchase'
          AND invoice_id=? AND status='accepted' HAVING COUNT(*) > 0`,
-      companyId,
-      String(inv.id),
-    );
-    // Taking back what a closing offset (Dt 521.01 / Kt 241 with a minus, by rate): the payment
-    // went down (a refund, a storno) or DVX no longer confirms the e-qaimə.
-    const takeBack = (amount: bigint, why: string) => {
-      if (amount <= 0n) return;
-      notes.push(
-        `${label}: əvəzləşdirilmiş ƏDV ${show(amount)} geri alınır — ${why} (241-ə qayıdır).`,
+        companyId,
+        String(inv.id),
       );
-      vatTax ||= role(db, companyId, 'vatTax', 'Vergi (haqq)');
-      for (const [rate, booked] of offset0!.closing) {
-        if (booked <= 0n || amount <= 0n) continue;
-        const back = booked < amount ? booked : amount;
-        amount -= back;
-        postings.push({
-          dt: { account: '521.01', sk: [vatTax] },
-          kt: { account: '241', sk: [doc.partner, document, rate] },
-          amount: -back,
-          memo: `ƏDV əvəzləşdirilməsinin geri alınması · ${String(inv.number)}`,
-        });
-      }
-    };
-    const offsetNet = (offset0?.kt ?? 0n) - (offset0?.dt ?? 0n);
-    // The VAT of the invoice itself: 241's debit less what was taken back to it from 521.01.
-    const invoiceVat = debit - (offset0?.dt ?? 0n);
-    if (!confirmed) {
-      if (open > 0n && ++unconfirmed <= LIMIT)
-        waiting.push({
-          ...signal(
-            'vatUnconfirmed',
-            `${label}: ƏDV ${show(open)} — e-qaiməsi DVX-də təsdiqlənməyib, əvəzləşdirilmir (241-də qalır).`,
-            '241',
-            [doc.partner, document],
-          ),
-          invoice: { id: String(inv.id), direction: 'purchase' },
-        });
-      takeBack(
-        offsetNet < byClosing ? offsetNet : byClosing,
-        'e-qaimə DVX-də artıq təsdiqlənmiş deyil',
-      );
-      continue;
-    }
-    // What reached the invoice by the month's end: the VAT through the VAT deposit, less what came
-    // back to it (a refund); foreign partners and currency invoices pay VAT with the rest — pro
-    // rata. An individual entrepreneur is a VAT payer like a company: VAT only through the deposit.
-    let paid = 0n;
-    const key = db.get(
-      `SELECT account, SUM(debit) AS d, SUM(credit) AS c, SUM(cur_dt) AS cd, SUM(cur_kt) AS ck
+      // Taking back what a closing offset (Dt 521.01 / Kt 241 with a minus, by rate): the payment
+      // went down (a refund, a storno) or DVX no longer confirms the e-qaimə.
+      const takeBack = (amount: bigint, why: string) => {
+        if (amount <= 0n) return;
+        notes.push(
+          `${label}: əvəzləşdirilmiş ƏDV ${show(amount)} geri alınır — ${why} (241-ə qayıdır).`,
+        );
+        vatTax ||= role(db, companyId, 'vatTax', 'Vergi (haqq)');
+        for (const [rate, booked] of offset0!.closing) {
+          if (booked <= 0n || amount <= 0n) continue;
+          const back = booked < amount ? booked : amount;
+          amount -= back;
+          postings.push({
+            dt: { account: '521.01', sk: [vatTax] },
+            kt: { account: '241', sk: [doc.partner, document, rate] },
+            amount: -back,
+            memo: `ƏDV əvəzləşdirilməsinin geri alınması · ${String(inv.number)}`,
+          });
+        }
+      };
+      const offsetNet = (offset0?.kt ?? 0n) - (offset0?.dt ?? 0n);
+      // The VAT of the invoice itself: 241's debit less what was taken back to it from 521.01.
+      const invoiceVat = debit - (offset0?.dt ?? 0n);
+      // What reached the invoice by the month's end: the VAT through the VAT deposit, less what came
+      // back to it (a refund); foreign partners and currency invoices pay VAT with the rest — pro
+      // rata. An individual entrepreneur is a VAT payer like a company: VAT only through the deposit.
+      let paid = 0n;
+      const key = db.get(
+        `SELECT account, SUM(debit) AS d, SUM(credit) AS c, SUM(cur_dt) AS cd, SUM(cur_kt) AS ck
        FROM registers WHERE company_id=? AND account IN (${payables.map(() => '?').join(',') || "''"})
          AND s1=? AND s2=? AND s3=? AND month<=? GROUP BY account ORDER BY SUM(credit) DESC LIMIT 1`,
-      companyId,
-      ...payables,
-      String(inv.partner_id),
-      String(inv.contract_id),
-      document,
-      month,
-    );
-    if (key) {
-      const whole = inv.currency !== 'AZN' || inv.partner_kind === 'foreign';
-      if (!whole) {
-        const through = (direction: 'in' | 'out') =>
-          depositPaid(
-            db,
-            companyId,
-            direction,
-            String(key.account),
-            String(inv.partner_id),
-            String(inv.contract_id),
-            document,
-            end,
-          );
-        paid = through('out') - through('in');
-        if (paid < 0n) paid = 0n;
-      } else {
-        const [settled, owed] =
-          inv.currency !== 'AZN'
-            ? [key.cd as bigint, key.ck as bigint]
-            : [key.d as bigint, key.c as bigint];
-        const share = settled < owed ? settled : owed;
-        paid = owed > 0n && share > 0n ? roundHalfAwayFromZero(invoiceVat * share, owed) : 0n;
-      }
-    }
-    if (paid > invoiceVat) paid = invoiceVat;
-    // Never more than DVX confirmed: an invoice saved with other VAT than its e-qaimə (a warning
-    // since 25.10.2026) offsets only the e-qaimə's VAT; the rest waits on 241 for the accountant.
-    const dvxVat = confirmed.vat as bigint;
-    if (paid > dvxVat) {
-      paid = dvxVat;
-      notes.push(
-        `${label}: qaimədə ƏDV ${show(invoiceVat)}, DVX-də ƏDV ${show(dvxVat)} — yalnız DVX-dəki əvəzləşdirilir, fərq 241-də qalır.`,
+        companyId,
+        ...payables,
+        String(inv.partner_id),
+        String(inv.contract_id),
+        document,
+        month,
       );
-    }
-    // Other credits of 241 (VAT moved to cost …) still come off what may be offset, as before.
-    const due = paid - (credit - (offset0?.kt ?? 0n)) - offsetNet;
-    if (due < 0n) {
-      takeBack(-due < byClosing ? -due : byClosing, 'ödənilmiş ƏDV azalıb');
-      continue;
-    }
-    let offset = due < open ? due : open;
-    if (offset < open) {
-      unpaid++;
-      unpaidVat += open - (offset > 0n ? offset : 0n);
-    }
-    if (offset <= 0n) continue;
-    vatTax ||= role(db, companyId, 'vatTax', 'Vergi (haqq)');
-    for (const k of doc.keys) {
-      const left = k.d - k.c;
-      if (left <= 0n || offset <= 0n) continue;
-      const amount = left < offset ? left : offset;
-      offset -= amount;
-      postings.push({
-        dt: { account: '521.01', sk: [vatTax] },
-        kt: { account: '241', sk: [doc.partner, document, k.rate] },
-        amount,
-        memo: `ƏDV əvəzləşdirilməsi · ${String(inv.number)}`,
-      });
+      if (key) {
+        const whole = inv.currency !== 'AZN' || inv.partner_kind === 'foreign';
+        if (!whole) {
+          const through = (direction: 'in' | 'out') =>
+            depositPaid(
+              db,
+              companyId,
+              direction,
+              String(key.account),
+              String(inv.partner_id),
+              String(inv.contract_id),
+              document,
+              end,
+            );
+          paid = through('out') - through('in');
+          if (paid < 0n) paid = 0n;
+        } else {
+          const [settled, owed] =
+            inv.currency !== 'AZN'
+              ? [key.cd as bigint, key.ck as bigint]
+              : [key.d as bigint, key.c as bigint];
+          const share = settled < owed ? settled : owed;
+          paid = owed > 0n && share > 0n ? roundHalfAwayFromZero(invoiceVat * share, owed) : 0n;
+        }
+      }
+      if (paid > invoiceVat) paid = invoiceVat;
+      seen = {
+        invoiceId: String(inv.id),
+        partner: doc.partner,
+        invoiceVat,
+        open,
+        offset: offsetNet,
+        paid,
+        dvxVat: confirmed ? (confirmed.vat as bigint) : null,
+      };
+      if (!confirmed) {
+        if (open > 0n && ++unconfirmed <= LIMIT)
+          waiting.push({
+            ...signal(
+              'vatUnconfirmed',
+              `${label}: ƏDV ${show(open)} — e-qaiməsi DVX-də təsdiqlənməyib, əvəzləşdirilmir (241-də qalır).`,
+              '241',
+              [doc.partner, document],
+            ),
+            invoice: { id: String(inv.id), direction: 'purchase' },
+          });
+        takeBack(
+          offsetNet < byClosing ? offsetNet : byClosing,
+          'e-qaimə DVX-də artıq təsdiqlənmiş deyil',
+        );
+        continue;
+      }
+      // Never more than DVX confirmed: an invoice saved with other VAT than its e-qaimə (a warning
+      // since 25.10.2026) offsets only the e-qaimə's VAT; the rest waits on 241 for the accountant.
+      const dvxVat = confirmed.vat as bigint;
+      if (paid > dvxVat) {
+        paid = dvxVat;
+        notes.push(
+          `${label}: qaimədə ƏDV ${show(invoiceVat)}, DVX-də ƏDV ${show(dvxVat)} — yalnız DVX-dəki əvəzləşdirilir, fərq 241-də qalır.`,
+        );
+      }
+      // Other credits of 241 (VAT moved to cost …) still come off what may be offset, as before.
+      const due = paid - (credit - (offset0?.kt ?? 0n)) - offsetNet;
+      if (due < 0n) {
+        takeBack(-due < byClosing ? -due : byClosing, 'ödənilmiş ƏDV azalıb');
+        continue;
+      }
+      let offset = due < open ? due : open;
+      if (offset < open) {
+        unpaid++;
+        unpaidVat += open - (offset > 0n ? offset : 0n);
+      }
+      if (offset <= 0n) continue;
+      vatTax ||= role(db, companyId, 'vatTax', 'Vergi (haqq)');
+      for (const k of doc.keys) {
+        const left = k.d - k.c;
+        if (left <= 0n || offset <= 0n) continue;
+        const amount = left < offset ? left : offset;
+        offset -= amount;
+        postings.push({
+          dt: { account: '521.01', sk: [vatTax] },
+          kt: { account: '241', sk: [doc.partner, document, k.rate] },
+          amount,
+          memo: `ƏDV əvəzləşdirilməsi · ${String(inv.number)}`,
+        });
+      }
+    } finally {
+      if (seen)
+        invoices.push({
+          ...seen,
+          amount: postings.slice(from).reduce((a, x) => a + x.amount, 0n),
+        });
     }
   }
   if (unconfirmed > LIMIT)
@@ -707,7 +793,7 @@ function vatStep(
     notes.push(
       `${unpaid} qaimənin ƏDV-si (${show(unpaidVat)}) hələ ödənilməyib — 241-də qalır, sonrakı bağlanışda yoxlanır.`,
     );
-  return { postings, notes, waiting };
+  return { postings, notes, waiting, invoices };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -834,7 +920,16 @@ interface Plan {
   fifo: Draft & { products: number };
   depreciation: Draft & { assets: number };
   revaluation: RevaluationStep | null;
-  vat: Draft;
+  /**
+   * The VAT offset: the month's posted ƏƏ- document as it is ("keep"), or what "Doldur" gives,
+   * posted by the closing as the document ("post"); delta — what the closing adds to the books.
+   */
+  vat: Draft & {
+    action: 'keep' | 'post' | 'none';
+    number: string;
+    lines: VatOffsetLine[];
+    delta: Posting[];
+  };
   /** December (stage 9d): the year's profit tax. */
   profitTax: (Draft & { tax: bigint }) | null;
   out: CloseOut;
@@ -918,14 +1013,46 @@ function buildPlan(
   const revaluation = attempt<RevaluationStep | null>('rate', null, () =>
     revaluationStep(db, companyId, month),
   );
-  const vat = attempt('closing', { postings: [], notes: [], waiting: [] as Signal[] }, () =>
-    vatStep(db, companyId, chart, month),
+  const vatDoc = postedVatOffset(db, companyId, month);
+  const fill = attempt(
+    'closing',
+    { postings: [], notes: [], waiting: [] as Signal[], invoices: [] as VatInvoice[] },
+    () => vatStep(db, companyId, chart, month, vatDoc ? String(vatDoc.id) : ''),
   );
+  const filled = fill.invoices
+    .filter((i) => i.amount !== 0n)
+    .map((i): VatOffsetLine => ({ invoiceId: i.invoiceId, amount: i.amount }));
+  const vat: Plan['vat'] & { waiting: Signal[] } = vatDoc
+    ? {
+        action: 'keep',
+        number: String(vatDoc.number),
+        lines: vatOffsetLines(vatDoc),
+        postings: vatOffsetPostings(db, companyId, String(vatDoc.id), Number(vatDoc.version)),
+        notes: [
+          `${String(vatDoc.number)} uçotdadır: ay bağlanışı onu olduğu kimi götürür (dəyişmək üçün sənədi açın).`,
+          ...(sameVatLines(vatOffsetLines(vatDoc), filled)
+            ? []
+            : [
+                `"Doldur" indi başqa nəticə verir (${filled.length} qaimə · ${show(filled.reduce((s, l) => s + l.amount, 0n))}) — sənəd əl ilə dəyişdirilib və ya ödənişlər sonra dəyişib.`,
+              ]),
+        ],
+        waiting: fill.waiting,
+        delta: [],
+      }
+    : {
+        action: filled.length ? 'post' : 'none',
+        number: vatOffsetNumber(month),
+        lines: filled,
+        postings: fill.postings,
+        notes: fill.notes,
+        waiting: fill.waiting,
+        delta: fill.postings,
+      };
   const before = [
     ...fifo.postings,
     ...depreciation.postings,
     ...(revaluation?.delta ?? []),
-    ...vat.postings,
+    ...vat.delta,
   ];
   const profitTax = month.endsWith('-12')
     ? attempt<Plan['profitTax']>('closing', null, () =>
@@ -1043,9 +1170,9 @@ function steps(plan: Plan, posted: boolean): ClosingStep[] {
       'vat',
       'Alış ƏDV-sinin əvəzləşdirilməsi (241 → 521.01)',
       plan.vat.postings,
-      plan.vat.postings.length
-        ? `${new Set(plan.vat.postings.map((p) => p.kt.sk[1])).size} qaimə · ${show(sum(plan.vat.postings))}`
-        : 'Əvəzləşdiriləcək ƏDV yoxdur',
+      plan.vat.action === 'none'
+        ? 'Əvəzləşdiriləcək ƏDV yoxdur'
+        : `${plan.vat.number}${plan.vat.action === 'keep' ? ' (uçotdadır)' : posted ? '' : ' (uçota alınacaq)'} · ${plan.vat.lines.length} qaimə · ${show(sum(plan.vat.postings))}`,
       plan.vat.notes,
     ),
     step(
@@ -1149,7 +1276,16 @@ export function postClosing(
   post(plan.fifo.postings, { costAdjustment: true });
   post(plan.depreciation.postings);
   const revaluation = plan.revaluation!.write(tx)?.id ?? plan.revaluation!.id;
-  post(plan.vat.postings);
+  // The VAT offset is a document of its own (ƏƏ-): filled and posted here when there is none.
+  if (plan.vat.action === 'post')
+    writeVatOffset(
+      tx,
+      cmd.companyId,
+      month,
+      undefined,
+      plan.vat.lines,
+      'ay bağlanışı ilə doldurulub',
+    );
   // December: the profit tax from the books after steps 2–4 (the same figures the plan showed).
   const profitTax = month.endsWith('-12')
     ? profitTaxStep(

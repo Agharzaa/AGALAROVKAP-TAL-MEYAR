@@ -84,6 +84,7 @@ import { BankDocumentsPage } from './pages/bank-documents';
 import { BankEditor } from './pages/bank-editor';
 import { CashBookPage, CashDocumentsPage, CashEditor } from './pages/cash';
 import { RatesPage, RevaluationPage } from './pages/rates';
+import { VatOffsetPage } from './pages/vat-offset';
 import { ClosingPage } from './pages/closing';
 import { CashFlowPage, DashboardPage, ProfitLossPage, VatSummaryPage } from './pages/reports';
 import { DeclarationPage } from './pages/declarations';
@@ -1117,6 +1118,8 @@ function Routed({ win }: { win: Win }) {
           return <RatesPage />;
         case 'revaluation':
           return <RevaluationPage />;
+        case 'vatOffset':
+          return <VatOffsetPage />;
         case 'closing':
           return <ClosingPage />;
         case 'profitLoss':

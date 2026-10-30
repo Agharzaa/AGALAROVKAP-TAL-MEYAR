@@ -3772,3 +3772,100 @@ test('stage 10c: the cash flow by the direct method opens from the menu, by acti
     h.close();
   }
 });
+
+test('ƏDV əvəzləşdirilməsi: an invoice added by hand, its amount changed, posted 241 → 521.01', async () => {
+  const h = harness();
+  const s = seed(h);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const supplier = h.run({
+    type: 'partner.save',
+    companyId: s.companyId,
+    name: 'Yanacaq MMC',
+    taxId: '1700000077',
+    kind: 'legal',
+    note: '',
+    archived: false,
+  }).id;
+  const contract = h.run({
+    type: 'contract.save',
+    companyId: s.companyId,
+    partnerId: supplier,
+    number: 'Y-1',
+    date: '2026-01-01',
+    kind: 'purchase',
+    currency: 'AZN',
+    note: '',
+    archived: false,
+  }).id;
+  const fuel = h.run({
+    type: 'product.save',
+    companyId: s.companyId,
+    code: '',
+    name: 'Dizel',
+    unit: 'litr',
+    kind: 'material',
+    groupId: '',
+    archived: false,
+  }).id;
+  h.run({
+    type: 'invoice.save',
+    companyId: s.companyId,
+    direction: 'purchase',
+    number: '',
+    date: `${month}-01`,
+    partnerId: supplier,
+    contractId: contract,
+    rate: '',
+    pricesIncludeVat: false,
+    eqSeries: '',
+    eqNumber: '',
+    memo: '',
+    lines: [{ productId: fuel, quantity: '1000', price: '1', vatRate: '18', memo: '' }],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getByRole('button', { name: 'Mühasibat' }));
+    await user.click(screen.getByRole('menuitem', { name: 'ƏDV əvəzləşdirilməsi' }));
+    const page = within(pane());
+    await page.findByText(/hələ uçotda deyil/);
+    // No e-qaimə confirmed: "Doldur" gives nothing; the accountant adds the invoice by hand.
+    await page.findByText('Sətir yoxdur');
+    await user.click(page.getByRole('combobox', { name: 'Qaimə əlavə et' }));
+    await user.keyboard('Yanacaq');
+    await user.keyboard('{Enter}');
+    const amount = (await page.findByRole('textbox', {
+      name: 'Sətir 1: əvəzləşdirilir',
+    })) as HTMLInputElement;
+    assert.equal(amount.value, '180,00');
+    await user.clear(amount);
+    await user.type(amount, '150');
+    await user.click(page.getByRole('button', { name: 'Uçota al' }));
+    await page.findByText(new RegExp(`ƏƏ-${month} uçota alındı`));
+    const tb = h.ledger.query({
+      type: 'trialBalance',
+      companyId: s.companyId,
+      from: `${month}-01`,
+      to: monthEnd(month),
+      expand: [],
+    }) as TrialBalance;
+    assert.equal(tb.rows.find((r) => r.account === '241')!.closeDt, '30.00');
+    // Saved: the button waits for a change; deleting the line and saving takes it back.
+    assert.equal(page.queryByRole('button', { name: 'Yadda saxla' }), null);
+    await user.click(page.getByRole('button', { name: 'Sətir 1: sil' }));
+    await user.click(page.getByRole('button', { name: 'Yadda saxla' }));
+    await page.findByText(/uçota alındı \(versiya 2\)/);
+    const after = h.ledger.query({
+      type: 'trialBalance',
+      companyId: s.companyId,
+      from: `${month}-01`,
+      to: monthEnd(month),
+      expand: [],
+    }) as TrialBalance;
+    assert.equal(after.rows.find((r) => r.account === '241')!.closeDt, '180.00');
+  } finally {
+    h.close();
+  }
+});

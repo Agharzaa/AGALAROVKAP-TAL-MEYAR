@@ -22,6 +22,7 @@ import { pairBankDocuments } from './bank-pair.js';
 import { cancelCashDocument, saveCashDocument } from './cash.js';
 import { saveRates } from './rates.js';
 import { cancelRevaluation, postRevaluation } from './revaluation.js';
+import { cancelVatOffset, saveVatOffset } from './vat-offset.js';
 import { cancelClosing, postClosing } from './closing.js';
 import { applyRules, applyStatementRules, saveBudgetCode, saveRule } from './rules.js';
 import {
@@ -139,6 +140,10 @@ export class Ledger {
         return postRevaluation(tx, c);
       case 'revaluation.cancel':
         return cancelRevaluation(tx, c);
+      case 'vatOffset.save':
+        return saveVatOffset(tx, c);
+      case 'vatOffset.cancel':
+        return cancelVatOffset(tx, c);
       case 'closing.post':
         return postClosing(tx, c, closingControls(tx.db, c.companyId));
       case 'closing.cancel':

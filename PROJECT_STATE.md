@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 30.10.2026 (0.9.17). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 30.10.2026 (0.9.18). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -770,6 +770,16 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **Geri alma** ay bağlanışının ƏDV addımında: depozit ödənişi = Dt 531 / Kt 224 − qaiməyə bağlı qaytarma (Dt 224 / Kt 531); əvəzləşdirilən bundan çox olanda və ya e-qaimə DVX-də artıq təsdiqlənmiş deyilsə — Dt 521.01 / Kt 241 mənfi məbləğlə, dərəcə üzrə, bağlanışın özünün əvəzləşdirdiyi qədər; əl ilə Dt 241 / Kt 521.01 nəzərə alınır. Bəyannamənin siyahısında belə sətir mənfidir.
 - **Avans:** əvvəlcədən depozitdən ödənilmiş ƏDV e-qaimə təsdiqlənən ayda əvəzləşir — dəyişiklik lazım olmadı, test yazıldı.
 - Testlər: `tests/integration/vat-offset.test.ts` (5: fərdi sahibkar, avans, qaytarma və yenidən ödəniş, əl ilə geri alma — təkrar yox, DVX-də ləğv), `closing.test.ts` A3 (fərdi sahibkar depozitdən). `npm run typecheck`, `npm test` 307, `npm run test:ui` 57, `npm run test:perf` (ay bağlanışı: baxış 2,4 s, bağlanış 2,3 s) keçir. Sxem dəyişmir (v24). Electron işlədilmədi.
+
+## 0.9.18 — ƏDV əvəzləşdirilməsi sənədi: Doldur, əl ilə əlavə / silmə / dəyişmə (30.10.2026, QERARLAR 2026-10-30 §4)
+
+İstifadəçi: "10-cu ayda kimlərə hansı ƏDV-li qaimələr ödəniş etmişəmsə, Doldur basanda əvəzləşəcəkləri yığsın, əl ilə də əlavə etmək, silmək, dəyişmək olsun."
+
+- **Sənəd ƏƏ-2026-10** (Mühasibat → Dövr → ƏDV əvəzləşdirilməsi; `src/application/vat-offset.ts`, `src/renderer/pages/vat-offset.tsx`): ay seçilir, "Doldur" — ay bağlanışının qaydası (`vatStep`, sənədin öz yazılışları çıxılmaqla) qaimə üzrə; sətirdə qaimə, tarix, təchizatçı, VÖEN, e-qaimə, DVX, qaimənin ƏDV-si, 241-də, ödənilib, Doldur, məbləğ (dəyişir), sil; "Qaimə əlavə et" — 241-də ƏDV-si olan və ya əvvəl əvəzləşmiş qaimələr. Uçot: Dt 521.01 / Kt 241 dərəcə açarları üzrə, ayın son günü; yenidən saxlanma — storno + yeni; ləğv — storno. Yoxlama: 241-dəki qalıqdan çox və ya əvvəl əvəzləşəndən çox geri alma — rədd; eyni qaimə iki dəfə — rədd.
+- **Əl ilə sətir** (`auto: false` — Doldur-dan fərqli məbləğ): qayda sonrakı aylarda onu özü geri almır (`vatStep`-in "öz" əvəzləşdirməsi — bağlanış + Doldur sətirləri).
+- **Ay bağlanışı:** sənəd varsa olduğu kimi götürür (addımda "uçotdadır", Doldur fərqlidirsə qeyd), yoxdursa doldurub uçota alır (ƏDV yazılışları artıq bağlanışın deyil, sənədindir); bağlanışın ləğvi sənədi saxlayır. ƏDV icmalı və bəyannaməsi — `source_type IN (closing, vatOffset)`; açıq ayda bağlanışın planı yalnız sənəd yoxdursa.
+- **Sxem v25:** `vat_offsets`. Real bazanın surəti (`meyar-v3.sqlite`, v13 → v25, `VACUUM INTO`): bütövlük `ok`, MG Transport — 126 namizəd qaimə, sənəd görünüşü ≤ 23 ms.
+- Testlər: `tests/integration/vat-offset.test.ts` (+4: Doldur və əl ilə əlavə / dəyişmə / silmə, bağlanış sənədi götürür; hədlər; bağlanış sənədi yaradır, ləğvdən sonra qalır; bəyannamə sənədi bir dəfə sayır), `tests/ui` (əl ilə əlavə, məbləğ, uçot, silmə). `npm run typecheck`, `npm test` 311, `npm run test:ui` 58, `npm run test:perf` keçir. Electron işlədilmədi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1645,6 +1645,32 @@ const v24 = `
 ALTER TABLE items ADD COLUMN tax_deductible INTEGER NOT NULL DEFAULT 1 CHECK(tax_deductible IN(0,1));
 `;
 
+// v25 — the month's purchase VAT offset document (ƏƏ-2026-10; QERARLAR 2026-10-30): "Doldur"
+// fills it with the closing's rule, the accountant adds, deletes and changes lines. One posted
+// per company and month, dated the month's last day (source type "vatOffset").
+
+const v25 = `
+CREATE TABLE vat_offsets(
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  month TEXT NOT NULL,
+  date TEXT NOT NULL,
+  number TEXT NOT NULL,
+  lines TEXT NOT NULL,
+  total INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('posted','cancelled')),
+  version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(company_id,id)
+);
+CREATE UNIQUE INDEX vat_offsets_month ON vat_offsets(company_id,month) WHERE status='posted';
+CREATE TRIGGER vat_offsets_no_delete BEFORE DELETE ON vat_offsets BEGIN SELECT RAISE(ABORT,'guard: Sənəd silinmir; ləğv edilir.'); END;
+CREATE TRIGGER vat_offsets_period BEFORE UPDATE ON vat_offsets
+WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
+BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1670,4 +1696,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 22, sql: v22 },
   { version: 23, sql: v23 },
   { version: 24, sql: v24 },
+  { version: 25, sql: v25 },
 ];
