@@ -167,7 +167,16 @@ test('V2: ƏDV return — appendices by invoice; more offset than accrued carrie
     exempt.rows.map((r) => [r[2], r[4]]),
     [['Alıcı MMC', '50.00']],
   );
-  assert.equal(v.appendices.length, 2, 'no list for a rate without sales');
+  assert.equal(v.appendices.length, 4, 'no list for a rate without sales; two offset lists');
+  // The incoming e-qaimə paid through the deposit: offset by the plan of the open month.
+  const list = (d: DeclarationView, title: string) =>
+    d.appendices.find((a) => a.title.startsWith(title))!;
+  assert.deepEqual(
+    list(v, 'Əvəzləşdirilən').rows.map((r) => [r[2], r[3], r[4], r[5], r[6]]),
+    [['Təchizat ASC', '1700000002', 'MT0001', '180.00', '180.00']],
+  );
+  assert.match(list(v, 'Əvəzləşdirilən').title, /bağlanışın planı/);
+  assert.deepEqual(list(v, 'Əvəzləşdirilməyən').rows, []);
 
   // October: a purchase only, paid through the deposit — the offset exceeds what is accrued.
   const supplier = f.partner('Təchizat 2', '1700000012');
@@ -186,6 +195,21 @@ test('V2: ƏDV return — appendices by invoice; more offset than accrued carrie
   dvx(f, 'purchase', 'MT0002', '1700000012', '100.00', '18.00', '2026-10-03');
   f.bank('out', '2026-10-05', accounts.bank, [f.bankLine('531.01', [supplier, cp], '100')]);
   f.bank('out', '2026-10-05', accounts.deposit, [f.bankLine('531.01', [supplier, cp], '18')]);
+  // Two more: confirmed in DVX but its VAT not paid; and one with no e-qaimə at all.
+  f.invoice(
+    'purchase',
+    '2026-10-07',
+    supplier,
+    cp,
+    [{ productId: fuel, quantity: '200', price: '1' }],
+    {
+      eqNumber: 'MT0003',
+    },
+  );
+  dvx(f, 'purchase', 'MT0003', '1700000012', '200.00', '36.00', '2026-10-07');
+  f.invoice('purchase', '2026-10-09', supplier, cp, [
+    { productId: fuel, quantity: '50', price: '1' },
+  ]);
   f.exec({ type: 'closing.post', companyId: f.companyId, month: '2026-09', acknowledged: true });
   f.exec({ type: 'closing.post', companyId: f.companyId, month: '2026-10', acknowledged: true });
   const october = declaration(f, 'vat', '2026-10');
@@ -195,6 +219,18 @@ test('V2: ƏDV return — appendices by invoice; more offset than accrued carrie
   assert.deepEqual(
     ['l:opening', 'l:credit', 'l:offset', 'l:closing'].map((k) => figures(october, k)[0]),
     ['180.00', '0.00', '18.00', '162.00'],
+  );
+  assert.deepEqual(
+    list(october, 'Əvəzləşdirilən').rows.map((r) => [r[4], r[6]]),
+    [['MT0002', '18.00']],
+  );
+  assert.doesNotMatch(list(october, 'Əvəzləşdirilən').title, /plan/);
+  assert.deepEqual(
+    list(october, 'Əvəzləşdirilməyən').rows.map((r) => [r[4], r[5], r[6]]),
+    [
+      ['MT0003', '36.00', 'ƏDV depozitdən ödənilməyib'],
+      ['', '9.00', 'e-qaimə bağlanmayıb'],
+    ],
   );
   assert.throws(() => declaration(f, 'vat', '2026-13'), /Ay/);
 });

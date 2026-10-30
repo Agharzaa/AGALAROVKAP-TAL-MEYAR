@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 29.10.2026 (0.9.14, mərhələ 10c). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 30.10.2026 (0.9.16). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -753,6 +753,14 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 6. **Kassa orderləri yük testi** də CI-da diskdən asılıdır (500 ayrıca commit, 40 s həddi). Tövsiyə: eyni CPU qaydası ona da tətbiq edilsin, CI həddi yenidən 10 s-ə endirilsin.
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, `npm run test:perf` (100 000 yazılış; e-qaimə yükü 3,1 s, CPU 3,1 s) keçir. Sxem dəyişməyib (v24). Electron və `dvx-smoke` işlədilmədi (pəncərə açır). **0.9.10** main-ə push edilir.
+
+## 0.9.16 — ƏDV bəyannaməsində əvəzləşdirilən gələn e-qaimələr (30.10.2026)
+
+İstifadəçi: "ödənişini etdiyimiz gələn e-qaimələri əvəzləşdiririk" — bəyannamədə hansı e-qaimənin əvəzləşdiyi görünməli idi.
+
+- **ƏDV bəyannaməsinə iki siyahı:** "Əvəzləşdirilən gələn e-qaimələr" (qaimə, tarix, təchizatçı, VÖEN, e-qaimə, qaimənin ƏDV-si, əvəzləşdirilən — bağlanmış ayda bağlanışın Dt 521.01 / Kt 241 yazılışları, açıq ayda bağlanışın planı) və "Əvəzləşdirilməyən — 241-də gözləyir" (ayın sonuna qalan ƏDV və səbəb: e-qaimə bağlanmayıb / DVX-də təsdiqlənməyib / ƏDV depozitdən ödənilməyib). Qayda dəyişməyib: ödənişi (ƏDV — depozitdən) edilmiş və DVX-də təsdiqlənmiş gələn e-qaimələr ay bağlanışında əvəzləşir.
+- `plannedVatPostings` (closing.ts) — bağlanışın ƏDV planı qaimə üzrə.
+- Testlər: `tests/integration/declarations.test.ts` V2 (planla və bağlanışdan sonra siyahı, iki gözləmə səbəbi). `npm run typecheck`, `npm test` 302, `npm run test:ui` 57, `npm run test:perf` keçir. Electron işlədilmədi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

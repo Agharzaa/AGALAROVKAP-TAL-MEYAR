@@ -479,10 +479,15 @@ function shares(
  * open month (plan §5.1, audit 0.9.9); null when the plan cannot be computed.
  */
 export function plannedVatOffset(db: Db, companyId: string, month: string): Minor | null {
+  return plannedVatPostings(db, companyId, month)?.reduce((s, p) => s + p.amount, 0n) ?? null;
+}
+
+/** The same plan line by line (Kt 241 by invoice): the return's list of offset e-qaimələr. */
+export function plannedVatPostings(db: Db, companyId: string, month: string): Posting[] | null {
   try {
-    return vatStep(db, companyId, loadChart(db, companyId), month)
-      .postings.filter((p) => p.dt.account === '521.01')
-      .reduce((s, p) => s + p.amount, 0n);
+    return vatStep(db, companyId, loadChart(db, companyId), month).postings.filter(
+      (p) => p.dt.account === '521.01',
+    );
   } catch (e) {
     if (e instanceof DomainError) return null;
     throw e;

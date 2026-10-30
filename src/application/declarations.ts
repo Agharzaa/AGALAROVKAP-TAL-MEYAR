@@ -18,7 +18,7 @@ import type {
 } from '../contracts/queries.js';
 import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
-import { plannedVatOffset } from './closing.js';
+import { plannedVatOffset, plannedVatPostings } from './closing.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
 import { profitTaxReturn } from './profit-tax.js';
@@ -89,6 +89,96 @@ interface SaleLine {
   vatRate: string;
   netAzn: string;
   vatAzn: string;
+}
+
+/**
+ * The incoming e-qaimələr behind "Əvəzləşdirilən ƏDV": what the month offset invoice by invoice
+ * (the closing's entries, or its plan in an open month), and the VAT still waiting on 241 at the
+ * month's end with the reason — not confirmed in DVX, or its VAT not paid through the deposit.
+ */
+function offsetLists(
+  db: Db,
+  companyId: string,
+  month: string,
+  closed: boolean,
+): DeclarationTable[] {
+  const offset = new Map<string, bigint>();
+  const add = (document: string, amount: bigint) =>
+    offset.set(document, (offset.get(document) ?? 0n) + amount);
+  if (closed)
+    for (const r of db.all(
+      `SELECT p.kt_s2 AS d, SUM(p.amount) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE p.company_id=? AND e.source_type='closing' AND p.dt_account='521.01' AND p.kt_account='241'
+         AND p.date BETWEEN ? AND ? GROUP BY p.kt_s2`,
+      companyId,
+      `${month}-01`,
+      monthEnd(month),
+    ))
+      add(String(r.d), r.a as bigint);
+  else
+    for (const p of plannedVatPostings(db, companyId, month) ?? []) add(p.kt.sk[1] ?? '', p.amount);
+  // On 241 at the month's end (an open month: less what its closing would offset).
+  const open = new Map<string, bigint>();
+  for (const r of db.all(
+    `SELECT s2, SUM(debit-credit) AS b FROM registers
+     WHERE company_id=? AND account='241' AND month<=? AND s2 LIKE 'invoice:%' GROUP BY s2`,
+    companyId,
+    month,
+  )) {
+    const left = (r.b as bigint) - (closed ? 0n : (offset.get(String(r.s2)) ?? 0n));
+    if (left > 0n) open.set(String(r.s2), left);
+  }
+  const invoice = (document: string) =>
+    db.get(
+      `SELECT i.id, i.number, i.date, i.vat, i.eq_series, i.eq_number, p.name, p.tax_id,
+         (SELECT COUNT(*) FROM eq_documents q WHERE q.company_id=i.company_id AND q.invoice_id=i.id
+            AND q.direction='purchase' AND q.status='accepted') AS confirmed
+       FROM invoices i JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
+       WHERE i.company_id=? AND i.id=?`,
+      companyId,
+      document.slice('invoice:'.length),
+    );
+  const head = (i: NonNullable<ReturnType<typeof invoice>>) => [
+    String(i.number),
+    dmy(String(i.date)),
+    String(i.name),
+    String(i.tax_id),
+    `${String(i.eq_series)}${String(i.eq_number)}`,
+  ];
+  const byDate = (a: string[], b: string[]) =>
+    a[1]!.split('.').reverse().join().localeCompare(b[1]!.split('.').reverse().join()) ||
+    a[0]!.localeCompare(b[0]!);
+  const offsetRows: string[][] = [];
+  for (const [document, amount] of offset) {
+    const i = invoice(document);
+    if (i && amount) offsetRows.push([...head(i), money(i.vat as bigint), money(amount)]);
+  }
+  const waitingRows: string[][] = [];
+  for (const [document, left] of open) {
+    const i = invoice(document);
+    if (!i) continue;
+    const reason = !String(i.eq_number)
+      ? 'e-qaimə bağlanmayıb'
+      : !Number(i.confirmed)
+        ? 'DVX-də təsdiqlənməyib'
+        : 'ƏDV depozitdən ödənilməyib';
+    waitingRows.push([...head(i), money(left), reason]);
+  }
+  const columns = ['Qaimə', 'Tarix', 'Təchizatçı', 'VÖEN', 'E-qaimə'];
+  return [
+    {
+      title: `Əvəzləşdirilən gələn e-qaimələr${closed ? '' : ' (bağlanışın planı)'}`,
+      columns: [...columns, 'Qaimənin ƏDV-si', 'Əvəzləşdirilir'],
+      money: [false, false, false, false, false, true, true],
+      rows: offsetRows.sort(byDate),
+    },
+    {
+      title: 'Əvəzləşdirilməyən — 241-də gözləyir (ayın sonuna)',
+      columns: [...columns, 'Gözləyən ƏDV', 'Səbəb'],
+      money: [false, false, false, false, false, true, false],
+      rows: waitingRows.sort(byDate),
+    },
+  ];
 }
 
 export function vatReturn(db: Db, companyId: string, monthInput: string): DeclarationView {
@@ -259,6 +349,7 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
         text: `${label(rate)}: ${money(rest)} AZN qaiməsiz dövriyyədir (əl ilə əməliyyat) — əlavədə sənədi mühasib göstərir.`,
       });
   }
+  appendices.push(...offsetLists(db, companyId, month, closed));
 
   if (!closed)
     checks.push({
