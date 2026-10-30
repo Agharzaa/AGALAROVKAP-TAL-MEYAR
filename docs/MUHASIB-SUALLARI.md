@@ -1,6 +1,6 @@
 # Mühasib üçün suallar — təsdiq gözləyən qaydalar
 
-Vəziyyət: **0.9.15** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
+Vəziyyət: **0.9.17** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
 
 **Necə istifadə etmək:** cədvəldə hər sətir üçün son sütuna "Təsdiq" və ya "Dəyiş: …" yazın. Ətraflı izah cədvəldən sonradır (eyni nömrə ilə). Meyar hazırda hər yerdə **tövsiyəni** tətbiq edir; "Təsdiq" — heç nə dəyişmir, "Dəyiş" — proqramçı yeni versiyada düzəldir. Rəqəmli misallar MG Transport üçün təxminidir (sürücü maaşı, tır, daşıma xidməti) — qaydanı göstərmək üçün.
 
@@ -15,11 +15,11 @@ Hər qrupda suallar **vaciblik sırası** ilə düzülüb: yuxarıdakılar hər 
 | 2    | ƏDV-li, amma e-qaiməsiz alış qaimələri İş masasında görünsünmü?                | Bəli: "ƏDV-li, e-qaiməsiz alış qaimələri: N" siqnalı (yalnız alış)                                     |                |
 |      | **A1. ƏDV əvəzləşdirilməsi**                                                   |                                                                                                        |                |
 | Ə1 ⚠ | Hansı alışın ƏDV-si ay bağlanışında əvəzləşdirilir?                            | DVX-də təsdiqlənmiş e-qaiməli və ƏDV-si depozitdən ödənilmiş; Dt 521.01 / Kt 241; DVX-dəkindən çox yox |                |
-| Ə2 ⚠ | Fiziki şəxs, xarici kontragent və valyuta qaiməsi                              | Ödənilən hissəyə mütənasib (cari hesabdan ödəniş də sayılır)                                           |                |
+| Ə2 ⚠ | Fərdi sahibkar, xarici kontragent və valyuta qaiməsi                           | Fərdi sahibkar — yalnız depozitdən (0.9.17); xarici və valyuta — ödənilən hissəyə mütənasib            |                |
 | Ə3 ⚠ | Əvəzləşdirilən hesablanandan çox olanda (artıq ƏDV)                            | Bəyannamədə "artıq — növbəti aya keçir"; növbəti ayın "ödənilməli"sindən özü çıxılsın (indi çıxılmır)  |                |
 | Ə4   | İdxal ƏDV-si (gömrükdə ödənilən)                                               | Meyar-da ayrıca qayda yoxdur — mühasib əl ilə Dt 521.01 / Kt 241; sonra "gömrük bəyannaməsi" sənədi    |                |
-| Ə5   | Ödənilməmiş və ya DVX-də təsdiqlənməmiş ƏDV                                    | 241-də qalır, hər sonrakı bağlanışda yenidən yoxlanır, şərtlər ödənən ayda əvəzləşdirilir              |                |
-| Ə6   | Ödəniş sonradan azalanda (qaytarma) əvəzləşdirmənin geri alınması              | Əl ilə: Dt 241 / Kt 521.01                                                                             |                |
+| Ə5   | Nə vaxt: ödənilməmiş və ya DVX-də təsdiqlənməmiş ƏDV                           | E-qaimənin ayı və depozit ödənişinin ayından **sonrakında**; o vaxta qədər 241-də                      |                |
+| Ə6   | Ödəniş azalanda və ya e-qaimə ləğv ediləndə — geri alma                        | Bağlanış özü geri alır (0.9.17): Dt 521.01 / Kt 241 qırmızı                                            |                |
 | Ə7   | VM 175: azad satış olan ayda alış ƏDV-sinin bölgüsü                            | Meyar faizi göstərir, bölgünü mühasib əl ilə yazır (sual 1 ilə birlikdə)                               |                |
 |      | **B. Əmək haqqı**                                                              |                                                                                                        |                |
 | 3 ⚠  | 2026 dərəcələri (gəlir vergisi, DSMF, işsizlik, tibbi sığorta)                 | 3 / 10 / 14%, 200 azad; DSMF 3 / 10% və 22 / 15%; 0,5 + 0,5%; tibbi 2 / 0,5% hər tərəf                 |                |
@@ -87,6 +87,8 @@ Alışın ƏDV-si qaimə uçota alınanda 241-ə (kontragent, qaimə, dərəcə 
 
 Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmişdi; o misalda əvəzləşdirmə yox idi (alışın ƏDV-si e-qaiməsiz idi, 241-də qaldı). Ona görə aşağıdakı qaydaların heç biri hələ mühasib tərəfindən təsdiqlənməyib.
 
+**0.9.17-də dəyişdi** (istifadəçi, 30.10.2026; QERARLAR 2026-10-30): ƏDV ödəyicisi olan fərdi sahibkarın ƏDV-si yalnız depozitdən ödənəndə əvəzləşdirilir (Ə2); ödəniş azalanda (qaytarma, storno) və ya DVX e-qaiməni ləğv edəndə bağlanış əvəzləşdirməni özü geri alır (Ə6); avansla əvvəlcədən depozitdən ödənilmiş ƏDV e-qaimə təsdiqlənən ayda əvəzləşdirilir (Ə5) — testlə yoxlanıb.
+
 ### Ə1. ⚠ Hansı ƏDV əvəzləşdirilir
 
 - **Nə soruşulur:** ay bağlanışında alış qaiməsinin ƏDV-si yalnız iki şərt birlikdə ödənəndə əvəzləşdirilir: (1) qaiməyə bağlanmış e-qaimə DVX-də **təsdiqlənib**; (2) ƏDV hissəsi ay sonuna qədər **ƏDV depozit hesabından (224.04)** ödənilib. Əvəzləşdirilən məbləğ DVX-dəki e-qaimənin ƏDV-sindən çox ola bilməz (qaimədə ƏDV fərqli yazılıbsa, fərq 241-də qalır və bağlanış qeyd yazır). Bu qayda düzgündürmü?
@@ -96,15 +98,15 @@ Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmiş
 - **Alternativlər:** (a) ödənişdən asılı olmayaraq ayın bütün təsdiqlənmiş alış e-qaimələrinin ƏDV-si (mərhələ 5 planının §11 alternativi); (b) e-qaimənin ayında deyil, ödəniş ayında — Meyar elə də edir (Ə5).
 - **Mühasib yoxlasın:** VM 175.1 (əvəzləşdirmənin şərtləri: e-qaimə və ƏDV-nin depozit hesabından ödənilməsi), ƏDV depozit hesabı qaydaları; əvəzləşdirmənin hansı aya düşdüyü (e-qaimənin, yoxsa ödənişin ayı).
 
-### Ə2. ⚠ Fiziki şəxs, xarici kontragent və valyuta qaiməsi
+### Ə2. ⚠ Fərdi sahibkar, xarici kontragent və valyuta qaiməsi
 
-- **Nə soruşulur:** malsatan fiziki şəxsdirsə (kontragentin növü "individual"), xaricidirsə və ya qaimə valyutadadırsa, Meyar depozit ödənişini axtarmır: qaimənin **ödənilən hissəsinə mütənasib** ƏDV əvəzləşdirilir (cari hesabdan ödəniş də sayılır; valyuta qaiməsində valyuta məbləği ilə). E-qaimənin DVX təsdiqi yenə şərtdir. Doğrudurmu?
-- **Niyə vacibdir:** ƏDV ödəyicisi olan fərdi sahibkardan təkər alışı 5 900 ₼ (ƏDV 900); oktyabrda 2 950 cari hesabdan ödənilib → Meyar **450** əvəzləşdirir. Əgər qanun fərdi sahibkara da ƏDV-nin depozitdən ödənilməsini tələb edirsə, bu 450 əvəzləşdirilməməlidir (DVX yoxlamasında sanksiya riski).
-- **Meyar indi:** yuxarıdakı kimi (QERARLAR 2026-10-17 §6: "fiziki şəxs və xarici malsatana cari hesabdan").
-- **Tövsiyə:** mühasib üç halın hər birini ayrıca təsdiqləsin. Fərdi sahibkar ƏDV ödəyicisidirsə — onun üçün də depozit qaydası (Ə1) daha təhlükəsiz görünür.
-- **Alternativlər:** (a) fiziki şəxs üçün də depozit tələb olunsun; (b) xarici kontragent üçün e-qaimə əvəzinə əks-hesablama (aşağıda).
-- **Mənbələrin ziddiyyəti:** xarici malsatan Azərbaycanda e-qaimə vermir, ona görə "DVX-də təsdiqlənmiş e-qaimə" şərti xarici qaimədə praktik olaraq heç vaxt ödənmir — qayda kağız üzərində var, işdə işləmir. Qeyri-rezidentin xidmətinə görə ƏDV (VM 169 — əks-hesablama, ƏDV-ni alıcı özü hesablayır) Meyar-da yoxdur.
-- **Mühasib yoxlasın:** VM 175.1, VM 169 (qeyri-rezidentə ödəniş), ƏDV depozit hesabı qaydası fərdi sahibkarlar üçün; MG Transport-un xarici malsatanları varmı (məs. xaricdə təmir, yanacaq).
+- **Nə soruşulur:** (a) ƏDV ödəyicisi olan **fərdi sahibkar** (kontragentin növü "fiziki şəxs") — 0.9.17-dən hüquqi şəxs kimi: ƏDV yalnız depozitdən ödənəndə əvəzləşdirilir, cari hesabdan ödəniş yalnız ƏDV-siz hissəni bağlayır. (b) **Xarici kontragent** və **valyuta qaiməsi** — depozit axtarılmır, qaimənin ödənilən hissəsinə mütənasib ƏDV əvəzləşdirilir. E-qaimənin DVX təsdiqi hər halda şərtdir. Satışda fiziki şəxs alıcı əvvəlki kimi bütöv məbləği cari hesaba ödəyir (onun depozit hesabı yoxdur). Doğrudurmu?
+- **Niyə vacibdir:** fərdi sahibkardan təkər alışı 5 900 ₼ (ƏDV 900). Bütün 5 900 cari hesabdan ödənilsə — 0.9.17-dən **heç nə əvəzləşdirilmir** (əvvəl 900 əvəzləşdirilirdi), 900 ödənilməmiş ƏDV kimi 241-də və 531-də qalır; 900 depozitdən ödənəndə — 900 əvəzləşdirilir.
+- **Meyar indi (0.9.17):** yuxarıdakı kimi; QERARLAR 2026-10-17 §6-nın "fiziki şəxs malsatana cari hesabdan" hissəsini QERARLAR 2026-10-30 əvəz edir.
+- **Tövsiyə:** fərdi sahibkar üçün təsdiq. Xarici kontragent üçün — VM 169 (əks-hesablama) qaydası ayrıca (sonra), valyuta qaiməsi — mühasib desin.
+- **Alternativlər:** əvvəlki qayda (fərdi sahibkara cari hesabdan ödənilən ƏDV də mütənasib).
+- **Mənbələrin ziddiyyəti:** xarici malsatan Azərbaycanda e-qaimə vermir, ona görə "DVX-də təsdiqlənmiş e-qaimə" şərti xarici qaimədə praktik olaraq heç vaxt ödənmir. Qeyri-rezidentin xidmətinə görə ƏDV (VM 169 — ƏDV-ni alıcı özü hesablayır) Meyar-da yoxdur.
+- **Mühasib yoxlasın:** VM 175.1, VM 169, ƏDV depozit hesabı qaydası fərdi sahibkarlar üçün; MG Transport-un xarici malsatanları varmı (məs. xaricdə təmir, yanacaq).
 
 ### Ə3. ⚠ Artıq ƏDV növbəti aya keçir
 
@@ -124,23 +126,23 @@ Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmiş
 - **Alternativlər:** idxal qaiməsinə "gömrük bəyannaməsi nömrəsi" sahəsi; onunla e-qaimə şərti əvəzlənsin.
 - **Mühasib yoxlasın:** VM 175 (idxal ƏDV-sinin əvəzləşdirilməsi — gömrük orqanına ödəniş sənədi ilə), Gömrük Məcəlləsi; MG Transport-un idxalı olurmu.
 
-### Ə5. Gözləyən ƏDV
+### Ə5. Nə vaxt əvəzləşdirilir — gözləyən ƏDV
 
-- **Nə soruşulur:** şərtlər ödənməyən ƏDV (ödənilməyib və ya e-qaimə təsdiqlənməyib) 241-də qalır. Hər sonrakı bağlanış bütün keçmiş qaimələri yenidən yoxlayır: ödəniş və ya təsdiq gələn ayda əvəzləşdirilir. Bağlanış "N qaimənin ƏDV-si hələ ödənilməyib" qeydi və təsdiqlənməyənlər üçün xəbərdarlıq yazır.
-- **Niyə vacibdir:** sentyabrın təmir e-qaiməsi (ƏDV 540) noyabrda ödənilir → noyabr bağlanışında əvəzləşdirilir. Mühasib onu sentyabrın bəyannaməsində gözləyirsə, rəqəm fərqli olacaq.
-- **Meyar indi:** belə; 241-in qalığı bəyannamədə "Əvəzləşdirilməmiş" sətrindədir.
+- **Nə soruşulur:** ƏDV iki tarixdən **sonrakının** ayında əvəzləşdirilir: e-qaimənin (DVX təsdiqi ilə) ayı və ƏDV-nin depozitdən ödənildiyi ay. O vaxta qədər 241-də qalır; hər sonrakı bağlanış bütün keçmiş qaimələri yenidən yoxlayır. Bağlanış "N qaimənin ƏDV-si hələ ödənilməyib" qeydi və təsdiqlənməyənlər üçün xəbərdarlıq yazır.
+- **Niyə vacibdir:** sentyabrın təmir e-qaiməsi (ƏDV 540) noyabrda ödənilir → **noyabr**. Avans: ƏDV sentyabrda depozitdən əvvəlcədən ödənilib, e-qaimə oktyabrda gəlib → **oktyabr** (0.9.17-də testlə yoxlanıb). Qismən ödəniş — ödənilən hissə həmin ayda, qalanı ödənilən ayda.
+- **Meyar indi:** belə; 241-in qalığı bəyannamədə "Əvəzləşdirilməmiş" sətrində və "241-də gözləyir" siyahısında (səbəbi ilə).
 - **Tövsiyə:** təsdiq.
 - **Alternativlər:** e-qaimənin ayına geri düzəliş (bağlanmış ayı dəyişmək — Meyar-da qadağandır).
-- **Mühasib yoxlasın:** VM 175 — gec ödənilən ƏDV hansı hesabat dövründə əvəzləşdirilir.
+- **Mühasib yoxlasın:** VM 175 — gec ödənilən və avansla ödənilən ƏDV hansı hesabat dövründə əvəzləşdirilir.
 
-### Ə6. Ödəniş azalanda — geri alma
+### Ə6. Ödəniş azalanda və ya e-qaimə ləğv ediləndə — geri alma
 
-- **Nə soruşulur:** əvəzləşdirmədən sonra ödəniş azalarsa (malsatan pulu qaytarır, ödəniş storno olunur, qaimə düzəldilir), Meyar əvəzləşdirməni avtomatik geri almır — mühasib əl ilə **Dt 241 / Kt 521.01** yazır.
-- **Niyə vacibdir:** təmirçi 1 180 ₼ (ƏDV 180) qaytarır → 180 əvəzləşdirilmiş qalır, mühasib unudarsa ƏDV 180 az ödənilir.
-- **Meyar indi:** əl ilə (QERARLAR 2026-10-17 "AUDİTDƏN SONRA" §3). Növbəti bağlanış artıq əvəzləşdirilmiş məbləği bilir və təkrar yazmır.
-- **Tövsiyə:** təsdiq; tez-tez olarsa — bağlanışda "əvəzləşdirilib, amma ödəniş azalıb" xəbərdarlığı (sonra).
-- **Alternativlər:** bağlanış geri almanı özü yazsın.
-- **Mühasib yoxlasın:** VM 175 (qaytarma və qiymət endirimi zamanı əvəzləşdirmənin düzəldilməsi), düzəliş e-qaiməsi.
+- **Nə soruşulur:** 0.9.17-dən əvəzləşdirmədən sonra depozit ödənişi azalanda (malsatan ƏDV-ni depozitə qaytarır, ödəniş sənədi ləğv olunur) və ya DVX e-qaiməni ləğv edəndə növbəti bağlanış əvəzləşdirilmiş ƏDV-ni **özü geri alır**: Dt 521.01 / Kt 241 qırmızı (mənfi məbləğlə), qeyd "əvəzləşdirilmiş ƏDV … geri alınır". Yalnız bağlanışın özünün əvəzləşdirdiyi qədər geri alınır; mühasib əvvəlcədən əl ilə Dt 241 / Kt 521.01 yazıbsa — təkrar geri alınmır. Ödəniş yenə gələndə yenə əvəzləşdirilir.
+- **Niyə vacibdir:** malsatan oktyabrda 450 ₼ ƏDV-ni depozitə qaytarır → oktyabr bağlanışı 450 geri alır, oktyabrın ödənilməli ƏDV-si 450 artır. Əvvəl mühasib bunu unudarsa, ƏDV az ödənilirdi.
+- **Meyar indi (0.9.17):** yuxarıdakı kimi. Qaytarma bank sənədində **qaiməyə bağlanmalıdır** (531-in sətrində qaimə seçilir) — qaiməsiz qaytarma malsatanın borcu kimi qalır və geri alma olmur.
+- **Tövsiyə:** təsdiq.
+- **Alternativlər:** əl ilə (əvvəlki qayda).
+- **Mühasib yoxlasın:** VM 175 (qaytarma, qiymət endirimi və ləğv edilmiş e-qaimə zamanı əvəzləşdirmənin düzəldilməsi), düzəliş e-qaiməsi.
 
 ### Ə7. VM 175 — azad satış olan ayda bölgü
 
@@ -157,7 +159,7 @@ Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmiş
 2. **"Ay ərzində" və "ay sonuna qədər"** — mərhələ 5 planı (§4.3) "ay ərzində ƏDV hissəsi ödənilmiş" deyir, kod isə ay sonuna qədər ödənilmiş hər şeyi (keçmiş aylar daxil) götürür. Plan özü də "ödənilməmiş sonrakı ayın bağlanışında yoxlanır" deyir — kod bu ikinci cümləyə uyğundur. Ə5.
 3. **"Artıq — növbəti aya keçir"** — bəyannamənin sətri belə deyir, amma növbəti ayın "ödənilməli"si onu nəzərə almır. Ə3.
 4. **Xarici malsatan** — qayda "cari hesabdan ödəniş, mütənasib" deyir, amma e-qaimə şərti xarici malsatanda ödənmir; nəticədə xarici alışın ƏDV-si heç vaxt avtomatik əvəzləşdirilmir. Ə2.
-5. **Fiziki şəxs** — QERARLAR "cari hesabdan" deyir; ƏDV ödəyicisi olan fərdi sahibkara ödənişdə depozitin məcburiliyi mənbələrdə yoxlanmayıb. Ə2.
+5. **Fiziki şəxs** — QERARLAR 2026-10-17 "cari hesabdan" deyirdi; 0.9.17-dən (QERARLAR 2026-10-30) ƏDV ödəyicisi olan fərdi sahibkara ƏDV yalnız depozitdən. Mühasib təsdiqləsin. Ə2.
 
 ## B. Əmək haqqı
 

@@ -94,7 +94,8 @@ type Normalized = ReturnType<typeof normalize>;
 
 /**
  * A deposit document pays VAT, a current account the rest; currency invoices as a whole.
- * Individuals and foreign partners have no VAT deposit account: their VAT comes with the rest.
+ * Foreign partners and individual buyers have no VAT deposit account: their VAT comes with the
+ * rest. An individual supplier who charges VAT is a VAT payer: paid it through the deposit.
  */
 const bankPart =
   (n: Normalized) =>
@@ -103,7 +104,7 @@ const bankPart =
       ? 'whole'
       : inFamily(n.holder.account.code, '224')
         ? 'vat'
-        : kind === 'individual' || kind === 'foreign'
+        : kind === 'foreign' || (kind === 'individual' && n.header.direction === 'in')
           ? 'whole'
           : 'net';
 

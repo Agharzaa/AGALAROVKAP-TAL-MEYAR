@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 30.10.2026 (0.9.16). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 30.10.2026 (0.9.17). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -761,6 +761,15 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **ƏDV bəyannaməsinə iki siyahı:** "Əvəzləşdirilən gələn e-qaimələr" (qaimə, tarix, təchizatçı, VÖEN, e-qaimə, qaimənin ƏDV-si, əvəzləşdirilən — bağlanmış ayda bağlanışın Dt 521.01 / Kt 241 yazılışları, açıq ayda bağlanışın planı) və "Əvəzləşdirilməyən — 241-də gözləyir" (ayın sonuna qalan ƏDV və səbəb: e-qaimə bağlanmayıb / DVX-də təsdiqlənməyib / ƏDV depozitdən ödənilməyib). Qayda dəyişməyib: ödənişi (ƏDV — depozitdən) edilmiş və DVX-də təsdiqlənmiş gələn e-qaimələr ay bağlanışında əvəzləşir.
 - `plannedVatPostings` (closing.ts) — bağlanışın ƏDV planı qaimə üzrə.
 - Testlər: `tests/integration/declarations.test.ts` V2 (planla və bağlanışdan sonra siyahı, iki gözləmə səbəbi). `npm run typecheck`, `npm test` 302, `npm run test:ui` 57, `npm run test:perf` keçir. Electron işlədilmədi.
+
+## 0.9.17 — alış ƏDV-sinin əvəzləşdirilməsi: fərdi sahibkar depozitdən, avtomatik geri alma (30.10.2026, QERARLAR 2026-10-30)
+
+İstifadəçi: "o qaydada elə də" (`docs/MUHASIB-SUALLARI.md` Ə1–Ə6; mühasib təsdiq edir).
+
+- **Fərdi sahibkar** (alışda, `individual`): ƏDV yalnız depozitdən — bank ödənişi cari hesabdan ƏDV-siz hissəni bağlayır (`bankPart`), bağlanış depozit ödənişini sayır (`vatStep`). Satışda fiziki şəxs alıcı — bütöv, əvvəlki kimi.
+- **Geri alma** ay bağlanışının ƏDV addımında: depozit ödənişi = Dt 531 / Kt 224 − qaiməyə bağlı qaytarma (Dt 224 / Kt 531); əvəzləşdirilən bundan çox olanda və ya e-qaimə DVX-də artıq təsdiqlənmiş deyilsə — Dt 521.01 / Kt 241 mənfi məbləğlə, dərəcə üzrə, bağlanışın özünün əvəzləşdirdiyi qədər; əl ilə Dt 241 / Kt 521.01 nəzərə alınır. Bəyannamənin siyahısında belə sətir mənfidir.
+- **Avans:** əvvəlcədən depozitdən ödənilmiş ƏDV e-qaimə təsdiqlənən ayda əvəzləşir — dəyişiklik lazım olmadı, test yazıldı.
+- Testlər: `tests/integration/vat-offset.test.ts` (5: fərdi sahibkar, avans, qaytarma və yenidən ödəniş, əl ilə geri alma — təkrar yox, DVX-də ləğv), `closing.test.ts` A3 (fərdi sahibkar depozitdən). `npm run typecheck`, `npm test` 307, `npm run test:ui` 57, `npm run test:perf` (ay bağlanışı: baxış 2,4 s, bağlanış 2,3 s) keçir. Sxem dəyişmir (v24). Electron işlədilmədi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

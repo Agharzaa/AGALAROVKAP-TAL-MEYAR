@@ -262,8 +262,10 @@ test('A3: purchase VAT offset — paid through the deposit 241 → 521.01, unpai
   f.bank('out', '2026-09-10', deposit, [B('531.01', [supplier, c1], '180')]);
   // The second: only the net part paid; its VAT waits on 241.
   f.bank('out', '2026-09-12', bankK, [B('531.01', [other, c2], '2000')]);
-  // The individual pays VAT with the rest: half of 590 paid → half of the VAT, 45.00.
-  f.bank('out', '2026-09-12', bankK, [B('531.01', [person, c3], '295')]);
+  // An individual entrepreneur charging VAT is a VAT payer: VAT only through the deposit (half
+  // of it, 45.00, offset); half of the net from the current account offsets nothing.
+  f.bank('out', '2026-09-12', bankK, [B('531.01', [person, c3], '250')]);
+  f.bank('out', '2026-09-12', deposit, [B('531.01', [person, c3], '45')]);
   // The unconfirmed one is paid in full, VAT included — still no offset without DVX.
   f.bank('out', '2026-09-12', bankK, [B('531.01', [late, c4], '100')]);
   f.bank('out', '2026-09-12', deposit, [B('531.01', [late, c4], '18')]);
