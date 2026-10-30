@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 31.10.2026 (0.9.19). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 31.10.2026 (0.9.20). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -788,6 +788,16 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **Dövr** (`openPeriod`, `src/domain/eqaime.ts`): açıq dövr + əvvəlki 2 ay; bağlanış yoxdursa 1 yanvar, yanvarda 1 dekabr.
 - **Qəpik fərqi** (`pennyApart`, `src/application/eqaime.ts`): mal sətirli e-qaimədə, eyni tarixlə, sətir sayı qədər qəpik — ziddiyyət deyil; saxlanan məbləğ dəyişmir (trigger), başlıq tamamlanır.
 - Testlər: `tests/domain/dvx-export.test.ts` (dövr), `tests/integration/eqaime-bank-audit.test.ts` (qəpik fərqi; 10 qəpik / 2 sətir — ziddiyyət). `npm run typecheck`, `npm test` 312, `npm run test:ui` 58, `npm run test:perf` (e-qaimə yükü 2,8 s) keçir. Electron işlədilmədi.
+
+## 0.9.20 — bank çıxarışı: real PAŞA Bank faylları ilə (31.10.2026, QERARLAR 2026-10-31 §3)
+
+İstifadəçi MG Transport-un oktyabr faylları ilə "bazanı yığaq, görək necə edəcəksən" dedi: DVX gələn / göndərilən "Qaimələr üzrə", PAŞA Bank AZN və USD çıxarışları, əmək haqqı reyestrləri (PDF). Hamısı əsl bazanın `VACUUM INTO` surətinə yükləndi (əsl bazaya toxunulmadı; skriptlər scratchpad-dadır, real məlumat repoya düşmür).
+
+- **Tapılan qüsurlar (düzəldilib):** "DÖVRÜN SONUNA BALANS" sətri 715 198,55 AZN (USD — 237 700) daxilolma kimi oxunurdu, əvvələ / sona qalıq oxunmurdu; "Ödəyən/Benefisiar" xanası IBAN + ad + ünvan idi (yeni kontragentlərin adı zibilli); "/AZ…" öz hesabı tanınmırdı; bank komissiyaları, kredit faizi, nağdlaşdırma, əmək haqqı layihəsi, valyuta alışı tanınmırdı ("Charge for Salary…" 533-ə, "Fee for Loan…" və faiz 501-ə düşürdü).
+- **Nəticə (oktyabr):** bank — 213 sətir, tanınmayan 96 → 19 (14-ü xarici daşıyıcıya SWIFT: kontragent yaradılıb qayda öyrədilməlidir), bir kliklə uçota alınan 127; qalanı subkonto (kredit müqaviləsi, USD məzənnəsi AMB-dən, yeni kontragent) istəyir. Satış e-qaimələri — 136 yükləndi, "Kontragentləri yarat" + "Toplu uyğunluq → Daşıma xidmətləri" + "Avtomatik keçir" ilə DVX-də təsdiqlənmiş 83-dən 82-si uçota alındı (511 090,70); 51-i təsdiq gözləyir. Alış — 21, 19-u uçotda.
+- **Əmək haqqı:** reyestrlərdən 13 işçi, oktyabr tabeli (5 günlük həftə, istehsalat təqvimi: 22 gün × 8 saat), əmək haqqı / avans ödənişləri işçilər üzrə bölünüb (4 bank sənədi). Müqavilə maaşı, işə qəbul tarixi, FİN, xərc hesabı reyestrdə yoxdur — istifadəçidən.
+- Kod: `src/domain/statement.ts` (`splitCounterparty`, balans sətirləri, "İstinad", yeni növlər `interest`, `expense`, `ownIbans`), `src/application/statements.ts` (bankın kontragenti 501 / 751 / 222.02 / 222.04-də). Testlər: `tests/domain/domain.test.ts` (2 test, uydurma məlumatla). `npm run typecheck`, `npm test` 314, `npm run test:ui` 58, `npm run test:perf` keçir.
+- **Diqqət:** çıxarış sətrinin barmaq izi sənəd nömrəsini də tutur — "İstinad No" indi oxunduğu üçün PAŞA Bank faylı əvvəlki versiya ilə yüklənibsə, yenidən yükləmə təkrar yarada bilər (MG Transport-un əsl bazasında çıxarış yox idi).
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

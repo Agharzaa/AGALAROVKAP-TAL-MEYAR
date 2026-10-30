@@ -23,6 +23,8 @@ export type PaymentKind =
   | 'salary'
   | 'transfer'
   | 'fee'
+  | 'interest'
+  | 'expense'
   | 'other';
 /** 521 and 522 are groups: tax and social proposals name the group and ask for the sub-account. */
 const roles = {
@@ -75,7 +77,8 @@ type Column =
   | 'counterparty'
   | 'counterpartyIban'
   | 'taxId'
-  | 'purpose';
+  | 'purpose'
+  | 'balance';
 
 /** Header words per column, compared after `searchKey` folding (i/ı/İ alike, lower case). */
 const headerWords: Record<Column, string[]> = {
@@ -115,6 +118,7 @@ const headerWords: Record<Column, string[]> = {
     'номер',
     'sənəd nömrəsi',
     'ref',
+    'istinad',
   ],
   counterparty: [
     'kontragent',
@@ -153,6 +157,8 @@ const headerWords: Record<Column, string[]> = {
     'izah',
     'description',
   ],
+  // The running balance after each operation; balance rows of the statement print it here.
+  balance: ['balans', 'qalıq', 'balance', 'остаток'],
 };
 
 function matchColumn(cell: string): Column | undefined {
@@ -271,6 +277,55 @@ export function findIban(text: string): string | undefined {
   return IBAN.exec(text.toUpperCase().replace(/[\s-]/g, ''))?.[0];
 }
 
+/** Any country's IBAN as a whole word ("/TR42…" of a SWIFT payment too). */
+const ANY_IBAN = /^\/?([A-Z]{2}\d{2}[A-Z0-9]{11,30})$/;
+
+/**
+ * The counterparty cell as banks print it in one cell, line by line ("AZ70AIIB…\rHAMZAYEV AKRAM
+ * HUSEYN OGLU\r", "/AZ05PAHA…\rMG TRANSPORT LLC\rSABAIL DIST…", "RHENUS LOGISTICS LLC~AZ06…~TIN:"):
+ * the account, the name (the first line that is neither an account nor a VÖEN; the address
+ * after it is dropped) and a VÖEN. A cell of one line is the name as it is.
+ */
+export function splitCounterparty(text: string): { name: string; iban: string; taxId: string } {
+  const parts = text
+    .split(/[\r\n~]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return { name: text.trim(), iban: '', taxId: '' };
+  let name = '';
+  let iban = '';
+  let taxId = '';
+  for (const part of parts) {
+    const account = ANY_IBAN.exec(part.toUpperCase().replace(/\s/g, ''));
+    if (account) {
+      iban ||= account[1]!;
+      continue;
+    }
+    // A foreign account number without IBAN ("/15966727700019") is not a name either.
+    if (/^\/\d{6,34}$/.test(part.replace(/\s/g, ''))) continue;
+    const tin = /^(?:TIN|VÖEN|VOEN)?:?\s*(\d{10})?$/i.exec(part);
+    if (tin) {
+      if (tin[1] && !/^0+$/.test(tin[1])) taxId ||= tin[1];
+      continue;
+    }
+    if (!name) name = part.replace(/\s+/g, ' ');
+  }
+  return { name: name || text.trim(), iban, taxId };
+}
+
+/**
+ * A balance row inside the table ("DÖVRÜN ƏVVƏLİNƏ BALANS AZN", "DÖVRÜN SONUNA BALANS AZN",
+ * "MÖVCUD BALANS AZN" — PAŞA Bank): dated like an operation, but not one. Its money columns are
+ * the period's turnover; the balance is in the "Balans" column.
+ */
+const balanceRowLabel = new RegExp(
+  searchKey(
+    '(dövrün|dovrun)\\s+(əvvəlinə|evveline|sonuna)\\s+(balans|qalıq|qaliq)|(mövcud|movcud)\\s+(balans|qalıq|qaliq)|(opening|closing|available)\\s+balance',
+  ),
+);
+const balanceRowOpening = new RegExp(searchKey('əvvəlinə|evveline|opening'));
+const balanceRowClosing = new RegExp(searchKey('sonuna|closing'));
+
 // Labels are matched in `searchKey` form (lower case, ı and İ as i), like the cells.
 const label = (source: string) => new RegExp(searchKey(source));
 const openingLabel = label(
@@ -312,6 +367,7 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
   for (const [column, index] of map) columns[column] = rows[header.index]![index] ?? '';
   const lines: StatementLine[] = [];
   const problems: StatementReadResult['problems'] = [];
+  const balances: { opening?: string; closing?: string } = {};
   /** Rows outside the table body: the title block above it and the totals below it. */
   const around: (readonly string[])[] = rows.slice(0, header.index);
   for (let r = header.index + 1; r < rows.length; r++) {
@@ -319,6 +375,16 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
     if (row.every((c) => !String(c ?? '').trim())) continue;
     const rawDate = cell(row, map.get('date'));
     const date = readStatementDate(rawDate);
+    const rowText = searchKey(row.join(' '));
+    if (date && balanceRowLabel.test(rowText)) {
+      // Not an operation: the opening / closing balance (the first of each — a currency
+      // statement prints an AZN line after its own).
+      const value = readStatementAmount(cell(row, map.get('balance')));
+      const amount = value ? formatMinor(value.negative ? -value.amount : value.amount) : undefined;
+      if (amount !== undefined && balanceRowOpening.test(rowText)) balances.opening ??= amount;
+      else if (amount !== undefined && balanceRowClosing.test(rowText)) balances.closing ??= amount;
+      continue;
+    }
     if (!date) {
       // Totals, balances and page footers ("Cəmi", "Qalıq") have no date; they are not operations.
       around.push(row);
@@ -349,18 +415,20 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
       continue;
     }
     const taxId = (/\b\d{10}\b/.exec(cell(row, map.get('taxId'))) ?? [''])[0];
+    const party = splitCounterparty(cell(row, map.get('counterparty')));
     lines.push({
       row: r + 1,
       date,
       direction,
       amount: formatMinor(amount),
       reference: cell(row, map.get('reference')).slice(0, 80),
-      counterparty: cell(row, map.get('counterparty')).slice(0, 240),
+      counterparty: party.name.slice(0, 240),
       counterpartyTaxId:
         taxId ||
+        party.taxId ||
         (/\b(?:VÖEN|VOEN)[:\s]*(\d{10})\b/i.exec(cell(row, map.get('purpose')))?.[1] ?? ''),
-      counterpartyIban: findIban(cell(row, map.get('counterpartyIban'))) ?? '',
-      purpose: cell(row, map.get('purpose')).slice(0, 500),
+      counterpartyIban: findIban(cell(row, map.get('counterpartyIban'))) ?? party.iban,
+      purpose: cell(row, map.get('purpose')).replace(/\s+/g, ' ').trim().slice(0, 500),
     });
   }
   const result: StatementReadResult = { lines, problems, columns };
@@ -370,8 +438,8 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
     .map((row) => findIban(row.join(' ')))
     .find(Boolean);
   if (iban) result.iban = iban;
-  let opening: string | undefined;
-  let closing: string | undefined;
+  let opening: string | undefined = balances.opening;
+  let closing: string | undefined = balances.closing;
   for (const row of around) {
     opening ??= balanceIn(row, openingLabel);
     closing ??= balanceIn(row, closingLabel);
@@ -459,15 +527,21 @@ export interface ClassifyContext {
   partnersByName: ReadonlyMap<string, { id: string; name: string }>;
   /** Expense item for bank charges ("Bank xidmətləri"), when the company has one. */
   bankFeeItemId?: string;
+  /** The company's own bank accounts: a payment to or from one is a transfer between them. */
+  ownIbans?: ReadonlySet<string>;
+  /** The statement's account currency (AZN: buying currency is money out). */
+  bankCurrency?: string;
 }
 
 const has = (text: string, ...words: string[]) => words.some((w) => text.includes(searchKey(w)));
 
 export function classifyStatementLine(
-  line: Pick<StatementLine, 'direction' | 'counterparty' | 'counterpartyTaxId' | 'purpose'>,
+  line: Pick<StatementLine, 'direction' | 'counterparty' | 'counterpartyTaxId' | 'purpose'> &
+    Partial<Pick<StatementLine, 'counterpartyIban'>>,
   ctx: ClassifyContext,
 ): StatementSuggestion {
   const purpose = searchKey(`${line.purpose} ${line.counterparty}`);
+  const text = searchKey(line.purpose);
   const out = line.direction === 'out';
   const byTax = line.counterpartyTaxId
     ? ctx.partnersByTaxId.get(line.counterpartyTaxId)
@@ -475,8 +549,82 @@ export function classifyStatementLine(
   const byName = !byTax ? ctx.partnersByName.get(searchKey(line.counterparty.trim())) : undefined;
   const partner = byTax ?? byName;
   const withPartner = partner ? { partnerId: partner.id } : {};
+  const ownAccount = !!line.counterpartyIban && !!ctx.ownIbans?.has(line.counterpartyIban);
+  const ownCompany =
+    ownAccount || (!!line.counterpartyTaxId && line.counterpartyTaxId === ctx.companyTaxId);
 
-  if (line.counterpartyTaxId && line.counterpartyTaxId === ctx.companyTaxId)
+  // The bank's own charges ("Charge for Outgoing XOHKS Payment", "Fee for Loan Disbursement").
+  if (out && /^(charge for|fee for|commission for)\b/.test(text))
+    return {
+      kind: 'fee',
+      counterAccount: roles.adminExpenses,
+      ...(ctx.bankFeeItemId ? { expenseItemId: ctx.bankFeeItemId } : {}),
+      confidence: ctx.bankFeeItemId ? 'high' : 'medium',
+      reason: ctx.bankFeeItemId
+        ? 'Bank komissiyası (721, Bank xidmətləri).'
+        : 'Bank komissiyası — xərc maddəsini seçin (721).',
+    };
+  // The tax a bank holds on a cash withdrawal (1%): an expense, not a bank charge.
+  if (out && has(text, 'tax payment for cash withdrawal', 'nağdlaşdırma vergisi', 'nagdlasdirma'))
+    return {
+      kind: 'expense',
+      counterAccount: '731',
+      confidence: 'medium',
+      reason:
+        'Nağd pul çıxarılmasından tutulan vergi (1%) — 731, sair xərc; gəlirdən çıxılıb-çıxılmadığını mühasib yoxlasın.',
+    };
+  if (out && has(text, 'interest payment', 'faiz ödən', 'faizin ödən', 'kredit faiz', 'faiz oden'))
+    return {
+      kind: 'interest',
+      counterAccount: '751',
+      confidence: 'medium',
+      reason:
+        'Kredit faizinin ödənilməsi (751, maliyyə xərcləri) — bankı və kredit müqaviləsini seçin.',
+    };
+  // A salary project: the bank takes the whole payroll from the company's own account.
+  if (out && ownCompany && has(text, 'salary', 'əmək haqq', 'emek haqq', 'maaş', 'maas'))
+    return {
+      kind: 'salary',
+      counterAccount: roles.payroll,
+      confidence: 'high',
+      reason: 'Əmək haqqının ödənilməsi (533, əmək haqqı layihəsi).',
+    };
+  if (
+    ownCompany &&
+    has(
+      text,
+      'currency exchange',
+      'konvertasiya',
+      'konversiya',
+      'valyuta mübadil',
+      'valyutanın alın',
+      'valyutanın satıl',
+    )
+  ) {
+    // Buying currency: AZN goes out, the currency comes in (222.02); selling — the other way.
+    const buying = (ctx.bankCurrency ?? 'AZN') === 'AZN' ? out : !out;
+    return {
+      kind: 'transfer',
+      counterAccount: buying ? '222.02' : '222.04',
+      confidence: 'high',
+      reason: buying
+        ? 'Xarici valyutanın alınması öz hesabları arasında (222.02).'
+        : 'Xarici valyutanın satılması öz hesabları arasında (222.04).',
+    };
+  }
+  // Cash taken out of the account (to the cashbox through 222.01, QERARLAR 2026-10-17 §3).
+  if (
+    out &&
+    has(text, 'cash withdrawal', 'hesabdan məxaric', 'hesabdan mexaric', 'nağd pul', 'nagd pul')
+  )
+    return {
+      kind: 'transfer',
+      counterAccount: roles.transit,
+      confidence: 'medium',
+      reason: 'Hesabdan nağd pul çıxarılması (222.01 → kassa mədaxili).',
+    };
+
+  if (ownCompany)
     return {
       kind: 'transfer',
       counterAccount: roles.transit,
@@ -533,17 +681,19 @@ export function classifyStatementLine(
     };
   // "ƏDV daxil" or "vergi hesab-fakturası" in a supplier payment is not a tax payment, so purpose
   // words count only when the counterparty is not a known partner; the Treasury always counts.
-  const budget = has(
-    searchKey(line.counterparty),
-    'xəzinə',
-    'xezine',
-    'dövlət vergi',
-    'dovlet vergi',
-    'dvx',
-    'büdcə',
-    'budce',
-    'казначейство',
-  );
+  const budget =
+    has(
+      searchKey(line.counterparty),
+      'xəzinə',
+      'xezine',
+      'dövlət vergi',
+      'dovlet vergi',
+      'dvx',
+      'büdcə',
+      'budce',
+      'казначейство',
+    ) ||
+    (out && has(text, 'dövlət vergi xidməti', 'dovlet vergi xidmeti'));
   const taxWords = has(
     purpose,
     'vergi ödən',

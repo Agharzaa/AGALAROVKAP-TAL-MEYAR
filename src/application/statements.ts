@@ -120,7 +120,9 @@ export function importStatement(tx: Tx, cmd: CommandOf<'statement.import'>): Com
         reference,
         counterparty: parseText(l.counterparty, 'Kontragent', 240, false),
         counterpartyTaxId: taxId,
-        counterpartyIban: findIban(l.counterpartyIban) ?? '',
+        counterpartyIban:
+          findIban(l.counterpartyIban) ??
+          (/^[A-Z]{2}d{2}[A-Z0-9]{11,30}$/.test(l.counterpartyIban) ? l.counterpartyIban : ''),
         purpose,
         fingerprint: createHash('sha256').update(`${base}|${n}`).digest('hex').slice(0, 40),
       });
@@ -375,6 +377,8 @@ interface ProposalContext extends ClassifyContext {
   db: Db;
   companyId: string;
   bankCurrency: string;
+  /** The bank of the statement's account: the other side of its loans, interest and currency deals. */
+  bankPartnerId: string;
   closedThrough: string;
   /** Unlinked posted bank documents of the account, for matching rows typed by hand. */
   manual: Row[];
@@ -451,6 +455,7 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     companyTaxId: String(company.tax_id),
     closedThrough: String(company.closed_through),
     bankCurrency: String(bank.currency),
+    bankPartnerId: String(bank.bank_id ?? ''),
     partnersByTaxId: new Map(
       partners
         .filter((p) => p.tax_id)
@@ -464,6 +469,11 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     ),
     ...(fee ? { bankFeeItemId: String(fee.id) } : {}),
     ...(capital ? { capitalIn: String(capital.id) } : {}),
+    ownIbans: new Set(
+      db
+        .all("SELECT iban FROM bank_accounts WHERE company_id=? AND iban<>''", companyId)
+        .map((b) => String(b.iban)),
+    ),
     rules: activeRules(db, companyId),
     budget: new Map(
       db
@@ -549,6 +559,7 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       direction,
       counterparty: String(r.counterparty),
       counterpartyTaxId: String(r.counterparty_tax_id),
+      counterpartyIban: String(r.counterparty_iban),
       purpose: String(r.purpose),
     },
     ctx,
@@ -573,9 +584,13 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       sk = p ? [p, ctx.capitalIn ?? ''] : [];
       break;
     case 'loan':
-      account = '501';
-      sk = p ? [p, onlyContract(ctx, p, 'loan')] : [];
+    case 'interest': {
+      // The loan and its interest are the bank's own (the statement names no other partner).
+      account = s.kind === 'loan' ? '501' : (s.counterAccount ?? '751');
+      const lender = p || ctx.bankPartnerId;
+      sk = lender ? [lender, onlyContract(ctx, lender, 'loan')] : [];
       break;
+    }
     case 'salary': {
       account = '533';
       const e = employeeOf(ctx, r);
@@ -594,7 +609,14 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
       break;
     }
     case 'transfer':
-      account = '222.01';
+      account = s.counterAccount ?? '222.01';
+      // Buying or selling currency is a deal with the bank of the account.
+      if ((account === '222.02' || account === '222.04') && ctx.bankPartnerId)
+        sk = [ctx.bankPartnerId];
+      break;
+    // Other expenses the statement names (731: the expense item is the accountant's).
+    case 'expense':
+      account = s.counterAccount ?? '';
       break;
     case 'fee':
       account = '721';

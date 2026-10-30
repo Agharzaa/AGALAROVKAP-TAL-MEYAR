@@ -504,3 +504,140 @@ test('rules: of two equal rules booking alike, "suggest" wins over "auto"', () =
     assert.equal(choice.kind === 'rule' && choice.rule.id, 's');
   }
 });
+
+// The layout of a PAŞA Bank statement (2026-10-31); names, accounts and VÖENs are made up.
+const OWN_AZN = 'AZ11PAHA00000AZNHC0000000001';
+const OWN_USD = 'AZ22PAHA00000USDHC0000000002';
+
+test('2026-10-31: a bank statement with balance rows and the counterparty in one cell', async () => {
+  const { splitCounterparty } = await import('../../src/domain/statement.js');
+  const header = ['Əməliyyat tarixi', 'İcra tarixi', 'Ödəyən/Benefisiar', 'Təyinat'];
+  const rows = [
+    ['HESAB ÜZRƏ ÇIXARIŞ', '', '', '', 'NÜMUNƏ LLC'],
+    ['IBAN: ', OWN_AZN, '', '', 'VÖEN: 1234567890'],
+    [...header, 'İstinad No', 'VÖEN', 'Mədaxil', 'Məxaric', 'Balans'],
+    ['01.10.2026', '', 'DÖVRÜN ƏVVƏLİNƏ BALANS AZN', '', '', '', '', '', '1000.00'],
+    ['01.10.2026', '', 'MÖVCUD BALANS AZN', '', '', '', '', '', '400.00'],
+    [
+      '01.10.2026',
+      '01.10.2026',
+      'AZ33TEST00000000000000000003\rALICI MMC\r',
+      'Incoming payment',
+      'R1',
+      '1700000001',
+      '850.0',
+      '',
+      '1850.00',
+    ],
+    [
+      '01.10.2026',
+      '01.10.2026',
+      'AZ44TEST00000000000000000004\rKİRAYƏVERƏN ŞƏXS\r0000000000',
+      'Outgoing payment',
+      'R2',
+      '',
+      '',
+      '150.0',
+      '1700.00',
+    ],
+    [
+      '02.10.2026',
+      '02.10.2026',
+      `/${OWN_USD}\rNÜMUNƏ LLC\rBAKI`,
+      'Currency exchange (SPOT) USD/AZN 1.7010',
+      'R3',
+      '',
+      '',
+      '1700.00',
+      '0.00',
+    ],
+    ['31.10.2026', '', 'DÖVRÜN SONUNA BALANS AZN', '', '', '', '850.0', '1850.00', '0.00'],
+    ['31.10.2026', '', 'MÖVCUD BALANS AZN', '', '', '', '', '', '0.00'],
+  ];
+  const r = readStatementTable(rows);
+  // The balance rows are not operations: the opening and closing balance come from "Balans".
+  assert.equal(r.lines.length, 3);
+  assert.deepEqual([r.opening, r.closing], ['1000.00', '0.00']);
+  assert.equal(statementAddsUp(r), true);
+  assert.deepEqual(
+    r.lines.map((l) => [l.counterparty, l.counterpartyIban, l.counterpartyTaxId, l.reference]),
+    [
+      ['ALICI MMC', 'AZ33TEST00000000000000000003', '1700000001', 'R1'],
+      ['KİRAYƏVERƏN ŞƏXS', 'AZ44TEST00000000000000000004', '', 'R2'],
+      ['NÜMUNƏ LLC', OWN_USD, '', 'R3'],
+    ],
+  );
+  assert.deepEqual(splitCounterparty('XARICI LOGISTICS LLC~AZ55TEST00000000000000000005~TIN:'), {
+    name: 'XARICI LOGISTICS LLC',
+    iban: 'AZ55TEST00000000000000000005',
+    taxId: '',
+  });
+  assert.deepEqual(splitCounterparty('/TR000000000000000000000001\rXARİCİ DAŞIYICI\rÜNVAN'), {
+    name: 'XARİCİ DAŞIYICI',
+    iban: 'TR000000000000000000000001',
+    taxId: '',
+  });
+});
+
+test('2026-10-31: the bank’s own lines, the salary project and currency between own accounts', async () => {
+  const { classifyStatementLine } = await import('../../src/domain/statement.js');
+  const ctx = {
+    companyTaxId: '1234567890',
+    partnersByTaxId: new Map(),
+    partnersByName: new Map(),
+    bankFeeItemId: 'fee',
+    ownIbans: new Set([OWN_AZN, OWN_USD]),
+    bankCurrency: 'AZN',
+  };
+  const s = (
+    direction: 'in' | 'out',
+    purpose: string,
+    counterparty = 'Pasha Bank',
+    extra: { counterpartyTaxId?: string; counterpartyIban?: string } = {},
+    c = ctx,
+  ) => {
+    const x = classifyStatementLine(
+      { direction, purpose, counterparty, counterpartyTaxId: '', ...extra },
+      c,
+    );
+    return [x.kind, x.counterAccount ?? ''];
+  };
+  assert.deepEqual(s('out', 'Charge for Outgoing XOHKS Payment'), ['fee', '721']);
+  assert.deepEqual(s('out', 'Charge for Salary and other Payments: SALARY AMOUNT TRANSFER'), [
+    'fee',
+    '721',
+  ]);
+  assert.deepEqual(s('out', 'Fee for Loan Disbursement DCL0001'), ['fee', '721']);
+  assert.deepEqual(s('out', 'Interest Payment of the Loan K0001 15.50%'), ['interest', '751']);
+  assert.deepEqual(s('out', 'Loan Payment K0001'), ['loan', '501']);
+  assert.deepEqual(s('out', '1% Tax payment for cash withdrawal'), ['expense', '731']);
+  assert.deepEqual(s('out', 'HESABDAN MƏXARİC- DİGƏR'), ['transfer', '222.01']);
+  assert.deepEqual(s('out', 'Internal payment DOVLET VERGI XIDMETI', 'PAHAAZ22XXX'), [
+    'tax',
+    '521',
+  ]);
+  assert.deepEqual(
+    s('out', 'Salary and other Payments: SALARY AMOUNT TRANSFER', 'NÜMUNƏ LLC', {
+      counterpartyTaxId: '1234567890',
+    }),
+    ['salary', '533'],
+  );
+  // Buying currency: AZN goes out to the own USD account, USD comes in from the own AZN one.
+  assert.deepEqual(
+    s('out', 'Currency exchange (SPOT) USD/AZN', 'NÜMUNƏ LLC', { counterpartyIban: OWN_USD }),
+    ['transfer', '222.02'],
+  );
+  assert.deepEqual(
+    s(
+      'in',
+      'Currency exchange (SPOT)',
+      'NÜMUNƏ LLC',
+      { counterpartyIban: OWN_AZN },
+      {
+        ...ctx,
+        bankCurrency: 'USD',
+      },
+    ),
+    ['transfer', '222.02'],
+  );
+});
