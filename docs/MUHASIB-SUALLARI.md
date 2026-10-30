@@ -1,6 +1,6 @@
 # Mühasib üçün suallar — təsdiq gözləyən qaydalar
 
-Vəziyyət: **0.9.15** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
+Vəziyyət: **0.9.15** (30.10.2026). Bu sənəd auditlərin açıq suallarını və "mühasib təsdiq edir" qeydi olan qaydaları bir yerə yığır. Mənbələr: `PROJECT_STATE.md` ("Mərhələ 8 auditi", "Mərhələ 9 auditi", "E-qaimə və bank auditi", "Mərhələ 10 auditi"), `docs/QERARLAR.md` (2026-10-17, 2026-10-27, 2026-10-28, 2026-10-29), `docs/MERHELE-5-AY-BAGLANISI.md`, `docs/MERHELE-8-EMEK-HAQQI.md`, `docs/MERHELE-9-VERGI-BEYANNAMELERI.md`, `docs/MERHELE-10-MALIYYE-HESABATLARI.md`.
 
 **Necə istifadə etmək:** cədvəldə hər sətir üçün son sütuna "Təsdiq" və ya "Dəyiş: …" yazın. Ətraflı izah cədvəldən sonradır (eyni nömrə ilə). Meyar hazırda hər yerdə **tövsiyəni** tətbiq edir; "Təsdiq" — heç nə dəyişmir, "Dəyiş" — proqramçı yeni versiyada düzəldir. Rəqəmli misallar MG Transport üçün təxminidir (sürücü maaşı, tır, daşıma xidməti) — qaydanı göstərmək üçün.
 
@@ -8,48 +8,56 @@ Hər qrupda suallar **vaciblik sırası** ilə düzülüb: yuxarıdakılar hər 
 
 ## Cədvəl
 
-| №    | Sual                                                                           | Tövsiyə (Meyar indi belə edir)                                                                    | Təsdiq / Dəyiş |
-| ---- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------- |
-|      | **A. ƏDV**                                                                     |                                                                                                   |                |
-| 1    | VM 175 (mütənasib bölgü) xəbərdarlığı hansı satışlarda çıxsın?                 | Azad **və cəlb olunmayan** satışda xəbərdarlıq; 0% əvəzləşdirməni məhdudlaşdırmır                 |                |
-| 2    | ƏDV-li, amma e-qaiməsiz alış qaimələri İş masasında görünsünmü?                | Bəli: "ƏDV-li, e-qaiməsiz alış qaimələri: N" siqnalı (yalnız alış)                                |                |
-|      | **B. Əmək haqqı**                                                              |                                                                                                   |                |
-| 3 ⚠  | 2026 dərəcələri (gəlir vergisi, DSMF, işsizlik, tibbi sığorta)                 | 3 / 10 / 14%, 200 azad; DSMF 3 / 10% və 22 / 15%; 0,5 + 0,5%; tibbi 2 / 0,5% hər tərəf            |                |
-| 4 ⚠  | 8 000 ₼-dan yuxarı gəlirdə işəgötürənin DSMF payı                              | 11% (DVX-nin 2026 flayeri)                                                                        |                |
-| 5 ⚠  | 200 ₼ azad məbləğ ilə şəxsi güzəşt (400 / 200 / 100) birlikdə tətbiq olunurmu? | Xeyr — ən böyüyü; əlavə 50 ₼ (102.5) üstəlik                                                      |                |
-| 6    | Artıq iş, bayram günü işi və gecə saatlarının əmsalları                        | Artıq iş × 2, bayram / istirahət günü × 2, gecə + 40%                                             |                |
-| 7    | 2026 istehsalat təqvimi                                                        | NK-nin 362 saylı qərarı: 241 gün, 1 922 saat; qısaldılmış gün yalnız B.e.–C.                      |                |
-| 8    | Məzuniyyətin orta qazancı                                                      | 12 ay / ay sayı / 30,4; məzuniyyət, ödənişsiz, xəstəlik günü olan aylar çıxılır                   |                |
-| 9    | Xəstəlik vərəqəsi                                                              | 4 rüb / təqvim günləri × staj faizi; 14 gün işəgötürən; 25 × minimum pensiya həddi tətbiq olunmur |                |
-| 10   | Ayın ortasında dəyişən maaş                                                    | Günlərə (tabeldə saatlara) görə; əlavələr ayın sonundakı maaşla                                   |                |
-| 11   | Muzdlu iş bəyannaməsində "işçi sayı"                                           | Ayın əmək haqqında sətri olan hər işçi (yalnız xəstəlik müavinəti olan da)                        |                |
-| 12   | Bankda bir ödənişlə bütün işçilərə maaş (reyestr)                              | Məbləğ işçilərin 533 borclarının cəminə tam bərabərdirsə — işçilər üzrə bölünür                   |                |
-|      | **C. Vergi amortizasiyası və mənfəət vergisi**                                 |                                                                                                   |                |
-| 13 ⚠ | Mənfəət vergisinin hesablanması və 20% dərəcə                                  | 20%; dekabr bağlanışında Dt 901 / Kt 521.04                                                       |                |
-| 14 ⚠ | VM 114 normaları və metod                                                      | Nəqliyyat 25%, hesablama texnikası 25%, maşın 20%, bina 7%, digər 20%; vəsait üzrə azalan qalıq   |                |
-| 15 ⚠ | İl ərzində alınan / satılan vəsait                                             | Alınan — tam il; satılan / silinən — həmin il amortizasiya yox, vergi qalıq dəyəri çıxılır        |                |
-| 16   | Meyar-dan əvvəlki illərin zərəri                                               | Yarandığı il ilə bir dəfə yazılsın, Meyar 5 il özü istifadə etsin (indi hər il əl ilə)            |                |
-| 17   | 521.04-ə ödənişin hansı ilə aid olduğu                                         | Əvvəl keçən ilin borcu bağlanır, sonra bu ilin avansı                                             |                |
-| 18   | Kateqoriyanın qalığı 100 ₼-dan az olanda                                       | Tamamilə gəlirdən çıxılır (parametr)                                                              |                |
-| 19   | Mikro / kiçik sahibkar əmsalı (2 / 1,5)                                        | Şirkət parametri, standart 1                                                                      |                |
-| 20   | Vergi amortizasiyasının yuvarlaqlaşdırılması                                   | Vəsait üzrə; bəyannamədə kateqoriyanın cəmi                                                       |                |
-| 21   | Qeyri-maddi aktivin amortizasiyası (VM 116)                                    | İndi xərc kimi gəlirdən çıxılır; VM 116 qaydası — sonra                                           |                |
-|      | **D. İllik maliyyə hesabatları**                                               |                                                                                                   |                |
-| 22 ⚠ | Plan §8 misalının qəpikbəqəpik yoxlanması                                      | Mühasib misalı əl ilə hesablayıb Meyar-ın rəqəmləri ilə tutuşdursun                               |                |
-| 23   | Açılmış qalıqlar: alıcının Kt qalığı, malsatanın Dt qalığı hansı sətrə?        | Alıcının avansı → 54, malsatana artıq ödəniş → 24                                                 |                |
-| 24   | Pul hərəkəti: faiz və 521.03 / 522 ödənişləri hansı sətirdə?                   | Faiz — əməliyyat; 521.03 / 522 — "işçilərin mükafatlandırılması"                                  |                |
-| 25   | 343 / 341-dən birbaşa pul ödənişi — dividend?                                  | Dividend yalnız 534 / 344 üzrə; 343 / 341 ↔ pul — "digər ödənişlər"                               |                |
-| 26   | Ödənilməmiş nizamnamə kapitalı (301 ↔ 217)                                     | İndi 30-da elan edilmiş kapital, borc 21-də; lazım olsa 30-dan çıxılsın                           |                |
-| 27   | Əl ilə yazılan kurs fərqi (valyuta satışı) pul hərəkətində                     | "Məzənnə fərqi" maddəli 611 / 731 ↔ 22 — "məzənnə təsiri" sətrinə                                 |                |
-| 28   | Overdraft (bankda mənfi qalıq)                                                 | Belə qalsın (22-də mənfi görünür); real kredit xətti — 501 ilə                                    |                |
-| 29   | Qarışıq qaimə (əsas vəsait + mal) pul hərəkətində                              | Bütövlükdə investisiya (nadirdir; sənədi ayırmaq olar)                                            |                |
-| 30   | Kapital ↔ M/Z xəbərdarlığının mətni                                            | Mətn kifayətdir; çaşdırarsa — fərqi yaradan yazılışlar sadalansın                                 |                |
-|      | **E. E-qaimə və bank**                                                         |                                                                                                   |                |
-| 31 ⚠ | "DVX-dən yenilə" hansı dövrü alsın?                                            | Bağlanış yoxdursa — keçən ayın 1-dən; bağlı aylar üçün ayda bir "son 3 ay" status yoxlaması       |                |
-| 32   | "Mallar üzrə" ilə "Qaimələr üzrə" arasında 1–2 qəpik fərq                      | Real "Mallar üzrə" faylı ilə yoxlansın; təsdiqlənsə — sətir sayı qədər fərq ziddiyyət sayılmasın  |                |
-| 33   | Çıxarışda eyni gün, eyni məbləğ, nömrəsiz iki ödəniş                           | Real bank faylları ilə yoxlansın; lazım olsa barmaq izinə qarşı tərəfin IBAN-ı əlavə edilsin      |                |
-| 34   | Hesab planının təkrar oxunması (sürət) — texniki                               | İndi lazım deyil                                                                                  |                |
-| 35   | Kassa orderlərinin yük testi CI-da — texniki                                   | Bank kimi CPU vaxtı ilə ölçülsün, hədd 10 s                                                       |                |
+| №    | Sual                                                                           | Tövsiyə (Meyar indi belə edir)                                                                         | Təsdiq / Dəyiş |
+| ---- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | -------------- |
+|      | **A. ƏDV**                                                                     |                                                                                                        |                |
+| 1    | VM 175 (mütənasib bölgü) xəbərdarlığı hansı satışlarda çıxsın?                 | Azad **və cəlb olunmayan** satışda xəbərdarlıq; 0% əvəzləşdirməni məhdudlaşdırmır                      |                |
+| 2    | ƏDV-li, amma e-qaiməsiz alış qaimələri İş masasında görünsünmü?                | Bəli: "ƏDV-li, e-qaiməsiz alış qaimələri: N" siqnalı (yalnız alış)                                     |                |
+|      | **A1. ƏDV əvəzləşdirilməsi**                                                   |                                                                                                        |                |
+| Ə1 ⚠ | Hansı alışın ƏDV-si ay bağlanışında əvəzləşdirilir?                            | DVX-də təsdiqlənmiş e-qaiməli və ƏDV-si depozitdən ödənilmiş; Dt 521.01 / Kt 241; DVX-dəkindən çox yox |                |
+| Ə2 ⚠ | Fiziki şəxs, xarici kontragent və valyuta qaiməsi                              | Ödənilən hissəyə mütənasib (cari hesabdan ödəniş də sayılır)                                           |                |
+| Ə3 ⚠ | Əvəzləşdirilən hesablanandan çox olanda (artıq ƏDV)                            | Bəyannamədə "artıq — növbəti aya keçir"; növbəti ayın "ödənilməli"sindən özü çıxılsın (indi çıxılmır)  |                |
+| Ə4   | İdxal ƏDV-si (gömrükdə ödənilən)                                               | Meyar-da ayrıca qayda yoxdur — mühasib əl ilə Dt 521.01 / Kt 241; sonra "gömrük bəyannaməsi" sənədi    |                |
+| Ə5   | Ödənilməmiş və ya DVX-də təsdiqlənməmiş ƏDV                                    | 241-də qalır, hər sonrakı bağlanışda yenidən yoxlanır, şərtlər ödənən ayda əvəzləşdirilir              |                |
+| Ə6   | Ödəniş sonradan azalanda (qaytarma) əvəzləşdirmənin geri alınması              | Əl ilə: Dt 241 / Kt 521.01                                                                             |                |
+| Ə7   | VM 175: azad satış olan ayda alış ƏDV-sinin bölgüsü                            | Meyar faizi göstərir, bölgünü mühasib əl ilə yazır (sual 1 ilə birlikdə)                               |                |
+|      | **B. Əmək haqqı**                                                              |                                                                                                        |                |
+| 3 ⚠  | 2026 dərəcələri (gəlir vergisi, DSMF, işsizlik, tibbi sığorta)                 | 3 / 10 / 14%, 200 azad; DSMF 3 / 10% və 22 / 15%; 0,5 + 0,5%; tibbi 2 / 0,5% hər tərəf                 |                |
+| 4 ⚠  | 8 000 ₼-dan yuxarı gəlirdə işəgötürənin DSMF payı                              | 11% (DVX-nin 2026 flayeri)                                                                             |                |
+| 5 ⚠  | 200 ₼ azad məbləğ ilə şəxsi güzəşt (400 / 200 / 100) birlikdə tətbiq olunurmu? | Xeyr — ən böyüyü; əlavə 50 ₼ (102.5) üstəlik                                                           |                |
+| 6    | Artıq iş, bayram günü işi və gecə saatlarının əmsalları                        | Artıq iş × 2, bayram / istirahət günü × 2, gecə + 40%                                                  |                |
+| 7    | 2026 istehsalat təqvimi                                                        | NK-nin 362 saylı qərarı: 241 gün, 1 922 saat; qısaldılmış gün yalnız B.e.–C.                           |                |
+| 8    | Məzuniyyətin orta qazancı                                                      | 12 ay / ay sayı / 30,4; məzuniyyət, ödənişsiz, xəstəlik günü olan aylar çıxılır                        |                |
+| 9    | Xəstəlik vərəqəsi                                                              | 4 rüb / təqvim günləri × staj faizi; 14 gün işəgötürən; 25 × minimum pensiya həddi tətbiq olunmur      |                |
+| 10   | Ayın ortasında dəyişən maaş                                                    | Günlərə (tabeldə saatlara) görə; əlavələr ayın sonundakı maaşla                                        |                |
+| 11   | Muzdlu iş bəyannaməsində "işçi sayı"                                           | Ayın əmək haqqında sətri olan hər işçi (yalnız xəstəlik müavinəti olan da)                             |                |
+| 12   | Bankda bir ödənişlə bütün işçilərə maaş (reyestr)                              | Məbləğ işçilərin 533 borclarının cəminə tam bərabərdirsə — işçilər üzrə bölünür                        |                |
+|      | **C. Vergi amortizasiyası və mənfəət vergisi**                                 |                                                                                                        |                |
+| 13 ⚠ | Mənfəət vergisinin hesablanması və 20% dərəcə                                  | 20%; dekabr bağlanışında Dt 901 / Kt 521.04                                                            |                |
+| 14 ⚠ | VM 114 normaları və metod                                                      | Nəqliyyat 25%, hesablama texnikası 25%, maşın 20%, bina 7%, digər 20%; vəsait üzrə azalan qalıq        |                |
+| 15 ⚠ | İl ərzində alınan / satılan vəsait                                             | Alınan — tam il; satılan / silinən — həmin il amortizasiya yox, vergi qalıq dəyəri çıxılır             |                |
+| 16   | Meyar-dan əvvəlki illərin zərəri                                               | Yarandığı il ilə bir dəfə yazılsın, Meyar 5 il özü istifadə etsin (indi hər il əl ilə)                 |                |
+| 17   | 521.04-ə ödənişin hansı ilə aid olduğu                                         | Əvvəl keçən ilin borcu bağlanır, sonra bu ilin avansı                                                  |                |
+| 18   | Kateqoriyanın qalığı 100 ₼-dan az olanda                                       | Tamamilə gəlirdən çıxılır (parametr)                                                                   |                |
+| 19   | Mikro / kiçik sahibkar əmsalı (2 / 1,5)                                        | Şirkət parametri, standart 1                                                                           |                |
+| 20   | Vergi amortizasiyasının yuvarlaqlaşdırılması                                   | Vəsait üzrə; bəyannamədə kateqoriyanın cəmi                                                            |                |
+| 21   | Qeyri-maddi aktivin amortizasiyası (VM 116)                                    | İndi xərc kimi gəlirdən çıxılır; VM 116 qaydası — sonra                                                |                |
+|      | **D. İllik maliyyə hesabatları**                                               |                                                                                                        |                |
+| 22 ⚠ | Plan §8 misalının qəpikbəqəpik yoxlanması                                      | Mühasib misalı əl ilə hesablayıb Meyar-ın rəqəmləri ilə tutuşdursun                                    |                |
+| 23   | Açılmış qalıqlar: alıcının Kt qalığı, malsatanın Dt qalığı hansı sətrə?        | Alıcının avansı → 54, malsatana artıq ödəniş → 24                                                      |                |
+| 24   | Pul hərəkəti: faiz və 521.03 / 522 ödənişləri hansı sətirdə?                   | Faiz — əməliyyat; 521.03 / 522 — "işçilərin mükafatlandırılması"                                       |                |
+| 25   | 343 / 341-dən birbaşa pul ödənişi — dividend?                                  | Dividend yalnız 534 / 344 üzrə; 343 / 341 ↔ pul — "digər ödənişlər"                                    |                |
+| 26   | Ödənilməmiş nizamnamə kapitalı (301 ↔ 217)                                     | İndi 30-da elan edilmiş kapital, borc 21-də; lazım olsa 30-dan çıxılsın                                |                |
+| 27   | Əl ilə yazılan kurs fərqi (valyuta satışı) pul hərəkətində                     | "Məzənnə fərqi" maddəli 611 / 731 ↔ 22 — "məzənnə təsiri" sətrinə                                      |                |
+| 28   | Overdraft (bankda mənfi qalıq)                                                 | Belə qalsın (22-də mənfi görünür); real kredit xətti — 501 ilə                                         |                |
+| 29   | Qarışıq qaimə (əsas vəsait + mal) pul hərəkətində                              | Bütövlükdə investisiya (nadirdir; sənədi ayırmaq olar)                                                 |                |
+| 30   | Kapital ↔ M/Z xəbərdarlığının mətni                                            | Mətn kifayətdir; çaşdırarsa — fərqi yaradan yazılışlar sadalansın                                      |                |
+|      | **E. E-qaimə və bank**                                                         |                                                                                                        |                |
+| 31 ⚠ | "DVX-dən yenilə" hansı dövrü alsın?                                            | Bağlanış yoxdursa — keçən ayın 1-dən; bağlı aylar üçün ayda bir "son 3 ay" status yoxlaması            |                |
+| 32   | "Mallar üzrə" ilə "Qaimələr üzrə" arasında 1–2 qəpik fərq                      | Real "Mallar üzrə" faylı ilə yoxlansın; təsdiqlənsə — sətir sayı qədər fərq ziddiyyət sayılmasın       |                |
+| 33   | Çıxarışda eyni gün, eyni məbləğ, nömrəsiz iki ödəniş                           | Real bank faylları ilə yoxlansın; lazım olsa barmaq izinə qarşı tərəfin IBAN-ı əlavə edilsin           |                |
+| 34   | Hesab planının təkrar oxunması (sürət) — texniki                               | İndi lazım deyil                                                                                       |                |
+| 35   | Kassa orderlərinin yük testi CI-da — texniki                                   | Bank kimi CPU vaxtı ilə ölçülsün, hədd 10 s                                                            |                |
 
 ---
 
@@ -72,6 +80,84 @@ Hər qrupda suallar **vaciblik sırası** ilə düzülüb: yuxarıdakılar hər 
 - **Tövsiyə:** İş masasında "ƏDV-li, e-qaiməsiz alış qaimələri: N" siqnalı (yalnız alış).
 - **Alternativlər:** belə qalsın (bağlanışdakı xəbərdarlıq kifayətdir).
 - **Mühasib yoxlasın:** ƏDV-li alışın e-qaiməsiz əvəzləşdirilmədiyi (VM 175); belə qaimələr təcrübədə olurmu (məs. idxal, gömrük bəyannaməsi ilə ƏDV — onlar üçün siqnal yalançı olar).
+
+## A1. ƏDV əvəzləşdirilməsi
+
+Alışın ƏDV-si qaimə uçota alınanda 241-ə (kontragent, qaimə, dərəcə üzrə) yazılır. Ayın bağlanışında Meyar 241-dən əvəzləşdirilə bilən hissəni büdcə ilə hesablaşmaya keçirir: **Dt 521.01 ("Vergi (haqq)") / Kt 241**. Bu addım ay bağlanışının 4-cü addımıdır (FIFO və yenidən qiymətləndirmədən sonra, 801-dən əvvəl). ƏDV bəyannaməsində "Əvəzləşdirilən ƏDV" sətri bu yazılışdır, ay hələ bağlanmayıbsa — bağlanışın planı. Mənbələr: QERARLAR 2026-10-17 (mərhələ 5) §6, "İCRADA DƏQİQLƏŞDİ (5c)", "AUDİTDƏN SONRA" §3; `docs/MERHELE-5-AY-BAGLANISI.md` §4.3, §11 sual 1; `src/application/closing.ts` (`vatStep`); QERARLAR 2026-10-28 (mərhələ 9) §3; Mərhələ 9 auditi, qüsur 4.
+
+Mərhələ 5-də mühasib yalnız bağlanışın misalını (§9) təsdiqləmişdi; o misalda əvəzləşdirmə yox idi (alışın ƏDV-si e-qaiməsiz idi, 241-də qaldı). Ona görə aşağıdakı qaydaların heç biri hələ mühasib tərəfindən təsdiqlənməyib.
+
+### Ə1. ⚠ Hansı ƏDV əvəzləşdirilir
+
+- **Nə soruşulur:** ay bağlanışında alış qaiməsinin ƏDV-si yalnız iki şərt birlikdə ödənəndə əvəzləşdirilir: (1) qaiməyə bağlanmış e-qaimə DVX-də **təsdiqlənib**; (2) ƏDV hissəsi ay sonuna qədər **ƏDV depozit hesabından (224.04)** ödənilib. Əvəzləşdirilən məbləğ DVX-dəki e-qaimənin ƏDV-sindən çox ola bilməz (qaimədə ƏDV fərqli yazılıbsa, fərq 241-də qalır və bağlanış qeyd yazır). Bu qayda düzgündürmü?
+- **Niyə vacibdir:** MG Transport-un əsas alışları — yanacaq, ehtiyat hissələri, təmir. Oktyabrda yanacaq e-qaiməsi 11 800 ₼ (ƏDV 1 800), DVX-də təsdiqlənib. 15.10-da malsatana 10 000 cari hesabdan, 1 800 depozitdən ödənilib → oktyabr bağlanışında **Dt 521.01 / Kt 241 1 800,00**, oktyabrın ödənilməli ƏDV-si 1 800 azalır. Depozitdən yalnız 900 ödənibsə — 900 əvəzləşdirilir, 900 241-də gözləyir. Qayda səhvdirsə, hər ay ödənilməli ƏDV yanlışdır.
+- **Meyar indi:** yuxarıdakı kimi. Depozitdən ödəniş bank sənədinin ƏDV bölgüsündən gəlir (mərhələ 3: depozit sətri qaimənin yalnız ƏDV hissəsini bağlayır).
+- **Tövsiyə:** təsdiq.
+- **Alternativlər:** (a) ödənişdən asılı olmayaraq ayın bütün təsdiqlənmiş alış e-qaimələrinin ƏDV-si (mərhələ 5 planının §11 alternativi); (b) e-qaimənin ayında deyil, ödəniş ayında — Meyar elə də edir (Ə5).
+- **Mühasib yoxlasın:** VM 175.1 (əvəzləşdirmənin şərtləri: e-qaimə və ƏDV-nin depozit hesabından ödənilməsi), ƏDV depozit hesabı qaydaları; əvəzləşdirmənin hansı aya düşdüyü (e-qaimənin, yoxsa ödənişin ayı).
+
+### Ə2. ⚠ Fiziki şəxs, xarici kontragent və valyuta qaiməsi
+
+- **Nə soruşulur:** malsatan fiziki şəxsdirsə (kontragentin növü "individual"), xaricidirsə və ya qaimə valyutadadırsa, Meyar depozit ödənişini axtarmır: qaimənin **ödənilən hissəsinə mütənasib** ƏDV əvəzləşdirilir (cari hesabdan ödəniş də sayılır; valyuta qaiməsində valyuta məbləği ilə). E-qaimənin DVX təsdiqi yenə şərtdir. Doğrudurmu?
+- **Niyə vacibdir:** ƏDV ödəyicisi olan fərdi sahibkardan təkər alışı 5 900 ₼ (ƏDV 900); oktyabrda 2 950 cari hesabdan ödənilib → Meyar **450** əvəzləşdirir. Əgər qanun fərdi sahibkara da ƏDV-nin depozitdən ödənilməsini tələb edirsə, bu 450 əvəzləşdirilməməlidir (DVX yoxlamasında sanksiya riski).
+- **Meyar indi:** yuxarıdakı kimi (QERARLAR 2026-10-17 §6: "fiziki şəxs və xarici malsatana cari hesabdan").
+- **Tövsiyə:** mühasib üç halın hər birini ayrıca təsdiqləsin. Fərdi sahibkar ƏDV ödəyicisidirsə — onun üçün də depozit qaydası (Ə1) daha təhlükəsiz görünür.
+- **Alternativlər:** (a) fiziki şəxs üçün də depozit tələb olunsun; (b) xarici kontragent üçün e-qaimə əvəzinə əks-hesablama (aşağıda).
+- **Mənbələrin ziddiyyəti:** xarici malsatan Azərbaycanda e-qaimə vermir, ona görə "DVX-də təsdiqlənmiş e-qaimə" şərti xarici qaimədə praktik olaraq heç vaxt ödənmir — qayda kağız üzərində var, işdə işləmir. Qeyri-rezidentin xidmətinə görə ƏDV (VM 169 — əks-hesablama, ƏDV-ni alıcı özü hesablayır) Meyar-da yoxdur.
+- **Mühasib yoxlasın:** VM 175.1, VM 169 (qeyri-rezidentə ödəniş), ƏDV depozit hesabı qaydası fərdi sahibkarlar üçün; MG Transport-un xarici malsatanları varmı (məs. xaricdə təmir, yanacaq).
+
+### Ə3. ⚠ Artıq ƏDV növbəti aya keçir
+
+- **Nə soruşulur:** ayda əvəzləşdirilən ƏDV satışın ƏDV-sindən çox olanda (məs. tır alınan ay) bəyannamə "Artıq — növbəti aya keçir" yazır. Amma növbəti ayın bəyannaməsində "Büdcəyə ödənilməli" yalnız **həmin ayın** hesablanmış − əvəzləşdirilən fərqidir; keçən aydan qalan artıq ondan çıxılmır, yalnız "521.01 ilə tutuşma" bölməsində ayın əvvəlinə qalıq kimi görünür. Necə olmalıdır?
+- **Niyə vacibdir:** oktyabrda tır alınıb: əvəzləşdirilən 27 000, satışın ƏDV-si 9 000 → artıq 18 000. Noyabrda hesablanmış 9 000, əvəzləşdirilən 2 000 → bəyannamənin sətri **7 000 ödənilməli** göstərir, halbuki keçən ayın artığı ilə büdcəyə heç nə ödənilmir (521.01-in noyabr sonuna qalığı −11 000 — yenə artıqdır). Mühasib sətirdəki rəqəmlə ödəniş etsə, 7 000 ₼ artıq ödəyər.
+- **Meyar indi:** artıq 521.01-in debet qalığı kimi qalır; bəyannamə onu tutuşma bölməsində göstərir, "ödənilməli" sətrində yox.
+- **Tövsiyə:** bəyannaməyə "Əvvəlki aylardan keçən artıq ƏDV" sətri və "Ödənilməli (keçən artıq çıxılmaqla)" sətri əlavə olunsun (kiçik proqram dəyişikliyi); qaytarma tələb edilibsə — mühasib qeyd edir.
+- **Alternativlər:** belə qalsın — mühasib "521.01 ilə tutuşma"nın son qalığına baxır.
+- **Mühasib yoxlasın:** VM-in artıq ödənilmiş / əvəzləşdirilməmiş ƏDV-nin növbəti aylara keçirilməsi və qaytarılması maddələri (VM 176 ətrafı); e-taxes ƏDV bəyannaməsinin həmin sətri.
+
+### Ə4. İdxal ƏDV-si (gömrük)
+
+- **Nə soruşulur:** idxalda (məs. xaricdən tır və ya ehtiyat hissəsi) ƏDV gömrükdə ödənilir və e-qaimə yoxdur — sənəd gömrük bəyannaməsidir. Meyar-da bunun üçün qayda yoxdur: bağlanış yalnız 241-də **qaiməyə bağlı** qalıqlara baxır. Necə yazılsın?
+- **Niyə vacibdir:** tır 150 000 ₼ idxal olunsa, gömrükdə 27 000 ƏDV ödənilir. Bu, alış qaiməsinə ƏDV kimi yazılsa, bağlanış onu "e-qaiməsi təsdiqlənməyib — 241-də qalır" kimi həmişəlik saxlayar; əl ilə 241-ə yazılsa (qaiməsiz) — bağlanış ona toxunmur. Hər iki halda 27 000 ₼ əvəzləşdirilmir, ödənilməli ƏDV artıq çıxır.
+- **Meyar indi:** yalnız əl ilə: mühasib gömrük ödənişini Dt 241 / Kt 223 (və ya 531 gömrük kontragenti) ilə, əvəzləşdirməni isə əl ilə əməliyyatla **Dt 521.01 / Kt 241** yazır. Bəyannamədə "alış ƏDV-si" və "əvəzləşdirilən" sətirləri 241 / 521.01-dən gəldiyi üçün rəqəmlər düzgün çıxır.
+- **Tövsiyə:** indi əl ilə (yuxarıdakı kimi). İdxal tez-tez olarsa — "Gömrük bəyannaməsi" sənədi (ƏDV, gömrük rüsumu, əvəzləşdirmə bağlanışda) növbəti mərhələdə. Sual 2-nin siqnalı belə qaimələri saymamalıdır.
+- **Alternativlər:** idxal qaiməsinə "gömrük bəyannaməsi nömrəsi" sahəsi; onunla e-qaimə şərti əvəzlənsin.
+- **Mühasib yoxlasın:** VM 175 (idxal ƏDV-sinin əvəzləşdirilməsi — gömrük orqanına ödəniş sənədi ilə), Gömrük Məcəlləsi; MG Transport-un idxalı olurmu.
+
+### Ə5. Gözləyən ƏDV
+
+- **Nə soruşulur:** şərtlər ödənməyən ƏDV (ödənilməyib və ya e-qaimə təsdiqlənməyib) 241-də qalır. Hər sonrakı bağlanış bütün keçmiş qaimələri yenidən yoxlayır: ödəniş və ya təsdiq gələn ayda əvəzləşdirilir. Bağlanış "N qaimənin ƏDV-si hələ ödənilməyib" qeydi və təsdiqlənməyənlər üçün xəbərdarlıq yazır.
+- **Niyə vacibdir:** sentyabrın təmir e-qaiməsi (ƏDV 540) noyabrda ödənilir → noyabr bağlanışında əvəzləşdirilir. Mühasib onu sentyabrın bəyannaməsində gözləyirsə, rəqəm fərqli olacaq.
+- **Meyar indi:** belə; 241-in qalığı bəyannamədə "Əvəzləşdirilməmiş" sətrindədir.
+- **Tövsiyə:** təsdiq.
+- **Alternativlər:** e-qaimənin ayına geri düzəliş (bağlanmış ayı dəyişmək — Meyar-da qadağandır).
+- **Mühasib yoxlasın:** VM 175 — gec ödənilən ƏDV hansı hesabat dövründə əvəzləşdirilir.
+
+### Ə6. Ödəniş azalanda — geri alma
+
+- **Nə soruşulur:** əvəzləşdirmədən sonra ödəniş azalarsa (malsatan pulu qaytarır, ödəniş storno olunur, qaimə düzəldilir), Meyar əvəzləşdirməni avtomatik geri almır — mühasib əl ilə **Dt 241 / Kt 521.01** yazır.
+- **Niyə vacibdir:** təmirçi 1 180 ₼ (ƏDV 180) qaytarır → 180 əvəzləşdirilmiş qalır, mühasib unudarsa ƏDV 180 az ödənilir.
+- **Meyar indi:** əl ilə (QERARLAR 2026-10-17 "AUDİTDƏN SONRA" §3). Növbəti bağlanış artıq əvəzləşdirilmiş məbləği bilir və təkrar yazmır.
+- **Tövsiyə:** təsdiq; tez-tez olarsa — bağlanışda "əvəzləşdirilib, amma ödəniş azalıb" xəbərdarlığı (sonra).
+- **Alternativlər:** bağlanış geri almanı özü yazsın.
+- **Mühasib yoxlasın:** VM 175 (qaytarma və qiymət endirimi zamanı əvəzləşdirmənin düzəldilməsi), düzəliş e-qaiməsi.
+
+### Ə7. VM 175 — azad satış olan ayda bölgü
+
+- **Nə soruşulur:** sual 1 xəbərdarlığın **nə vaxt** çıxdığını soruşur; bu sual — **necə yazılsın**. Meyar bütün şərtləri ödənən ƏDV-ni əvəzləşdirir, sonra ƏDV bəyannaməsi "vergi tutulan pay: 90,00%" xəbərdarlığını verir. Əvəzləşdirilməyən hissəni mühasib əl ilə yazır.
+- **Niyə vacibdir:** 18% satış 90 000, azad 10 000, alış ƏDV-si 5 000 → 500 ₼ əvəzləşdirilməməlidir: mühasib Dt 721 (və ya 701) / Kt 521.01 500,00 yazır (xərcə aid edilir).
+- **Meyar indi:** yalnız xəbərdarlıq (faizlə).
+- **Tövsiyə:** belə qalsın (MG Transport-da azad satış nadirdir); mühasib düzəlişin yazılışını təsdiqləsin. Tez-tez olarsa — bağlanış bölgünü özü etsin.
+- **Alternativlər:** bağlanış bölgünü özü yazsın.
+- **Mühasib yoxlasın:** VM 175 (mütənasib bölgü, illik dəqiqləşdirmə varmı), əvəzləşdirilməyən ƏDV-nin xərcə aid edilməsi.
+
+### Mənbələrin ziddiyyətləri
+
+1. **"Azad və ya 0%"** — QERARLAR 2026-10-28 (mərhələ 9) §3 VM 175 xəbərdarlığını "azad və ya 0% satış"a bağlayır, kod isə yalnız azad satışda xəbərdarlıq verir (0% əvəzləşdirməni məhdudlaşdırmır — kod vergi baxımından düzgündür). Sual 1.
+2. **"Ay ərzində" və "ay sonuna qədər"** — mərhələ 5 planı (§4.3) "ay ərzində ƏDV hissəsi ödənilmiş" deyir, kod isə ay sonuna qədər ödənilmiş hər şeyi (keçmiş aylar daxil) götürür. Plan özü də "ödənilməmiş sonrakı ayın bağlanışında yoxlanır" deyir — kod bu ikinci cümləyə uyğundur. Ə5.
+3. **"Artıq — növbəti aya keçir"** — bəyannamənin sətri belə deyir, amma növbəti ayın "ödənilməli"si onu nəzərə almır. Ə3.
+4. **Xarici malsatan** — qayda "cari hesabdan ödəniş, mütənasib" deyir, amma e-qaimə şərti xarici malsatanda ödənmir; nəticədə xarici alışın ƏDV-si heç vaxt avtomatik əvəzləşdirilmir. Ə2.
+5. **Fiziki şəxs** — QERARLAR "cari hesabdan" deyir; ƏDV ödəyicisi olan fərdi sahibkara ödənişdə depozitin məcburiliyi mənbələrdə yoxlanmayıb. Ə2.
 
 ## B. Əmək haqqı
 
