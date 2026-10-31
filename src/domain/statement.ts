@@ -291,6 +291,16 @@ export function findIban(text: string): string | undefined {
   return IBAN.exec(text.toUpperCase().replace(/[\s-]/g, ''))?.[0];
 }
 
+/**
+ * The State Treasury's VAT deposit account (AZ48CTRE00000000000000014001): a payment to it with
+ * the supplier in the order pays that supplier's VAT through the deposit, though it leaves a
+ * current account — its VAT is offset (MG Transport's practice, 2026-11-01).
+ */
+export function isVatDepositIban(iban: string): boolean {
+  const text = iban.toUpperCase().replace(/\s/g, '');
+  return /^AZ\d{2}CTRE\d*14001$/.test(text);
+}
+
 /** Any country's IBAN as a whole word ("/TR42…" of a SWIFT payment too). */
 const ANY_IBAN = /^\/?([A-Z]{2}\d{2}[A-Z0-9]{11,30})$/;
 

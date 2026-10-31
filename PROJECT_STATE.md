@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 01.11.2026 (0.9.24). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 01.11.2026 (0.9.25). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -841,6 +841,10 @@ Altı müstəqil yoxlayıcı (alt agentlər) paralel işlədi, hər biri qüsuru
 - **UI/UX:** 15 tapıntı (bax §7); sol / sağ oxla menyu bölmələri arasında keçid edilmədi.
 - Kod: `invoices.ts` (`splitAdvances`, `offsetLaterAdvances` xəbərdarlığı və valyuta), `money.ts` (`depositPaid`, avansın işarəsi), `closing.ts` (ləğv edilmiş qaimə, əl ilə əvəzləşdirmə xəbərdarlığı), `profit-tax.ts`, `reports.ts` (222.02 / 222.04), `bank.ts` / `cash.ts` (xəbərdarlıq), `domain/statement.ts`, `domain/eqaime.ts`, `renderer/sheet-reader.ts`, `renderer/xlsx.ts`, ekranlar.
 - `npm run typecheck`, `npm test` 357, `npm run test:ui` 65, `npm run test:perf` (satış qaiməsi 176 ms, bank daxilolması 5 ms) keçir. Electron işlədilmədi.
+
+## 0.9.25 — Xəzinədarlığın ƏDV depozit hesabına bank ödənişi əvəzləşir (01.11.2026)
+
+İstifadəçi: "mən ƏDV-lərini bankdan ödəmişəm, sən əvəzləşdirmirsən". Real oktyabr çıxarışında ƏDV ayrıca ödənişlə Xəzinədarlığın ƏDV depozit hesabına (AZ48CTRE00000000000000014001) gedir, Meyar onu əsas məbləğ kimi qəbul edirdi (241-də 34 095,94 ₼ gözləyir). İndi `isVatDepositIban` (`domain/statement.ts`) → təklifdə hərəkət maddəsi "ƏDV-nin ödənilməsi" (`statements.ts`); bəyannamədə alış siyahıları əvvəl. Test: `vat-offset.test.ts` (çıxarış → uçot → əvəzləşmə). `npm test` 358, `npm run test:ui` 65, `npm run test:perf` keçir. Əsl bazada oktyabrın artıq uçota alınmış ƏDV ödənişləri yenilənmədən sonra düzəldilməlidir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

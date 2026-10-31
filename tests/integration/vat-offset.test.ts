@@ -7,7 +7,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { EqDocumentInputDto } from '../../src/contracts/commands.js';
-import type { ClosingView, DeclarationView, VatOffsetView } from '../../src/contracts/queries.js';
+import type {
+  ClosingView,
+  DeclarationView,
+  StatementLineView,
+  VatOffsetView,
+} from '../../src/contracts/queries.js';
 import { fixture } from './fixture.js';
 
 type F = ReturnType<typeof fixture>;
@@ -155,6 +160,64 @@ test('2026-10-31: without the item the same payment from the current account off
     f.bankLine('531.01', [supplier, contract], '900'),
   ]);
   assert.deepEqual(vat(f, '2026-09'), []);
+});
+
+test('2026-11-01: VAT paid from the current account to the Treasury VAT deposit is recognised and offset', (t) => {
+  const { f, buy, confirmed } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  // The statement: the net to the supplier's account, the VAT to the Treasury's VAT deposit.
+  const line = (amount: string, iban: string, row: number) => ({
+    row,
+    date: '2026-09-10',
+    direction: 'out' as const,
+    amount,
+    reference: `R${row}`,
+    counterparty: 'Təkər Sahibkar',
+    counterpartyTaxId: '1700000012',
+    counterpartyIban: iban,
+    purpose: 'Müqavilə və EQ MT2609001 əsasən',
+  });
+  f.exec({
+    type: 'statement.import',
+    companyId: f.companyId,
+    iban: 'AZ12AIIB38060019441234567890',
+    fileName: 'cixaris.xlsx',
+    fileHash: 'c'.repeat(64),
+    lines: [
+      line('5000.00', 'AZ55TEST00000000000000000055', 1),
+      line('900.00', 'AZ48CTRE00000000000000014001', 2),
+    ],
+  });
+  const importId = String(f.db.get('SELECT id FROM statement_imports')!.id);
+  const rows = f.query<{ lines: StatementLineView[] }>({
+    type: 'statement',
+    companyId: f.companyId,
+    id: importId,
+  }).lines;
+  const vatItem = f.item('cashFlowItem', 'ƏDV-nin ödənilməsi (depozitə)');
+  const vatRow = rows.find((l) => l.amount === '900.00')!;
+  assert.equal(vatRow.proposal?.lines?.[0]?.cashFlowItem, vatItem, 'the VAT line is a VAT payment');
+  assert.match(vatRow.proposal!.reason, /ƏDV depozit hesabına/);
+  // Booked as proposed (as the bank form would fill it).
+  for (const l of rows) {
+    const p = l.proposal!;
+    f.bank(
+      'out',
+      l.date,
+      l.bankAccountId,
+      p.lines ?? [{ account: p.account, sk: p.sk, amount: l.amount, cashFlowItem: '', memo: '' }],
+      {
+        counterpartyName: l.counterparty,
+        counterpartyTaxId: l.counterpartyTaxId,
+        purpose: l.purpose,
+        statementLineId: l.id,
+      },
+    );
+  }
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
+  close(f, '2026-09');
+  assert.equal(left241(f, inv.id), 0n);
 });
 
 test('audit 2026-10-31: VAT paid ahead with the item from the current account counts once offset', (t) => {

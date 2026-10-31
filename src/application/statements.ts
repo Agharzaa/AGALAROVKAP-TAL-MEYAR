@@ -15,6 +15,7 @@ import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import {
   classifyStatementLine,
   findIban,
+  isVatDepositIban,
   partnerNameKey,
   type ClassifyContext,
 } from '../domain/statement.js';
@@ -384,6 +385,8 @@ interface ProposalContext extends ClassifyContext {
   bankCurrency: string;
   /** The bank of the statement's account: the other side of its loans, interest and currency deals. */
   bankPartnerId: string;
+  /** The cash-flow item of a VAT payment (role vatPayment): lines to the Treasury's VAT deposit. */
+  vatPaymentItem: string;
   closedThrough: string;
   /** Unlinked posted bank documents of the account, for matching rows typed by hand. */
   manual: Row[];
@@ -461,6 +464,12 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     closedThrough: String(company.closed_through),
     bankCurrency: String(bank.currency),
     bankPartnerId: String(bank.bank_id ?? ''),
+    vatPaymentItem: String(
+      db.get(
+        "SELECT id FROM items WHERE company_id=? AND kind='cashFlowItem' AND role='vatPayment' AND archived=0",
+        companyId,
+      )?.id ?? '',
+    ),
     partnersByTaxId: new Map(
       partners
         .filter((p) => p.tax_id)
@@ -633,6 +642,27 @@ function propose(ctx: ProposalContext, r: Row): StatementProposal {
   }
   let reason = s.reason;
   let known = s.confidence !== 'low';
+  // VAT paid to the Treasury's VAT deposit for a supplier: the line pays that invoice's VAT and is
+  // offset like a payment from 224 (cash-flow item "ƏDV-nin ödənilməsi").
+  if (
+    direction === 'out' &&
+    s.kind === 'settlement' &&
+    ctx.vatPaymentItem &&
+    isVatDepositIban(String(r.counterparty_iban))
+  ) {
+    lines = [
+      {
+        account,
+        sk,
+        amount: money(r.amount as bigint),
+        cashFlowItem: ctx.vatPaymentItem,
+        memo: '',
+      },
+    ];
+    notes.push(
+      'Xəzinədarlığın ƏDV depozit hesabına ödəniş: qaimənin ƏDV hissəsi kimi bağlanır və əvəzləşdirilir.',
+    );
+  }
   const code = findBudgetCode(String(r.purpose), new Set(ctx.budget.keys()));
   const budget = code ? ctx.budget.get(code) : undefined;
   if (budget) {

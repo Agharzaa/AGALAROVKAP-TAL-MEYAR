@@ -339,7 +339,8 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
       listed.set(rate, (listed.get(rate) ?? 0n) + amount);
     }
   }
-  const appendices: DeclarationTable[] = [];
+  // The purchase e-qaimələr offset (and waiting) first: what the accountant checks every month.
+  const appendices: DeclarationTable[] = [...offsetLists(db, companyId, month, closed)];
   const checks: DeclarationView['checks'] = [];
   for (const rate of ['0', 'exempt', 'nontaxable']) {
     const rows = lists.get(rate) ?? [];
@@ -357,7 +358,6 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
         text: `${label(rate)}: ${money(rest)} AZN qaiməsiz dövriyyədir (əl ilə əməliyyat) — əlavədə sənədi mühasib göstərir.`,
       });
   }
-  appendices.push(...offsetLists(db, companyId, month, closed));
 
   if (!closed)
     checks.push({
