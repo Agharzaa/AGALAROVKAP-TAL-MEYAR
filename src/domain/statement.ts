@@ -199,10 +199,14 @@ function findHeader(
   return undefined;
 }
 
-/** Reads 31.01.2026, 31/01/2026, 2026-01-31, 31.01.26 and Excel serial day numbers. */
+/**
+ * Reads 31.01.2026, 31/01/2026, 2026-01-31, 2026/01/31, 2026.01.31, 31.01.26 and Excel serial
+ * day numbers.
+ */
 export function readStatementDate(value: string): string | undefined {
   const text = value.trim();
-  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  // Year first: ISO "2026-01-31" and the "2026/01/31", "2026.01.31" some banks print.
+  let m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})\b/.exec(text);
   if (m) return check(+m[1]!, +m[2]!, +m[3]!);
   m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})\b/.exec(text);
   if (m) {
@@ -229,7 +233,11 @@ export function readStatementDate(value: string): string | undefined {
 export function readStatementAmount(
   value: string,
 ): { amount: Minor; negative: boolean } | undefined {
-  let text = value.replace(/[\s ']/g, '').replace(/(AZN|₼|manat)$/i, '');
+  let text = value
+    .replace(/[\s ']/g, '')
+    .replace(/(AZN|₼|manat)$/i, '')
+    // The Unicode minus (U+2212, the app's own display form) and an en dash are a minus too.
+    .replace(/[−–]/g, '-');
   if (!text) return undefined;
   let negative = false;
   if (/^\(.*\)$/.test(text)) {
@@ -253,6 +261,12 @@ export function readStatementAmount(
       single && (decimals !== 3 || text.startsWith('0,'))
         ? text.replace(',', '.')
         : text.replace(/,/g, '');
+  } else if (lastDot >= 0 && text.indexOf('.') !== lastDot) {
+    // Several dots are thousands separators ("1.234.567"); the groups must be of three digits.
+    // A single dot stays the decimal point ("12.500" is 12,50): numbers read from .xlsx cells
+    // and machine-made CSV files are always written with a decimal dot ("1500.000" is 1 500).
+    if (!/^\d{1,3}(\.\d{3})+$/.test(text)) return undefined;
+    text = text.replace(/\./g, '');
   }
   if (!/^\d+(\.\d+)?$/.test(text)) return undefined;
   // Banks sometimes print 4 decimals (1C style "17 000,0000"); round half up to qəpik.
@@ -386,6 +400,16 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
       continue;
     }
     if (!date) {
+      // A date-like cell that cannot be read ("31.02.2026") next to an amount is an operation
+      // the reader does not understand: report it rather than lose the money silently.
+      const money = ['credit', 'debit', 'amount'] as const;
+      if (
+        /\d{1,4}[./-]\d{1,2}[./-]\d{1,4}/.test(rawDate) &&
+        money.some((c) => readStatementAmount(cell(row, map.get(c)))?.amount)
+      ) {
+        problems.push({ row: r + 1, message: `Tarix oxunmadı: “${rawDate}”.` });
+        continue;
+      }
       // Totals, balances and page footers ("Cəmi", "Qalıq") have no date; they are not operations.
       around.push(row);
       continue;
@@ -394,11 +418,12 @@ export function readStatementTable(rows: readonly string[][]): StatementReadResu
     let amount: Minor | undefined;
     const credit = readStatementAmount(cell(row, map.get('credit')));
     const debit = readStatementAmount(cell(row, map.get('debit')));
+    // A negative amount in a column is a reversal (storno): it moves money the other way.
     if (credit && credit.amount > 0n) {
-      direction = 'in';
+      direction = credit.negative ? 'out' : 'in';
       amount = credit.amount;
     } else if (debit && debit.amount > 0n) {
-      direction = 'out';
+      direction = debit.negative ? 'in' : 'out';
       amount = debit.amount;
     } else {
       const single = readStatementAmount(cell(row, map.get('amount')));
@@ -470,10 +495,25 @@ export function statementAddsUp(r: StatementReadResult): boolean | undefined {
 /** Splits CSV text (comma, semicolon or tab separated; quoted fields) into rows. */
 export function readCsv(text: string): string[][] {
   const body = text.replace(/^﻿/, '');
-  const firstLine = body.split(/\r?\n/, 1)[0] ?? '';
-  const sep = [';', '\t', ','].sort(
-    (a, b) => firstLine.split(b).length - firstLine.split(a).length,
-  )[0]!;
+  // The separator is the one that splits the first lines into the same number (> 1) of columns
+  // most often, weighted by that number: a title line above the table ("Hesab çıxarışı") must
+  // not decide it.
+  const sample = body
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .slice(0, 20);
+  const score = (s: string) => {
+    const counts = new Map<number, number>();
+    for (const l of sample) {
+      const n = l.split(s).length;
+      if (n > 1) counts.set(n, (counts.get(n) ?? 0) + 1);
+    }
+    // Lines × extra columns: the table (many columns) wins over decimal commas in amounts,
+    // which split a few lines into two.
+    return Math.max(0, ...[...counts].map(([n, lines]) => lines * (n - 1)));
+  };
+  // A tie keeps the order: semicolon, tab, comma.
+  const sep = [';', '\t', ','].reduce((best, s) => (score(s) > score(best) ? s : best));
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';

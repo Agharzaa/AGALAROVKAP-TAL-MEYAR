@@ -297,6 +297,8 @@ export function Confirm({
   children,
   confirmLabel,
   destructive = false,
+  busy = false,
+  disabled = false,
   onConfirm,
   onCancel,
 }: {
@@ -304,9 +306,31 @@ export function Confirm({
   children: ReactNode;
   confirmLabel: string;
   destructive?: boolean;
-  onConfirm: () => void;
+  /** The confirmed action is running: the button waits, a second click sends nothing. */
+  busy?: boolean;
+  /** A required field (the reason) is still empty. */
+  disabled?: boolean;
+  onConfirm: () => unknown;
   onCancel: () => void;
 }) {
+  const [pending, setPending] = useState(false);
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  const blocked = pending || busy || disabled;
+  async function confirm() {
+    if (blocked) return;
+    setPending(true);
+    try {
+      await onConfirm();
+    } finally {
+      if (alive.current) setPending(false);
+    }
+  }
   return (
     <Modal title={title} onClose={onCancel} size="small">
       <div className="modal-body">{children}</div>
@@ -317,7 +341,9 @@ export function Confirm({
         <button
           type="button"
           className={`button ${destructive ? 'destructive' : 'primary'}`}
-          onClick={onConfirm}
+          disabled={blocked}
+          aria-busy={pending || busy || undefined}
+          onClick={() => void confirm()}
         >
           {confirmLabel}
         </button>

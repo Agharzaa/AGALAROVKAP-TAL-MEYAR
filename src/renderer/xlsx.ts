@@ -13,8 +13,16 @@ export interface SheetSpec {
   widths?: number[];
 }
 
+// Control characters other than tab and line breaks are not allowed in XML 1.0 at all (not even
+// as entities): Excel refuses a sheet holding one, so they are dropped.
 const xml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  s
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 const col = (i: number) => {
   let s = '';
   for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26))
@@ -22,15 +30,26 @@ const col = (i: number) => {
   return s;
 };
 
+const textCell = (ref: string, text: string, style: number) =>
+  `<c r="${ref}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${xml(text)}</t></is></c>`;
+
 function cellXml(ref: string, c: Cell, style = 0): string {
   if (c === null || c === '') return '';
-  if (typeof c === 'number') return `<c r="${ref}" s="${style}"><v>${c}</v></c>`;
+  // "<v>NaN</v>" (or Infinity) makes Excel refuse the file: a value that is not a finite number
+  // is written as the text it was, so nothing is lost and the file still opens.
+  if (typeof c === 'number')
+    return Number.isFinite(c)
+      ? `<c r="${ref}" s="${style}"><v>${c}</v></c>`
+      : textCell(ref, String(c), style);
   if (typeof c === 'object') {
     const raw = 'money' in c ? c.money : c.qty;
     if (!raw) return '';
-    return `<c r="${ref}" s="${'money' in c ? 2 : 3}"><v>${Number(raw)}</v></c>`;
+    const n = Number(raw);
+    return Number.isFinite(n)
+      ? `<c r="${ref}" s="${'money' in c ? 2 : 3}"><v>${n}</v></c>`
+      : textCell(ref, raw, style);
   }
-  return `<c r="${ref}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${xml(c)}</t></is></c>`;
+  return textCell(ref, c, style);
 }
 
 function sheetXml(spec: SheetSpec): string {

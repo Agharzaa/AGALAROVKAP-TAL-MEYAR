@@ -289,21 +289,22 @@ export function depositPaid(
      WHERE p.company_id=? AND p.${own}_account=? AND p.${own}_s1=? AND p.${own}_s2=? AND p.${own}_s3=?
        AND p.date<=?
        AND (p.${other}_account='224' OR p.${other}_account LIKE '224.%'
-         OR (p.${other}_s3 LIKE 'bank:%' AND EXISTS(
+         -- an older advance offset (before 2026-11-01) of an advance paid from a 224 account
+         OR (substr(p.memo,1,?)<>? AND p.${other}_s3 LIKE 'bank:%' AND EXISTS(
            SELECT 1 FROM bank_documents b JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
            WHERE b.company_id=p.company_id AND 'bank:'||b.id=p.${other}_s3
-             AND (x.account='224' OR x.account LIKE '224.%'
-               -- an advance paid with the "VAT payment" item from a current account (audit)
-               OR EXISTS(SELECT 1 FROM items i WHERE i.company_id=b.company_id AND i.role='vatPayment'
-                 AND instr(b.lines, '"cashFlowItem":"' || i.id || '"') > 0))))
+             AND (x.account='224' OR x.account LIKE '224.%')))
+         -- a "VAT payment" line, or the VAT part of an advance offset (the memo says so)
          OR (substr(p.memo,1,?)=? AND EXISTS(SELECT 1 FROM entries e
-           WHERE e.company_id=p.company_id AND e.id=p.entry_id AND e.source_type IN ('bank','cash'))))`,
+           WHERE e.company_id=p.company_id AND e.id=p.entry_id AND e.source_type IN ('bank','cash','invoice'))))`,
     companyId,
     account,
     partner,
     contract,
     document,
     through,
+    VAT_PAYMENT_MEMO.length,
+    VAT_PAYMENT_MEMO,
     VAT_PAYMENT_MEMO.length,
     VAT_PAYMENT_MEMO,
   )!.a as bigint;
@@ -551,7 +552,10 @@ function autoSettle(
       },
       azn[allocations.length]!,
       left,
-      `Avans · ${memo}`,
+      // An advance of a "VAT payment" line keeps the mark in front: its VAT is known later.
+      memo.startsWith(VAT_PAYMENT_MEMO)
+        ? `${VAT_PAYMENT_MEMO}Avans · ${memo.slice(VAT_PAYMENT_MEMO.length)}`
+        : `Avans · ${memo}`,
     );
   }
 }

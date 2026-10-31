@@ -107,6 +107,38 @@ function yearCore(db: Db, companyId: string, year: number, extra: readonly Posti
   for (const p of extra)
     if (/^[67]/.test(p.dt.account) && inFamily(p.kt.account, '112'))
       addBooked(key(p.dt.account, p.dt.sk[0] ?? '', p.dt.sk[1] ?? ''), p.amount);
+  // Depreciation charged to 202 (a carrier's trucks) reaches 6xx / 7xx when 202 is moved there:
+  // that part of the transfers is the books' depreciation too, not a deductible expense twice
+  // (audit 2026-11-01). Whatever stays on 202 at the year's end is not an expense yet.
+  let via202 =
+    (db.get(
+      `SELECT COALESCE(SUM(amount),0) AS x FROM postings
+       WHERE company_id=? AND (dt_account='202' OR dt_account LIKE '202.%')
+         AND (kt_account='112' OR kt_account LIKE '112.%') AND date BETWEEN ? AND ?`,
+      companyId,
+      `${year}-01-01`,
+      `${year}-12-31`,
+    )!.x as bigint) +
+    extra
+      .filter((p) => inFamily(p.dt.account, '202') && inFamily(p.kt.account, '112'))
+      .reduce((s, p) => s + p.amount, 0n);
+  if (via202 > 0n)
+    for (const r of db.all(
+      `SELECT dt_account AS a, dt_s1 AS s1, dt_s2 AS s2, SUM(amount) AS x FROM postings
+       WHERE company_id=? AND (kt_account='202' OR kt_account LIKE '202.%')
+         AND substr(dt_account,1,1) IN ('6','7') AND date BETWEEN ? AND ?
+       GROUP BY dt_account, dt_s1, dt_s2 ORDER BY MIN(date)`,
+      companyId,
+      `${year}-01-01`,
+      `${year}-12-31`,
+    )) {
+      if (via202 <= 0n) break;
+      const moved = r.x as bigint;
+      const take = moved < via202 ? moved : via202;
+      if (take <= 0n) continue;
+      addBooked(key(str(r.a), str(r.s1), str(r.s2)), take);
+      via202 -= take;
+    }
   const disposal = itemsWith(db, companyId, "role='assetDisposal'");
   const excluded = itemsWith(db, companyId, 'tax_deductible=0');
   const has = (map: Map<string, string>, t: { s1: string; s2: string }) =>
@@ -213,7 +245,7 @@ export function profitTaxFigures(
   const debit = db.get(
     `SELECT COALESCE(SUM(p.amount),0) AS d FROM postings p JOIN entries e ON e.id=p.entry_id
      WHERE p.company_id=? AND p.dt_account='521.04' AND p.dt_s1=? AND e.source_type<>'closing'
-       AND p.date BETWEEN ? AND ?`,
+       AND p.kt_account<>'901' AND p.date BETWEEN ? AND ?`,
     companyId,
     kind,
     `${year}-01-01`,
@@ -256,9 +288,13 @@ export function profitTaxStep(
   const r341 = { account: '341', sk: [] };
   const r52104 = { account: '521.04', sk: [paymentKind] };
   // Booked on 901 by other documents this year (an operation by hand): only the difference.
+  // Net of what was taken back from 901 by a counter entry (audit 2026-11-01), as M/Z reads it.
   const booked = db.get(
-    `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p JOIN entries e ON e.id=p.entry_id
-     WHERE p.company_id=? AND p.dt_account='901' AND e.source_type<>'closing' AND p.date BETWEEN ? AND ?`,
+    `SELECT COALESCE(SUM(CASE WHEN p.dt_account='901' THEN p.amount ELSE -p.amount END),0) AS a
+     FROM postings p JOIN entries e ON e.id=p.entry_id
+     WHERE p.company_id=? AND (p.dt_account='901' OR p.kt_account='901')
+       AND p.dt_account<>'341' AND p.kt_account<>'341'
+       AND e.source_type<>'closing' AND p.date BETWEEN ? AND ?`,
     companyId,
     `${year}-01-01`,
     `${year}-12-31`,

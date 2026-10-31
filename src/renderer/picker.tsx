@@ -50,7 +50,7 @@ export function Picker({
   const input = useRef<HTMLInputElement>(null);
   const selected = options.find((o) => o.value === value);
   const shown = selected ? selected.label : value ? value : (emptyLabel ?? '');
-  const matches = useMemo(() => {
+  const { matches, more } = useMemo(() => {
     const q = searchKey(text.trim());
     const list = q
       ? options.filter(
@@ -62,8 +62,16 @@ export function Picker({
     // typed text names it, so Enter after typing never picks it by accident.
     const offerEmpty = emptyLabel !== undefined && (!q || searchKey(emptyLabel).includes(q));
     const withEmpty = offerEmpty ? [{ value: '', label: emptyLabel }, ...list] : list;
-    return withEmpty.slice(0, 60);
+    return { matches: withEmpty.slice(0, 60), more: Math.max(0, withEmpty.length - 60) };
   }, [options, text, emptyLabel]);
+  const list = useRef<HTMLUListElement>(null);
+  const optionId = (i: number) => `${listId}-o${i}`;
+  // The option chosen by the arrows stays inside the 300 px list.
+  useEffect(() => {
+    if (!open) return;
+    const el = list.current?.querySelector<HTMLElement>('li.active');
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, open]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -89,6 +97,7 @@ export function Picker({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={open && matches[active] ? optionId(active) : undefined}
         aria-invalid={invalid || undefined}
         disabled={disabled}
         autoFocus={autoFocus}
@@ -141,11 +150,12 @@ export function Picker({
       />
       <ChevronDown size={13} className="picker-caret" aria-hidden="true" />
       {open && !disabled && (
-        <ul id={listId} role="listbox" className="picker-list">
+        <ul ref={list} id={listId} role="listbox" className="picker-list">
           {matches.length === 0 && <li className="picker-empty">Uyğun nəticə yoxdur</li>}
           {matches.map((o, i) => (
             <li
               key={o.value || '∅'}
+              id={optionId(i)}
               role="option"
               aria-selected={o.value === value}
               className={i === active ? 'active' : ''}
@@ -159,6 +169,15 @@ export function Picker({
               {o.hint && <small>{o.hint}</small>}
             </li>
           ))}
+          {more > 0 && (
+            <li
+              className="picker-empty picker-more"
+              aria-hidden="true"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              daha {more}… — axtarışı dəqiqləşdirin
+            </li>
+          )}
         </ul>
       )}
     </div>

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import type { DeclarationKind, DeclarationView, TaxYearView } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { MonthFilter } from '../filters';
-import { money } from '../format';
+import { money, monthTitle } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { Plus } from '../icons';
 import { pages } from '../pages';
@@ -84,7 +84,7 @@ function PeriodFilter({
           >
             {['Q1', 'Q2', 'Q3', 'Q4'].map((q) => (
               <option key={q} value={q}>
-                {q.slice(1)}-ci rüb
+                {ordinal[q]} rüb
               </option>
             ))}
           </select>
@@ -93,6 +93,9 @@ function PeriodFilter({
     </>
   );
 }
+
+/** Azerbaijani ordinals: 1-ci, 2-ci, 3-cü, 4-cü. */
+const ordinal: Record<string, string> = { Q1: '1-ci', Q2: '2-ci', Q3: '3-cü', Q4: '4-cü' };
 
 export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
   const win = useWindow();
@@ -106,6 +109,10 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
   const v =
     view.data && view.data.period === period && view.data.kind === kind ? view.data : undefined;
   const meta = pages[pageOf[kind]];
+  const openCard = (account: string) =>
+    account &&
+    v &&
+    ws.open({ type: 'accountCard', account, from: v.from, to: v.to }, win.companyId);
   const body = v && (
     <>
       {v.sections.map((s) => (
@@ -116,7 +123,7 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
               <th scope="col">Göstərici</th>
               {s.columns.map((c) => (
                 <th key={c} scope="col" className="num">
-                  {c}
+                  {monthTitle(c)}
                 </th>
               ))}
               <th scope="col">Mənbə</th>
@@ -127,13 +134,14 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
               <tr
                 key={r.key}
                 className={r.total ? 'total' : r.level ? 'child' : undefined}
-                onDoubleClick={() =>
-                  r.account &&
-                  ws.open(
-                    { type: 'accountCard', account: r.account, from: v.from, to: v.to },
-                    win.companyId,
-                  )
-                }
+                tabIndex={r.account ? 0 : undefined}
+                onDoubleClick={() => openCard(r.account)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && r.account) {
+                    e.preventDefault();
+                    openCard(r.account);
+                  }
+                }}
               >
                 <th scope="row" className={r.level ? 'indent' : undefined}>
                   {r.label}
@@ -162,7 +170,7 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
             <tr>
               {a.columns.map((c, i) => (
                 <th key={c} scope="col" className={a.money[i] ? 'num' : undefined}>
-                  {c}
+                  {monthTitle(c)}
                 </th>
               ))}
             </tr>
@@ -173,7 +181,7 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
                 <tr key={j}>
                   {r.map((x, i) => (
                     <td key={i} className={a.money[i] ? 'num' : undefined}>
-                      {a.money[i] && x ? money(x) : x}
+                      {a.money[i] && x ? money(x) : monthTitle(x)}
                     </td>
                   ))}
                 </tr>
@@ -232,7 +240,7 @@ export function DeclarationPage({ kind }: { kind: DeclarationKind }) {
   return (
     <ModuleFrame
       title={meta.title}
-      hint={v ? `${v.title} · ${v.ms} ms · sətrə iki dəfə klik — hesab kartı` : meta.hint}
+      hint={v ? `${v.title} · sətrə iki dəfə klik və ya Enter — hesab kartı` : meta.hint}
       onRefresh={view.reload}
       actions={
         v && (

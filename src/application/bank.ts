@@ -240,7 +240,7 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
   );
   guardAdvances(tx, cmd.companyId, BANK, id, previous);
   // An advance of an earlier date than invoices already posted: they offset it now.
-  offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
+  const advanceNote = offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
   // The statement row stays what the bank wrote: account, direction, date and amount.
   const bound =
     existing?.statement_line_id &&
@@ -268,7 +268,7 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
     id,
     `${number} · ${n.header.date} · ${String(n.bank.name) || String(n.bank.iban)} · ${money(n.total)} ${n.currency}`,
   );
-  return { id, version, number };
+  return { id, version, number, ...(advanceNote ? { warning: advanceNote } : {}) };
 }
 
 export function cancelBankDocument(tx: Tx, cmd: CommandOf<'bank.cancel'>): CommandResult {

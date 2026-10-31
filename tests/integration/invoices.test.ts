@@ -146,7 +146,9 @@ test('October: the next sale invoice offsets the September advance by itself', (
     ['211.01', '601', '5000.00'],
     ['604.1', '521.01', '762.71'],
     ['701', '205', '1000.00', '10'],
-    ['543.01', '211.01', '3000.00'],
+    // The advance by part (audit 2026-11-01): its VAT received to the deposit pays the VAT first.
+    ['543.01', '211.01', '457.62'],
+    ['543.01', '211.01', '2542.38'],
   ]);
   const self = `invoice:${inv.id}`;
   const tb = f.trial('2026-10-01', '2026-10-31', [

@@ -80,6 +80,8 @@ export function StatementsPage() {
   const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
   const [ignore, setIgnore] = useState<StatementLineView | null>(null);
+  /** An automatically booked line whose bank document is to be cancelled by red storno. */
+  const [storno, setStorno] = useState<StatementLineView | null>(null);
   const [reason, setReason] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const m = useMutation();
@@ -157,6 +159,7 @@ export function StatementsPage() {
   }
   async function undo(l: StatementLineView) {
     setMessage('');
+    setReadError('');
     let version: number;
     try {
       version = (
@@ -167,7 +170,7 @@ export function StatementsPage() {
         })
       ).version;
     } catch (e) {
-      setMessage((e as Error).message);
+      setReadError((e as Error).message);
       return;
     }
     const r = await m.run({
@@ -290,10 +293,10 @@ export function StatementsPage() {
             type="button"
             className="button secondary small"
             disabled={m.busy}
-            aria-label={`Sətir ${l.row}: avtomatik uçotu geri qaytar`}
-            onClick={() => void undo(l)}
+            aria-label={`Sətir ${l.row}: uçotu ləğv et (storno)`}
+            onClick={() => setStorno(l)}
           >
-            Geri qaytar
+            Uçotu ləğv et (storno)
           </button>
         ) : l.state === 'ignored' ? (
           <button
@@ -541,10 +544,29 @@ export function StatementsPage() {
           />
         </>
       ) : null}
+      {storno && (
+        <Confirm
+          title={`Uçotu ləğv et (storno) · ${storno.documentNumber}`}
+          confirmLabel="Storno et"
+          destructive
+          busy={m.busy}
+          onCancel={() => setStorno(null)}
+          onConfirm={async () => {
+            await undo(storno);
+            setStorno(null);
+          }}
+        >
+          <p>
+            Çıxarış sətri {storno.row}: avtomatik yazılmış {storno.documentNumber} sənədi qırmızı
+            storno ilə ləğv olunur; sətir yenidən uçota alınmağı gözləyəcək.
+          </p>
+        </Confirm>
+      )}
       {ignore && (
         <Confirm
           title={`Sətri kənara qoy · ${ignore.row}`}
           confirmLabel="Kənara qoy"
+          disabled={!reason.trim()}
           onCancel={() => setIgnore(null)}
           onConfirm={async () => {
             const r = await m.run({

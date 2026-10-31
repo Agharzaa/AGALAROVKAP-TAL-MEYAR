@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 31.10.2026 (0.9.23). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 01.11.2026 (0.9.24). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -828,6 +828,19 @@ Müstəqil yoxlayıcı (kodu yazmayan alt agent) 5 qüsur tapdı, hər biri əvv
 ## 0.9.23 — CI: bank daxilolmasının sürəti (31.10.2026)
 
 0.9.22-nin CI-i yük testində dayandı: "Bank daxilolması (qaimələrə bölgü, avans)" 1 112 ms / 300 ms — avansın sonradan əvəzləşdirilməsi kontragentin bütün sonrakı qaimələrini yenidən hesablayırdı. İndi yalnız öz hesablaşma açarında borcu qalan qaimələr (bir SQL sorğusu); kompüterdə 7 ms. `npm test` 323, `npm run test:perf` keçir.
+
+## 0.9.24 — altı nəfərlik audit və düzəlişlər (01.11.2026, QERARLAR 2026-11-01)
+
+Altı müstəqil yoxlayıcı (alt agentlər) paralel işlədi, hər biri qüsuru əvvəl uğursuz test ilə sübut etdi (`tests/integration/audit2-vat|bank|close|dev-core.test.ts`, `tests/domain/audit2-dev-edge.test.ts`, `tests/ui/audit2-ux.test.tsx`); sonra düzəliş (mühasibat nüvəsi — əsas sessiya, fayl oxuyucuları və ekranlar — iki alt agent, ayrı fayllarda).
+
+- **Baş mühasib 1 (ƏDV):** bir "ƏDV ödənişi" sətri bütün sənədin avansını ƏDV sayırdı (810 ₼ artıq əvəzləşmə); ləğv edilmiş qaimənin ƏDV-si heç vaxt geri alınmırdı; əl ilə əvəzləşdirmə ləğv edilmiş e-qaimədə xəbərsiz qalırdı.
+- **Baş mühasib 2 (bank):** depozitdən əvvəlcədən ödənən ƏDV qaimənin əsasını bağlayırdı (növbəti qaimənin ƏDV-si əvəzləşmirdi); sonradan əvəzləşən avans valyuta qaiməsində işləmirdi; 222.02-də məzənnə fərqi xəbərsiz qalırdı.
+- **Baş mühasib 3 (bağlanış):** 901-ə əl ilə yazılıb geri alınan vergi yazılmış sayılırdı (521.04 500 ₼ səhv); 202 vasitəsilə amortizasiya mənfəət vergisində iki dəfə çıxılırdı.
+- **Developer 1:** sonradan əvəzləşən avans səhvləri udurdu (indi xəbərdarlıq, DomainError olmayan səhv yuxarı ötürülür).
+- **Developer 2:** 16 oxuyucu / ixrac qüsuru (bax QERARLAR 2026-11-01 §6).
+- **UI/UX:** 15 tapıntı (bax §7); sol / sağ oxla menyu bölmələri arasında keçid edilmədi.
+- Kod: `invoices.ts` (`splitAdvances`, `offsetLaterAdvances` xəbərdarlığı və valyuta), `money.ts` (`depositPaid`, avansın işarəsi), `closing.ts` (ləğv edilmiş qaimə, əl ilə əvəzləşdirmə xəbərdarlığı), `profit-tax.ts`, `reports.ts` (222.02 / 222.04), `bank.ts` / `cash.ts` (xəbərdarlıq), `domain/statement.ts`, `domain/eqaime.ts`, `renderer/sheet-reader.ts`, `renderer/xlsx.ts`, ekranlar.
+- `npm run typecheck`, `npm test` 357, `npm run test:ui` 65, `npm run test:perf` (satış qaiməsi 176 ms, bank daxilolması 5 ms) keçir. Electron işlədilmədi.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

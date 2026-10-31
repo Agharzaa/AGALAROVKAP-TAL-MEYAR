@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -372,6 +373,7 @@ function NavMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const keys = useMenuKeys(open, () => setOpen(true));
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -388,8 +390,9 @@ function NavMenu({
     };
   }, [open]);
   return (
-    <div className={`nav-menu${primary ? ' primary' : ''}`} ref={ref}>
+    <div className={`nav-menu${primary ? ' primary' : ''}`} ref={ref} onKeyDown={keys.onKeyDown}>
       <button
+        ref={keys.button}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -401,7 +404,7 @@ function NavMenu({
         <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open && (
-        <ul className="menu" role="menu" aria-label={label}>
+        <ul className="menu" role="menu" aria-label={label} ref={keys.menuRef}>
           {items.map((i) => (
             <li key={i.label} role="none">
               <button
@@ -507,6 +510,58 @@ function ZoomControl() {
   );
 }
 
+/**
+ * ↓/↑ (Home/End) in a drop-down menu: from its button the focus enters the menu (opening it if
+ * needed), inside it walks the items round; Escape returns the focus to the button.
+ */
+function useMenuKeys(open: boolean, onOpen: () => void) {
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLElement | null>(null);
+  const enter = useRef<'first' | 'last' | null>(null);
+  const items = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+  useEffect(() => {
+    if (!open || !enter.current) return;
+    const list = items();
+    (enter.current === 'first' ? list[0] : list[list.length - 1])?.focus();
+    enter.current = null;
+  }, [open]);
+  function onKeyDown(e: ReactKeyboardEvent) {
+    const inside = !!menu.current?.contains(document.activeElement);
+    if (e.key === 'Escape' && inside) {
+      button.current?.focus();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const back = e.key === 'ArrowUp' || e.key === 'End';
+    if (!inside) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      if (open) {
+        const list = items();
+        (back ? list[list.length - 1] : list[0])?.focus();
+      } else {
+        enter.current = back ? 'last' : 'first';
+        onOpen();
+      }
+      return;
+    }
+    e.preventDefault();
+    const list = items();
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? list.length - 1
+          : (at + (back ? -1 : 1) + list.length) % list.length;
+    list[next]?.focus();
+  }
+  const menuRef = (el: HTMLElement | null) => {
+    menu.current = el;
+  };
+  return { button, menuRef, onKeyDown };
+}
+
 /** One entry of the main menu: the section name, and its functions in a drop-down. */
 function MainMenuItem({
   section,
@@ -526,6 +581,7 @@ function MainMenuItem({
   onPick: (item: NavItem) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const keys = useMenuKeys(open, onOpen);
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -542,8 +598,14 @@ function MainMenuItem({
     };
   }, [open, onClose]);
   return (
-    <div className="menu-entry" ref={ref} onPointerEnter={onHover}>
+    <div
+      className="menu-entry"
+      ref={ref}
+      onPointerEnter={onHover}
+      onKeyDown={section.groups.length ? keys.onKeyDown : undefined}
+    >
       <button
+        ref={keys.button}
         type="button"
         aria-label={section.label}
         aria-haspopup={section.groups.length ? 'menu' : undefined}
@@ -555,7 +617,7 @@ function MainMenuItem({
         <span>{section.label}</span>
       </button>
       {open && (
-        <div className="menu-drop" role="menu" aria-label={section.label}>
+        <div className="menu-drop" role="menu" aria-label={section.label} ref={keys.menuRef}>
           {section.groups.map((g) => (
             <div key={g.title} className="menu-group">
               <span className="menu-group-title">{g.title}</span>

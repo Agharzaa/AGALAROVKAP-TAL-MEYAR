@@ -1076,7 +1076,11 @@ function advanceWarnings(nets: Map<string, Map<string, bigint>>, names: Names): 
  * money that left one account and has not arrived on another.
  */
 function transitWarnings(db: Db, companyId: string, chart: Chart, date: string): Signal[] {
-  const transit = ['222.01', '222.03'].filter((c) => chart.get(c) && chart.postable(c));
+  // 222.02 / 222.04 (buying / selling currency) too: what is left there once both legs are in is
+  // the rate difference the accountant closes to 731 / 611 (audit 2026-11-01).
+  const transit = ['222.01', '222.02', '222.03', '222.04'].filter(
+    (c) => chart.get(c) && chart.postable(c),
+  );
   const out: Signal[] = [];
   for (const r of aggregate(db, companyId, date, date, ['account'], { accounts: transit })) {
     const net = r.agg.closeDt - r.agg.closeKt;
@@ -1085,7 +1089,10 @@ function transitWarnings(db: Db, companyId: string, chart: Chart, date: string):
         kind: 'transit',
         account: r.key[0]!,
         sk: [],
-        text: `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
+        text:
+          r.key[0] === '222.02' || r.key[0] === '222.04'
+            ? `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} qalıb — valyutanın ikinci tərəfi uçota alınmayıb və ya məzənnə fərqidir (Dt 731 / Kt ${r.key[0]} və ya Dt ${r.key[0]} / Kt 611 ilə bağlayın).`
+            : `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
       });
   }
   return out;

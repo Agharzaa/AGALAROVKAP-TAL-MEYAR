@@ -20,7 +20,7 @@ import type {
 } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { addAmounts, day, money, qty, stamp, today } from '../format';
+import { addAmounts, day, money, monthTitle, qty, stamp, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { MonthFilter } from '../filters';
@@ -120,6 +120,8 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   const [open, setOpen] = useState<string>('');
   const [ignore, setIgnore] = useState<EqDocumentView | null>(null);
   const [settle, setSettle] = useState<EqDocumentView | null>(null);
+  /** A booked invoice to cancel by red storno: DVX cancelled it, or its automatic booking. */
+  const [storno, setStorno] = useState<{ d: EqDocumentView; auto: boolean } | null>(null);
   const [reason, setReason] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const m = useMutation();
@@ -258,6 +260,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   /** DVX cancelled (or the buyer rejected) a booked e-qaimə: its invoice is cancelled by storno. */
   async function cancelInvoice(d: EqDocumentView) {
     setMessage('');
+    setReadError('');
     let version: number;
     try {
       version = (
@@ -268,7 +271,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         })
       ).version;
     } catch (e) {
-      setMessage((e as Error).message);
+      setReadError((e as Error).message);
       return;
     }
     const r = await m.run({
@@ -304,6 +307,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
   /** Undoing an automatic booking: the invoice is cancelled (storno), the e-qaimə waits. */
   async function undo(d: EqDocumentView) {
     setMessage('');
+    setReadError('');
     let version: number;
     try {
       version = (
@@ -314,7 +318,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         })
       ).version;
     } catch (e) {
-      setMessage((e as Error).message);
+      setReadError((e as Error).message);
       return;
     }
     const r = await m.run({
@@ -507,7 +511,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
                 className="button secondary small"
                 disabled={m.busy}
                 aria-label={`${d.number}: qaiməni ləğv et`}
-                onClick={() => void cancelInvoice(d)}
+                onClick={() => setStorno({ d, auto: false })}
               >
                 Qaiməni ləğv et
               </button>
@@ -530,10 +534,10 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             type="button"
             className="button secondary small"
             disabled={m.busy}
-            aria-label={`${d.number}: avtomatik uçotu geri qaytar`}
-            onClick={() => void undo(d)}
+            aria-label={`${d.number}: uçotu ləğv et (storno)`}
+            onClick={() => setStorno({ d, auto: true })}
           >
-            Geri qaytar
+            Uçotu ləğv et (storno)
           </button>
         ) : d.state === 'ignored' && !d.reason.startsWith('DVX:') ? (
           <button
@@ -611,11 +615,6 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           {api.hasDvx && (
             <button type="button" className="button secondary" onClick={() => void openCabinet()}>
               DVX kabinetini aç
-            </button>
-          )}
-          {api.hasDvx && (
-            <button type="button" className="button secondary" onClick={() => void diagnose()}>
-              DVX sorğularının quruluşunu saxla
             </button>
           )}
           {api.hasDvx && (
@@ -916,6 +915,15 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           />
         </>
       ) : null}
+      {api.hasDvx && (
+        // For support only: kept out of the toolbar, where the accountant works.
+        <details className="support-tools">
+          <summary>Texniki dəstək üçün</summary>
+          <button type="button" className="button secondary small" onClick={() => void diagnose()}>
+            DVX sorğularının quruluşunu saxla
+          </button>
+        </details>
+      )}
       {open && d && (
         <Modal
           title={`E-qaimə ${d.number}`}
@@ -937,6 +945,17 @@ export function EqaimePage({ direction }: { direction: Direction }) {
               {d.roadTax !== '0.00' && <> · yol vergisi {money(d.roadTax)}</>}
             </p>
             {d.conflict && <Notice kind="warning">{d.conflict}</Notice>}
+            {(d.autoNote || (d.proposal?.reasons.length ?? 0) > 0) && (
+              <>
+                <h3>Niyə avtomatik uçota alınmayıb</h3>
+                <ul aria-label="Niyə avtomatik uçota alınmayıb">
+                  {d.autoNote && <li>{d.autoNote}</li>}
+                  {d.proposal?.reasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              </>
+            )}
             {d.lines.length ? (
               <table className="grid" aria-label="Mal sətirləri">
                 <thead>
@@ -971,7 +990,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             <ul>
               {d.history.map((h, i) => (
                 <li key={i}>
-                  {h.at.slice(0, 10)} · {h.fileName} ({day(h.from)}–{day(h.to)}):{' '}
+                  {stamp(h.at).slice(0, 10)} · {h.fileName} ({day(h.from)}–{day(h.to)}):{' '}
                   {h.dvxStatus || '—'}
                 </li>
               ))}
@@ -979,10 +998,31 @@ export function EqaimePage({ direction }: { direction: Direction }) {
           </div>
         </Modal>
       )}
+      {storno && (
+        <Confirm
+          title={`Uçotu ləğv et (storno) · ${storno.d.invoiceNumber}`}
+          confirmLabel="Storno et"
+          destructive
+          busy={m.busy}
+          onCancel={() => setStorno(null)}
+          onConfirm={async () => {
+            await (storno.auto ? undo(storno.d) : cancelInvoice(storno.d));
+            setStorno(null);
+          }}
+        >
+          <p>
+            {storno.d.invoiceNumber} qaiməsinin yazılışları qırmızı storno ilə ləğv olunur
+            {storno.auto
+              ? `; e-qaimə ${storno.d.number} yenidən uçota alınmağı gözləyəcək.`
+              : `; e-qaimə ${storno.d.number} (DVX-də ${statusLabel[storno.d.status]}) kənara qoyulur.`}
+          </p>
+        </Confirm>
+      )}
       {settle && (
         <Confirm
           title={`Ziddiyyəti qəbul et · ${settle.number}`}
           confirmLabel="Qəbul et"
+          disabled={!reason.trim()}
           onCancel={() => setSettle(null)}
           onConfirm={async () => {
             const r = await m.run({
@@ -1018,6 +1058,7 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         <Confirm
           title={`E-qaiməni kənara qoy · ${ignore.number}`}
           confirmLabel="Kənara qoy"
+          disabled={!reason.trim()}
           onCancel={() => setIgnore(null)}
           onConfirm={async () => {
             const r = await m.run({
@@ -1107,7 +1148,7 @@ function ReconcileBody({ v, open }: { v: EqReconcileView; open: (id: string) => 
         <tbody>
           {v.months.map((m) => (
             <tr key={m.month}>
-              <td>{m.month}</td>
+              <td>{monthTitle(m.month)}</td>
               <td className="num">{m.dvxCount}</td>
               <td className="num">{money(m.dvxVat)}</td>
               <td className="num">{m.bookedCount}</td>

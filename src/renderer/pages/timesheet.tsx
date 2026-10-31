@@ -506,6 +506,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
         <Confirm
           title={`Tabeli ləğv et · ${doc.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

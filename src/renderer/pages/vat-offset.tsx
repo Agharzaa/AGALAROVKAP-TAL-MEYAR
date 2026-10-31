@@ -47,6 +47,8 @@ export function VatOffsetPage() {
   const [adding, setAdding] = useState('');
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
+  /** A month picked while the lines are unsaved: asked before they are dropped. */
+  const [pendingMonth, setPendingMonth] = useState('');
   const v = view.data && view.data.month === month ? view.data : undefined;
   const page = pages.vatOffset;
 
@@ -58,6 +60,12 @@ export function VatOffsetPage() {
     setDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
+  useEffect(() => ws.setDirty(win.id, dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  function pickMonth(next: string) {
+    if (next === month) return;
+    if (dirty) setPendingMonth(next);
+    else setMonth(next);
+  }
 
   const info = useMemo(() => {
     const map = new Map<string, VatOffsetLineView>();
@@ -94,6 +102,7 @@ export function VatOffsetPage() {
     setAdding('');
   }
   async function save() {
+    if (readOnly || m.busy || (v?.posted && !dirty)) return;
     setMessage('');
     const r = await m.run({
       type: 'vatOffset.save',
@@ -103,10 +112,23 @@ export function VatOffsetPage() {
       lines: lines.map((l, i) => ({ invoiceId: l.invoiceId, amount: amounts[i] || l.amount })),
     });
     if (r) {
+      setDirty(false);
       setMessage(`${r.number} uçota alındı (versiya ${r.version}).`);
       view.reload();
     }
   }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (ws.activeId !== win.id) return;
+      // As in every document form: Ctrl+S and Ctrl+Enter post the document.
+      if (e.ctrlKey && (e.key.toLowerCase() === 's' || e.key === 'Enter')) {
+        e.preventDefault();
+        void save();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   return (
     <ModuleFrame
@@ -141,7 +163,7 @@ export function VatOffsetPage() {
           )}
         </>
       }
-      filters={<MonthFilter value={month} onChange={setMonth} />}
+      filters={<MonthFilter value={month} onChange={pickMonth} />}
       notices={
         <>
           {view.error && <Notice>{view.error}</Notice>}
@@ -306,10 +328,28 @@ export function VatOffsetPage() {
           )}
         </>
       )}
+      {pendingMonth && (
+        <Confirm
+          title="Saxlanmamış dəyişikliklər"
+          confirmLabel="Saxlamadan keç"
+          destructive
+          onCancel={() => setPendingMonth('')}
+          onConfirm={() => {
+            setDirty(false);
+            setMonth(pendingMonth);
+            setPendingMonth('');
+          }}
+        >
+          <p>
+            {v?.number ?? 'Sənəd'}: sətirlər saxlanmayıb. Başqa aya keçsəniz, dəyişikliklər itəcək.
+          </p>
+        </Confirm>
+      )}
       {cancel && v?.posted && (
         <Confirm
           title={`ƏDV əvəzləşdirilməsini ləğv et · ${v.posted.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

@@ -306,20 +306,38 @@ function amount(text: string, what: string): string {
   return formatMinor(a.negative ? -a.amount : a.amount);
 }
 
-/** A decimal with up to `scale` places, as printed ("1 234,5678" → "1234.5678"). */
+/**
+ * A decimal with up to `scale` places, as printed ("1 234,5678" → "1234.5678"); a correction
+ * line's quantity may be negative ("-2"). Separators follow `readStatementAmount`'s rule, so a
+ * cell means the same number in a quantity column as in an amount column: a single comma
+ * before exactly three digits ("1,000") is a thousands separator, unless the number starts
+ * with "0,"; several commas or several dots are thousands separators.
+ */
 function decimal(text: string, scale: number, what: string): string {
-  let t = text.replace(/[\s ']/g, '');
+  let t = text.replace(/[\s ']/g, '').replace(/^[−–]/, '-');
   if (!t) return '';
+  const sign = t.startsWith('-') ? '-' : '';
+  if (sign || t.startsWith('+')) t = t.slice(1);
   const comma = t.lastIndexOf(',');
   const dot = t.lastIndexOf('.');
   if (comma >= 0 && dot >= 0)
     t = comma > dot ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
-  else if (comma >= 0) t = t.replace(',', '.');
+  else if (comma >= 0) {
+    const single = t.indexOf(',') === comma;
+    t =
+      single && (t.length - comma - 1 !== 3 || t.startsWith('0,'))
+        ? t.replace(',', '.')
+        : t.replace(/,/g, '');
+  } else if (dot >= 0 && t.indexOf('.') !== dot) {
+    if (!/^\d{1,3}(\.\d{3})+$/.test(t)) throw new Error(`${what} oxunmadı: “${text}”`);
+    t = t.replace(/\./g, '');
+  }
   const m = /^(\d+)(?:\.(\d+))?$/.exec(t);
   if (!m) throw new Error(`${what} oxunmadı: “${text}”`);
   const frac = (m[2] ?? '').replace(/0+$/, '');
   if (frac.length > scale) throw new Error(`${what}: ən çox ${scale} onluq: “${text}”`);
-  return frac ? `${m[1]}.${frac}` : m[1]!;
+  const value = frac ? `${m[1]}.${frac}` : m[1]!;
+  return sign && /[1-9]/.test(value) ? `-${value}` : value;
 }
 
 function vatRateOf(text: string): string {

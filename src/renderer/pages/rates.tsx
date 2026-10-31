@@ -441,6 +441,7 @@ export function RevaluationPage() {
         <Confirm
           title={`Yenidən qiymətləndirməni ləğv et · ${v.posted.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

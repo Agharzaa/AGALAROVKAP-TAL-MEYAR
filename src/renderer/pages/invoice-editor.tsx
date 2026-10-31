@@ -4,7 +4,7 @@
  * entry is shown under the document after saving, so every figure can be traced.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, CheckCheck, Copy, Plus, Trash2 } from '../icons';
+import { Ban, Check, CheckCheck, Copy, Plus, Trash2, ListTree } from '../icons';
 import { vatRates, type VatRate } from '../../domain/chart';
 import { aznAmounts, AZN_RATE, lineAmounts, type LineAmounts } from '../../domain/invoice';
 import { formatMinor } from '../../domain/money';
@@ -432,11 +432,7 @@ export function InvoiceEditor({
                   ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }
             >
-              <span className="dtkt" aria-hidden="true">
-                Dt
-                <br />
-                Kt
-              </span>
+              <ListTree size={15} />
               Yazılışlar
             </button>
           )}
@@ -891,6 +887,7 @@ export function InvoiceEditor({
         <Confirm
           title={`Qaiməni ləğv et · ${doc.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {
@@ -959,8 +956,9 @@ function EqBanner({ eq, fresh }: { eq: EqDocumentDetail; fresh: boolean }) {
           </ul>
         </details>
       )}
-      {fresh && p && p.reasons.length > 0 && (
+      {fresh && p && (p.reasons.length > 0 || eq.autoNote) && (
         <ul aria-label="Təsdiq tələb edənlər">
+          {eq.autoNote && <li>{eq.autoNote}</li>}
           {p.reasons.map((r) => (
             <li key={r}>{r}</li>
           ))}

@@ -37,6 +37,8 @@ import { writeOff } from './assets.js';
 import { buildPostings as buildManualPostings } from './operations.js';
 import { documentRate } from './rates.js';
 import { checkSideValues } from './subkonto.js';
+import { depositPaid } from './money.js';
+import { VAT_PAYMENT_MEMO } from '../domain/bank.js';
 import { expectVersion, type Tx } from './tx.js';
 import { bindEq, releaseEq } from './eqaime-book.js';
 
@@ -471,7 +473,22 @@ function buildPostings(
       header.date,
       foreign,
     );
-    for (const o of allocateAdvances(open, owed, owedCur))
+    const offsets = foreign
+      ? allocateAdvances(open, owed, owedCur).map((o) => ({ ...o, vat: false }))
+      : splitAdvances(
+          tx,
+          companyId,
+          'in',
+          advance.code,
+          receivable.code,
+          partner,
+          contract,
+          self,
+          open,
+          owed,
+          n,
+        );
+    for (const o of offsets)
       out.push({
         dt: {
           ...side(advance, { partner, contract, document: o.document }, 'Avans'),
@@ -479,7 +496,7 @@ function buildPostings(
         },
         kt: { ...side(receivable, pv, 'Avans'), ...cur(o.currency) },
         amount: o.amount,
-        memo: 'Avansın əvəzləşdirilməsi',
+        memo: `${o.vat ? VAT_PAYMENT_MEMO : ''}Avansın əvəzləşdirilməsi`,
       });
   } else {
     const payable = settle('531');
@@ -535,7 +552,22 @@ function buildPostings(
       header.date,
       foreign,
     );
-    for (const o of allocateAdvances(open, owed, owedCur))
+    const offsets = foreign
+      ? allocateAdvances(open, owed, owedCur).map((o) => ({ ...o, vat: false }))
+      : splitAdvances(
+          tx,
+          companyId,
+          'out',
+          advance.code,
+          payable.code,
+          partner,
+          contract,
+          self,
+          open,
+          owed,
+          n,
+        );
+    for (const o of offsets)
       out.push({
         dt: { ...side(payable, pv, 'Avans'), ...cur(o.currency) },
         kt: {
@@ -543,7 +575,7 @@ function buildPostings(
           ...cur(o.currency),
         },
         amount: o.amount,
-        memo: 'Verilmiş avansın əvəzləşdirilməsi',
+        memo: `${o.vat ? VAT_PAYMENT_MEMO : ''}Verilmiş avansın əvəzləşdirilməsi`,
       });
   }
   // Every value is also checked against the catalogs, as for a manual operation.
@@ -754,6 +786,84 @@ function guardSettlement(
   }
 }
 
+/**
+ * The advances an AZN invoice offsets, by part (audit 2026-11-01): the VAT an advance holds —
+ * paid from the VAT deposit (224) or with the "VAT payment" cash-flow item — pays only the
+ * invoice's VAT still open (its offset says so in the memo, for the VAT offset), the rest of an
+ * advance pays the rest of the invoice; VAT left over stays on the advance for a later invoice.
+ */
+function splitAdvances(
+  tx: Tx,
+  companyId: string,
+  direction: 'in' | 'out',
+  advanceAccount: string,
+  settlementAccount: string,
+  partner: string,
+  contract: string,
+  self: string,
+  open: readonly { document: string; amount: Minor; currency: Minor }[],
+  owed: Minor,
+  n: Normalized,
+): { document: string; amount: Minor; currency: Minor; vat: boolean }[] {
+  // The advance's own side: Kt 543 for money received, Dt 243 for money paid.
+  const [own, other] = direction === 'in' ? (['kt', 'dt'] as const) : (['dt', 'kt'] as const);
+  const vatOfAdvance = (document: string): Minor => {
+    const r = tx.db.get(
+      `SELECT
+         COALESCE(SUM(CASE WHEN p.${own}_account=?1 AND (p.${other}_account='224' OR p.${other}_account LIKE '224.%'
+           OR substr(p.memo,1,?5)=?6) THEN p.amount END),0) AS paidIn,
+         COALESCE(SUM(CASE WHEN p.${other}_account=?1 AND substr(p.memo,1,?5)=?6 THEN p.amount END),0) AS usedUp
+       FROM postings p
+       WHERE p.company_id=?2 AND ((p.${own}_account=?1 AND p.${own}_s1=?3 AND p.${own}_s2=?4 AND p.${own}_s3=?7)
+         OR (p.${other}_account=?1 AND p.${other}_s1=?3 AND p.${other}_s2=?4 AND p.${other}_s3=?7))`,
+      advanceAccount,
+      companyId,
+      partner,
+      contract,
+      VAT_PAYMENT_MEMO.length,
+      VAT_PAYMENT_MEMO,
+      document,
+    )!;
+    const left = (r.paidIn as bigint) - (r.usedUp as bigint);
+    return left > 0n ? left : 0n;
+  };
+  if (!open.length || owed <= 0n) return [];
+  const vat = n.lines.reduce((s, l) => s + l.azn.vat, 0n);
+  const vatPaid =
+    vat <= 0n
+      ? 0n
+      : depositPaid(tx.db, companyId, direction, settlementAccount, partner, contract, self);
+  let vatLeft = vat - vatPaid;
+  if (vatLeft > owed) vatLeft = owed;
+  let left = owed;
+  const out: { document: string; amount: Minor; currency: Minor; vat: boolean }[] = [];
+  const rest = open.map((a) => {
+    const v = vatOfAdvance(a.document);
+    return { document: a.document, amount: a.amount, vat: v < a.amount ? v : a.amount };
+  });
+  // 1. VAT advances pay the invoice's VAT.
+  for (const a of rest) {
+    if (vatLeft <= 0n || left <= 0n) break;
+    if (a.vat <= 0n) continue;
+    const take = [a.vat, vatLeft, left].reduce((x, y) => (y < x ? y : x));
+    out.push({ document: a.document, amount: take, currency: 0n, vat: true });
+    a.vat -= take;
+    a.amount -= take;
+    vatLeft -= take;
+    left -= take;
+  }
+  // 2. The rest of each advance (its VAT kept for a later invoice) pays the rest.
+  for (const a of rest) {
+    if (left <= 0n) break;
+    const free = a.amount - a.vat;
+    if (free <= 0n) continue;
+    const take = free < left ? free : left;
+    out.push({ document: a.document, amount: take, currency: 0n, vat: false });
+    left -= take;
+  }
+  return out;
+}
+
 function payload(number: string, n: Normalized) {
   return { number, ...n.header, lines: n.lines.map((l) => l.stored) };
 }
@@ -915,7 +1025,8 @@ export function saveInvoice(
   return { id, version, number, ...(warning ? { warning } : {}) };
 }
 
-const advanceMemos = new Set(['Avansın əvəzləşdirilməsi', 'Verilmiş avansın əvəzləşdirilməsi']);
+const isAdvanceMemo = (memo: string) =>
+  memo.endsWith('Avansın əvəzləşdirilməsi') || memo.endsWith('Verilmiş avansın əvəzləşdirilməsi');
 
 /**
  * A bank or cash document dated before invoices already posted brings an advance (543 / 243) of
@@ -931,7 +1042,7 @@ export function offsetLaterAdvances(
   partner: string,
   contract: string,
   from: string,
-): number {
+): string[] {
   const closed = String(tx.company(companyId).closed_through);
   const chart = tx.chart(companyId);
   // Only invoices still owed on their own settlement key (211 debit / 531 credit): one paid in
@@ -941,14 +1052,14 @@ export function offsetLaterAdvances(
     tx.db
       .all(
         `SELECT s FROM (
-           SELECT dt_s3 AS s, amount AS a FROM postings
+           SELECT dt_s3 AS s, amount AS a, dt_cur AS c FROM postings
              WHERE company_id=?1 AND (dt_account=?2 OR dt_account LIKE ?2||'.%') AND dt_s1=?3 AND dt_s2=?4
                AND dt_s3 LIKE 'invoice:%' AND date>=?5
            UNION ALL
-           SELECT kt_s3, -amount FROM postings
+           SELECT kt_s3, -amount, -kt_cur FROM postings
              WHERE company_id=?1 AND (kt_account=?2 OR kt_account LIKE ?2||'.%') AND kt_s1=?3 AND kt_s2=?4
                AND kt_s3 LIKE 'invoice:%' AND date>=?5
-         ) GROUP BY s HAVING ?6*SUM(a)>0`,
+         ) GROUP BY s HAVING ?6*SUM(a)>0 OR ?6*SUM(c)>0`,
         companyId,
         family,
         partner,
@@ -958,8 +1069,10 @@ export function offsetLaterAdvances(
       )
       .map((r) => String(r.s).slice('invoice:'.length)),
   );
-  if (!owed.size) return 0;
-  let done = 0;
+  if (!owed.size) return [];
+  // An invoice that cannot be posted again as it stands (an archived product, a changed catalog…):
+  // said to the accountant, not swallowed (audit 2026-11-01).
+  const problems: string[] = [];
   for (const inv of tx.db.all(
     `SELECT * FROM invoices WHERE company_id=? AND direction=? AND partner_id=? AND contract_id=?
        AND status='posted' AND manual=0 AND date>=? AND date>? ORDER BY date, rowid`,
@@ -998,11 +1111,11 @@ export function offsetLaterAdvances(
     const signature = (list: readonly Posting[]) =>
       JSON.stringify(
         list
-          .filter((p) => !advanceMemos.has(p.memo))
+          .filter((p) => !isAdvanceMemo(p.memo))
           .map((p) => [p.dt.account, p.dt.sk, p.kt.account, p.kt.sk, String(p.amount)]),
       );
     const advance = (list: readonly Posting[]) =>
-      list.filter((p) => advanceMemos.has(p.memo)).reduce((s, p) => s + p.amount, 0n);
+      list.filter((p) => isAdvanceMemo(p.memo)).reduce((s, p) => s + p.amount, 0n);
     try {
       tx.db.savepoint(() => {
         const prev = tx.entryPostings(companyId, INVOICE, id, version);
@@ -1013,7 +1126,7 @@ export function offsetLaterAdvances(
           signature(fresh) !== signature(prev.postings) ||
           advance(fresh) <= advance(prev.postings)
         )
-          throw new Error('unchanged');
+          throw UNCHANGED;
         const next = version + 1;
         tx.post(companyId, chart, { ...source, version: next }, prev.date, false, fresh);
         guardSettlement(tx, companyId, chart, id, String(inv.number), prev.postings, fresh);
@@ -1032,13 +1145,18 @@ export function offsetLaterAdvances(
           `${String(inv.number)} · ${money(advance(fresh) - advance(prev.postings))} ${String(inv.currency)} — sonradan yazılan ödəniş`,
         );
       });
-      done++;
-    } catch {
+    } catch (e) {
       // Left as it was: nothing to offset, or more than the advance would change.
+      if (e === UNCHANGED) continue;
+      if (!(e instanceof DomainError)) throw e;
+      problems.push(
+        `${String(inv.number)}: avans əvəzləşdirilmədi — ${e.message} Qaiməni açıb yenidən saxlayın.`,
+      );
     }
   }
-  return done;
+  return problems;
 }
+const UNCHANGED = new Error('unchanged');
 
 /** The advances a bank / cash document's postings make, offset by the invoices dated after it. */
 export function offsetAdvancesOf(
@@ -1046,7 +1164,7 @@ export function offsetAdvancesOf(
   companyId: string,
   date: string,
   postings: readonly Posting[],
-): void {
+): string {
   const keys = new Map<string, ['sale' | 'purchase', string, string]>();
   for (const p of postings) {
     if (p.amount <= 0n) continue;
@@ -1055,8 +1173,10 @@ export function offsetAdvancesOf(
     if (p.dt.account.startsWith('243') && p.dt.sk[0] && p.dt.sk[1])
       keys.set(`p|${p.dt.sk[0]}|${p.dt.sk[1]}`, ['purchase', p.dt.sk[0], p.dt.sk[1]]);
   }
+  const problems: string[] = [];
   for (const [direction, partner, contract] of keys.values())
-    offsetLaterAdvances(tx, companyId, direction, partner, contract, date);
+    problems.push(...offsetLaterAdvances(tx, companyId, direction, partner, contract, date));
+  return problems.join(' ');
 }
 
 export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): CommandResult {

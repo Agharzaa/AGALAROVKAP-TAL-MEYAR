@@ -786,6 +786,7 @@ export function CashEditor({ direction, id }: { direction: Direction; id?: strin
         <Confirm
           title={`Sənədi ləğv et · ${doc.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

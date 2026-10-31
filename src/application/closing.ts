@@ -634,11 +634,12 @@ export function vatStep(
       const open = debit - credit;
       const offset0 = offsets.get(document);
       const byClosing = [...(offset0?.closing.values() ?? [])].reduce((s, a) => s + a, 0n);
-      if (open <= 0n && byClosing <= 0n) continue;
+      // Offset by hand only is looked at too: a cancelled invoice or e-qaimə must be said (audit).
+      if (open <= 0n && byClosing <= 0n && (offset0?.kt ?? 0n) <= 0n) continue;
       const inv = db.get(
         `SELECT i.*, p.kind AS partner_kind, p.name AS partner_name FROM invoices i
          JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
-       WHERE i.company_id=? AND i.id=? AND i.direction='purchase' AND i.status='posted'`,
+       WHERE i.company_id=? AND i.id=? AND i.direction='purchase'`,
         companyId,
         document.slice('invoice:'.length),
       );
@@ -674,6 +675,37 @@ export function vatStep(
       // What the rule itself still holds offset: a reversal by hand (Dt 241 / Kt 521.01) undoes it
       // first; lines set by hand are the accountant's and stay out of the rule's sums (audit D2).
       const ruleNet = byClosing - (offset0?.dt ?? 0n);
+      // What stays offset after the rule took its own back: the accountant's lines, said when the
+      // invoice or its e-qaimə no longer stands (the rule never takes them back by itself).
+      const byHand = (why: string) => {
+        const left = offsetNet - (ruleNet > 0n ? ruleNet : 0n);
+        if (left > 0n)
+          waiting.push({
+            ...signal(
+              'vatUnconfirmed',
+              `${label}: əl ilə əvəzləşdirilmiş ƏDV ${show(left)} — ${why}; ƏDV əvəzləşdirilməsi sənədində mənfi sətirlə geri alın.`,
+              '241',
+              [doc.partner, document],
+            ),
+            invoice: { id: String(inv.id), direction: 'purchase' },
+          });
+      };
+      // A cancelled invoice keeps nothing offset (audit 2026-11-01).
+      if (inv.status !== 'posted') {
+        // In the list too: the closing posts its take-back as a line of the ƏƏ- document.
+        seen = {
+          invoiceId: String(inv.id),
+          partner: doc.partner,
+          invoiceVat: 0n,
+          open,
+          offset: offsetNet,
+          paid: 0n,
+          dvxVat: null,
+        };
+        takeBack(ruleNet, 'qaimə ləğv edilib');
+        byHand('qaimə ləğv edilib');
+        continue;
+      }
       // The VAT of the invoice itself: 241's debit less what was taken back to it from 521.01.
       const invoiceVat = debit - (offset0?.dt ?? 0n);
       // What reached the invoice by the month's end: the VAT through the VAT deposit, less what came
@@ -738,6 +770,7 @@ export function vatStep(
             invoice: { id: String(inv.id), direction: 'purchase' },
           });
         takeBack(ruleNet, 'e-qaimə DVX-də artıq təsdiqlənmiş deyil');
+        byHand('e-qaimə DVX-də təsdiqlənmiş deyil');
         continue;
       }
       // Never more than DVX confirmed: an invoice saved with other VAT than its e-qaimə (a warning

@@ -405,7 +405,7 @@ textarea:focus-visible {
   background: transparent;
   border-color: var(--line-2);
   box-shadow: none;
-  color: var(--off);
+  color: var(--muted);
   cursor: default;
 }
 .button:disabled .icon {
@@ -415,15 +415,7 @@ textarea:focus-visible {
   background: transparent;
   border-color: var(--line-2);
   box-shadow: none;
-  color: var(--off);
-}
-.dtkt {
-  display: inline-block;
-  font-size: 9px;
-  line-height: 9px;
-  font-weight: 700;
-  color: var(--ink-2);
-  text-align: center;
+  color: var(--muted);
 }
 .icon-button {
   display: inline-flex;
@@ -619,7 +611,7 @@ textarea:focus-visible {
   margin-top: 1px;
   border-radius: 50%;
   color: var(--on-strong);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -653,7 +645,6 @@ textarea:focus-visible {
 .notice.info::before {
   content: 'i';
   background: var(--link);
-  font-style: italic;
 }
 .notice.warning {
   background: var(--wait-bg);
@@ -1868,7 +1859,7 @@ td.trial-name {
   line-height: 14px;
 }
 /* As in 1C (variant A, 25.10.2026): the report sheet, every cell ruled, grouping marks (⊞ ⊟) in
-   the left margin, accounts of the first level bold, subkonto in italics. */
+   the left margin, accounts of the first level bold, subkonto in a softer ink (no italics, DIZAYN). */
 .report-head {
   padding: 10px 2px 8px;
 }
@@ -1910,7 +1901,7 @@ td.trial-name {
   font-weight: 600;
 }
 .trial.onec tr.subkonto .label {
-  font-style: italic;
+  color: var(--ink-2);
 }
 .trial tr.lvl3 td,
 .trial tr.lvl4 td {
@@ -2577,7 +2568,7 @@ button.step:active {
   border-radius: 0;
   background: none;
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .status.cancelled i::before {
@@ -3050,7 +3041,7 @@ button.step:active {
 }
 .chip-wait {
   color: var(--ink-2);
-  background: var(--frame);
+  background: var(--head);
 }
 .chip-bad {
   color: var(--bad);
@@ -3099,7 +3090,7 @@ button.step:active {
     font-weight: 600;
   }
   .print-sheet .trial-sheet .subkonto td:first-child {
-    font-style: italic;
+    color: #444;
   }
   body > *:not(.print-sheet) {
     display: none !important;

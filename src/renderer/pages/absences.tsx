@@ -458,6 +458,7 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
         <Confirm
           title={`Sənədi ləğv et · ${doc.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

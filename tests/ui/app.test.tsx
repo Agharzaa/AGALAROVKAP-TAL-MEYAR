@@ -870,8 +870,9 @@ test('rules: save a booking as a rule, switch it to auto, undo an automatic post
     await user.selectOptions(statements.getByRole('combobox', { name: 'Çıxarış' }), second.id);
     await user.click(await statements.findByRole('tab', { name: /Uçota alınıb/ }));
     await statements.findByText(/avtomatik, qayda: /);
+    await user.click(statements.getByRole('button', { name: 'Sətir 5: uçotu ləğv et (storno)' }));
     await user.click(
-      statements.getByRole('button', { name: 'Sətir 5: avtomatik uçotu geri qaytar' }),
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Storno et' }),
     );
     await statements.findByText(/Avtomatik uçot geri qaytarıldı: BX-000002 storno edildi/);
     const after = h.ledger.query({
@@ -1239,6 +1240,9 @@ test('DVX statuses: cancel the invoice of a cancelled e-qaimə, apply a correcti
     const box = within(pane());
     await user.click(await box.findByRole('tab', { name: /Ziddiyyət 1/ }));
     await user.click(await box.findByRole('button', { name: 'MT1: qaiməni ləğv et' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Storno et' }),
+    );
     await box.findByText(/AQ-000001 storno ilə ləğv edildi; MT1 kənara qoyuldu/);
     await box.findByRole('tab', { name: /Kənar qoyulub 1/ });
     // The correction of MT5 opens AQ-000002 itself, with the correction's quantity.
@@ -3334,7 +3338,7 @@ test('stage 9b: the muzdlu iş return opens on the quarter, by months; another q
     await user.clear(report.getByLabelText('İl'));
     await user.type(report.getByLabelText('İl'), '2026');
     await user.selectOptions(report.getByLabelText('Rüb'), 'Q2');
-    await report.findAllByRole('columnheader', { name: '2026-04' });
+    await report.findAllByRole('columnheader', { name: 'Aprel 2026' });
     const tax = report.getByRole('rowheader', { name: 'Gəlir vergisi' }).closest('tr')!;
     assert.deepEqual(
       within(tax)

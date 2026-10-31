@@ -273,7 +273,7 @@ export function saveCashDocument(tx: Tx, cmd: SaveCash): CommandResult {
   );
   guardAdvances(tx, cmd.companyId, CASH, id, previous);
   // An advance of an earlier date than invoices already posted: they offset it now.
-  offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
+  const advanceNote = offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
   // The new cashbox from the earlier of both dates; the cashbox it left from its old date.
   const from =
     previousBox && previousBox.id === n.holder.id && previousBox.date < n.header.date
@@ -296,7 +296,7 @@ export function saveCashDocument(tx: Tx, cmd: SaveCash): CommandResult {
     id,
     `${number} · ${n.header.date} · ${String(n.box.name)} · ${money(n.total)} ${n.header.currency}`,
   );
-  return { id, version, number };
+  return { id, version, number, ...(advanceNote ? { warning: advanceNote } : {}) };
 }
 
 export function cancelCashDocument(tx: Tx, cmd: CommandOf<'cash.cancel'>): CommandResult {

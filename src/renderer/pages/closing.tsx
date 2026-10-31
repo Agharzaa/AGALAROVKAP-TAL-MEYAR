@@ -15,7 +15,7 @@ import type {
 } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { MonthFilter } from '../filters';
-import { money } from '../format';
+import { money, monthTitle } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Amount, Confirm, Empty, Field, Notice } from '../ui';
@@ -192,6 +192,14 @@ export function ClosingPage() {
     list.reload();
   };
   const canClose = !!v && !v.posted && !v.blocking.length && (read || !v.warnings.length);
+  // Why "Ayı bağla" is unavailable, said on the button itself.
+  const whyNot = !v
+    ? ''
+    : v.blocking.length
+      ? `Bağlamaq olmur: ${v.blocking.length} yoxlama bağlanışı dayandırır (aşağıda).`
+      : !read && v.warnings.length
+        ? 'Əvvəlcə xəbərdarlıqları oxuyub "Oxudum" qeyd edin.'
+        : '';
   async function run() {
     if (!canClose) return;
     setMessage('');
@@ -227,7 +235,7 @@ export function ClosingPage() {
                 type="button"
                 className="button primary"
                 disabled={m.busy || !canClose}
-                title="Ctrl+Enter"
+                title={whyNot || 'Ctrl+Enter'}
                 onClick={() => void run()}
               >
                 <Check size={15} /> Ayı bağla
@@ -332,9 +340,17 @@ export function ClosingPage() {
                     <tr
                       key={c.id}
                       className={c.month === month ? 'selected' : undefined}
+                      tabIndex={0}
                       onClick={() => (setMonth(c.month), setRead(false))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setMonth(c.month);
+                          setRead(false);
+                        }
+                      }}
                     >
-                      <td>{c.month}</td>
+                      <td>{monthTitle(c.month)}</td>
                       <td>{c.number}</td>
                       <td>{c.status === 'posted' ? 'uçotda' : 'ləğv edilib'}</td>
                       <td className="num">
@@ -352,6 +368,7 @@ export function ClosingPage() {
         <Confirm
           title={`Ay bağlanışını ləğv et · ${v.posted.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {

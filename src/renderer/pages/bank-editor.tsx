@@ -5,7 +5,7 @@
  * open invoices by the server; the entry under the form shows where the money went.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Ban, Check, CheckCheck } from '../icons';
+import { Ban, Check, CheckCheck, ListTree } from '../icons';
 import type {
   BankDocumentDetail,
   Catalog,
@@ -321,11 +321,7 @@ export function BankEditor({
                   ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }
             >
-              <span className="dtkt" aria-hidden="true">
-                Dt
-                <br />
-                Kt
-              </span>
+              <ListTree size={15} />
               Yazılışlar
             </button>
           )}
@@ -379,6 +375,11 @@ export function BankEditor({
               {row.proposal?.newPartner &&
                 ` Kontragentlər kitabçasına əlavə edin: ${row.proposal.newPartner.name}, VÖEN ${row.proposal.newPartner.taxId}.`}{' '}
               Sətirlərin cəmi çıxarışdakı məbləğə bərabər olmalıdır.
+              {row.autoNote && (
+                <ul aria-label="Niyə avtomatik uçota alınmayıb">
+                  <li>{row.autoNote}</li>
+                </ul>
+              )}
             </Notice>
           )}
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
@@ -637,6 +638,7 @@ export function BankEditor({
         <Confirm
           title={`Sənədi ləğv et · ${doc.number}`}
           confirmLabel="Ləğv et"
+          disabled={!reason.trim()}
           destructive
           onCancel={() => setCancel(false)}
           onConfirm={async () => {
