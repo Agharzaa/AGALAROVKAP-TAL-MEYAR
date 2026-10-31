@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 31.10.2026 (0.9.22). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 31.10.2026 (0.9.23). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -824,6 +824,10 @@ Müstəqil yoxlayıcı (kodu yazmayan alt agent) 5 qüsur tapdı, hər biri əvv
 - **Avansın sonradan əvəzləşdirilməsi** (`offsetLaterAdvances`, `src/application/invoices.ts`; bank və kassa sənədindən sonra): əsl bazanın surətində bir alıcının 104 850 ₼ avansı qaiməsi ilə əvəzləşmirdi (qaimə əvvəl, çıxarış sonra yüklənmişdi).
 - **Əsl bazanın vəziyyəti (surətdə yoxlandı):** sxem v26-ya təmiz keçir; bank qalığı tutuşmur, çünki yanvar–sentyabr bank çıxarışları və 30.09 qalığı yoxdur (531-də 352 258 ₼ "borc"); 241-də 34 095,94 ₼ — depozit çıxarışı yoxdur; satış e-qaimələri yalnız oktyabr; oktyabrı bağlamaq üçün yanvar–sentyabr bağlanmalıdır. Mövcud avansların əvəzləşdirilməsi əsl bazada 0.9.22 quraşdırılandan sonra edilməlidir (0.9.20 v26 bazanı açmır).
 - Testlər: `audit-1031.test.ts` (6), `vat-offset.test.ts` (+1). `npm run typecheck`, `npm test` 323, `npm run test:ui` 58, `npm run test:perf` keçir.
+
+## 0.9.23 — CI: bank daxilolmasının sürəti (31.10.2026)
+
+0.9.22-nin CI-i yük testində dayandı: "Bank daxilolması (qaimələrə bölgü, avans)" 1 112 ms / 300 ms — avansın sonradan əvəzləşdirilməsi kontragentin bütün sonrakı qaimələrini yenidən hesablayırdı. İndi yalnız öz hesablaşma açarında borcu qalan qaimələr (bir SQL sorğusu); kompüterdə 7 ms. `npm test` 323, `npm run test:perf` keçir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

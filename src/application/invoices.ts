@@ -934,6 +934,31 @@ export function offsetLaterAdvances(
 ): number {
   const closed = String(tx.company(companyId).closed_through);
   const chart = tx.chart(companyId);
+  // Only invoices still owed on their own settlement key (211 debit / 531 credit): one paid in
+  // full has nothing to offset, and a partner's whole history is never posted again.
+  const [family, sign] = direction === 'sale' ? ['211', 1n] : ['531', -1n];
+  const owed = new Set(
+    tx.db
+      .all(
+        `SELECT s FROM (
+           SELECT dt_s3 AS s, amount AS a FROM postings
+             WHERE company_id=?1 AND (dt_account=?2 OR dt_account LIKE ?2||'.%') AND dt_s1=?3 AND dt_s2=?4
+               AND dt_s3 LIKE 'invoice:%' AND date>=?5
+           UNION ALL
+           SELECT kt_s3, -amount FROM postings
+             WHERE company_id=?1 AND (kt_account=?2 OR kt_account LIKE ?2||'.%') AND kt_s1=?3 AND kt_s2=?4
+               AND kt_s3 LIKE 'invoice:%' AND date>=?5
+         ) GROUP BY s HAVING ?6*SUM(a)>0`,
+        companyId,
+        family,
+        partner,
+        contract,
+        from,
+        sign,
+      )
+      .map((r) => String(r.s).slice('invoice:'.length)),
+  );
+  if (!owed.size) return 0;
   let done = 0;
   for (const inv of tx.db.all(
     `SELECT * FROM invoices WHERE company_id=? AND direction=? AND partner_id=? AND contract_id=?
@@ -946,6 +971,7 @@ export function offsetLaterAdvances(
     closed,
   )) {
     const id = String(inv.id);
+    if (!owed.has(id)) continue;
     const version = Number(inv.version);
     const last = tx.db.get(
       "SELECT payload FROM document_history WHERE company_id=? AND doc_type=? AND doc_id=? AND version=? AND status='posted'",
