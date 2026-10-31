@@ -15,6 +15,7 @@ import {
   splitProportionally,
   type OpenInvoice,
   type SettlementPart,
+  VAT_PAYMENT_MEMO,
 } from '../domain/bank.js';
 import {
   inFamily,
@@ -268,7 +269,8 @@ function openInvoices(
 
 /**
  * What has reached an invoice through the VAT deposit: settlements whose other side is a 224
- * account, and advance offsets whose advance came from a bank document on a 224 account; up to
+ * account, advance offsets whose advance came from a bank document on a 224 account, and the
+ * lines of the "VAT payment" cash-flow item from a current account (their memo says so); up to
  * `through` (the month closing reads it at the month's end).
  */
 export function depositPaid(
@@ -290,13 +292,17 @@ export function depositPaid(
          OR (p.${other}_s3 LIKE 'bank:%' AND EXISTS(
            SELECT 1 FROM bank_documents b JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
            WHERE b.company_id=p.company_id AND 'bank:'||b.id=p.${other}_s3
-             AND (x.account='224' OR x.account LIKE '224.%'))))`,
+             AND (x.account='224' OR x.account LIKE '224.%')))
+         OR (substr(p.memo,1,?)=? AND EXISTS(SELECT 1 FROM entries e
+           WHERE e.company_id=p.company_id AND e.id=p.entry_id AND e.source_type IN ('bank','cash'))))`,
     companyId,
     account,
     partner,
     contract,
     document,
     through,
+    VAT_PAYMENT_MEMO.length,
+    VAT_PAYMENT_MEMO,
   )!.a as bigint;
 }
 
@@ -335,6 +341,9 @@ export function buildMoneyPostings(
   // What earlier lines of this document already settle on each invoice key: the ledger does not
   // hold this document yet, so a later automatic line would see those invoices still open.
   const taken = new Map<string, Minor>();
+  /** The part of `taken` that paid VAT: lines of a 224 holder or of the "VAT payment" item. */
+  const takenVat = new Map<string, Minor>();
+  let paysVat = false;
   const push = (counter: Side, amount: Minor, holderCur: Minor, memo: string) => {
     const [partner, contract, document] = counter.sk;
     if (
@@ -344,6 +353,7 @@ export function buildMoneyPostings(
       const k = `${counter.account}|${partner}|${contract}|${document}`;
       const v = chart.get(counter.account)?.currency ? (counter.curAmount ?? 0n) : amount;
       taken.set(k, (taken.get(k) ?? 0n) + v);
+      if (paysVat) takenVat.set(k, (takenVat.get(k) ?? 0n) + v);
     }
     out.push(
       d.direction === 'in'
@@ -352,10 +362,22 @@ export function buildMoneyPostings(
     );
   };
 
+  const vatItems = new Set(
+    tx.db
+      .all(
+        "SELECT id FROM items WHERE company_id=? AND kind='cashFlowItem' AND role='vatPayment'",
+        companyId,
+      )
+      .map((r) => String(r.id)),
+  );
   d.lines.forEach((l, i) => {
     const where = `Sətir ${i + 1}`;
     const field = `lines.${i}.sk`;
-    const memo = l.stored.memo || d.memo;
+    // A line of the "VAT payment" item pays VAT though from a current account (QERARLAR
+    // 2026-10-31 §5): it settles the VAT part, and its postings say so for the VAT offset.
+    const vatLine = !!l.stored.cashFlowItem && vatItems.has(l.stored.cashFlowItem);
+    paysVat = vatLine || inFamily(d.holder.account.code, '224');
+    const memo = `${vatLine ? VAT_PAYMENT_MEMO : ''}${l.stored.memo || d.memo}`;
     // Subkonto: an empty settlement document means this document (also for an advance remainder).
     const values = l.account.subkonto.map((kind, j) =>
       kind === 'document' && !l.sk[j] ? self : l.sk[j]!,
@@ -408,6 +430,8 @@ export function buildMoneyPostings(
       push,
       self,
       taken,
+      vatLine,
+      takenVat,
     );
   });
 
@@ -447,6 +471,10 @@ function autoSettle(
   self: string,
   /** Settled by earlier lines of this document, per account|partner|contract|invoice. */
   taken: ReadonlyMap<string, Minor>,
+  /** The line pays VAT (cash-flow item "ƏDV-nin ödənilməsi"): only the VAT part. */
+  vatLine = false,
+  /** What earlier lines of this document paid of the VAT, per the same key as `taken`. */
+  takenVat: ReadonlyMap<string, Minor> = taken,
 ) {
   const direction = d.direction;
   const currency = d.holder.currency;
@@ -466,19 +494,23 @@ function autoSettle(
     partner,
   )?.kind;
   // A deposit document's earlier lines paid VAT (as depositPaid counts it once posted).
-  const deposit = inFamily(d.holder.account.code, '224');
+  const deposit = inFamily(d.holder.account.code, '224') || vatLine;
   const invoices = openInvoices(tx, companyId, direction, l.account, partner, contract, d.date).map(
     (inv) => {
-      const t = taken.get(`${l.account.code}|${partner}|${contract}|${inv.document}`) ?? 0n;
-      return t
-        ? { ...inv, open: inv.open - t, vatOpen: deposit ? inv.vatOpen - t : inv.vatOpen }
-        : inv;
+      const key = `${l.account.code}|${partner}|${contract}|${inv.document}`;
+      const t = taken.get(key) ?? 0n;
+      const tv = takenVat.get(key) ?? 0n;
+      if (!t) return inv;
+      const open = inv.open - t;
+      // Earlier VAT lines took VAT; earlier net lines leave the VAT, but never more than is open.
+      const vatOpen = deposit ? inv.vatOpen - tv : inv.vatOpen;
+      return { ...inv, open, vatOpen: vatOpen < open ? vatOpen : open };
     },
   );
   const { allocations, left } = allocatePayment(
     invoices,
     l.amount,
-    d.part(kind === undefined ? undefined : String(kind)),
+    vatLine ? 'vat' : d.part(kind === undefined ? undefined : String(kind)),
   );
   const pieces = [...allocations.map((a) => a.amount), ...(left > 0n ? [left] : [])];
   // AZN value of each piece; on an AZN holder the pieces are AZN already.

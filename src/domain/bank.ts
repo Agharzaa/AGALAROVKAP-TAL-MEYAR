@@ -24,6 +24,15 @@ export const CASH_FLOW_ITEMS = [
   'Sair daxilolmalar və ödənişlər',
 ];
 
+/**
+ * A bank line with this cash-flow item (role "vatPayment") pays an invoice's VAT, though from a
+ * current account (the bank sends it to the supplier's VAT deposit): it settles the VAT part and
+ * counts for the purchase VAT offset like a payment from 224 (QERARLAR 2026-10-31 §5).
+ */
+export const VAT_PAYMENT_ITEM = 'ƏDV-nin ödənilməsi (depozitə)';
+/** The memo prefix of such postings: how the VAT offset finds them. */
+export const VAT_PAYMENT_MEMO = 'ƏDV ödənişi · ';
+
 /** Which part of an invoice a bank document can settle. */
 export type SettlementPart = 'vat' | 'net' | 'whole';
 

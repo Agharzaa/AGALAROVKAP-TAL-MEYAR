@@ -337,8 +337,8 @@ test('cash-flow item: an attribute of the line, checked against its own catalog'
   );
   assert.equal(
     f.catalog().items.filter((i) => i.kind === 'cashFlowItem').length,
-    8,
-    'a new company starts with the standard list',
+    9,
+    'a new company starts with the standard list (and the VAT payment item, 2026-10-31)',
   );
 });
 

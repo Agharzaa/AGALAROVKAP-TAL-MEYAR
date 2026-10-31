@@ -12,7 +12,12 @@
 import { createHash } from 'node:crypto';
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
-import { classifyStatementLine, findIban, type ClassifyContext } from '../domain/statement.js';
+import {
+  classifyStatementLine,
+  findIban,
+  partnerNameKey,
+  type ClassifyContext,
+} from '../domain/statement.js';
 import { numberKey, parseDate, parseText, searchKey } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type {
@@ -463,7 +468,7 @@ function proposalContext(db: Db, companyId: string, bank: Row): ProposalContext 
     ),
     partnersByName: new Map(
       partners.map((p) => [
-        searchKey(String(p.name).trim()),
+        partnerNameKey(String(p.name)),
         { id: String(p.id), name: String(p.name) },
       ]),
     ),

@@ -809,7 +809,8 @@ type Role =
   | 'fxExpense'
   | 'depreciation'
   | 'assetDisposal'
-  | 'assetSale';
+  | 'assetSale'
+  | 'vatPayment';
 /** Roles an element of each kind can take in the posting rules (invoices, revaluation). */
 const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
   paymentKind: [{ role: 'vatTax', label: 'Satışın ƏDV-si (Kt 521.01)' }],
@@ -820,6 +821,9 @@ const kindRoles: Partial<Record<ItemKind, { role: Role; label: string }[]>> = {
     { role: 'assetDisposal', label: 'Əsas vəsaitlərin silinməsi (Dt 731)' },
   ],
   productGroup: [{ role: 'defaultProductGroup', label: 'Standart nomenklatura qrupu' }],
+  cashFlowItem: [
+    { role: 'vatPayment', label: 'ƏDV-nin ödənilməsi: cari hesabdan da əvəzləşdirilir' },
+  ],
   incomeType: [
     { role: 'goodsIncome', label: 'Mal satışında standart' },
     { role: 'serviceIncome', label: 'Xidmət satışında standart' },

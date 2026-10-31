@@ -496,6 +496,7 @@ export const commandSchema = z.discriminatedUnion('type', [
         'salary',
         'socialInsurance',
         'sickPay',
+        'vatPayment',
       ])
       .optional(),
     /** Stage 9d, an expense item: false — not deducted from income for the profit tax; omitted keeps. */

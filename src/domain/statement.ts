@@ -523,7 +523,7 @@ export interface StatementSuggestion {
 export interface ClassifyContext {
   companyTaxId: string;
   partnersByTaxId: ReadonlyMap<string, { id: string; name: string }>;
-  /** Partners by folded name, used when the statement has no VÖEN. */
+  /** Partners by `partnerNameKey`, used when the statement has no VÖEN. */
   partnersByName: ReadonlyMap<string, { id: string; name: string }>;
   /** Expense item for bank charges ("Bank xidmətləri"), when the company has one. */
   bankFeeItemId?: string;
@@ -534,6 +534,83 @@ export interface ClassifyContext {
 }
 
 const has = (text: string, ...words: string[]) => words.some((w) => text.includes(searchKey(w)));
+
+/** Legal forms and filler words that banks drop, shorten or spell in Latin letters. */
+const legalWords = new Set(
+  'mmc llc ltd limited lim co company sirketi sirket qsc asc ass ac jsc oao ooo mahdud masuliyyatli masuliyatli camiyyati camiyyat cam publik huquqi saxs birga muassisasi muassisa ve and as a.s. san tic'.split(
+    ' ',
+  ),
+);
+
+/**
+ * A partner's name as banks print it: Azerbaijani letters in Latin, no quotes, no legal form
+ * ("\"RHENUS LOGİSTİCS AZERBAİJAN\" MƏHDUD MƏSULİYYƏTLİ CƏMİYYƏTİ" → "rhenus logistics azerbaijan").
+ */
+export function partnerNameKey(name: string): string {
+  return searchKey(name)
+    .replace(/[əä]/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    // Latin spellings of ş, ç, ğ ("PASHA", "CHELIK") read as the letters themselves.
+    .replace(/sh/g, 's')
+    .replace(/ch/g, 'c')
+    .replace(/gh/g, 'g')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((w) => w && !legalWords.has(w))
+    .join(' ');
+}
+
+/** Two spellings of one word: the same, one cut short (≥ 3 letters), or ≤ 2 letters apart. */
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (short.length >= 3 && long.startsWith(short)) return true;
+  if (short.length < 6 || long.length - short.length > 2) return false;
+  // Levenshtein distance, stopped at 3.
+  let prev = Array.from({ length: long.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= short.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= long.length; j++)
+      row[j] = Math.min(
+        prev[j]! + 1,
+        row[j - 1]! + 1,
+        prev[j - 1]! + (short[i - 1] === long[j - 1] ? 0 : 1),
+      );
+    prev = row;
+  }
+  return prev[long.length]! <= 2;
+}
+
+/**
+ * The one partner whose name the bank printed differently (shortened, in Latin letters, without
+ * the legal form): the same first word and most words alike. Two partners alike — none.
+ */
+export function partnerByName<T>(printed: string, byKey: ReadonlyMap<string, T>): T | undefined {
+  const key = partnerNameKey(printed);
+  if (!key) return undefined;
+  const exact = byKey.get(key);
+  if (exact) return exact;
+  const words = key.split(' ');
+  if (words.join('').length < 6) return undefined;
+  let best: { score: number; partner: T } | undefined;
+  let tie = false;
+  for (const [other, partner] of byKey) {
+    const theirs = other.split(' ');
+    if (!theirs.length || !sameWord(words[0]!, theirs[0]!)) continue;
+    const alike = words.filter((w) => theirs.some((t) => sameWord(w, t))).length;
+    const score = alike / Math.max(words.length, Math.min(theirs.length, words.length + 1));
+    if (score < 0.6 || alike < 2) continue;
+    if (!best || score > best.score) {
+      best = { score, partner };
+      tie = false;
+    } else if (score === best.score) tie = true;
+  }
+  return best && !tie ? best.partner : undefined;
+}
 
 export function classifyStatementLine(
   line: Pick<StatementLine, 'direction' | 'counterparty' | 'counterpartyTaxId' | 'purpose'> &
@@ -546,7 +623,10 @@ export function classifyStatementLine(
   const byTax = line.counterpartyTaxId
     ? ctx.partnersByTaxId.get(line.counterpartyTaxId)
     : undefined;
-  const byName = !byTax ? ctx.partnersByName.get(searchKey(line.counterparty.trim())) : undefined;
+  const byName =
+    !byTax && !line.counterpartyTaxId
+      ? partnerByName(line.counterparty, ctx.partnersByName)
+      : undefined;
   const partner = byTax ?? byName;
   const withPartner = partner ? { partnerId: partner.id } : {};
   const ownAccount = !!line.counterpartyIban && !!ctx.ownIbans?.has(line.counterpartyIban);

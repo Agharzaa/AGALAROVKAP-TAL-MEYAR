@@ -14,7 +14,7 @@
 import { calendar2026 } from '../../domain/calendar.js';
 import { rates2026 } from '../../domain/payroll.js';
 
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 
 const v1 = `
 CREATE TABLE companies(
@@ -1671,6 +1671,19 @@ WHEN OLD.date<=(SELECT closed_through FROM companies WHERE id=OLD.company_id)
 BEGIN SELECT RAISE(ABORT,'guard: Bu tarix üzrə uçot dövrü bağlanıb.'); END;
 `;
 
+// v26 — the cash-flow item "ƏDV-nin ödənilməsi (depozitə)" (role vatPayment; QERARLAR 2026-10-31
+// §5): a bank line with it pays an invoice's VAT from a current account and the VAT is offset.
+
+const v26 = `
+UPDATE items SET role='vatPayment' WHERE kind='cashFlowItem' AND name='ƏDV-nin ödənilməsi (depozitə)' AND role='' AND archived=0
+  AND NOT EXISTS(SELECT 1 FROM items j WHERE j.company_id=items.company_id AND j.role='vatPayment');
+INSERT INTO items(id,company_id,kind,name,role)
+  SELECT ${uuid},id,'cashFlowItem','ƏDV-nin ödənilməsi (depozitə)','vatPayment'
+  FROM (SELECT hex(randomblob(16)) AS h, id FROM companies c
+    WHERE NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.role='vatPayment')
+      AND NOT EXISTS(SELECT 1 FROM items i WHERE i.company_id=c.id AND i.kind='cashFlowItem' AND i.name='ƏDV-nin ödənilməsi (depozitə)'));
+`;
+
 export const migrations: { version: number; sql: string; foreignKeysOff?: boolean }[] = [
   { version: 1, sql: v1 },
   { version: 2, sql: v2, foreignKeysOff: true },
@@ -1697,4 +1710,5 @@ export const migrations: { version: number; sql: string; foreignKeysOff?: boolea
   { version: 23, sql: v23 },
   { version: 24, sql: v24 },
   { version: 25, sql: v25 },
+  { version: 26, sql: v26 },
 ];

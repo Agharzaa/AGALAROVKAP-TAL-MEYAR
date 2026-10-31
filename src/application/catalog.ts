@@ -1,6 +1,6 @@
 /** Company, chart of accounts and the catalogs that subkonto values point to. */
 import { baseChart, checkSubkonto, currencies, newAccount } from '../domain/chart.js';
-import { CASH_FLOW_ITEMS } from '../domain/bank.js';
+import { CASH_FLOW_ITEMS, VAT_PAYMENT_ITEM } from '../domain/bank.js';
 import { rates2026 } from '../domain/payroll.js';
 import { DomainError } from '../domain/errors.js';
 import { numberKey, parseDate, parseTaxId, parseText } from '../domain/values.js';
@@ -56,7 +56,7 @@ const seedItems: [kind: string, names: (string | [name: string, role: string])[]
     ],
   ],
   ['productGroup', [['Əsas nomenklatura qrupu', 'defaultProductGroup']]],
-  ['cashFlowItem', CASH_FLOW_ITEMS],
+  ['cashFlowItem', [...CASH_FLOW_ITEMS, [VAT_PAYMENT_ITEM, 'vatPayment']]],
 ];
 
 export function createCompany(tx: Tx, cmd: CommandOf<'company.create'>): CommandResult {
@@ -647,6 +647,7 @@ const roleKind = {
   salary: 'expenseItem',
   socialInsurance: 'expenseItem',
   sickPay: 'expenseItem',
+  vatPayment: 'cashFlowItem',
 } as const;
 const roleLabel = {
   vatTax: 'satışın ƏDV-si (521.01)',
@@ -662,6 +663,7 @@ const roleLabel = {
   salary: 'əmək haqqı (Kt 533)',
   socialInsurance: 'sosial sığorta ayırmaları (Kt 522)',
   sickPay: 'xəstəlik vərəqəsi üzrə müavinət (Kt 533)',
+  vatPayment: 'ƏDV-nin ödənilməsi (əvəzləşdirmə üçün)',
 } as const;
 
 export function saveItem(tx: Tx, cmd: CommandOf<'item.save'>): CommandResult {

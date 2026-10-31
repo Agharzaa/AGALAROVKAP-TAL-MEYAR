@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 31.10.2026 (0.9.20). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 31.10.2026 (0.9.21). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -798,6 +798,15 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **Əmək haqqı:** reyestrlərdən 13 işçi, oktyabr tabeli (5 günlük həftə, istehsalat təqvimi: 22 gün × 8 saat), əmək haqqı / avans ödənişləri işçilər üzrə bölünüb (4 bank sənədi). Müqavilə maaşı, işə qəbul tarixi, FİN, xərc hesabı reyestrdə yoxdur — istifadəçidən.
 - Kod: `src/domain/statement.ts` (`splitCounterparty`, balans sətirləri, "İstinad", yeni növlər `interest`, `expense`, `ownIbans`), `src/application/statements.ts` (bankın kontragenti 501 / 751 / 222.02 / 222.04-də). Testlər: `tests/domain/domain.test.ts` (2 test, uydurma məlumatla). `npm run typecheck`, `npm test` 314, `npm run test:ui` 58, `npm run test:perf` keçir.
 - **Diqqət:** çıxarış sətrinin barmaq izi sənəd nömrəsini də tutur — "İstinad No" indi oxunduğu üçün PAŞA Bank faylı əvvəlki versiya ilə yüklənibsə, yenidən yükləmə təkrar yarada bilər (MG Transport-un əsl bazasında çıxarış yox idi).
+
+## 0.9.21 — bankda adla tanıma və "ƏDV-nin ödənilməsi" maddəsi (31.10.2026, QERARLAR 2026-10-31 §4, §5)
+
+İstifadəçi: "eyni VÖEN-li kontragentləri bir-birinə bağlamayıb ayrı-ayrı adla qeydə alır — 1 VÖEN-dən 1 qeydiyyat olmalıdır"; "əsasını və ƏDV-sini bankdan ödəyəndə də hərəkət maddəsində qeyd etmək olmalıdır ki, ƏDV əvəzləşdirsin".
+
+- **Yoxlama:** əsl bazada təkrar VÖEN yoxdur (unikal indeks). Səbəb VÖEN-siz bank sətirləri idi: bank adı qısaldır və latınca yazır, Meyar yalnız tam eyni adı tanıyırdı → mövcud kontragent əvəzinə yeni təklif edirdi.
+- **Adla tanıma** (`partnerNameKey`, `partnerByName`, `src/domain/statement.ts`): yalnız VÖEN-siz sətirdə; əsl bazanın 90 kontragentində çarpaz səhv uyğunluq yoxdur ("2K HEDEF ULUSLARASI NAKLIYAT VE PAZ" → filialı, "Pasha Bank" → PAŞA Bank ASC).
+- **"ƏDV-nin ödənilməsi (depozitə)"** (rol `vatPayment`, sxem v26; `src/application/money.ts`): sətir ƏDV hissəsini bağlayır, yazılış memo-su "ƏDV ödənişi · ", `depositPaid` onu sayır; eyni sənəddə əsas + ƏDV sətirləri — ƏDV avansa düşmür (`takenVat`).
+- Testlər: `tests/integration/vat-offset.test.ts` (+2), `statements.test.ts` (maddələr 9). `npm run typecheck`, `npm test` 316, `npm run test:ui` 58, `npm run test:perf` keçir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

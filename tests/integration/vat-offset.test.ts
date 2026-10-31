@@ -117,8 +117,45 @@ function setup(t: Parameters<typeof fixture>[0], kind: 'legal' | 'individual' = 
         amount,
       ),
     ]);
-  return { f, bankK, deposit, buy, confirmed, pay };
+  return { f, bankK, deposit, buy, confirmed, pay, supplier, contract };
 }
+
+test('2026-10-31: VAT paid from the current account with the "ƏDV-nin ödənilməsi" item is offset', (t) => {
+  const { f, bankK, buy, confirmed, supplier, contract } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  const vatItem = f.item('cashFlowItem', 'ƏDV-nin ödənilməsi (depozitə)');
+  // One payment from the current account: 5 000 net and 900 VAT, the VAT line marked.
+  const doc = f.bank('out', '2026-09-10', bankK, [
+    f.bankLine('531.01', [supplier, contract], '5000'),
+    f.bankLine('531.01', [supplier, contract], '900', { cashFlowItem: vatItem }),
+  ]);
+  const memos = f.db
+    .all(
+      `SELECT p.memo, p.amount FROM postings p JOIN entries e ON e.id=p.entry_id
+       WHERE e.source_id=? AND p.dt_account='531.01' ORDER BY p.amount`,
+      doc.id,
+    )
+    .map((r) => [String(r.memo).startsWith('ƏDV ödənişi · '), r.amount]);
+  assert.deepEqual(memos, [
+    [true, 90000n],
+    [false, 500000n],
+  ]);
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
+  close(f, '2026-09');
+  assert.equal(left241(f, inv.id), 0n);
+});
+
+test('2026-10-31: without the item the same payment from the current account offsets nothing', (t) => {
+  const { f, bankK, buy, confirmed, supplier, contract } = setup(t);
+  buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  f.bank('out', '2026-09-10', bankK, [
+    f.bankLine('531.01', [supplier, contract], '5000'),
+    f.bankLine('531.01', [supplier, contract], '900'),
+  ]);
+  assert.deepEqual(vat(f, '2026-09'), []);
+});
 
 test('an individual entrepreneur charging VAT: only VAT through the deposit is offset', (t) => {
   const { f, bankK, deposit, buy, confirmed, pay } = setup(t, 'individual');
