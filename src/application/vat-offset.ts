@@ -45,6 +45,17 @@ export const postedVatOffset = (db: Db, companyId: string, month: string) =>
     month,
   );
 
+/**
+ * A posted ƏƏ- document of a later month (audit D1): "Doldur" and the room of a line see only
+ * offsets up to their own month, so an earlier month's offset after it would offset its VAT again.
+ */
+export const laterVatOffset = (db: Db, companyId: string, month: string) =>
+  db.get(
+    "SELECT number FROM vat_offsets WHERE company_id=? AND month>? AND status='posted' ORDER BY month LIMIT 1",
+    companyId,
+    month,
+  );
+
 const storedLines = (row: Row): VatOffsetLine[] =>
   (JSON.parse(String(row.lines)) as { invoiceId: string; amount: string; auto?: boolean }[]).map(
     (l) => ({ invoiceId: l.invoiceId, amount: signedMoney(l.amount), auto: l.auto !== false }),
@@ -291,6 +302,13 @@ export function saveVatOffset(tx: Tx, cmd: CommandOf<'vatOffset.save'>): Command
       'conflict',
     );
   if (existing) expectVersion(existing, cmd.version!, 'ƏDV əvəzləşdirilməsi');
+  const later = laterVatOffset(tx.db, cmd.companyId, month);
+  if (later)
+    throw new DomainError(
+      `${String(later.number)} artıq uçotdadır: ${vatOffsetNumber(month)} ondan sonra dəyişdirilmir — eyni ƏDV iki dəfə əvəzləşə bilər. Əvvəlcə ${String(later.number)}-i ləğv edin, sonra hər ikisini ardıcıl doldurun.`,
+      'month',
+      'conflict',
+    );
   // A line is "Doldur"'s when it has the amount Doldur gives now; otherwise it is the accountant's.
   const filled = new Map(
     fillVatOffset(tx.db, cmd.companyId, month, existing ? String(existing.id) : '').lines.map(

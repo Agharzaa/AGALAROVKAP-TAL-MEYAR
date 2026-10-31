@@ -127,7 +127,7 @@ export function importStatement(tx: Tx, cmd: CommandOf<'statement.import'>): Com
         counterpartyTaxId: taxId,
         counterpartyIban:
           findIban(l.counterpartyIban) ??
-          (/^[A-Z]{2}d{2}[A-Z0-9]{11,30}$/.test(l.counterpartyIban) ? l.counterpartyIban : ''),
+          (/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(l.counterpartyIban) ? l.counterpartyIban : ''),
         purpose,
         fingerprint: createHash('sha256').update(`${base}|${n}`).digest('hex').slice(0, 40),
       });

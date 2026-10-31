@@ -915,6 +915,124 @@ export function saveInvoice(
   return { id, version, number, ...(warning ? { warning } : {}) };
 }
 
+const advanceMemos = new Set(['Avansın əvəzləşdirilməsi', 'Verilmiş avansın əvəzləşdirilməsi']);
+
+/**
+ * A bank or cash document dated before invoices already posted brings an advance (543 / 243) of
+ * the same partner and contract: the invoices offset it now, as they would have if posted after
+ * the payment (the import order — e-qaimələr first, the statement later; audit 2026-10-31). Each
+ * invoice is posted again (storno + new) only when nothing but its advance offset changes; one
+ * whose cost, VAT or anything else would change, or in a closed period, is left as it is.
+ */
+export function offsetLaterAdvances(
+  tx: Tx,
+  companyId: string,
+  direction: 'sale' | 'purchase',
+  partner: string,
+  contract: string,
+  from: string,
+): number {
+  const closed = String(tx.company(companyId).closed_through);
+  const chart = tx.chart(companyId);
+  let done = 0;
+  for (const inv of tx.db.all(
+    `SELECT * FROM invoices WHERE company_id=? AND direction=? AND partner_id=? AND contract_id=?
+       AND status='posted' AND manual=0 AND date>=? AND date>? ORDER BY date, rowid`,
+    companyId,
+    direction,
+    partner,
+    contract,
+    from,
+    closed,
+  )) {
+    const id = String(inv.id);
+    const version = Number(inv.version);
+    const last = tx.db.get(
+      "SELECT payload FROM document_history WHERE company_id=? AND doc_type=? AND doc_id=? AND version=? AND status='posted'",
+      companyId,
+      INVOICE,
+      id,
+      version,
+    );
+    if (!last) continue;
+    const data = JSON.parse(String(last.payload)) as Record<string, unknown> & {
+      postings?: unknown;
+    };
+    if (data.postings) continue;
+    const cmd = {
+      ...data,
+      type: 'invoice.save',
+      key: 'advance-offset',
+      companyId,
+      id,
+      version,
+      direction,
+      eqSeries: '',
+    } as unknown as SaveInvoice;
+    const signature = (list: readonly Posting[]) =>
+      JSON.stringify(
+        list
+          .filter((p) => !advanceMemos.has(p.memo))
+          .map((p) => [p.dt.account, p.dt.sk, p.kt.account, p.kt.sk, String(p.amount)]),
+      );
+    const advance = (list: readonly Posting[]) =>
+      list.filter((p) => advanceMemos.has(p.memo)).reduce((s, p) => s + p.amount, 0n);
+    try {
+      tx.db.savepoint(() => {
+        const prev = tx.entryPostings(companyId, INVOICE, id, version);
+        const source = { type: INVOICE, id, number: String(inv.number), version };
+        tx.post(companyId, chart, source, prev.date, true, storno(prev.postings));
+        const fresh = buildPostings(tx, companyId, chart, id, normalize(tx, cmd, chart), false);
+        if (
+          signature(fresh) !== signature(prev.postings) ||
+          advance(fresh) <= advance(prev.postings)
+        )
+          throw new Error('unchanged');
+        const next = version + 1;
+        tx.post(companyId, chart, { ...source, version: next }, prev.date, false, fresh);
+        guardSettlement(tx, companyId, chart, id, String(inv.number), prev.postings, fresh);
+        tx.db.run(
+          'UPDATE invoices SET version=?, updated_at=? WHERE id=?',
+          next,
+          tx.clock.now(),
+          id,
+        );
+        tx.history(companyId, INVOICE, id, next, 'posted', data);
+        tx.audit(
+          companyId,
+          'Avans əvəzləşdirildi (storno + yeni yazılış)',
+          label[direction],
+          id,
+          `${String(inv.number)} · ${money(advance(fresh) - advance(prev.postings))} ${String(inv.currency)} — sonradan yazılan ödəniş`,
+        );
+      });
+      done++;
+    } catch {
+      // Left as it was: nothing to offset, or more than the advance would change.
+    }
+  }
+  return done;
+}
+
+/** The advances a bank / cash document's postings make, offset by the invoices dated after it. */
+export function offsetAdvancesOf(
+  tx: Tx,
+  companyId: string,
+  date: string,
+  postings: readonly Posting[],
+): void {
+  const keys = new Map<string, ['sale' | 'purchase', string, string]>();
+  for (const p of postings) {
+    if (p.amount <= 0n) continue;
+    if (p.kt.account.startsWith('543') && p.kt.sk[0] && p.kt.sk[1])
+      keys.set(`s|${p.kt.sk[0]}|${p.kt.sk[1]}`, ['sale', p.kt.sk[0], p.kt.sk[1]]);
+    if (p.dt.account.startsWith('243') && p.dt.sk[0] && p.dt.sk[1])
+      keys.set(`p|${p.dt.sk[0]}|${p.dt.sk[1]}`, ['purchase', p.dt.sk[0], p.dt.sk[1]]);
+  }
+  for (const [direction, partner, contract] of keys.values())
+    offsetLaterAdvances(tx, companyId, direction, partner, contract, date);
+}
+
 export function cancelInvoice(tx: Tx, cmd: CommandOf<'invoice.cancel'>): CommandResult {
   tx.company(cmd.companyId);
   const reason = parseText(cmd.reason, 'Ləğv səbəbi');

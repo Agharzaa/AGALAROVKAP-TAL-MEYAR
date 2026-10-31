@@ -292,7 +292,10 @@ export function depositPaid(
          OR (p.${other}_s3 LIKE 'bank:%' AND EXISTS(
            SELECT 1 FROM bank_documents b JOIN bank_accounts x ON x.company_id=b.company_id AND x.id=b.bank_account_id
            WHERE b.company_id=p.company_id AND 'bank:'||b.id=p.${other}_s3
-             AND (x.account='224' OR x.account LIKE '224.%')))
+             AND (x.account='224' OR x.account LIKE '224.%'
+               -- an advance paid with the "VAT payment" item from a current account (audit)
+               OR EXISTS(SELECT 1 FROM items i WHERE i.company_id=b.company_id AND i.role='vatPayment'
+                 AND instr(b.lines, '"cashFlowItem":"' || i.id || '"') > 0))))
          OR (substr(p.memo,1,?)=? AND EXISTS(SELECT 1 FROM entries e
            WHERE e.company_id=p.company_id AND e.id=p.entry_id AND e.source_type IN ('bank','cash'))))`,
     companyId,
@@ -503,7 +506,7 @@ function autoSettle(
       if (!t) return inv;
       const open = inv.open - t;
       // Earlier VAT lines took VAT; earlier net lines leave the VAT, but never more than is open.
-      const vatOpen = deposit ? inv.vatOpen - tv : inv.vatOpen;
+      const vatOpen = inv.vatOpen - tv;
       return { ...inv, open, vatOpen: vatOpen < open ? vatOpen : open };
     },
   );

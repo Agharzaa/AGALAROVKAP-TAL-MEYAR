@@ -13,6 +13,7 @@
  * is computed (so matching sees the ledger without this document) and cancelling stornoes it. An
  * advance of this document that a later invoice has already used is never taken back.
  */
+import { offsetAdvancesOf } from './invoices.js';
 import type { SettlementPart } from '../domain/bank.js';
 import { inFamily, type Chart, type CurrencyCode } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
@@ -238,6 +239,8 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
     postings,
   );
   guardAdvances(tx, cmd.companyId, BANK, id, previous);
+  // An advance of an earlier date than invoices already posted: they offset it now.
+  offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
   // The statement row stays what the bank wrote: account, direction, date and amount.
   const bound =
     existing?.statement_line_id &&

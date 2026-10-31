@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 31.10.2026 (0.9.21). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 31.10.2026 (0.9.22). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -807,6 +807,23 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 - **Adla tanıma** (`partnerNameKey`, `partnerByName`, `src/domain/statement.ts`): yalnız VÖEN-siz sətirdə; əsl bazanın 90 kontragentində çarpaz səhv uyğunluq yoxdur ("2K HEDEF ULUSLARASI NAKLIYAT VE PAZ" → filialı, "Pasha Bank" → PAŞA Bank ASC).
 - **"ƏDV-nin ödənilməsi (depozitə)"** (rol `vatPayment`, sxem v26; `src/application/money.ts`): sətir ƏDV hissəsini bağlayır, yazılış memo-su "ƏDV ödənişi · ", `depositPaid` onu sayır; eyni sənəddə əsas + ƏDV sətirləri — ƏDV avansa düşmür (`takenVat`).
 - Testlər: `tests/integration/vat-offset.test.ts` (+2), `statements.test.ts` (maddələr 9). `npm run typecheck`, `npm test` 316, `npm run test:ui` 58, `npm run test:perf` keçir.
+
+## 0.9.22 — 0.9.16–0.9.21-in müstəqil auditi və avansın sonradan əvəzləşdirilməsi (31.10.2026, QERARLAR 2026-10-31 §6, §7)
+
+Müstəqil yoxlayıcı (kodu yazmayan alt agent) 5 qüsur tapdı, hər biri əvvəl uğursuz test ilə (`tests/integration/audit-1031.test.ts`), sonra düzəliş:
+
+| # | Qüsur | Düzəliş |
+| --- | --- | --- |
+| D1 | Sonrakı ayın ƏƏ- sənədi əvvəl uçota alınanda əvvəlki ayın bağlanışı eyni ƏDV-ni yenidən əvəzləşdirirdi (241 mənfiyə). | `laterVatOffset`: sənəd saxlanmır, bağlanış bloklanır — əvvəlcə sonrakı ləğv edilir. |
+| D2 | Əl ilə əlavə əvəzləşdirmə növbəti ay qaydanın özününkündən geri alınırdı. | `due = paid − digər kreditlər − ruleNet` (`ruleNet` = qaydanın öz əvəzləşdirdiyi − əl ilə geri alınan). |
+| D4 | ƏDV sətri əsas sətirdən əvvəl olanda əsas 900 az bağlanırdı. | `vatOpen − takenVat` həmişə. |
+| D5 | Xarici IBAN idxalda itirdi (`d{2}`). | Regex düzəldi. |
+| D6 | Adla tanıma başqa şəxsi / şirkəti götürürdü. | Qısa adda bütün sözlər, uzun adda ¾; "oğlu / qızı" sayılmır. |
+
+- **Əlavə (yoxlayıcının ehtimalı):** avansla "ƏDV-nin ödənilməsi" maddəsi ilə ödənən ƏDV `depositPaid`-də sayılır.
+- **Avansın sonradan əvəzləşdirilməsi** (`offsetLaterAdvances`, `src/application/invoices.ts`; bank və kassa sənədindən sonra): əsl bazanın surətində bir alıcının 104 850 ₼ avansı qaiməsi ilə əvəzləşmirdi (qaimə əvvəl, çıxarış sonra yüklənmişdi).
+- **Əsl bazanın vəziyyəti (surətdə yoxlandı):** sxem v26-ya təmiz keçir; bank qalığı tutuşmur, çünki yanvar–sentyabr bank çıxarışları və 30.09 qalığı yoxdur (531-də 352 258 ₼ "borc"); 241-də 34 095,94 ₼ — depozit çıxarışı yoxdur; satış e-qaimələri yalnız oktyabr; oktyabrı bağlamaq üçün yanvar–sentyabr bağlanmalıdır. Mövcud avansların əvəzləşdirilməsi əsl bazada 0.9.22 quraşdırılandan sonra edilməlidir (0.9.20 v26 bazanı açmır).
+- Testlər: `audit-1031.test.ts` (6), `vat-offset.test.ts` (+1). `npm run typecheck`, `npm test` 323, `npm run test:ui` 58, `npm run test:perf` keçir.
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

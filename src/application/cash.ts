@@ -12,6 +12,7 @@
  * The cash balance may not fall below zero on any day: checked day by day from the earliest date
  * the change touches, after the new entry is posted (a back-dated payment too).
  */
+import { offsetAdvancesOf } from './invoices.js';
 import type { Chart } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import type { Minor } from '../domain/money.js';
@@ -271,6 +272,8 @@ export function saveCashDocument(tx: Tx, cmd: SaveCash): CommandResult {
     postings,
   );
   guardAdvances(tx, cmd.companyId, CASH, id, previous);
+  // An advance of an earlier date than invoices already posted: they offset it now.
+  offsetAdvancesOf(tx, cmd.companyId, n.header.date, postings);
   // The new cashbox from the earlier of both dates; the cashbox it left from its old date.
   const from =
     previousBox && previousBox.id === n.holder.id && previousBox.date < n.header.date

@@ -537,7 +537,7 @@ const has = (text: string, ...words: string[]) => words.some((w) => text.include
 
 /** Legal forms and filler words that banks drop, shorten or spell in Latin letters. */
 const legalWords = new Set(
-  'mmc llc ltd limited lim co company sirketi sirket qsc asc ass ac jsc oao ooo mahdud masuliyyatli masuliyatli camiyyati camiyyat cam publik huquqi saxs birga muassisasi muassisa ve and as a.s. san tic'.split(
+  'mmc llc ltd limited lim co company sirketi sirket qsc asc ass ac jsc oao ooo mahdud masuliyyatli masuliyatli camiyyati camiyyat cam publik huquqi saxs birga muassisasi muassisa ve and as a.s. san tic oglu ogli qizi kizi ogly kyzy'.split(
     ' ',
   ),
 );
@@ -547,21 +547,23 @@ const legalWords = new Set(
  * ("\"RHENUS LOGİSTİCS AZERBAİJAN\" MƏHDUD MƏSULİYYƏTLİ CƏMİYYƏTİ" → "rhenus logistics azerbaijan").
  */
 export function partnerNameKey(name: string): string {
-  return searchKey(name)
-    .replace(/[əä]/g, 'a')
-    .replace(/ö/g, 'o')
-    .replace(/ü/g, 'u')
-    .replace(/ş/g, 's')
-    .replace(/ç/g, 'c')
-    .replace(/ğ/g, 'g')
-    // Latin spellings of ş, ç, ğ ("PASHA", "CHELIK") read as the letters themselves.
-    .replace(/sh/g, 's')
-    .replace(/ch/g, 'c')
-    .replace(/gh/g, 'g')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .split(' ')
-    .filter((w) => w && !legalWords.has(w))
-    .join(' ');
+  return (
+    searchKey(name)
+      .replace(/[əä]/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ç/g, 'c')
+      .replace(/ğ/g, 'g')
+      // Latin spellings of ş, ç, ğ ("PASHA", "CHELIK") read as the letters themselves.
+      .replace(/sh/g, 's')
+      .replace(/ch/g, 'c')
+      .replace(/gh/g, 'g')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter((w) => w && !legalWords.has(w))
+      .join(' ')
+  );
 }
 
 /** Two spellings of one word: the same, one cut short (≥ 3 letters), or ≤ 2 letters apart. */
@@ -603,7 +605,9 @@ export function partnerByName<T>(printed: string, byKey: ReadonlyMap<string, T>)
     if (!theirs.length || !sameWord(words[0]!, theirs[0]!)) continue;
     const alike = words.filter((w) => theirs.some((t) => sameWord(w, t))).length;
     const score = alike / Math.max(words.length, Math.min(theirs.length, words.length + 1));
-    if (score < 0.6 || alike < 2) continue;
+    // A short name ("Məmmədov Elçin Ali", "Kaspi Trans Logistika") must agree in every word;
+    // a long one in three words and three quarters of them (audit D6).
+    if (words.length <= 3 ? alike < words.length || alike < 2 : alike < 3 || score < 0.75) continue;
     if (!best || score > best.score) {
       best = { score, partner };
       tie = false;

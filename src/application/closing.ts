@@ -52,6 +52,7 @@ import { checkSideValues } from './subkonto.js';
 import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
 import { profitTaxStep } from './profit-tax.js';
 import {
+  laterVatOffset,
   postedVatOffset,
   sameVatLines,
   vatOffsetLines,
@@ -670,6 +671,9 @@ export function vatStep(
         }
       };
       const offsetNet = (offset0?.kt ?? 0n) - (offset0?.dt ?? 0n);
+      // What the rule itself still holds offset: a reversal by hand (Dt 241 / Kt 521.01) undoes it
+      // first; lines set by hand are the accountant's and stay out of the rule's sums (audit D2).
+      const ruleNet = byClosing - (offset0?.dt ?? 0n);
       // The VAT of the invoice itself: 241's debit less what was taken back to it from 521.01.
       const invoiceVat = debit - (offset0?.dt ?? 0n);
       // What reached the invoice by the month's end: the VAT through the VAT deposit, less what came
@@ -733,10 +737,7 @@ export function vatStep(
             ),
             invoice: { id: String(inv.id), direction: 'purchase' },
           });
-        takeBack(
-          offsetNet < byClosing ? offsetNet : byClosing,
-          'e-qaimə DVX-də artıq təsdiqlənmiş deyil',
-        );
+        takeBack(ruleNet, 'e-qaimə DVX-də artıq təsdiqlənmiş deyil');
         continue;
       }
       // Never more than DVX confirmed: an invoice saved with other VAT than its e-qaimə (a warning
@@ -749,9 +750,9 @@ export function vatStep(
         );
       }
       // Other credits of 241 (VAT moved to cost …) still come off what may be offset, as before.
-      const due = paid - (credit - (offset0?.kt ?? 0n)) - offsetNet;
+      const due = paid - (credit - (offset0?.kt ?? 0n)) - ruleNet;
       if (due < 0n) {
-        takeBack(-due < byClosing ? -due : byClosing, 'ödənilmiş ƏDV azalıb');
+        takeBack(-due < ruleNet ? -due : ruleNet, 'ödənilmiş ƏDV azalıb');
         continue;
       }
       let offset = due < open ? due : open;
@@ -1022,6 +1023,16 @@ function buildPlan(
   const filled = fill.invoices
     .filter((i) => i.amount !== 0n)
     .map((i): VatOffsetLine => ({ invoiceId: i.invoiceId, amount: i.amount }));
+  // A later month's ƏƏ- is posted already: this month's offset would not see it (audit D1).
+  const later = !vatDoc && filled.length ? laterVatOffset(db, companyId, month) : undefined;
+  if (later)
+    blocking.push(
+      signal(
+        'closing',
+        `${String(later.number)} uçotdadır, ${vatOffsetNumber(month)} isə yoxdur: bu ayın ƏDV əvəzləşdirilməsi onu görmür və eyni ƏDV iki dəfə əvəzləşə bilər. Əvvəlcə ${String(later.number)}-i ləğv edin.`,
+        '241',
+      ),
+    );
   const vat: Plan['vat'] & { waiting: Signal[] } = vatDoc
     ? {
         action: 'keep',

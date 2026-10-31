@@ -157,6 +157,21 @@ test('2026-10-31: without the item the same payment from the current account off
   assert.deepEqual(vat(f, '2026-09'), []);
 });
 
+test('audit 2026-10-31: VAT paid ahead with the item from the current account counts once offset', (t) => {
+  const { f, bankK, buy, confirmed, supplier, contract } = setup(t);
+  const vatItem = f.item('cashFlowItem', 'ƏDV-nin ödənilməsi (depozitə)');
+  // An advance before the invoice: 5 000 and, marked, 900 VAT — both from the current account.
+  f.bank('out', '2026-09-02', bankK, [
+    f.bankLine('531.01', [supplier, contract], '5000'),
+    f.bankLine('531.01', [supplier, contract], '900', { cashFlowItem: vatItem }),
+  ]);
+  const inv = buy('2026-09-05', 'MT2609001'); // the invoice offsets the advance
+  confirmed('MT2609001', '2026-09-05');
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
+  close(f, '2026-09');
+  assert.equal(left241(f, inv.id), 0n);
+});
+
 test('an individual entrepreneur charging VAT: only VAT through the deposit is offset', (t) => {
   const { f, bankK, deposit, buy, confirmed, pay } = setup(t, 'individual');
   const inv = buy('2026-09-05', 'MT2609001');
