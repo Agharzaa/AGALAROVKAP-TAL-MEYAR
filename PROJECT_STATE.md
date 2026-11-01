@@ -926,3 +926,7 @@ Müstəqil yoxlayıcı (kodu yazmayan sessiya), proqramçı və baş mühasib g�
 6. **Kapital ↔ M/Z xəbərdarlığının mətni** "801 / 341-ə əl ilə yazılış" deyir; 3-cü qüsurdan sonra fərqin qalan səbəbi 801 / 901-ə əl ilə yazılışdır. Tövsiyə: mətn kifayətdir; mühasib çaşsa, fərqi yaradan yazılışlar sadalansın.
 
 Testlər Windows-da: `npm run typecheck`, `npm test` 302, `npm run test:ui` 57, `npm run test:perf` (100 000 yazılış: balans 125 ms, kapital 81 ms, pul hərəkəti — birbaşa 84 ms) keçir. Sxem dəyişməyib (v24). Electron işlədilmədi (pəncərə açır). **0.9.15** main-ə push edilir.
+
+## 0.9.27 — dövriyyə balansı 1C ОСВ görünüşündə (01.11.2026)
+
+QERARLAR 2026-11-01: kod ayrıca sütunda, səviyyə çalarları (`tier-account` / `tier-sub` / `tier-subkonto`), sıx sətirlər, "Ayarlar" bükülür. Görünüş həqiqi bazanın surətində (jsdom → statik HTML, daxili brauzer paneli) yoxlanıb; Electron açılmadı. Testlər: `npm run typecheck`, `npm test` 359, `npm run test:ui` 66, `npm run test:perf` keçir. Həqiqi bazada çatışmayanlar: USD çıxarışı yanvar–sentyabr və məzənnələr (222.02), 01.01.2026 başlanğıc qalıqları.

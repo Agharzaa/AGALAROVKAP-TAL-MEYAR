@@ -1896,12 +1896,58 @@ td.trial-name {
 .group-mark:focus-visible {
   color: var(--ink);
 }
-.trial.onec tr.account.lvl0 td:not(.gut) {
-  background: var(--hover);
+/* 1C ОСВ (01.11.2026): the code in its own column, dense rows, and each tier its own shade —
+   account (bold, darkest), subaccount, subkonto line (the sheet itself). Tokens only, so the
+   dark theme keeps the same order of shades. */
+.trial.onec td,
+.trial.onec th {
+  height: 24px;
+  padding: 2px 6px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.trial.onec .trial-code {
+  width: 1%;
+  min-width: 64px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.trial.onec .trial-name {
+  min-width: 300px;
+  max-width: 440px;
+}
+.trial.onec td.num,
+.trial.onec th.num {
+  min-width: 108px;
+}
+.trial.onec tr.tier-account td:not(.gut) {
+  background: var(--head);
   font-weight: 600;
 }
-.trial.onec tr.subkonto .label {
+.trial.onec tr.tier-sub td:not(.gut) {
+  background: var(--hover);
+}
+.trial.onec tr.tier-subkonto td:not(.gut) {
+  background: var(--sheet);
+}
+.trial.onec tr.tier-subkonto.lvl3 .label,
+.trial.onec tr.tier-subkonto.lvl4 .label {
   color: var(--ink-2);
+}
+.trial.onec tbody tr:hover td:not(.gut) {
+  background: var(--row-hover);
+}
+.trial.onec tbody tr.selected td:not(.gut) {
+  background: var(--select);
+}
+.filter-settings {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
 }
 .trial tr.lvl3 td,
 .trial tr.lvl4 td {

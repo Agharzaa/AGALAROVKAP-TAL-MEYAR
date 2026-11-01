@@ -3873,3 +3873,72 @@ test('ƏDV əvəzləşdirilməsi: an invoice added by hand, its amount changed, 
     h.close();
   }
 });
+
+test('2026-11-01: trial balance laid out as 1C ОСВ — code column, row tiers, settings folded', async () => {
+  const h = harness();
+  const s = seed(h);
+  const date = new Date();
+  const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${ym}-01`,
+    memo: 'Başlanğıc',
+    lines: [
+      {
+        dtAccount: '211.01',
+        dtSk: [s.customer, s.contract, ''],
+        ktAccount: '223.01',
+        ktSk: [s.bankAccount],
+        amount: '500',
+        memo: '',
+      },
+    ],
+  });
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    await user.click(screen.getAllByRole('button', { name: 'Dövriyyə balansı' })[0]!);
+    const page = within(pane());
+    // The code has its own column, the name and the subkonto the next one.
+    page.getByRole('columnheader', { name: 'Hesab' });
+    page.getByRole('columnheader', { name: 'Ad' });
+    const detail = page.getByRole('group', { name: 'Detallaşdırma' });
+    await user.click(within(detail).getByRole('button', { name: 'Kontragentlər' }));
+    const cells = (re: RegExp) => {
+      const row = [...pane().querySelectorAll('tbody tr')].find((r) =>
+        re.test(r.textContent ?? ''),
+      );
+      assert.ok(row, String(re));
+      return { row, td: [...row.querySelectorAll('td')].map((c) => c.textContent?.trim() ?? '') };
+    };
+    await waitFor(() => cells(/Alıcı MMC/));
+    const top = cells(/Alıcıların və sifarişçilərin/);
+    assert.equal(top.td[1], '211');
+    assert.match(top.row.className, /tier-account/);
+    const sub = cells(/Alıcılar və sifarişçilərlə hesablaşmalar \(manatla\)/);
+    assert.equal(sub.td[1], '211.01');
+    assert.match(sub.row.className, /tier-sub/);
+    const partner = cells(/Alıcı MMC/);
+    assert.equal(partner.td[1], '', 'subkonto rows have no code');
+    assert.equal(partner.td[2], 'Alıcı MMC');
+    assert.match(partner.row.className, /tier-subkonto/);
+    // Rarely used filters are folded under "Ayarlar", as 1C's "Показать настройки".
+    assert.equal(page.queryByLabelText('Hesablar'), null);
+    const settings = page.getByRole('button', { name: 'Ayarlar' });
+    assert.equal(settings.getAttribute('aria-expanded'), 'false');
+    await user.click(settings);
+    await user.type(page.getByLabelText('Hesablar'), '211');
+    await user.click(page.getByRole('button', { name: 'Göstər' }));
+    await waitFor(() =>
+      assert.ok(!/Bank hesablaşma/.test(pane().querySelector('tbody')!.textContent ?? '')),
+    );
+    // Folded again, the button says a setting is on.
+    await user.click(page.getByRole('button', { name: 'Ayarlar' }));
+    page.getByRole('button', { name: 'Ayarlar (1)' });
+  } finally {
+    h.close();
+  }
+});

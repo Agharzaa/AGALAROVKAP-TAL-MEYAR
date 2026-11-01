@@ -30,6 +30,9 @@ const SIDES = ['Debet', 'Kredit', 'Debet', 'Kredit', 'Debet', 'Kredit'];
 const amounts = (
   r: Pick<TrialRow, 'openDt' | 'openKt' | 'turnDt' | 'turnKt' | 'closeDt' | 'closeKt'>,
 ) => [r.openDt, r.openKt, r.turnDt, r.turnKt, r.closeDt, r.closeKt];
+/** 1C ОСВ's row tiers: an account, its subaccount, a subkonto line — each its own shade. */
+const tier = (r: TrialRow) =>
+  r.kind === 'subkonto' ? 'tier-subkonto' : r.level === 0 ? 'tier-account' : 'tier-sub';
 
 /** The printed form (and the PDF): the rows as open on screen, A4 landscape. */
 function TrialSheet({ tb, company }: { tb: TrialBalance; company: string }) {
@@ -44,6 +47,7 @@ function TrialSheet({ tb, company }: { tb: TrialBalance; company: string }) {
         <thead>
           <tr>
             <th rowSpan={2}>Hesab</th>
+            <th rowSpan={2}>Ad</th>
             <th colSpan={2}>Dövrün əvvəlinə saldo</th>
             <th colSpan={2}>Dövr üzrə dövriyyə</th>
             <th colSpan={2}>Dövrün sonuna saldo</th>
@@ -58,10 +62,9 @@ function TrialSheet({ tb, company }: { tb: TrialBalance; company: string }) {
         </thead>
         <tbody>
           {tb.rows.map((r) => (
-            <tr key={r.key} className={`lvl${Math.min(r.level, 4)} ${r.kind}`}>
-              <td style={{ paddingLeft: `${2 + r.level * 4}mm` }}>
-                {r.kind === 'account' ? `${r.account} ${r.label}` : r.label}
-              </td>
+            <tr key={r.key} className={`lvl${Math.min(r.level, 4)} ${r.kind} ${tier(r)}`}>
+              <td>{r.kind === 'account' ? r.account : ''}</td>
+              <td style={{ paddingLeft: `${2 + r.level * 4}mm` }}>{r.label}</td>
               {amounts(r).map((v, i) => (
                 <td key={i} className="num">
                   {cell(v)}
@@ -72,7 +75,7 @@ function TrialSheet({ tb, company }: { tb: TrialBalance; company: string }) {
         </tbody>
         <tfoot>
           <tr>
-            <td>Cəmi</td>
+            <td colSpan={2}>Cəmi</td>
             {amounts(tb.totals).map((v, i) => (
               <td key={i} className="num">
                 {money(v)}
@@ -101,6 +104,11 @@ export function TrialPage() {
   const [partnerId, setPartnerId] = useState('');
   const [selected, setSelected] = useState(0);
   const [exportMsg, setExportMsg] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  // Settings in force (applied ones), shown on the folded "Ayarlar" button.
+  const settingsOn = [accounts.length > 0, !!partnerId, onlyMoved, onlyArising].filter(
+    Boolean,
+  ).length;
   const result = useQuery<TrialBalance>({
     type: 'trialBalance',
     companyId: win.companyId,
@@ -270,40 +278,53 @@ export function TrialPage() {
         <>
           <RangeFields range={range} />
           <PeriodSteps range={range} />
-          <label className="filter-text">
-            <span>Hesablar</span>
-            <input
-              aria-label="Hesablar"
-              placeholder="211, 531…"
-              value={accountsText}
-              onChange={(e) => setAccountsText(e.target.value)}
-            />
-          </label>
-          <span className="filter-picker">
-            <Picker
-              ariaLabel="Kontragent filtri"
-              value={partnerId}
-              options={partners}
-              onChange={setPartnerId}
-              emptyLabel="Bütün kontragentlər"
-            />
-          </span>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={onlyMoved}
-              onChange={(e) => setOnlyMoved(e.target.checked)}
-            />{' '}
-            Yalnız dövriyyəsi olanlar
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={onlyArising}
-              onChange={(e) => setOnlyArising(e.target.checked)}
-            />{' '}
-            Yalnız dövrdə yaranan
-          </label>
+          {/* As 1C's "Показать настройки": the rarely changed filters are folded. */}
+          <button
+            type="button"
+            className="button secondary settings-toggle"
+            aria-expanded={showSettings}
+            onClick={() => setShowSettings((v) => !v)}
+          >
+            {!showSettings && settingsOn ? `Ayarlar (${settingsOn})` : 'Ayarlar'}
+          </button>
+          {showSettings && (
+            <div className="filter-settings" role="group" aria-label="Ayarlar">
+              <label className="filter-text">
+                <span>Hesablar</span>
+                <input
+                  aria-label="Hesablar"
+                  placeholder="211, 531…"
+                  value={accountsText}
+                  onChange={(e) => setAccountsText(e.target.value)}
+                />
+              </label>
+              <span className="filter-picker">
+                <Picker
+                  ariaLabel="Kontragent filtri"
+                  value={partnerId}
+                  options={partners}
+                  onChange={setPartnerId}
+                  emptyLabel="Bütün kontragentlər"
+                />
+              </span>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={onlyMoved}
+                  onChange={(e) => setOnlyMoved(e.target.checked)}
+                />{' '}
+                Yalnız dövriyyəsi olanlar
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={onlyArising}
+                  onChange={(e) => setOnlyArising(e.target.checked)}
+                />{' '}
+                Yalnız dövrdə yaranan
+              </label>
+            </div>
+          )}
         </>
       }
       notices={
@@ -337,8 +358,11 @@ export function TrialPage() {
           <thead>
             <tr>
               <th scope="col" rowSpan={2} className="gut" aria-label="Qruplama" />
-              <th scope="col" rowSpan={2} className="trial-name">
+              <th scope="col" rowSpan={2} className="trial-code">
                 Hesab
+              </th>
+              <th scope="col" rowSpan={2} className="trial-name">
+                Ad
               </th>
               <th scope="colgroup" colSpan={2}>
                 Dövrün əvvəlinə saldo
@@ -362,7 +386,7 @@ export function TrialPage() {
             {rows.map((r, i) => (
               <tr
                 key={r.key}
-                className={`lvl${Math.min(r.level, 4)} ${r.kind}${i === selected ? ' selected' : ''}`}
+                className={`lvl${Math.min(r.level, 4)} ${r.kind} ${tier(r)}${i === selected ? ' selected' : ''}`}
                 onClick={() => setSelected(i)}
                 onDoubleClick={() => openCard(r)}
               >
@@ -379,9 +403,14 @@ export function TrialPage() {
                     </button>
                   )}
                 </td>
+                <td className="trial-code" style={{ paddingLeft: `${6 + r.level * 10}px` }}>
+                  {r.kind === 'account' ? r.account : ''}
+                </td>
                 <td className="trial-name">
-                  <span className="tree-cell" style={{ paddingLeft: `${r.level * 16}px` }}>
-                    {r.kind === 'account' && <span className="code">{r.account}</span>}
+                  <span
+                    className="tree-cell"
+                    style={{ paddingLeft: `${r.kind === 'subkonto' ? r.level * 14 : 0}px` }}
+                  >
                     <span
                       className="label"
                       title={r.kind === 'subkonto' ? `${r.hint}: ${r.label}` : r.label}
@@ -416,7 +445,7 @@ export function TrialPage() {
             ))}
             {tb && !rows.length && (
               <tr>
-                <td colSpan={8} className="panel-empty">
+                <td colSpan={9} className="panel-empty">
                   Bu dövrdə və seçilən filtrdə qalıq və dövriyyə yoxdur.
                 </td>
               </tr>
@@ -426,7 +455,7 @@ export function TrialPage() {
             <tfoot>
               <tr>
                 <td className="gut" />
-                <td>Cəmi</td>
+                <td colSpan={2}>Cəmi</td>
                 {amounts(tb.totals).map((v, i) => (
                   <td key={i} className="num">
                     {money(v)}
