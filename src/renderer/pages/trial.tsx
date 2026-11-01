@@ -24,6 +24,16 @@ const details: [Detail, string][] = [
   ['partners', 'Kontragentlər'],
   ['all', 'Hamısı'],
 ];
+/** The chosen level is kept for the next opening, as 1C keeps a report's settings. */
+const MEMORY = 'meyar.trial.v1';
+const readDetail = (): Detail => {
+  try {
+    const d = window.localStorage.getItem(MEMORY);
+    return details.some(([k]) => k === d) ? (d as Detail) : 'accounts';
+  } catch {
+    return 'accounts';
+  }
+};
 
 const TITLE = 'Hesablar üzrə dövriyyə-saldo cədvəli';
 const SIDES = ['Debet', 'Kredit', 'Debet', 'Kredit', 'Debet', 'Kredit'];
@@ -94,7 +104,7 @@ export function TrialPage() {
   const { catalog } = useCatalog(win.companyId);
   const range = useRange(ws.period);
   const printer = usePrint();
-  const [detail, setDetail] = useState<Detail>('accounts');
+  const [detail, setDetail] = useState<Detail>(readDetail);
   const [expand, setExpand] = useState<string[]>([]);
   const [collapse, setCollapse] = useState<string[]>([]);
   const [onlyMoved, setOnlyMoved] = useState(false);
@@ -139,6 +149,11 @@ export function TrialPage() {
   };
   const chooseDetail = (d: Detail) => {
     setDetail(d);
+    try {
+      window.localStorage.setItem(MEMORY, d);
+    } catch {
+      /* storage unavailable: the level is simply not remembered */
+    }
     setExpand([]);
     setCollapse([]);
   };
@@ -226,7 +241,6 @@ export function TrialPage() {
   return (
     <ModuleFrame
       title={pages.trial.title}
-      hint={tb ? `${day(tb.from)} – ${day(tb.to)} · ${tb.ms} ms` : pages.trial.hint}
       onRefresh={result.reload}
       onFilter={() => {
         range.apply();
@@ -466,11 +480,7 @@ export function TrialPage() {
           )}
         </table>
       </div>
-      <p className="table-hint">
-        Sətrə iki dəfə vurun və ya Enter basın — hesab kartı açılır. ← → açır/bağlayır. Hesabı
-        açanda kontragentli subhesabları da açıq gəlir. Debitor və kreditor qalıqları açıq saldo ilə
-        göstərilir.
-      </p>
+      <p className="table-hint">İki klik və ya Enter — hesab kartı. ← → — aç / bağla.</p>
       {printer.sheet}
     </ModuleFrame>
   );

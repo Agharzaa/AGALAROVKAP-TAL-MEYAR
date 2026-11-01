@@ -3942,3 +3942,31 @@ test('2026-11-01: trial balance laid out as 1C ОСВ — code column, row tiers
     h.close();
   }
 });
+
+test('2026-11-01: trial balance is plain — the chosen level is remembered, no timing in the header', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    const open = async () => {
+      render(<App />);
+      await screen.findByRole('navigation', { name: 'Əsas menyu' });
+      await user.click(screen.getAllByRole('button', { name: 'Dövriyyə balansı' })[0]!);
+      return within(pane());
+    };
+    let page = await open();
+    await page.findByText('Hesablar üzrə dövriyyə-saldo cədvəli');
+    assert.ok(!/\d+ ms/.test(pane().textContent ?? ''), 'no query timing on screen');
+    const level = () => within(page.getByRole('group', { name: 'Detallaşdırma' }));
+    await user.click(level().getByRole('button', { name: 'Kontragentlər' }));
+    cleanup();
+    page = await open();
+    assert.equal(
+      level().getByRole('button', { name: 'Kontragentlər' }).getAttribute('aria-pressed'),
+      'true',
+    );
+  } finally {
+    window.localStorage.removeItem('meyar.trial.v1');
+    h.close();
+  }
+});

@@ -930,3 +930,7 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 302, `npm run test:ui` 57, 
 ## 0.9.27 — dövriyyə balansı 1C ОСВ görünüşündə (01.11.2026)
 
 QERARLAR 2026-11-01: kod ayrıca sütunda, səviyyə çalarları (`tier-account` / `tier-sub` / `tier-subkonto`), sıx sətirlər, "Ayarlar" bükülür. Görünüş həqiqi bazanın surətində (jsdom → statik HTML, daxili brauzer paneli) yoxlanıb; Electron açılmadı. Testlər: `npm run typecheck`, `npm test` 359, `npm run test:ui` 66, `npm run test:perf` keçir. Həqiqi bazada çatışmayanlar: USD çıxarışı yanvar–sentyabr və məzənnələr (222.02), 01.01.2026 başlanğıc qalıqları.
+
+## 0.9.28 — dövriyyə balansı: sadə ekran, səviyyə yadda qalır (01.11.2026)
+
+QERARLAR 2026-11-01 §5–6. Həqiqi bazanın surətində müstəqil tutuşdurma: 5 dövr, 5 995 sətir, 0 fərq. Testlər: `npm run typecheck`, `npm test`, `npm run test:ui` 67, `npm run test:perf` keçir.

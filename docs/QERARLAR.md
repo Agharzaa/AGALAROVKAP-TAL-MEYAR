@@ -534,3 +534,8 @@ Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`. İstifadəçi növbəti mərhəl
 4. **"Ayarlar" bükülür** (1C-nin "Показать настройки"): Dövr, Ay / Rüb / İl və "Göstər" görünür; hesablar, kontragent filtri və iki bayraq "Ayarlar"-ın altındadır, bükülü düymə qüvvədə olan ayarların sayını göstərir.
 
 **Rəqəmlər (həqiqi baza, yanvar–oktyabr) — kod səhvi deyil, mənbə çatışmır:** 222.02-də 3 862 092,66 (USD çıxarışı yanvar–sentyabr və AMB məzənnələri yüklənməyib, 223.02-də yazılış yoxdur); başlanğıc qalıqlar (01.01.2026) yoxdur; 211 Dt 666 857,59 / 543 Kt 667 493,90 — yalnız 5 kontragentdə (63 059,80) eyni vaxtda borc və avans var, qalanı ayrı kontragentlərdir.
+
+**Davamı (01.11.2026, istifadəçi: "davam, mükəmməl olmalıdı və sadə"):**
+
+5. **Rəqəmlər müstəqil yoxlanıb:** həqiqi bazanın surətində 5 dövrdə (il, ayların ortası, bir ay, bir gün, rüb) bütün səviyyələrin 5 995 sətri yazılışlardan birbaşa hesablanmış saldo və dövriyyələrlə qəpikbəqəpik tutur.
+6. **Sadə:** başlıqda dövrün təkrarı və sorğu vaxtı (ms) yoxdur — dövr hesabat vərəqindədir; alt qeyd bir sətirdir; seçilən detallaşdırma növbəti açılışda qalır.
