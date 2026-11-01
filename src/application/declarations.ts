@@ -5,7 +5,6 @@
  * time, with its source, so a closed period always shows the same return. The accountant copies
  * the figures into the e-taxes form; the checks say what to look at first, they never block.
  */
-import { vatRates } from '../domain/chart.js';
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import { monthEnd } from '../domain/rates.js';
@@ -86,16 +85,10 @@ export const monthClosed = (db: Db, companyId: string, month: string) =>
 // ---------------------------------------------------------------------------------------------
 // ƏDV (§5.1)
 
-interface SaleLine {
-  vatRate: string;
-  netAzn: string;
-  vatAzn: string;
-}
-
 /**
  * The incoming e-qaimələr behind "Əvəzləşdirilən ƏDV": what the month offset invoice by invoice
  * (the closing's entries, or its plan in an open month), and the VAT still waiting on 241 at the
- * month's end with the reason — not confirmed in DVX, or its VAT not paid through the deposit.
+ * month's end with the reason — not confirmed in DVX, or not paid (in full).
  */
 function offsetLists(
   db: Db,
@@ -165,7 +158,7 @@ function offsetLists(
       ? 'e-qaimə bağlanmayıb'
       : !Number(i.confirmed)
         ? 'DVX-də təsdiqlənməyib'
-        : 'ƏDV depozitdən ödənilməyib';
+        : 'tam ödənilməyib';
     waitingRows.push([...head(i), money(left), reason]);
   }
   const columns = ['Qaimə', 'Tarix', 'Təchizatçı', 'VÖEN', 'E-qaimə'];
@@ -194,7 +187,6 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
   const summary = vatSummary(db, companyId, month);
   const base = (rate: string) => parseMoney(v.sales.find((s) => s.rate === rate)?.base ?? '0.00');
   const vat18 = parseMoney(v.sales.find((s) => s.rate === '18')?.vat ?? '0.00');
-  const label = (rate: string) => vatRates.find((r) => r.id === rate)!.name;
   const closed = monthClosed(db, companyId, month);
 
   const sales: DeclarationSection = {
@@ -310,54 +302,10 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
     ],
   };
 
-  // The appendices: the sales at 0%, exempt and not taxable, invoice by invoice.
-  const lists = new Map<string, string[][]>();
-  const listed = new Map<string, bigint>();
-  for (const i of db.all(
-    `SELECT i.number, i.date, i.lines, p.name, p.tax_id FROM invoices i
-       JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
-     WHERE i.company_id=? AND i.direction='sale' AND i.status='posted' AND i.date BETWEEN ? AND ?
-     ORDER BY i.date, i.number`,
-    companyId,
-    from,
-    to,
-  )) {
-    const byRate = new Map<string, bigint>();
-    for (const l of JSON.parse(String(i.lines)) as SaleLine[])
-      if (l.vatRate !== '18')
-        byRate.set(l.vatRate, (byRate.get(l.vatRate) ?? 0n) + parseMoney(l.netAzn));
-    for (const [rate, amount] of byRate) {
-      const list = lists.get(rate) ?? [];
-      list.push([
-        String(i.number),
-        dmy(String(i.date)),
-        String(i.name),
-        String(i.tax_id),
-        money(amount),
-      ]);
-      lists.set(rate, list);
-      listed.set(rate, (listed.get(rate) ?? 0n) + amount);
-    }
-  }
-  // The purchase e-qaimələr offset (and waiting) first: what the accountant checks every month.
+  // The purchase e-qaimələr offset (and waiting); the sales are not listed one by one (QERARLAR
+  // 2026-11-01 §9).
   const appendices: DeclarationTable[] = [...offsetLists(db, companyId, month, closed)];
   const checks: DeclarationView['checks'] = [];
-  for (const rate of ['0', 'exempt', 'nontaxable']) {
-    const rows = lists.get(rate) ?? [];
-    if (!rows.length && !base(rate)) continue;
-    appendices.push({
-      title: `Satış qaimələri — ${label(rate)}`,
-      columns: ['Qaimə', 'Tarix', 'Alıcı', 'VÖEN', 'Dəyər'],
-      money: [false, false, false, false, true],
-      rows,
-    });
-    const rest = base(rate) - (listed.get(rate) ?? 0n);
-    if (rest)
-      checks.push({
-        kind: 'info',
-        text: `${label(rate)}: ${money(rest)} AZN qaiməsiz dövriyyədir (əl ilə əməliyyat) — əlavədə sənədi mühasib göstərir.`,
-      });
-  }
 
   if (!closed)
     checks.push({

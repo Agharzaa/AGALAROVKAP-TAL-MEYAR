@@ -203,7 +203,7 @@ function confirm(f: F, documents: Partial<EqDocumentInputDto>[]) {
   });
 }
 
-test('A3: purchase VAT offset — paid through the deposit 241 → 521.01, unpaid stays', (t) => {
+test('A3: purchase VAT offset — the paid share 241 → 521.01 (2026-11-01 §9), unpaid stays', (t) => {
   const f = fixture(t);
   const kapital = f.partner('Kapital Bank ASC', '9900003611');
   const founder = f.partner('Ağarza Ağalarov', '', 'individual');
@@ -260,10 +260,9 @@ test('A3: purchase VAT offset — paid through the deposit 241 → 521.01, unpai
   // The first: net from the current account, VAT from the deposit — wholly paid.
   f.bank('out', '2026-09-10', bankK, [B('531.01', [supplier, c1], '1000')]);
   f.bank('out', '2026-09-10', deposit, [B('531.01', [supplier, c1], '180')]);
-  // The second: only the net part paid; its VAT waits on 241.
+  // The second: 2 000 of 2 360 paid — 2 000 / 2 360 of the VAT offset, the rest waits on 241.
   f.bank('out', '2026-09-12', bankK, [B('531.01', [other, c2], '2000')]);
-  // An individual entrepreneur charging VAT is a VAT payer: VAT only through the deposit (half
-  // of it, 45.00, offset); half of the net from the current account offsets nothing.
+  // An individual entrepreneur: half paid (from the bank and the deposit alike), half offset.
   f.bank('out', '2026-09-12', bankK, [B('531.01', [person, c3], '250')]);
   f.bank('out', '2026-09-12', deposit, [B('531.01', [person, c3], '45')]);
   // The unconfirmed one is paid in full, VAT included — still no offset without DVX.
@@ -274,17 +273,18 @@ test('A3: purchase VAT offset — paid through the deposit 241 → 521.01, unpai
     step(v, 'vat').postings.map((p) => [p.dt, p.kt, p.ktSk[1], p.amount]),
     [
       ['521.01', '241', `invoice:${full.id}`, '180.00'],
+      ['521.01', '241', `invoice:${half.id}`, '305.08'],
       ['521.01', '241', `invoice:${fiz.id}`, '45.00'],
     ].sort((a, b) => a[2]!.localeCompare(b[2]!)),
   );
-  assert.match(step(v, 'vat').notes.join(), /2 qaimənin ƏDV-si \(405,00\) hələ ödənilməyib/);
+  assert.match(step(v, 'vat').notes.join(), /2 qaimənin ƏDV-si \(99,92\) hələ ödənilməyib/);
   const waiting = v.warnings.filter((w) => w.kind === 'vatUnconfirmed');
   assert.equal(waiting.length, 1);
   assert.equal(waiting[0]!.invoice!.id, none.id);
   assert.match(waiting[0]!.text, /e-qaiməsi DVX-də təsdiqlənməyib/);
   assert.throws(() => close(f, '2026-09'), /xəbərdarlıq var: oxuyub "Oxudum"/);
   close(f, '2026-09', true);
-  assert.equal(balance(f, '241'), String((360 + 45 + 18) * 100));
+  assert.equal(balance(f, '241'), String(5492 + 4500 + 1800));
   assert.equal(view(f, '2026-09').posted!.warnings.length, v.warnings.length);
   const left241 = (id: string) =>
     f.db.get(
@@ -293,7 +293,7 @@ test('A3: purchase VAT offset — paid through the deposit 241 → 521.01, unpai
     )!.b;
   assert.deepEqual(
     [full, half, fiz, none].map((x) => left241(x.id)),
-    [0n, 36000n, 4500n, 1800n],
+    [0n, 5492n, 4500n, 1800n],
   );
 });
 

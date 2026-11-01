@@ -102,7 +102,7 @@ function setup(t: Parameters<typeof fixture>[0]) {
 // D1: depositPaid treats a whole advance as VAT when any line of its bank document carries the
 // "ƏDV-nin ödənilməsi" item.
 
-test('audit2 D1a: an advance with only 90 of VAT marked offsets 90, not the invoice’s 900', (t) => {
+test('audit2 D1a (2026-11-01 §9): an advance of 5 090 offsets its share of the 900 VAT', (t) => {
   const { f, bankK, buy, confirmed, supplier, contract, vatItem } = setup(t);
   // One advance from the current account: 5 000 unmarked, 90 marked as VAT.
   f.bank('out', '2026-09-02', bankK, [
@@ -111,13 +111,13 @@ test('audit2 D1a: an advance with only 90 of VAT marked offsets 90, not the invo
   ]);
   const inv = buy('2026-09-05', 'MT2609101'); // offsets the 5 090 advance
   confirmed('MT2609101', '2026-09-05');
-  // Only 90 of VAT has been paid as VAT; 810 of the 900 is unpaid.
-  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '90.00']]);
+  // 5 090 of 5 900 is paid, marked or not: 5 090 / 5 900 of the VAT.
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '776.44']]);
   close(f, '2026-09');
-  assert.equal(left241(f, inv.id), 81000n);
+  assert.equal(left241(f, inv.id), 12356n);
 });
 
-test('audit2 D1b: another supplier’s VAT line in the same bank document makes this advance VAT', (t) => {
+test('audit2 D1b (2026-11-01 §9): an unmarked advance paying the whole invoice offsets its VAT', (t) => {
   const { f, bankK, buy, confirmed, supplier, contract, other, otherContract, vatItem } = setup(t);
   // One payment order batch: Alfa gets an ordinary 5 900 advance from the current account;
   // Beta gets 180 marked as VAT. Nothing of Alfa's VAT went as VAT.
@@ -127,10 +127,10 @@ test('audit2 D1b: another supplier’s VAT line in the same bank document makes 
   ]);
   const inv = buy('2026-09-05', 'MT2609102');
   confirmed('MT2609102', '2026-09-05');
-  // Alfa's 900 is not paid as VAT: nothing to offset.
-  assert.deepEqual(vat(f, '2026-09'), []);
+  // Alfa's 5 900 pays the invoice in full: its 900 is offset.
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
   close(f, '2026-09');
-  assert.equal(left241(f, inv.id), 90000n);
+  assert.equal(left241(f, inv.id), 0n);
 });
 
 // ---------------------------------------------------------------------------------------------

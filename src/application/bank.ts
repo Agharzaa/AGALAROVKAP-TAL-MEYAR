@@ -94,9 +94,10 @@ function normalize(tx: Tx, cmd: SaveBank, chart: Chart) {
 type Normalized = ReturnType<typeof normalize>;
 
 /**
- * A deposit document pays VAT, a current account the rest; currency invoices as a whole.
- * Foreign partners and individual buyers have no VAT deposit account: their VAT comes with the
- * rest. An individual supplier who charges VAT is a VAT payer: paid it through the deposit.
+ * A deposit document pays VAT. A payment to a supplier from a current account pays the invoice as
+ * a whole — the base and the VAT alike (QERARLAR 2026-11-01 §9). Money received on a current
+ * account pays the rest; its VAT comes through the deposit — except from foreign partners and
+ * individual buyers, who have no VAT deposit account. Currency invoices are paid as a whole.
  */
 const bankPart =
   (n: Normalized) =>
@@ -105,7 +106,7 @@ const bankPart =
       ? 'whole'
       : inFamily(n.holder.account.code, '224')
         ? 'vat'
-        : kind === 'foreign' || (kind === 'individual' && n.header.direction === 'in')
+        : n.header.direction === 'out' || kind === 'foreign' || kind === 'individual'
           ? 'whole'
           : 'net';
 

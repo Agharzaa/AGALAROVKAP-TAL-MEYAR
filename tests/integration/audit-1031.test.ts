@@ -154,16 +154,15 @@ test('D2: a manual extra offset is taken back by the rule in the next month', (t
   const { f, bankK, deposit, buy, confirmed, pay } = setup(t);
   const inv = buy('2026-09-05', 'AA2609002');
   confirmed('AA2609002', '2026-09-05');
-  pay('2026-09-10', bankK, '5000');
-  pay('2026-09-10', deposit, '500');
-  close(f, '2026-09'); // the rule offsets 500
-  assert.equal(offsetTotal(f, inv.id), 50000n);
-  // October: the accountant offsets the other 400 by hand (a decision of his own).
+  pay('2026-09-10', bankK, '2950'); // half of 5 900
+  close(f, '2026-09'); // the rule offsets the half: 450
+  assert.equal(offsetTotal(f, inv.id), 45000n);
+  // October: the accountant offsets the other 450 by hand (a decision of his own).
   assert.deepEqual(doc(f, '2026-10').proposal, []);
-  save(f, '2026-10', [[inv.id, '400']]);
+  save(f, '2026-10', [[inv.id, '450']]);
   close(f, '2026-10');
   assert.equal(offsetTotal(f, inv.id), 90000n);
-  // November: nothing changed, yet the rule takes the hand-made 400 back (from its own 500).
+  // November: nothing changed; the hand-made 450 is not taken back by the rule.
   assert.deepEqual(vat(f, '2026-11'), [], 'the manual line is taken back by the rule');
 });
 

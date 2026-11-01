@@ -153,21 +153,13 @@ test('V1: ƏDV return — sales by rate, accrued, offset by the closing, 521.01 
   assert.ok(!after.checks.some((c) => /kredit dövriyyəsi/.test(c.text)));
 });
 
-test('V2: ƏDV return — appendices by invoice; more offset than accrued carries over', (t) => {
+test('V2: ƏDV return — purchase appendices by invoice, no sales lists; more offset than accrued carries over', (t) => {
   const f = fixture(t);
   const accounts = september(f);
   const v = declaration(f, 'vat', '2026-09');
-  const zero = v.appendices.find((a) => a.title.includes('0%'))!;
-  assert.deepEqual(
-    zero.rows.map((r) => [r[2], r[3], r[4]]),
-    [['Xarici Alıcı LLC', '1700000005', '300.00']],
-  );
-  const exempt = v.appendices.find((a) => a.title.includes('azad'))!;
-  assert.deepEqual(
-    exempt.rows.map((r) => [r[2], r[4]]),
-    [['Alıcı MMC', '50.00']],
-  );
-  assert.equal(v.appendices.length, 4, 'no list for a rate without sales; two offset lists');
+  // The sales are not listed invoice by invoice (QERARLAR 2026-11-01 §9): the two offset lists.
+  assert.equal(v.appendices.length, 2);
+  assert.ok(!v.appendices.some((x) => x.title.startsWith('Satış')));
   // The incoming e-qaimə paid through the deposit: offset by the plan of the open month.
   const list = (d: DeclarationView, title: string) =>
     d.appendices.find((a) => a.title.startsWith(title))!;
@@ -228,7 +220,7 @@ test('V2: ƏDV return — appendices by invoice; more offset than accrued carrie
   assert.deepEqual(
     list(october, 'Əvəzləşdirilməyən').rows.map((r) => [r[4], r[5], r[6]]),
     [
-      ['MT0003', '36.00', 'ƏDV depozitdən ödənilməyib'],
+      ['MT0003', '36.00', 'tam ödənilməyib'],
       ['', '9.00', 'e-qaimə bağlanmayıb'],
     ],
   );

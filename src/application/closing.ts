@@ -42,7 +42,6 @@ import type {
   Signal,
 } from '../contracts/queries.js';
 import type { Db, Row } from '../infrastructure/sqlite/db.js';
-import { depositPaid } from './money.js';
 import { checkMonth, revaluationStep, type RevaluationStep } from './revaluation.js';
 import { expectVersion, loadChart, rowToPosting, type Tx } from './tx.js';
 import { termsOf } from './assets.js';
@@ -517,7 +516,7 @@ export interface VatInvoice {
   open: Minor;
   /** Offset so far (Dt 521.01 / Kt 241, less back), before this month's document. */
   offset: Minor;
-  /** VAT paid by the month's end: through the deposit (less refunds), or pro rata. */
+  /** VAT paid by the month's end: the settled share of the invoice times its VAT (pro rata). */
   paid: Minor;
   /** DVX: the confirmed e-qaimə's VAT; null — not confirmed. */
   dvxVat: Minor | null;
@@ -708,9 +707,9 @@ export function vatStep(
       }
       // The VAT of the invoice itself: 241's debit less what was taken back to it from 521.01.
       const invoiceVat = debit - (offset0?.dt ?? 0n);
-      // What reached the invoice by the month's end: the VAT through the VAT deposit, less what came
-      // back to it (a refund); foreign partners and currency invoices pay VAT with the rest — pro
-      // rata. An individual entrepreneur is a VAT payer like a company: VAT only through the deposit.
+      // What was paid by the month's end (QERARLAR 2026-11-01 §9): the invoice's settled share —
+      // the base and the VAT, from the bank or the VAT deposit alike — times its VAT, pro rata.
+      // Paid in full: offset in full in the month of the payment; paid in part: the same part.
       let paid = 0n;
       const key = db.get(
         `SELECT account, SUM(debit) AS d, SUM(credit) AS c, SUM(cur_dt) AS cd, SUM(cur_kt) AS ck
@@ -724,29 +723,13 @@ export function vatStep(
         month,
       );
       if (key) {
-        const whole = inv.currency !== 'AZN' || inv.partner_kind === 'foreign';
-        if (!whole) {
-          const through = (direction: 'in' | 'out') =>
-            depositPaid(
-              db,
-              companyId,
-              direction,
-              String(key.account),
-              String(inv.partner_id),
-              String(inv.contract_id),
-              document,
-              end,
-            );
-          paid = through('out') - through('in');
-          if (paid < 0n) paid = 0n;
-        } else {
-          const [settled, owed] =
-            inv.currency !== 'AZN'
-              ? [key.cd as bigint, key.ck as bigint]
-              : [key.d as bigint, key.c as bigint];
-          const share = settled < owed ? settled : owed;
-          paid = owed > 0n && share > 0n ? roundHalfAwayFromZero(invoiceVat * share, owed) : 0n;
-        }
+        // The invoice's own amount is owed; more on the credit side is money back (a refund).
+        const cur = inv.currency !== 'AZN';
+        const owed = (cur ? inv.total : inv.total_azn) as bigint;
+        const [d, c] = cur ? [key.cd as bigint, key.ck as bigint] : [key.d as bigint, key.c as bigint];
+        const settled = d - (c > owed ? c - owed : 0n);
+        const share = settled < owed ? settled : owed;
+        paid = owed > 0n && share > 0n ? roundHalfAwayFromZero(invoiceVat * share, owed) : 0n;
       }
       if (paid > invoiceVat) paid = invoiceVat;
       seen = {

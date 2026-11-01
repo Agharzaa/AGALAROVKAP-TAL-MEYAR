@@ -3289,9 +3289,9 @@ test('stage 9a: the VAT return lists sales by rate with their source; a row open
       cells.map((c) => c.textContent!.replace(/\s/g, ' ')),
       ['1 000,00', '', '601, dərəcə 0%'],
     );
-    // A sale without an invoice: the appendix says the accountant names the document.
-    await report.findByText(/qaiməsiz dövriyyədir/);
-    report.getByText(/ayı bağlanmayıb/);
+    // The sales are not listed invoice by invoice (QERARLAR 2026-11-01 §9).
+    await report.findByText(/ayı bağlanmayıb/);
+    assert.equal(report.queryByText(/Satış qaimələri —/), null);
     await user.click(report.getByRole('button', { name: /Excel/ }));
     await report.findByText(new RegExp(`Saxlanıldı: .*ƏDV bəyannaməsi ${month}\.xlsx`));
     await user.dblClick(row);

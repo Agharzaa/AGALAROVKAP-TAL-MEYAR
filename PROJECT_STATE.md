@@ -1,6 +1,6 @@
 # Meyar — layihənin vəziyyəti
 
-Yenilənib: 01.11.2026 (0.9.25). Növbəti sessiya buradan davam etməlidir.
+Yenilənib: 01.11.2026 (0.9.26). Növbəti sessiya buradan davam etməlidir.
 
 ## Kontekst
 
@@ -845,6 +845,10 @@ Altı müstəqil yoxlayıcı (alt agentlər) paralel işlədi, hər biri qüsuru
 ## 0.9.25 — Xəzinədarlığın ƏDV depozit hesabına bank ödənişi əvəzləşir (01.11.2026)
 
 İstifadəçi: "mən ƏDV-lərini bankdan ödəmişəm, sən əvəzləşdirmirsən". Real oktyabr çıxarışında ƏDV ayrıca ödənişlə Xəzinədarlığın ƏDV depozit hesabına (AZ48CTRE00000000000000014001) gedir, Meyar onu əsas məbləğ kimi qəbul edirdi (241-də 34 095,94 ₼ gözləyir). İndi `isVatDepositIban` (`domain/statement.ts`) → təklifdə hərəkət maddəsi "ƏDV-nin ödənilməsi" (`statements.ts`); bəyannamədə alış siyahıları əvvəl. Test: `vat-offset.test.ts` (çıxarış → uçot → əvəzləşmə). `npm test` 358, `npm run test:ui` 65, `npm run test:perf` keçir. Əsl bazada oktyabrın artıq uçota alınmış ƏDV ödənişləri yenilənmədən sonra düzəldilməlidir.
+
+## 0.9.26 — ƏDV ödənildiyi ayda əvəzləşir, bankdan və ya depozitdən (01.11.2026)
+
+İstifadəçi 9 aylıq ƏDV bəyannaməsini göndərdi: əsas və ƏDV ödənibsə, ödənildiyi ayda əvəzləşir, bankdan və ya depozitdən fərqi yoxdur; bəyannamədə satış qaimələri sadalanmır (QERARLAR 2026-11-01 §9). `closing.ts` (`vatStep`): ödənmiş pay × ƏDV hamı üçün, geri ödəniş payı azaldır; `bank.ts`: təchizatçıya cari hesabdan ödəniş qaiməni bütöv bağlayır; `declarations.ts`: satış əlavələri çıxarıldı. `npm test` 359, `npm run test:ui` 65, `npm run test:perf` keçir. Əsl bazada yanvar–sentyabr ƏƏ- sənədləri bəyannamələrlə eyni yazıldı, İFN-in 3 dizel qaiməsi uçota alındı, DİLALA-nın ƏDV-si xərcə keçdi (istifadəçinin qərarı). Testlər yeni qaydaya uyğunlaşdırıldı (+2).
 
 ## Növbəti mərhələlər (istifadəçi təsdiqindən sonra)
 

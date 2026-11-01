@@ -1,6 +1,6 @@
 /**
- * Purchase VAT offset in the month closing (QERARLAR 2026-10-30): an individual entrepreneur is
- * paid VAT through the deposit; VAT paid ahead (an advance) is offset once the e-qaimə is
+ * Purchase VAT offset in the month closing (QERARLAR 2026-10-30, 2026-11-01 §9): the paid share
+ * of the invoice's VAT, from the bank or the deposit alike; VAT paid ahead (an advance) is offset once the e-qaimə is
  * confirmed; what was offset is taken back by the closing when the payment goes down or DVX no
  * longer confirms the e-qaimə.
  */
@@ -151,7 +151,7 @@ test('2026-10-31: VAT paid from the current account with the "ƏDV-nin ödənilm
   assert.equal(left241(f, inv.id), 0n);
 });
 
-test('2026-10-31: without the item the same payment from the current account offsets nothing', (t) => {
+test('2026-11-01 §9: the same payment from the current account without the item is offset too', (t) => {
   const { f, bankK, buy, confirmed, supplier, contract } = setup(t);
   buy('2026-09-05', 'MT2609001');
   confirmed('MT2609001', '2026-09-05');
@@ -159,7 +159,20 @@ test('2026-10-31: without the item the same payment from the current account off
     f.bankLine('531.01', [supplier, contract], '5000'),
     f.bankLine('531.01', [supplier, contract], '900'),
   ]);
-  assert.deepEqual(vat(f, '2026-09'), []);
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
+});
+
+test('2026-11-01 §9: paid in part — the same part of the VAT is offset, the rest when paid', (t) => {
+  const { f, bankK, buy, confirmed, pay } = setup(t);
+  const inv = buy('2026-09-05', 'MT2609001');
+  confirmed('MT2609001', '2026-09-05');
+  pay('2026-09-10', bankK, '2950'); // half of 5 900
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '450.00']]);
+  close(f, '2026-09');
+  pay('2026-10-10', bankK, '2950');
+  assert.deepEqual(vat(f, '2026-10'), [['521.01', '241', '450.00']]);
+  close(f, '2026-10');
+  assert.equal(left241(f, inv.id), 0n);
 });
 
 test('2026-11-01: VAT paid from the current account to the Treasury VAT deposit is recognised and offset', (t) => {
@@ -235,15 +248,14 @@ test('audit 2026-10-31: VAT paid ahead with the item from the current account co
   assert.equal(left241(f, inv.id), 0n);
 });
 
-test('an individual entrepreneur charging VAT: only VAT through the deposit is offset', (t) => {
-  const { f, bankK, deposit, buy, confirmed, pay } = setup(t, 'individual');
+test('an individual entrepreneur charging VAT: paid from the current account, offset by the part paid', (t) => {
+  const { f, bankK, buy, confirmed, pay } = setup(t, 'individual');
   const inv = buy('2026-09-05', 'MT2609001');
   confirmed('MT2609001', '2026-09-05');
-  // The whole 5 900 from the current account: the VAT has not gone through the deposit.
-  pay('2026-09-10', bankK, '5900');
-  assert.deepEqual(vat(f, '2026-09'), []);
-  assert.match(notes(f, '2026-09'), /1 qaimənin ƏDV-si \(900,00\) hələ ödənilməyib/);
-  pay('2026-09-12', deposit, '900');
+  pay('2026-09-10', bankK, '2950');
+  assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '450.00']]);
+  assert.match(notes(f, '2026-09'), /1 qaimənin ƏDV-si \(450,00\) hələ ödənilməyib/);
+  pay('2026-09-12', bankK, '2950');
   assert.deepEqual(vat(f, '2026-09'), [['521.01', '241', '900.00']]);
   close(f, '2026-09');
   assert.equal(left241(f, inv.id), 0n);
@@ -272,19 +284,19 @@ test('a refund to the deposit after the offset: the next closing takes the VAT b
   pay('2026-09-10', deposit, '900');
   close(f, '2026-09');
   assert.equal(offsetByClosings(f), 90000n);
-  // October: the supplier returns 450 of the VAT to the deposit, against the invoice.
-  pay('2026-10-08', deposit, '450', 'in', inv.id);
-  assert.deepEqual(vat(f, '2026-10'), [['521.01', '241', '-450.00']]);
+  // October: the supplier returns 1 180 against the invoice — a fifth: 180 of the VAT back.
+  pay('2026-10-08', deposit, '1180', 'in', inv.id);
+  assert.deepEqual(vat(f, '2026-10'), [['521.01', '241', '-180.00']]);
   assert.match(
     notes(f, '2026-10'),
-    /əvəzləşdirilmiş ƏDV 450,00 geri alınır — ödənilmiş ƏDV azalıb/,
+    /əvəzləşdirilmiş ƏDV 180,00 geri alınır — ödənilmiş ƏDV azalıb/,
   );
   close(f, '2026-10');
-  assert.equal(left241(f, inv.id), 45000n);
-  assert.equal(offsetByClosings(f), 45000n);
+  assert.equal(left241(f, inv.id), 18000n);
+  assert.equal(offsetByClosings(f), 72000n);
   // Paid again in November: offset again; nothing taken back twice.
-  pay('2026-11-04', deposit, '450', 'out', inv.id);
-  assert.deepEqual(vat(f, '2026-11'), [['521.01', '241', '450.00']]);
+  pay('2026-11-04', deposit, '1180', 'out', inv.id);
+  assert.deepEqual(vat(f, '2026-11'), [['521.01', '241', '180.00']]);
   close(f, '2026-11');
   assert.equal(left241(f, inv.id), 0n);
   assert.deepEqual(vat(f, '2026-12'), []);
@@ -297,7 +309,7 @@ test('the accountant already took it back by hand: the closing does not take it 
   pay('2026-09-10', bankK, '5000');
   pay('2026-09-10', deposit, '900');
   close(f, '2026-09');
-  pay('2026-10-08', deposit, '450', 'in', inv.id);
+  pay('2026-10-08', deposit, '1180', 'in', inv.id);
   const vatTax = f.item('paymentKind', 'Vergi (haqq)');
   const supplier = String(
     f.db.get('SELECT partner_id FROM invoices WHERE id=?', inv.id)!.partner_id,
@@ -307,11 +319,11 @@ test('the accountant already took it back by hand: the closing does not take it 
       .s3,
   );
   f.operation('2026-10-08', [
-    f.line('241', [supplier, `invoice:${inv.id}`, rate], '521.01', [vatTax], '450'),
+    f.line('241', [supplier, `invoice:${inv.id}`, rate], '521.01', [vatTax], '180'),
   ]);
   assert.deepEqual(vat(f, '2026-10'), []);
   close(f, '2026-10');
-  assert.equal(left241(f, inv.id), 45000n);
+  assert.equal(left241(f, inv.id), 18000n);
 });
 
 test('DVX cancels a confirmed e-qaimə after the offset: the closing takes the VAT back', (t) => {
