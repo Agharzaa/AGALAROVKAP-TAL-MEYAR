@@ -45,12 +45,13 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
       .map((r) => String(r.id));
   } else ({ companyId, banks } = generate(db, ledger));
   /**
-   * `cpuOnCi`: on the GitHub runner the budget applies to the process's CPU time, not the wall
-   * clock — for one large transaction whose wall time there is the runner's disk (the e-qaimə
-   * load writes ~66 MB of WAL and checkpoints as much: 14.7–36.8 s on CI, ~3 s on a PC; audit
-   * of 29.10.2026). The wall clock still has a ceiling of three budgets there.
+   * `ciWall`: on the GitHub runner the budget applies to the process's CPU time and the wall
+   * clock only has this ceiling — for steps whose wall time there is the runner's disk: the
+   * e-qaimə load writes ~66 MB of WAL and checkpoints as much (14.7–36.8 s on CI, ~3 s on a PC;
+   * audit of 29.10.2026), 500 cash orders are 500 commits (11.8–31.7 s on CI, ~1 s on a PC).
    */
-  const time = <T>(label: string, budget: number, fn: () => T, cpuOnCi = false): T => {
+  const time = <T>(label: string, budget: number, fn: () => T, ciWall = 0): T => {
+    const cpuOnCi = ciWall > 0;
     const s = performance.now();
     const c = process.cpuUsage();
     const result = fn();
@@ -59,7 +60,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
     const cpu = Math.round((used.user + used.system) / 1000);
     const byCpu = cpuOnCi && !!process.env.GITHUB_ACTIONS;
     const measured = byCpu ? cpu : ms;
-    const ok = measured <= budget && ms <= (byCpu ? 3 * budget : budget);
+    const ok = measured <= budget && ms <= (byCpu ? ciWall : budget);
     const said = `${label}: ${ms} ms${cpuOnCi ? ` (CPU ${cpu} ms)` : ''} (hədd ${budget} ms${byCpu ? ' CPU' : ''})`;
     console.log(`  ${said}`);
     // On CI the numbers are also annotations: readable on the run page without signing in (only
@@ -304,7 +305,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
         },
         { actor: 'perf', correlationId: 'perf' },
       ),
-    true,
+    60000,
   ) as { added: number; rejected: unknown[]; posted: number; failed: unknown[] };
   assert.deepEqual([eqLoaded.added, eqLoaded.rejected], [5000, []]);
   assert.deepEqual([eqLoaded.posted, eqLoaded.failed], [1200, []]);
@@ -335,7 +336,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
   const stamp3 = Date.now();
   time(
     'Kassa orderləri (500, hər biri ayrıca, mənfi qalıq yoxlaması ilə)',
-    process.env.GITHUB_ACTIONS ? 40000 : 10000,
+    10000,
     () => {
       for (let i = 0; i < 500; i++) {
         const incoming = i % 2 === 0;
@@ -363,6 +364,7 @@ test(`reports stay within budget on ${POSTINGS} postings`, { timeout: 600_000 },
         );
       }
     },
+    60000,
   );
   const cashYear = time('Kassa kitabı, il (500 order)', 1500, () =>
     q({ type: 'cashBook', cashboxId: box, from: '2026-01-01', to: '2026-12-31' }),
