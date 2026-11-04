@@ -944,3 +944,15 @@ QERARLAR 2026-11-01 §5–6. Həqiqi bazanın surətində müstəqil tutuşdurma
 - **Kassa orderləri yük testi CI-də CPU vaxtı ilə** (auditin 6-cı sualı): 500 commit CI diskində 11,8–31,7 s idi (QERARLAR 2026-10-22 §10-un 40 s həddi). İndi CI-də 10 s CPU + 60 s divar tavanı (kompüterdə CPU 0,6–0,8 s); e-qaimə yükü də eyni qayda ilə (20 s CPU, 60 s tavan).
 
 Testlər: `npm run typecheck`, `npm test` 360, `npm run test:ui` 68, `npm run test:perf` (100 000 yazılış) keçir. Sxem dəyişməyib.
+
+## 0.9.30 — açıq qalanlar, 2-ci dəst: VM 175, pul hərəkətində dividend və kurs fərqi (04.11.2026)
+
+İstifadəçi: "başqa nə qaldı, hamısını həll et, yekunlaşdıraq". Auditlərin tövsiyələri tətbiq olundu (testlər `tests/integration/open-items.test.ts`):
+
+- **VM 175** (mərhələ 9 auditinin 4-cü sualı): ƏDV-yə cəlb edilməyən satış da (azad satış kimi) alış ƏDV-si olan ayda xəbərdarlıq verir, vergi tutulan pay hər ikisi ilə hesablanır. Yalnız xəbərdarlıqdır — bölgünü mühasib edir.
+- **Dividend** (mərhələ 10 auditinin 1-ci sualı): pul hərəkətində "dividendlər" yalnız 534 / 344-dür (kapitaldakı dəyişikliklər kimi); 343 / 341 ilə birbaşa pul — "digər ödənişlər / daxilolmalar".
+- **Əl ilə kurs fərqi** (mərhələ 10 auditinin 3-cü sualı): 611 / 731-ə "Məzənnə fərqi" maddəsi ilə 22-yə yazılan fərq yenidən qiymətləndirmə kimi "məzənnə təsiri" sətrinə düşür.
+
+**Bilərəkdən edilmədi:** DVX ixrac şablonunu icazəli sahələrə endirmək (mərhələ 6 auditinin 2-ci müşahidəsi) — 0.7.6-da real DVX-in 400 xətası məhz portalın öz gövdəsini şablon götürməklə həll olunub; dəyişiklik yalnız real yeniləmə ilə yoxlana bilər. Çıxarışın barmaq izinə qarşı tərəfin IBAN-ı (e-qaimə və bank auditinin 3-cü sualı) — PAŞA Bank faylı hər sətirdə "İstinad No" çap edir və o barmaq izindədir: risk yoxdur, köhnə izləri dəyişmək isə təkrar yarada bilərdi.
+
+Testlər: `npm run typecheck`, `npm test` 362, `npm run test:ui` 68, `npm run test:perf` (100 000 yazılış) keçir. Sxem dəyişməyib.
