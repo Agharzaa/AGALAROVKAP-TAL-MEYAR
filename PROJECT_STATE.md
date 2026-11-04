@@ -812,13 +812,13 @@ Testlər Windows-da: `npm run typecheck`, `npm test` 286, `npm run test:ui` 53, 
 
 Müstəqil yoxlayıcı (kodu yazmayan alt agent) 5 qüsur tapdı, hər biri əvvəl uğursuz test ilə (`tests/integration/audit-1031.test.ts`), sonra düzəliş:
 
-| # | Qüsur | Düzəliş |
-| --- | --- | --- |
-| D1 | Sonrakı ayın ƏƏ- sənədi əvvəl uçota alınanda əvvəlki ayın bağlanışı eyni ƏDV-ni yenidən əvəzləşdirirdi (241 mənfiyə). | `laterVatOffset`: sənəd saxlanmır, bağlanış bloklanır — əvvəlcə sonrakı ləğv edilir. |
-| D2 | Əl ilə əlavə əvəzləşdirmə növbəti ay qaydanın özününkündən geri alınırdı. | `due = paid − digər kreditlər − ruleNet` (`ruleNet` = qaydanın öz əvəzləşdirdiyi − əl ilə geri alınan). |
-| D4 | ƏDV sətri əsas sətirdən əvvəl olanda əsas 900 az bağlanırdı. | `vatOpen − takenVat` həmişə. |
-| D5 | Xarici IBAN idxalda itirdi (`d{2}`). | Regex düzəldi. |
-| D6 | Adla tanıma başqa şəxsi / şirkəti götürürdü. | Qısa adda bütün sözlər, uzun adda ¾; "oğlu / qızı" sayılmır. |
+| #   | Qüsur                                                                                                                 | Düzəliş                                                                                                 |
+| --- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| D1  | Sonrakı ayın ƏƏ- sənədi əvvəl uçota alınanda əvvəlki ayın bağlanışı eyni ƏDV-ni yenidən əvəzləşdirirdi (241 mənfiyə). | `laterVatOffset`: sənəd saxlanmır, bağlanış bloklanır — əvvəlcə sonrakı ləğv edilir.                    |
+| D2  | Əl ilə əlavə əvəzləşdirmə növbəti ay qaydanın özününkündən geri alınırdı.                                             | `due = paid − digər kreditlər − ruleNet` (`ruleNet` = qaydanın öz əvəzləşdirdiyi − əl ilə geri alınan). |
+| D4  | ƏDV sətri əsas sətirdən əvvəl olanda əsas 900 az bağlanırdı.                                                          | `vatOpen − takenVat` həmişə.                                                                            |
+| D5  | Xarici IBAN idxalda itirdi (`d{2}`).                                                                                  | Regex düzəldi.                                                                                          |
+| D6  | Adla tanıma başqa şəxsi / şirkəti götürürdü.                                                                          | Qısa adda bütün sözlər, uzun adda ¾; "oğlu / qızı" sayılmır.                                            |
 
 - **Əlavə (yoxlayıcının ehtimalı):** avansla "ƏDV-nin ödənilməsi" maddəsi ilə ödənən ƏDV `depositPaid`-də sayılır.
 - **Avansın sonradan əvəzləşdirilməsi** (`offsetLaterAdvances`, `src/application/invoices.ts`; bank və kassa sənədindən sonra): əsl bazanın surətində bir alıcının 104 850 ₼ avansı qaiməsi ilə əvəzləşmirdi (qaimə əvvəl, çıxarış sonra yüklənmişdi).
@@ -934,3 +934,13 @@ QERARLAR 2026-11-01: kod ayrıca sütunda, səviyyə çalarları (`tier-account`
 ## 0.9.28 — dövriyyə balansı: sadə ekran, səviyyə yadda qalır (01.11.2026)
 
 QERARLAR 2026-11-01 §5–6. Həqiqi bazanın surətində müstəqil tutuşdurma: 5 dövr, 5 995 sətir, 0 fərq. Testlər: `npm run typecheck`, `npm test`, `npm run test:ui` 67, `npm run test:perf` keçir.
+
+## 0.9.29 — açıq qalanlar, 1-ci dəst: DVX yeniləməsi, e-qaiməsiz ƏDV, CI yük testi (04.11.2026)
+
+İstifadəçi: "yarımçıq qalanları bir-bir həll edək". Əvvəlcə qərar tələb etməyənlər:
+
+- **Bir anda bir "DVX-dən yenilə"** (mərhələ 6 auditinin 1-ci müşahidəsi): qutu və İş masası yeniləmənin başqa yerdə getdiyini görür, düymə bağlı qalır ("DVX yeniləməsi başqa pəncərədə gedir"); əvvəl ikincisi birincini ləğv edirdi. `src/renderer/dvx-sync.ts` (tətbiq üzrə bir `running`). Test: `tests/ui` ("while one … runs").
+- **İş masası: ƏDV-li, e-qaiməsiz alış qaimələri** (e-qaimə və bank auditinin 4-cü sualı): açıq dövrdə ƏDV-ni əvəzləşdirən (xərcə deyil), e-qaimə nömrəsi olmayan və e-qaiməyə bağlanmayan alış qaimələri sayı, ƏDV-si və ilk nömrələri ilə — bu ƏDV heç vaxt əvəzləşmir; e-qaimə başqa qaimədə uçotdadırsa, ikinci dəfədir. `eqNumberless` (`eqaime.ts`), siqnal `eqNumberless`. Test: `eqaime-bank-audit.test.ts`; `eqaime-book.test.ts`-in İş masası gözləntisi bu siqnalla.
+- **Kassa orderləri yük testi CI-də CPU vaxtı ilə** (auditin 6-cı sualı): 500 commit CI diskində 11,8–31,7 s idi (QERARLAR 2026-10-22 §10-un 40 s həddi). İndi CI-də 10 s CPU + 60 s divar tavanı (kompüterdə CPU 0,6–0,8 s); e-qaimə yükü də eyni qayda ilə (20 s CPU, 60 s tavan).
+
+Testlər: `npm run typecheck`, `npm test` 360, `npm run test:ui` 68, `npm run test:perf` (100 000 yazılış) keçir. Sxem dəyişməyib.
