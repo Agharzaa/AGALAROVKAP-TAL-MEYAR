@@ -259,10 +259,15 @@ test('2026-10-31: "Mallar üzrə" and "Qaimələr üzrə" a qəpik apart is roun
     doc('MT2', '2026-09-05', SUPPLIER, { net: '100.00', vat: '18.00', base18: '100.00' }),
   ]);
   assert.equal(r.conflicts, 1, 'MT2 is 10 qəpik apart with 2 lines — still a conflict');
-  const one = f.db.get("SELECT net, conflict, header_full FROM eq_documents WHERE eq_number='MT1'")!;
+  const one = f.db.get(
+    "SELECT net, conflict, header_full FROM eq_documents WHERE eq_number='MT1'",
+  )!;
   // The stored amounts stay as DVX wrote them first; the header is completed.
   assert.deepEqual([one.net, one.conflict, one.header_full], [10002n, '', 1n]);
-  assert.notEqual(f.db.get("SELECT conflict FROM eq_documents WHERE eq_number='MT2'")!.conflict, '');
+  assert.notEqual(
+    f.db.get("SELECT conflict FROM eq_documents WHERE eq_number='MT2'")!.conflict,
+    '',
+  );
   // Loaded again, either report: rounding, nothing new.
   assert.equal(
     load(f, 'purchase', [
@@ -279,4 +284,28 @@ test('2026-10-31: "Mallar üzrə" and "Qaimələr üzrə" a qəpik apart is roun
     ).conflicts,
     0,
   );
+});
+
+test('audit: İş masası names purchase invoices whose VAT has no e-qaimə (it is never offset)', (t) => {
+  const f = fixture(t);
+  const supplier = f.partner('Kağız Təchizat MMC', SUPPLIER);
+  const contract = f.contract(supplier, 'A-1', 'purchase');
+  const service = f.product('Rabitə xidməti', 'ay', 'service');
+  const item = f.item('expenseItem', 'Rabitə');
+  const buy = (extra: object, vatRate: '18' | '0' = '18') =>
+    f.invoice(
+      'purchase',
+      '2026-09-05',
+      supplier,
+      contract,
+      [{ productId: service, price: '100', vatRate, expenseItemId: item }],
+      extra,
+    );
+  buy({}); // VAT, no e-qaimə: signalled
+  buy({ eqNumber: 'MT5' }); // carries its e-qaimə number
+  buy({}, '0'); // no VAT
+  buy({ vatTreatment: 'cost' }); // VAT to cost: nothing to offset
+  const w = f.home().warnings.filter((x) => x.kind === 'eqNumberless');
+  assert.equal(w.length, 1);
+  assert.match(w[0]!.text, /1 alış qaiməsində ƏDV var \(18,00\).*AQ-000001/);
 });

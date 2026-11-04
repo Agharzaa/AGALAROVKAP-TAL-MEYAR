@@ -1003,7 +1003,8 @@ test('DVX ↔ books: VAT by month, e-qaimələr not booked, invoices DVX does no
   const signals = f.home().warnings.filter((w) => w.eq === 'purchase');
   assert.deepEqual(
     signals.map((w) => w.kind),
-    ['eqWaiting', 'eqVat', 'eqMissing'],
+    // The numberless invoice with VAT is named too (its VAT is never offset).
+    ['eqWaiting', 'eqVat', 'eqMissing', 'eqNumberless'],
   );
   assert.match(signals[0]!.text, /3 e-qaimə DVX-də təsdiqlənib, uçota alınmayıb/);
 });

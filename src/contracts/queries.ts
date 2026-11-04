@@ -1347,6 +1347,8 @@ export interface HomeView {
       | 'eqWaiting'
       | 'eqVat'
       | 'eqMissing'
+      // A purchase invoice with VAT to offset and no e-qaimə: its VAT is never offset.
+      | 'eqNumberless'
       // DVX not updated for more than 7 days / after the closed month (stage 6c-1).
       | 'dvxStale'
       // Month closing (stage 5c): missing month-end rate, register ≠ journal, steps refused, a

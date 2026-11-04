@@ -1011,3 +1011,41 @@ export function eqWarnings(
   }
   return out;
 }
+
+/**
+ * İş masası: purchase invoices of the open period that offset VAT but carry no e-qaimə (no number,
+ * not bound). The closing never offsets that VAT (it waits on 241); the month comparison does not
+ * see them (QERARLAR 2026-10-16 §4) — e.g. an e-qaimə booked by itself and typed again by hand.
+ */
+export function eqNumberless(db: Db, companyId: string, closed: string): HomeView['warnings'] {
+  const found: { number: string; vat: bigint }[] = [];
+  for (const i of db.all(
+    `SELECT i.number, i.lines FROM invoices i WHERE i.company_id=? AND i.direction='purchase'
+       AND i.status='posted' AND i.eq_key='' AND i.date>?
+       AND NOT EXISTS(SELECT 1 FROM eq_documents d WHERE d.company_id=i.company_id AND d.invoice_id=i.id)
+     ORDER BY i.date, i.number_key`,
+    companyId,
+    closed,
+  )) {
+    const vat = (JSON.parse(String(i.lines)) as { vatAzn?: string; vatTreatment?: string }[])
+      .filter((l) => l.vatTreatment !== 'cost' && l.vatAzn && !l.vatAzn.startsWith('-'))
+      .reduce((s, l) => s + parseMoney(l.vatAzn!), 0n);
+    if (vat > 0n) found.push({ number: String(i.number), vat });
+  }
+  if (!found.length) return [];
+  const vat = found.reduce((s, x) => s + x.vat, 0n);
+  return [
+    {
+      kind: 'eqNumberless',
+      text: `Alınan e-qaimələr: ${found.length} alış qaiməsində ƏDV var (${displayMinor(vat)}), amma e-qaimə nömrəsi yoxdur — bu ƏDV əvəzləşmir (${found
+        .slice(0, 3)
+        .map((x) => x.number)
+        .join(
+          ', ',
+        )}${found.length > 3 ? '…' : ''}). Qutuda e-qaiməni qaiməyə bağlayın və ya nömrəni yazın; e-qaimə artıq başqa qaimədə uçotdadırsa, bu qaimə ikinci dəfədir.`,
+      account: '',
+      sk: [],
+      eq: 'purchase',
+    },
+  ];
+}

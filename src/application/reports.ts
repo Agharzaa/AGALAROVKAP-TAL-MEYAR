@@ -51,7 +51,15 @@ import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
 import { statementImports, statementLineView, statementView } from './statements.js';
-import { dvxStale, eqDocument, eqImports, eqInbox, eqReconcile, eqWarnings } from './eqaime.js';
+import {
+  dvxStale,
+  eqDocument,
+  eqImports,
+  eqInbox,
+  eqNumberless,
+  eqReconcile,
+  eqWarnings,
+} from './eqaime.js';
 import { eqMaps } from './eqaime-book.js';
 import { cashBook, cashDetail, cashDocuments, cashSelect, cashSummary } from './cash-reports.js';
 import { rateOn, ratesList } from './rates.js';
@@ -1154,6 +1162,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
   warnings.push(...transitWarnings(db, companyId, chart, today));
   warnings.push(...vatPairWarnings(db, companyId, names));
   warnings.push(...eqWarnings(db, companyId, co.closedThrough, today));
+  warnings.push(...eqNumberless(db, companyId, co.closedThrough));
   warnings.push(...dvxStale(db, companyId, { today }));
   const recent = db
     .all(
