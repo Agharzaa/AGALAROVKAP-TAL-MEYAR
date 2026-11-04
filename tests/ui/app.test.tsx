@@ -3970,3 +3970,30 @@ test('2026-11-01: trial balance is plain — the chosen level is remembered, no 
     h.close();
   }
 });
+
+test('audit: while one "DVX-dən yenilə" runs, İş masası does not start another (it would cancel it)', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = userEvent.setup();
+    act(() => h.dvxState({ connected: true }));
+    render(<App />);
+    await screen.findByRole('navigation', { name: 'Əsas menyu' });
+    const desk = within(await screen.findByRole('region', { name: 'DVX e-qaimələri' }));
+    const both = desk.getByRole('button', { name: 'DVX-dən yenilə (gələn və göndərilən)' });
+    await user.click(screen.getByRole('button', { name: 'Alış' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Alınan e-qaimələr (DVX)' }));
+    const page = within(pane());
+    let answer!: (a: Outcome<{ files: { name: string; bytes: Uint8Array }[] }>) => void;
+    h.setDvxExport(new Promise((resolve) => (answer = resolve)));
+    await user.click(await page.findByRole('button', { name: 'DVX-dən yenilə' }));
+    await page.findByText('Gələnlər: DVX-dən alınır…');
+    // The box's update runs: İş masası's button waits for it.
+    await waitFor(() => assert.equal((both as HTMLButtonElement).disabled, true));
+    assert.equal(h.dvxExports.length, 1);
+    await act(async () => answer({ ok: true, value: { files: [] } }));
+    await waitFor(() => assert.equal((both as HTMLButtonElement).disabled, false));
+  } finally {
+    h.close();
+  }
+});

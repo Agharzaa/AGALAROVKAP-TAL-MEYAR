@@ -148,7 +148,8 @@ function DvxBoth({ companyId, closedThrough }: { companyId: string; closedThroug
         <button
           type="button"
           className="button secondary"
-          disabled={dvx.syncing}
+          disabled={dvx.busy}
+          title={dvx.busy && !dvx.syncing ? 'DVX yeniləməsi başqa pəncərədə gedir' : undefined}
           onClick={() => void start()}
         >
           <RefreshCw size={15} /> DVX-dən yenilə (gələn və göndərilən)

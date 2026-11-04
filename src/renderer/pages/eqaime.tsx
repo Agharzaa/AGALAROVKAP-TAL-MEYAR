@@ -583,8 +583,12 @@ export function EqaimePage({ direction }: { direction: Direction }) {
             <button
               type="button"
               className="button primary"
-              disabled={syncing || m.busy}
-              title="DVX-dən açıq dövrün e-qaimələrini özü alır və yükləyir (kabinetə giriş lazımdır)"
+              disabled={dvx.busy || m.busy}
+              title={
+                dvx.busy && !syncing
+                  ? 'DVX yeniləməsi başqa pəncərədə gedir'
+                  : 'DVX-dən açıq dövrün e-qaimələrini özü alır və yükləyir (kabinetə giriş lazımdır)'
+              }
               onClick={() => void sync()}
             >
               {syncing ? 'DVX-dən alınır…' : 'DVX-dən yenilə'}

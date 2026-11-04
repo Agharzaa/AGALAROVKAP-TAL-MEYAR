@@ -3,7 +3,7 @@
  * asked by Meyar and loaded page by page as from a file (QERARLAR 2026-10-22, 2026-10-25 §18).
  * The e-qaimə box updates its own direction; İş masası updates both, one after the other.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { openPeriod, readEqTable } from '../domain/eqaime';
 import type { CommandResult } from '../contracts/commands';
 import { api } from './api';
@@ -34,6 +34,22 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice());
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * One update at a time in the whole app (the main process runs one export): a box and İş masası
+ * see an update started elsewhere and do not start another, which would cancel it (audit of
+ * stage 6).
+ */
+let running = false;
+const listeners = new Set<() => void>();
+const setRunning = (v: boolean) => {
+  running = v;
+  for (const l of listeners) l();
+};
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => void listeners.delete(l);
+};
 
 /** How one box's update ended: a sentence for the user, failed or not. */
 export interface SyncOutcome {
@@ -67,6 +83,8 @@ export function useDvxSync(o: {
     };
   }, []);
   const [syncing, setSyncing] = useState(false);
+  /** An update runs somewhere in the app (here or in another window). */
+  const busy = useSyncExternalStore(subscribe, () => running);
   const [progress, setProgress] = useState('');
   const [waiting, setWaiting] = useState<Direction[]>([]);
   const cancelled = useRef(false);
@@ -194,6 +212,8 @@ export function useDvxSync(o: {
   }
 
   async function run(directions: Direction[]) {
+    if (running) return;
+    setRunning(true);
     setSyncing(true);
     cancelled.current = false;
     const outcomes: SyncOutcome[] = [];
@@ -206,12 +226,14 @@ export function useDvxSync(o: {
       current.current = null;
       setProgress('');
       setSyncing(false);
+      setRunning(false);
     }
     o.onDone(outcomes);
   }
 
   /** Starts the update; false when the cabinet was opened for the sign-in first. */
   async function start(directions: Direction[]): Promise<boolean> {
+    if (running) return true;
     if (connected) {
       await run(directions);
       return true;
@@ -234,5 +256,5 @@ export function useDvxSync(o: {
     void api.dvxCancel();
   }
 
-  return { connected, syncing, progress, cancelling: cancelled.current, start, cancel };
+  return { connected, syncing, busy, progress, cancelling: cancelled.current, start, cancel };
 }
