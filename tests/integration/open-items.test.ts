@@ -68,3 +68,39 @@ test('stage 10 audit Q1, Q3: dividends are 534 / 344 only; a manual exchange dif
     ['-1000.00', '-500.00', '5000.00'],
   );
 });
+
+test('account card as 1C: a corrected document shows its current movements only, analytics apart', (t) => {
+  const f = fixture(t);
+  const supplier = f.partner('TURAN MMC', '1700000002');
+  const pc = f.contract(supplier, 'Əsas', 'purchase');
+  const service = f.product('İcarə', 'ay', 'service');
+  const item = f.item('expenseItem', 'Rabitə');
+  const inv = f.invoice('purchase', '2026-10-01', supplier, pc, [
+    { productId: service, price: '100', expenseItemId: item },
+  ]);
+  // The invoice is saved again with another price: storno + new entry in the journal.
+  f.invoice(
+    'purchase',
+    '2026-10-01',
+    supplier,
+    pc,
+    [{ productId: service, price: '200', expenseItemId: item }],
+    { id: inv.id, version: inv.version, number: inv.number },
+  );
+  const card = f.card('531.01', '2026-10-01', '2026-10-31');
+  // 1C: only what the document posts now — 200 + 36 VAT, no storno pair of the first save.
+  assert.deepEqual(
+    card.lines.map((l) => [l.storno, l.credit]),
+    [
+      [false, '200.00'],
+      [false, '36.00'],
+    ],
+  );
+  assert.deepEqual([card.turnKt, card.closing], ['236.00', '-236.00']);
+  const l = card.lines[0]!;
+  assert.equal(l.document, `Alış qaiməsi ${inv.number}`);
+  assert.deepEqual([l.dtAccount, l.ktAccount], ['721', '531.01']);
+  assert.deepEqual(l.dtAnalytics, ['Rabitə']);
+  assert.equal(l.ktAnalytics[0], 'TURAN MMC');
+  assert.equal(l.ktAnalytics.length, 3);
+});

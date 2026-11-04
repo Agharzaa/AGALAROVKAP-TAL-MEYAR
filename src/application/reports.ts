@@ -638,6 +638,25 @@ const familyCodes = (chart: Chart, code: string) =>
     .filter((a) => inFamily(a.code, code))
     .map((a) => a.code);
 
+/** The kind of a journal entry's document, as the card names it. */
+function docTitle(type: string, direction: string): string {
+  const kinds: Record<string, string> = {
+    'invoice:sale': 'Satış qaiməsi',
+    'invoice:purchase': 'Alış qaiməsi',
+    'bank:in': 'Bank daxilolması',
+    'bank:out': 'Bank məxarici',
+    'cash:in': 'Kassa mədaxil orderi',
+    'cash:out': 'Kassa məxaric orderi',
+    operation: 'Əməliyyat',
+    closing: 'Ay bağlanışı',
+    revaluation: 'Yenidən qiymətləndirmə',
+    payroll: 'Əmək haqqı',
+    asset: 'Əsas vəsait sənədi',
+    vatOffset: 'ƏDV əvəzləşdirilməsi',
+  };
+  return kinds[`${type}:${direction}`] ?? kinds[type] ?? '';
+}
+
 function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): AccountCard {
   const from = parseDate(q.from, 'Başlanğıc');
   const to = parseDate(q.to, 'Son');
@@ -655,6 +674,12 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
     const a = chart.get(code);
     return a ? a.subkonto.map((kind, i) => names.name(kind, values[i] ?? '')).join(' · ') : '';
   };
+  const values = (code: string, v: string[]) => {
+    const a = chart.get(code);
+    return a
+      ? a.subkonto.map((kind, i) => (v[i] ? names.name(kind, v[i]!) : '')).filter(Boolean)
+      : [];
+  };
   type Raw = { r: Row; side: 'dt' | 'kt' };
   const raws: Raw[] = [];
   for (const side of ['dt', 'kt'] as const) {
@@ -668,6 +693,11 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
        LEFT JOIN bank_documents b ON e.source_type='bank' AND b.id=e.source_id
        LEFT JOIN cash_documents k ON e.source_type='cash' AND k.id=e.source_id
        WHERE p.company_id=? AND p.${side}_account IN (${codes.map(() => '?').join(',')}) AND p.date>=? AND p.date<=?${conds}
+         -- As 1C: a document's current movements only. A version reversed by its storno on the
+         -- same date (a correction, a cancellation) nets to nothing and is not listed.
+         AND NOT EXISTS(SELECT 1 FROM entries x WHERE x.company_id=e.company_id
+           AND x.source_type=e.source_type AND x.source_id=e.source_id
+           AND x.source_version=e.source_version AND x.storno<>e.storno AND x.date=e.date)
        ORDER BY p.date, e.rowid, p.line_no LIMIT ${LIMIT + 1}`,
       q.companyId,
       ...codes,
@@ -709,6 +739,12 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
       storno: flag(r.storno),
       memo: str(r.memo) || str(r.doc_memo),
       account: str(r[`${side}_account`]),
+      document:
+        `${docTitle(str(r.source_type), str(r.doc_direction))} ${str(r.source_number)}`.trim(),
+      dtAccount: str(r.dt_account),
+      ktAccount: str(r.kt_account),
+      dtAnalytics: values(str(r.dt_account), [r.dt_s1, r.dt_s2, r.dt_s3].map(str)),
+      ktAnalytics: values(str(r.kt_account), [r.kt_s1, r.kt_s2, r.kt_s3].map(str)),
       sk: skNames(str(r[`${side}_account`]), own),
       corrAccount: str(r[`${other}_account`]),
       corrSk: skNames(str(r[`${other}_account`]), corr),

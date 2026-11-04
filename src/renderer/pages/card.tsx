@@ -60,21 +60,23 @@ export function CardPage({
       header: [
         'Tarix',
         'Sənəd',
-        'Məzmun',
-        'Debet (hesab, subkonto)',
-        'Kredit (hesab, subkonto)',
-        'Dövriyyə Debet',
-        'Dövriyyə Kredit',
+        'Analitika Dt',
+        'Analitika Kt',
+        'Debet: hesab',
+        'Debet: məbləğ',
+        'Kredit: hesab',
+        'Kredit: məbləğ',
         'Miqdar',
         'Saldo',
         'Cari saldo',
       ],
-      widths: [11, 16, 30, 40, 40, 15, 15, 10, 6, 16],
+      widths: [11, 26, 36, 36, 10, 15, 10, 15, 10, 6, 16],
       rows: [
         [
           '',
-          '',
           'Dövrün əvvəlinə saldo',
+          '',
+          '',
           '',
           '',
           '',
@@ -83,27 +85,37 @@ export function CardPage({
           side(c.opening),
           { money: c.opening.replace('-', '') },
         ],
-        ...c.lines.map((l) => {
-          const own = `${l.account} ${l.sk}`.trim();
-          const corr = `${l.corrAccount} ${l.corrSk}`.trim();
-          return [
-            day(l.date),
-            `${l.number}${l.storno ? ' (storno)' : ''}`,
-            l.memo,
-            l.debit ? own : corr,
-            l.debit ? corr : own,
-            { money: l.debit },
-            { money: l.credit },
-            { qty: l.qty },
-            side(l.balance),
-            { money: l.balance.replace('-', '') },
-          ];
-        }),
-        ['', '', 'Dövriyyə', '', '', { money: c.turnDt }, { money: c.turnKt }, '', '', ''],
+        ...c.lines.map((l) => [
+          day(l.date),
+          `${l.document}${l.storno ? ' (storno)' : ''}`,
+          l.dtAnalytics.join(', '),
+          l.ktAnalytics.join(', '),
+          l.dtAccount,
+          { money: l.debit },
+          l.ktAccount,
+          { money: l.credit },
+          { qty: l.qty },
+          side(l.balance),
+          { money: l.balance.replace('-', '') },
+        ]),
         [
           '',
+          'Dövr üzrə dövriyyə',
+          '',
+          '',
+          '',
+          { money: c.turnDt },
+          '',
+          { money: c.turnKt },
+          '',
+          '',
+          '',
+        ],
+        [
           '',
           'Dövrün sonuna saldo',
+          '',
+          '',
           '',
           '',
           '',
@@ -215,6 +227,7 @@ export function CardPage({
               {c.filter ? ` · ${c.filter}` : ''}
             </p>
           </div>
+          {/* 1C's "Карточка счета": analytics apart, each amount beside its account. */}
           <table className="grid card onec">
             <thead>
               <tr>
@@ -224,24 +237,30 @@ export function CardPage({
                 <th scope="col" rowSpan={2}>
                   Sənəd
                 </th>
-                <th scope="colgroup" colSpan={2}>
-                  Əməliyyat
+                <th scope="col" rowSpan={2}>
+                  Analitika Dt
+                </th>
+                <th scope="col" rowSpan={2}>
+                  Analitika Kt
                 </th>
                 <th scope="colgroup" colSpan={2}>
-                  Dövriyyə
+                  Debet
+                </th>
+                <th scope="colgroup" colSpan={2}>
+                  Kredit
                 </th>
                 <th scope="colgroup" colSpan={2}>
                   Cari saldo
                 </th>
               </tr>
               <tr>
-                <th scope="col">Debet (hesab, subkonto)</th>
-                <th scope="col">Kredit (hesab, subkonto)</th>
+                <th scope="col">Hesab</th>
                 <th scope="col" className="num">
-                  Debet
+                  Məbləğ
                 </th>
+                <th scope="col">Hesab</th>
                 <th scope="col" className="num">
-                  Kredit
+                  Məbləğ
                 </th>
                 <th scope="col" className="side" aria-label="Saldonun tərəfi" />
                 <th scope="col" className="num">
@@ -251,72 +270,65 @@ export function CardPage({
             </thead>
             <tbody>
               <tr className="opening">
-                <td colSpan={6}>Dövrün əvvəlinə saldo</td>
+                <td colSpan={8}>Dövrün əvvəlinə saldo</td>
                 <td className="side">{side(c.opening)}</td>
                 <td className="num">{amount(c.opening)}</td>
               </tr>
-              {c.lines.map((l, i) => {
-                // This account on the side of the line's amount, the corresponding one opposite.
-                const own = (
-                  <>
-                    <span className="code">{l.account}</span>
-                    <small>{l.sk}</small>
-                  </>
-                );
-                const corr = (
-                  <>
-                    <span className="code">{l.corrAccount}</span>
-                    <small>{l.corrSk}</small>
-                  </>
-                );
-                return (
-                  <tr
-                    key={i}
-                    className={l.storno ? 'storno' : ''}
-                    onDoubleClick={() => openSource(l)}
-                  >
-                    <td>{day(l.date)}</td>
-                    <td>
-                      {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
-                        <button type="button" className="link" onClick={() => openSource(l)}>
-                          {l.number}
-                        </button>
-                      ) : (
-                        l.number
-                      )}
-                      {l.storno && <small className="storno-tag">storno</small>}
-                      {l.memo && <small className="memo">{l.memo}</small>}
-                    </td>
-                    <td className="entry">{l.debit ? own : corr}</td>
-                    <td className="entry">{l.debit ? corr : own}</td>
-                    <td className="num">
-                      {l.debit ? money(l.debit) : ''}
-                      {l.qty && l.debit && <small>{qty(l.qty)}</small>}
-                    </td>
-                    <td className="num">
-                      {l.credit ? money(l.credit) : ''}
-                      {l.qty && l.credit && <small>{qty(l.qty)}</small>}
-                    </td>
-                    <td className="side">{side(l.balance)}</td>
-                    <td className="num">{amount(l.balance)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4}>Dövriyyə</td>
+              {c.lines.map((l, i) => (
+                <tr
+                  key={i}
+                  className={l.storno ? 'storno' : ''}
+                  onDoubleClick={() => openSource(l)}
+                >
+                  <td>{day(l.date)}</td>
+                  <td className="doc">
+                    {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
+                      <button type="button" className="link" onClick={() => openSource(l)}>
+                        {l.document}
+                      </button>
+                    ) : (
+                      l.document
+                    )}
+                    {l.storno && <small className="storno-tag">storno</small>}
+                  </td>
+                  <td className="analytics">
+                    {l.dtAnalytics.map((v, k) => (
+                      <div key={k}>{v}</div>
+                    ))}
+                  </td>
+                  <td className="analytics">
+                    {l.ktAnalytics.map((v, k) => (
+                      <div key={k}>{v}</div>
+                    ))}
+                  </td>
+                  <td className="code">{l.dtAccount}</td>
+                  <td className="num">
+                    {l.debit ? money(l.debit) : ''}
+                    {l.qty && l.debit && <small>{qty(l.qty)}</small>}
+                  </td>
+                  <td className="code">{l.ktAccount}</td>
+                  <td className="num">
+                    {l.credit ? money(l.credit) : ''}
+                    {l.qty && l.credit && <small>{qty(l.qty)}</small>}
+                  </td>
+                  <td className="side">{side(l.balance)}</td>
+                  <td className="num">{amount(l.balance)}</td>
+                </tr>
+              ))}
+              <tr className="turnover">
+                <td colSpan={5}>Dövr üzrə dövriyyə</td>
                 <td className="num">{money(c.turnDt)}</td>
+                <td />
                 <td className="num">{money(c.turnKt)}</td>
                 <td />
                 <td />
               </tr>
-              <tr>
-                <td colSpan={6}>Dövrün sonuna saldo</td>
+              <tr className="closing">
+                <td colSpan={8}>Dövrün sonuna saldo</td>
                 <td className="side">{side(c.closing)}</td>
                 <td className="num">{amount(c.closing)}</td>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
         </div>
       )}

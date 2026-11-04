@@ -3432,9 +3432,29 @@ button.step:active {
   font-weight: 600;
 }
 .card.onec tr.opening td,
+.card.onec tr.turnover td,
+.card.onec tr.closing td,
 .card.onec tfoot td {
   background: var(--hover);
   font-weight: 600;
+}
+/* 1C's card: one subkonto value a line, the accounts in their own narrow columns. */
+.card.onec td.analytics {
+  font-size: 12.5px;
+  line-height: 1.35;
+  max-width: 320px;
+}
+.card.onec td.analytics div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card.onec td.code {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.card.onec td.doc {
+  white-space: nowrap;
 }
 
 /* Stage 7a: a fixed asset per card in the putting-into-service and opening balance documents. */

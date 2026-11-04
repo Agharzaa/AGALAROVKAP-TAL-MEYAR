@@ -1297,6 +1297,13 @@ export interface CardLine {
   memo: string;
   /** The line's own (leaf) account: 223.01 on the card of 223. */
   account: string;
+  /** As 1C's card: the document's kind and number ("Alış qaiməsi AQ-000191"). */
+  document: string;
+  /** The posting's two accounts and their analytics, one subkonto value an item (1C). */
+  dtAccount: string;
+  ktAccount: string;
+  dtAnalytics: string[];
+  ktAnalytics: string[];
   /** This account's subkonto names on this line. */
   sk: string;
   corrAccount: string;

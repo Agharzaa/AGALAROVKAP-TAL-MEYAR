@@ -550,3 +550,12 @@ Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`. İstifadəçi növbəti mərhəl
 4. **Düzəliş e-qaiməsi bu mərhələdə yoxdur:** imzalanmış e-qaimənin qaiməsi dəyişəndə xəbərdarlıq.
 5. **Nomenklaturada "DVX məhsul kodu" və "DVX ölçü vahidi";** boşdursa satış uyğunluqlarından.
 6. **11a — quruluş real qaralamadan:** istifadəçi kabinetdə bir qaralamanı saxlayır (imzalamadan), Meyar-ın diaqnostikası onun quruluşunu (dəyərsiz) yazır.
+
+## 2026-11-04 — Hesab kartı 1C-nin "Карточка счета" quruluşunda
+
+İstifadəçi (ekran şəkli ilə): "dəfələrlə izah etdim — hesab kartı 1C-dəki kimi olsun". 2026-10-25 §16-nın kartını əvəz edir:
+
+1. **Sütunlar 1C kimi:** Tarix · Sənəd · Analitika Dt · Analitika Kt · Debet (Hesab, Məbləğ) · Kredit (Hesab, Məbləğ) · Cari saldo (D / K, Məbləğ). Məbləğ öz hesabının yanındadır; analitika (subkonto) ayrı sütunlarda, hər dəyər ayrıca sətirdə.
+2. **Sənəd:** növü və nömrəsi ("Alış qaiməsi AQ-000191"); məzmun sətri yoxdur.
+3. **Yalnız cari hərəkətlər:** düzəldilmiş / ləğv edilmiş sənədin öz storno-su ilə eyni tarixdə sıfırlanan köhnə versiyası kartda göstərilmir (1C-də sənəd yenidən keçiriləndə köhnə hərəkətlər yox olur). Saldo və dövriyyələr dəyişmir; tarixçə sənədin özündə və jurnaldadır.
+4. **Sətirlər:** "Dövrün əvvəlinə saldo", "Dövr üzrə dövriyyə", "Dövrün sonuna saldo".

@@ -2918,13 +2918,15 @@ test('2026-10-25: trial balance and account card as in 1C (the user chose varian
     await user.dblClick(row);
     const card = within(pane());
     await card.findByText('223 hesabının kartı');
-    for (const name of ['Debet (hesab, subkonto)', 'Kredit (hesab, subkonto)', 'Cari saldo'])
+    // 1C's "Карточка счета" (04.11.2026): analytics apart, each amount beside its account.
+    for (const name of ['Analitika Dt', 'Analitika Kt', 'Debet', 'Kredit', 'Cari saldo'])
       card.getByRole('columnheader', { name });
     card.getByText('Dövrün əvvəlinə saldo');
+    card.getByText('Dövr üzrə dövriyyə');
     card.getByText('Dövrün sonuna saldo');
     // The posting: Dt 223.01 (the bank account), Kt 301; the saldo is debit.
     const line = [...pane().querySelectorAll('tbody tr')].find((r) =>
-      /Başlanğıc/.test(r.textContent ?? ''),
+      /Əməliyyat/.test(r.textContent ?? ''),
     )!;
     assert.match(line.textContent ?? '', /223\.01/);
     assert.match(line.textContent ?? '', /301/);
