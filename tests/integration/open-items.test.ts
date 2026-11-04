@@ -38,3 +38,33 @@ test('stage 9 audit Q4: VM 175 — sales outside VAT with purchase VAT are flagg
     v.checks.map((c) => c.text).join('\n'),
   );
 });
+
+test('stage 10 audit Q1, Q3: dividends are 534 / 344 only; a manual exchange difference is the FX effect', (t) => {
+  const f = fixture(t, ':memory:', '2027-01-15');
+  const bankPartner = f.partner('Kapital Bank', '9900003611');
+  const bank = f.bankAccount(bankPartner, 'AZ12AIIB38060019441234567890');
+  const fxIncome = f.item('incomeType', 'Məzənnə fərqi');
+  const B = f.bankLine;
+  f.bank('in', '2026-03-01', bank, [B('611', [fxIncome], '5000')]);
+  f.bank('out', '2026-04-01', bank, [B('343', [], '500')]);
+  f.bank('out', '2026-05-01', bank, [B('534.01', [], '1000')]);
+  const v = f.query<DeclarationView>({
+    type: 'declaration',
+    companyId: f.companyId,
+    kind: 'cashFlowStatement',
+    period: '2026',
+  });
+  const k = (key: string) => {
+    for (const s of v.sections) {
+      const r = s.rows.find((x) => x.key === key);
+      if (r) return r.values[0];
+    }
+    throw new Error(
+      `row ${key} not found: ${v.sections.flatMap((s) => s.rows.map((r) => r.key)).join(' ')}`,
+    );
+  };
+  assert.deepEqual(
+    [k('f:f:dividends'), k('f:o:otherOut'), k('f:fx')],
+    ['-1000.00', '-500.00', '5000.00'],
+  );
+});

@@ -962,7 +962,10 @@ function flowOf(other: string, inflow: boolean, investment: boolean, source: str
   if (under(other, ['17', '18', '23'])) return inflow ? 'i:loanIn' : 'i:loanOut';
   if (cls === '1') return inflow ? 'i:sell' : 'i:buy';
   if (under(other, ['30', '31', '32'])) return inflow ? 'f:shares' : 'f:buyback';
-  if (under(other, ['534', '344', '343', '341'])) return inflow ? 'o:otherIn' : 'f:dividends';
+  // Dividends are what was declared to the owners (534 / 344), as in the changes in equity; money
+  // straight to or from 343 / 341 is another payment (audit of stage 10, question 1).
+  if (under(other, ['534', '344'])) return inflow ? 'o:otherIn' : 'f:dividends';
+  if (under(other, ['343', '341'])) return inflow ? 'o:otherIn' : 'o:otherOut';
   if (cls === '4' || under(other, ['50'])) return inflow ? 'f:borrow' : 'f:repay';
   if (inflow) return under(other, ['211', '543', '60']) ? 'o:sales' : 'o:otherIn';
   if (under(other, ['531', '243', '241', '242', '20'])) return 'o:goods';
@@ -1018,7 +1021,11 @@ function cashYears(
   const side = (other: 'dt' | 'kt') =>
     `SELECT substr(p.date,1,4) AS y, p.${other}_account AS other,
        CASE WHEN substr(p.${other}_account,1,3) IN (${SETTLEMENT.map((c) => `'${c}'`).join(',')}) THEN p.${other}_s3 ELSE '' END AS doc,
-       p.entry_id IN (SELECT id FROM entries WHERE company_id=?1 AND source_type='revaluation') AS fx,
+       -- The FX effect: a revaluation, or an exchange difference posted by hand on 611 / 731 with
+       -- the "Məzənnə fərqi" item (audit of stage 10, question 3).
+       (p.entry_id IN (SELECT id FROM entries WHERE company_id=?1 AND source_type='revaluation')
+         OR (substr(p.${other}_account,1,3) IN ('611','731') AND p.${other}_s1 IN (
+           SELECT id FROM items WHERE company_id=?1 AND role IN ('fxIncome','fxExpense')))) AS fx,
        SUM(p.amount) AS a
      FROM postings p
      WHERE p.company_id=?1 AND p.${other === 'kt' ? 'dt' : 'kt'}_account>='22'
