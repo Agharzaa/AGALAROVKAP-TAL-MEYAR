@@ -1313,12 +1313,35 @@ export interface CardLine {
   qty: string;
   balance: string;
 }
+/**
+ * One row of the card by levels (user, 05.11.2026): sub-account → partner → contract → settlement
+ * document → the documents that moved it. Saldo signed: debit positive, credit negative.
+ */
+export interface CardNode {
+  key: string;
+  /** The parent's key; empty at the first level. */
+  parent: string;
+  level: number;
+  /** A level of analytics, or a document that moved the key (the last level). */
+  kind: 'group' | 'move';
+  label: string;
+  /** A move: the document to open. */
+  sourceType?: string;
+  sourceId?: string;
+  direction?: CardLine['direction'];
+  opening: string;
+  debit: string;
+  credit: string;
+  closing: string;
+}
 export interface AccountCard {
   account: string;
   name: string;
   filter: string;
   opening: string;
   lines: CardLine[];
+  /** The same movements by levels of analytics, one row a document (no corresponding accounts). */
+  tree: CardNode[];
   turnDt: string;
   turnKt: string;
   closing: string;

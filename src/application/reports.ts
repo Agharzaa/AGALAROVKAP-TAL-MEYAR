@@ -17,6 +17,7 @@ import { monthEnd } from '../domain/rates.js';
 import { parseDate } from '../domain/values.js';
 import type {
   AccountCard,
+  CardNode,
   AuditView,
   BankAccountView,
   CashboxView,
@@ -755,6 +756,7 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
     };
   });
   const filter = sk.map((v, i) => names.name(account.subkonto[i]!, v)).join(' · ');
+  const tree = cardTree(db, q.companyId, chart, names, leafs, sk, from, raws.slice(0, LIMIT));
   if (truncated) {
     // Totals must stay exact even when the list is cut: take them from the registers.
     balance = netBefore(db, q.companyId, nextDay(to), { accounts: leafs, sk });
@@ -775,7 +777,181 @@ function accountCard(db: Db, q: Extract<Query, { type: 'accountCard' }>): Accoun
     turnKt: money(tk),
     closing: money(balance),
     truncated,
+    tree,
   };
+}
+
+/**
+ * The card by levels: the sub-account (when the card's account has several), then each subkonto
+ * of the account, then the documents. Only keys with a saldo or a movement in the period.
+ */
+function cardTree(
+  db: Db,
+  companyId: string,
+  chart: Chart,
+  names: Names,
+  leafs: string[],
+  sk: string[],
+  from: string,
+  raws: { r: Row; side: 'dt' | 'kt' }[],
+): CardNode[] {
+  type Sums = { opening: bigint; debit: bigint; credit: bigint };
+  const keyOf = (a: string, s: string[]) => [a, ...s].join('|');
+  const keys = new Map<string, { account: string; sk: string[]; sums: Sums }>();
+  const at = (a: string, s: string[]) => {
+    const k = keyOf(a, s);
+    let x = keys.get(k);
+    if (!x) keys.set(k, (x = { account: a, sk: s, sums: { opening: 0n, debit: 0n, credit: 0n } }));
+    return x;
+  };
+  const conds = (side: string) => sk.map((_, i) => ` AND ${side}_s${i + 1}=?`).join('');
+  const inList = leafs.map(() => '?').join(',');
+  for (const r of db.all(
+    `SELECT a, s1, s2, s3, SUM(v) AS v FROM (
+       SELECT dt_account AS a, dt_s1 AS s1, dt_s2 AS s2, dt_s3 AS s3, amount AS v FROM postings
+         WHERE company_id=? AND dt_account IN (${inList}) AND date<?${conds('dt')}
+       UNION ALL
+       SELECT kt_account, kt_s1, kt_s2, kt_s3, -amount FROM postings
+         WHERE company_id=? AND kt_account IN (${inList}) AND date<?${conds('kt')}
+     ) GROUP BY 1, 2, 3, 4 HAVING SUM(v)<>0`,
+    companyId,
+    ...leafs,
+    from,
+    ...sk,
+    companyId,
+    ...leafs,
+    from,
+    ...sk,
+  ))
+    at(str(r.a), [r.s1, r.s2, r.s3].map(str)).sums.opening += r.v as bigint;
+  // The documents that moved each key, one row a document.
+  const moves = new Map<string, { node: CardNode; d: bigint; c: bigint; key: string }>();
+  for (const { r, side } of raws) {
+    const a = str(r[`${side}_account`]);
+    const s = [r[`${side}_s1`], r[`${side}_s2`], r[`${side}_s3`]].map(str);
+    const k = at(a, s);
+    const amount = r.amount as bigint;
+    if (side === 'dt') k.sums.debit += amount;
+    else k.sums.credit += amount;
+    const mk = `${keyOf(a, s)}#${str(r.source_type)}:${str(r.source_id)}:${str(r.date)}`;
+    let m = moves.get(mk);
+    if (!m) {
+      const title =
+        `${docTitle(str(r.source_type), str(r.doc_direction))} ${str(r.source_number)}`.trim();
+      m = {
+        key: keyOf(a, s),
+        d: 0n,
+        c: 0n,
+        node: {
+          key: mk,
+          parent: '',
+          level: 0,
+          kind: 'move',
+          label: `${str(r.date).split('-').reverse().join('.')} · ${title}`,
+          sourceType: str(r.source_type),
+          sourceId: str(r.source_id),
+          direction: str(r.doc_direction) as CardLine['direction'],
+          opening: '',
+          debit: '',
+          credit: '',
+          closing: '',
+        },
+      };
+      moves.set(mk, m);
+    }
+    if (side === 'dt') m.d += amount;
+    else m.c += amount;
+  }
+  // Levels: the sub-account when there are several, then the subkonto slots after the filter.
+  const accounts = new Set([...keys.values()].map((k) => k.account));
+  const multi = accounts.size > 1;
+  type Group = { node: CardNode; sums: Sums; children: Map<string, Group>; moves: CardNode[] };
+  const root: Group = {
+    node: {
+      key: '',
+      parent: '',
+      level: -1,
+      kind: 'group',
+      label: '',
+      opening: '',
+      debit: '',
+      credit: '',
+      closing: '',
+    },
+    sums: { opening: 0n, debit: 0n, credit: 0n },
+    children: new Map(),
+    moves: [],
+  };
+  for (const k of keys.values()) {
+    const acc = chart.get(k.account);
+    const path: { id: string; label: string }[] = [];
+    if (multi) path.push({ id: k.account, label: `${k.account} ${acc?.name ?? ''}`.trim() });
+    acc?.subkonto.forEach((kind, i) => {
+      if (i < sk.length) return;
+      const v = k.sk[i] ?? '';
+      path.push({ id: v, label: v ? names.name(kind, v) : '—' });
+    });
+    let g = root;
+    const add = (x: Group) => {
+      x.sums.opening += k.sums.opening;
+      x.sums.debit += k.sums.debit;
+      x.sums.credit += k.sums.credit;
+    };
+    path.forEach((p, level) => {
+      let next = g.children.get(p.id);
+      if (!next) {
+        const key = `${g.node.key}/${p.id}`;
+        next = {
+          node: {
+            key,
+            parent: g.node.key,
+            level,
+            kind: 'group',
+            label: p.label,
+            opening: '',
+            debit: '',
+            credit: '',
+            closing: '',
+          },
+          sums: { opening: 0n, debit: 0n, credit: 0n },
+          children: new Map(),
+          moves: [],
+        };
+        g.children.set(p.id, next);
+      }
+      add(next);
+      g = next;
+    });
+    for (const m of moves.values())
+      if (m.key === keyOf(k.account, k.sk))
+        g.moves.push({
+          ...m.node,
+          parent: g.node.key,
+          level: path.length,
+          debit: m.d ? money(m.d) : '',
+          credit: m.c ? money(m.c) : '',
+        });
+  }
+  const out: CardNode[] = [];
+  const walk = (g: Group) => {
+    const groups = [...g.children.values()].sort((a, b) =>
+      a.node.label.localeCompare(b.node.label, 'az'),
+    );
+    for (const c of groups) {
+      const closing = c.sums.opening + c.sums.debit - c.sums.credit;
+      out.push({
+        ...c.node,
+        opening: money(c.sums.opening),
+        debit: c.sums.debit ? money(c.sums.debit) : '',
+        credit: c.sums.credit ? money(c.sums.credit) : '',
+        closing: money(closing),
+      });
+      walk(c);
+      out.push(...c.moves);
+    }
+  };
+  walk(root);
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -559,3 +559,8 @@ Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`. İstifadəçi növbəti mərhəl
 2. **Sənəd:** növü və nömrəsi ("Alış qaiməsi AQ-000191"); məzmun sətri yoxdur.
 3. **Yalnız cari hərəkətlər:** düzəldilmiş / ləğv edilmiş sənədin öz storno-su ilə eyni tarixdə sıfırlanan köhnə versiyası kartda göstərilmir (1C-də sənəd yenidən keçiriləndə köhnə hərəkətlər yox olur). Saldo və dövriyyələr dəyişmir; tarixçə sənədin özündə və jurnaldadır.
 4. **Sətirlər:** "Dövrün əvvəlinə saldo", "Dövr üzrə dövriyyə", "Dövrün sonuna saldo".
+
+**Davamı (05.11.2026, istifadəçi: "721 241 hissəsi lazım deyil", "sadə olmalıdır", "səviyyə bir, iki, üç — 531-də TURAN 7 000, açılanda müqavilə, qaimə düşür"):**
+
+5. **Kart səviyyələrlə açılır:** (alt hesab, bir neçəsi olanda) → kontragent → müqavilə → hesablaşma sənədi (qaimə) → onu hərəkət etdirən sənədlər, hər sətirdə əvvələ saldo, Debet, Kredit, sonuna saldo; ⊞ / ⊟ ilə. Bir sənəd bir sətirdir — müxabir hesablar (721, 241) yoxdur.
+6. **"Müxabir hesablarla"** seçimi 1C 8.3 kartını (§1–§4) göstərir. Excel görünən rejimlə.

@@ -104,3 +104,40 @@ test('account card as 1C: a corrected document shows its current movements only,
   assert.equal(l.ktAnalytics[0], 'TURAN MMC');
   assert.equal(l.ktAnalytics.length, 3);
 });
+
+test('account card by levels: partner → contract → invoice → the documents, one row a document', (t) => {
+  const f = fixture(t);
+  const supplier = f.partner('TURAN MMC', '1700000002');
+  const pc = f.contract(supplier, 'Əsas', 'purchase');
+  const service = f.product('İcarə', 'ay', 'service');
+  const item = f.item('expenseItem', 'Rabitə');
+  const bankPartner = f.partner('Kapital Bank', '9900003611');
+  const bank = f.bankAccount(bankPartner, 'AZ12AIIB38060019441234567890');
+  f.invoice('purchase', '2026-09-20', supplier, pc, [
+    { productId: service, price: '50', expenseItemId: item },
+  ]);
+  const inv = f.invoice('purchase', '2026-10-01', supplier, pc, [
+    { productId: service, price: '100', expenseItemId: item },
+  ]);
+  f.bank('out', '2026-10-05', bank, [f.bankLine('531.01', [supplier, pc], '100')]);
+  const card = f.card('531.01', '2026-10-01', '2026-10-31');
+  const row = (pred: (n: (typeof card.tree)[number]) => boolean) => card.tree.find(pred)!;
+  const partner = row((n) => n.level === 0);
+  // The first level: TURAN with its saldo (59 owed before, 118 bought, 100 paid → 77 owed).
+  assert.deepEqual(
+    [partner.label, partner.opening, partner.debit, partner.credit, partner.closing],
+    ['TURAN MMC', '-59.00', '100.00', '118.00', '-77.00'],
+  );
+  assert.equal(row((n) => n.level === 1).parent, partner.key);
+  // The invoice of October: one row for the invoice (100 + 18 VAT, no 721 / 241 rows) and the
+  // payment's part that reached it (59 went to the older invoice first).
+  const doc = row((n) => n.level === 2 && n.label.startsWith(inv.number!));
+  const moves = card.tree.filter((n) => n.parent === doc.key);
+  assert.deepEqual(
+    moves.map((m) => [m.kind, m.credit, m.debit]),
+    [
+      ['move', '118.00', ''],
+      ['move', '', '41.00'],
+    ],
+  );
+});

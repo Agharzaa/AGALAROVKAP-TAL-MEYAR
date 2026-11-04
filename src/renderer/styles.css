@@ -3655,3 +3655,26 @@ button.step:active {
 .declaration .grid.report td.muted {
   font-size: 12px;
 }
+
+/* The account card by levels (05.11.2026): partner → contract → invoice → documents. */
+.card.onec.tree td {
+  white-space: nowrap;
+}
+.card.onec.tree tr.lvl0 td {
+  font-weight: 600;
+}
+.card.onec.tree tr.move td {
+  color: var(--muted);
+}
+.card.onec.tree .gut-mark {
+  display: inline-block;
+  width: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}

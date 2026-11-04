@@ -2918,6 +2918,9 @@ test('2026-10-25: trial balance and account card as in 1C (the user chose varian
     await user.dblClick(row);
     const card = within(pane());
     await card.findByText('223 hesabının kartı');
+    // By levels first (05.11.2026): the bank account with its saldo; the postings on request.
+    await card.findByRole('columnheader', { name: 'Kontragent / müqavilə / sənəd' });
+    await user.click(card.getByRole('checkbox', { name: 'Müxabir hesablarla' }));
     // 1C's "Карточка счета" (04.11.2026): analytics apart, each amount beside its account.
     for (const name of ['Analitika Dt', 'Analitika Kt', 'Debet', 'Kredit', 'Cari saldo'])
       card.getByRole('columnheader', { name });

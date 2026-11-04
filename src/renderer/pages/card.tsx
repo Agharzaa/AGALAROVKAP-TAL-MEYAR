@@ -21,7 +21,9 @@ export function CardPage({
 }) {
   const win = useWindow();
   const ws = useWorkspace();
-  const openSource = (l: AccountCard['lines'][number]) => {
+  const openSource = (
+    l: Pick<AccountCard['lines'][number], 'sourceType' | 'sourceId' | 'direction'>,
+  ) => {
     if (l.sourceType === 'operation') ws.open({ type: 'operation', id: l.sourceId }, win.companyId);
     if (l.sourceType === 'invoice' && (l.direction === 'sale' || l.direction === 'purchase'))
       ws.open({ type: 'invoice', direction: l.direction, id: l.sourceId }, win.companyId);
@@ -38,6 +40,17 @@ export function CardPage({
   const [account, setAccount] = useState(initial?.account ?? '');
   const [sk, setSk] = useState<string[]>(initial?.sk ?? []);
   const [msg, setMsg] = useState('');
+  // The card by levels (05.11.2026): partner, contract, invoice, documents; ⊞ / ⊟ open a level.
+  // "Müxabir hesablarla" shows every posting with its accounts instead.
+  const [postings, setPostings] = useState(false);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (key: string) =>
+    setOpen((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const card = useQuery<AccountCard>(
     account
       ? { type: 'accountCard', companyId: win.companyId, account, sk, ...range.applied }
@@ -50,7 +63,47 @@ export function CardPage({
   const c = card.data;
   const exportXlsx = async () => {
     if (!c) return;
-    const bytes = workbook({
+    const bytes = postings ? detailedBook(c) : treeBook(c);
+    try {
+      const file = await api.saveFile(`Hesab kartı ${c.account}.xlsx`, bytes);
+      if (file) setMsg(`Saxlanıldı: ${file}`);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  const treeBook = (c: AccountCard) =>
+    workbook({
+      name: `Hesab kartı ${c.account}`,
+      title: [
+        `${catalog?.company.name ?? ''}`,
+        `${c.account} hesabının kartı · ${c.name}${c.filter ? ` · ${c.filter}` : ''}`,
+        `${day(range.applied.from)} – ${day(range.applied.to)}`,
+      ],
+      header: ['Analitika / sənəd', 'Əvvələ saldo', '', 'Debet', 'Kredit', 'Sonuna saldo', ''],
+      widths: [60, 6, 16, 16, 16, 6, 16],
+      rows: [
+        ...c.tree.map((n) => [
+          `${'   '.repeat(n.level)}${n.label}`,
+          n.kind === 'group' ? side(n.opening) : '',
+          n.kind === 'group' ? { money: n.opening.replace('-', '') } : '',
+          { money: n.debit },
+          { money: n.credit },
+          n.kind === 'group' ? side(n.closing) : '',
+          n.kind === 'group' ? { money: n.closing.replace('-', '') } : '',
+        ]),
+        [
+          'Cəmi',
+          side(c.opening),
+          { money: c.opening.replace('-', '') },
+          { money: c.turnDt },
+          { money: c.turnKt },
+          side(c.closing),
+          { money: c.closing.replace('-', '') },
+        ],
+      ],
+    });
+  const detailedBook = (c: AccountCard) =>
+    workbook({
       name: `Hesab kartı ${c.account}`,
       title: [
         `${catalog?.company.name ?? ''}`,
@@ -126,13 +179,6 @@ export function CardPage({
         ],
       ],
     });
-    try {
-      const file = await api.saveFile(`Hesab kartı ${c.account}.xlsx`, bytes);
-      if (file) setMsg(`Saxlanıldı: ${file}`);
-    } catch (e) {
-      setMsg((e as Error).message);
-    }
-  };
   // Cari saldo as in 1C: the side (D / K) and the amount apart.
   const side = (v: string) => (!v || v === '0.00' ? '' : v.startsWith('-') ? 'K' : 'D');
   const amount = (v: string) => (!v || v === '0.00' ? '0,00' : money(v.replace('-', '')));
@@ -196,6 +242,14 @@ export function CardPage({
                 </span>
               ),
             )}
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={postings}
+              onChange={(e) => setPostings(e.target.checked)}
+            />
+            Müxabir hesablarla
+          </label>
           <RangeFields range={range} />
         </>
       }
@@ -227,111 +281,222 @@ export function CardPage({
               {c.filter ? ` · ${c.filter}` : ''}
             </p>
           </div>
+          {!postings && <CardTree c={c} open={open} toggle={toggle} onOpen={openSource} />}
           {/* 1C's "Карточка счета": analytics apart, each amount beside its account. */}
-          <table className="grid card onec">
-            <thead>
-              <tr>
-                <th scope="col" rowSpan={2}>
-                  Tarix
-                </th>
-                <th scope="col" rowSpan={2}>
-                  Sənəd
-                </th>
-                <th scope="col" rowSpan={2}>
-                  Analitika Dt
-                </th>
-                <th scope="col" rowSpan={2}>
-                  Analitika Kt
-                </th>
-                <th scope="colgroup" colSpan={2}>
-                  Debet
-                </th>
-                <th scope="colgroup" colSpan={2}>
-                  Kredit
-                </th>
-                <th scope="colgroup" colSpan={2}>
-                  Cari saldo
-                </th>
-              </tr>
-              <tr>
-                <th scope="col">Hesab</th>
-                <th scope="col" className="num">
-                  Məbləğ
-                </th>
-                <th scope="col">Hesab</th>
-                <th scope="col" className="num">
-                  Məbləğ
-                </th>
-                <th scope="col" className="side" aria-label="Saldonun tərəfi" />
-                <th scope="col" className="num">
-                  Məbləğ
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="opening">
-                <td colSpan={8}>Dövrün əvvəlinə saldo</td>
-                <td className="side">{side(c.opening)}</td>
-                <td className="num">{amount(c.opening)}</td>
-              </tr>
-              {c.lines.map((l, i) => (
-                <tr
-                  key={i}
-                  className={l.storno ? 'storno' : ''}
-                  onDoubleClick={() => openSource(l)}
-                >
-                  <td>{day(l.date)}</td>
-                  <td className="doc">
-                    {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
-                      <button type="button" className="link" onClick={() => openSource(l)}>
-                        {l.document}
-                      </button>
-                    ) : (
-                      l.document
-                    )}
-                    {l.storno && <small className="storno-tag">storno</small>}
-                  </td>
-                  <td className="analytics">
-                    {l.dtAnalytics.map((v, k) => (
-                      <div key={k}>{v}</div>
-                    ))}
-                  </td>
-                  <td className="analytics">
-                    {l.ktAnalytics.map((v, k) => (
-                      <div key={k}>{v}</div>
-                    ))}
-                  </td>
-                  <td className="code">{l.dtAccount}</td>
-                  <td className="num">
-                    {l.debit ? money(l.debit) : ''}
-                    {l.qty && l.debit && <small>{qty(l.qty)}</small>}
-                  </td>
-                  <td className="code">{l.ktAccount}</td>
-                  <td className="num">
-                    {l.credit ? money(l.credit) : ''}
-                    {l.qty && l.credit && <small>{qty(l.qty)}</small>}
-                  </td>
-                  <td className="side">{side(l.balance)}</td>
-                  <td className="num">{amount(l.balance)}</td>
+          {postings && (
+            <table className="grid card onec">
+              <thead>
+                <tr>
+                  <th scope="col" rowSpan={2}>
+                    Tarix
+                  </th>
+                  <th scope="col" rowSpan={2}>
+                    Sənəd
+                  </th>
+                  <th scope="col" rowSpan={2}>
+                    Analitika Dt
+                  </th>
+                  <th scope="col" rowSpan={2}>
+                    Analitika Kt
+                  </th>
+                  <th scope="colgroup" colSpan={2}>
+                    Debet
+                  </th>
+                  <th scope="colgroup" colSpan={2}>
+                    Kredit
+                  </th>
+                  <th scope="colgroup" colSpan={2}>
+                    Cari saldo
+                  </th>
                 </tr>
-              ))}
-              <tr className="turnover">
-                <td colSpan={5}>Dövr üzrə dövriyyə</td>
-                <td className="num">{money(c.turnDt)}</td>
-                <td />
-                <td className="num">{money(c.turnKt)}</td>
-                <td />
-                <td />
-              </tr>
-              <tr className="closing">
-                <td colSpan={8}>Dövrün sonuna saldo</td>
-                <td className="side">{side(c.closing)}</td>
-                <td className="num">{amount(c.closing)}</td>
-              </tr>
-            </tbody>
-          </table>
+                <tr>
+                  <th scope="col">Hesab</th>
+                  <th scope="col" className="num">
+                    Məbləğ
+                  </th>
+                  <th scope="col">Hesab</th>
+                  <th scope="col" className="num">
+                    Məbləğ
+                  </th>
+                  <th scope="col" className="side" aria-label="Saldonun tərəfi" />
+                  <th scope="col" className="num">
+                    Məbləğ
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="opening">
+                  <td colSpan={8}>Dövrün əvvəlinə saldo</td>
+                  <td className="side">{side(c.opening)}</td>
+                  <td className="num">{amount(c.opening)}</td>
+                </tr>
+                {c.lines.map((l, i) => (
+                  <tr
+                    key={i}
+                    className={l.storno ? 'storno' : ''}
+                    onDoubleClick={() => openSource(l)}
+                  >
+                    <td>{day(l.date)}</td>
+                    <td className="doc">
+                      {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
+                        <button type="button" className="link" onClick={() => openSource(l)}>
+                          {l.document}
+                        </button>
+                      ) : (
+                        l.document
+                      )}
+                      {l.storno && <small className="storno-tag">storno</small>}
+                    </td>
+                    <td className="analytics">
+                      {l.dtAnalytics.map((v, k) => (
+                        <div key={k}>{v}</div>
+                      ))}
+                    </td>
+                    <td className="analytics">
+                      {l.ktAnalytics.map((v, k) => (
+                        <div key={k}>{v}</div>
+                      ))}
+                    </td>
+                    <td className="code">{l.dtAccount}</td>
+                    <td className="num">
+                      {l.debit ? money(l.debit) : ''}
+                      {l.qty && l.debit && <small>{qty(l.qty)}</small>}
+                    </td>
+                    <td className="code">{l.ktAccount}</td>
+                    <td className="num">
+                      {l.credit ? money(l.credit) : ''}
+                      {l.qty && l.credit && <small>{qty(l.qty)}</small>}
+                    </td>
+                    <td className="side">{side(l.balance)}</td>
+                    <td className="num">{amount(l.balance)}</td>
+                  </tr>
+                ))}
+                <tr className="turnover">
+                  <td colSpan={5}>Dövr üzrə dövriyyə</td>
+                  <td className="num">{money(c.turnDt)}</td>
+                  <td />
+                  <td className="num">{money(c.turnKt)}</td>
+                  <td />
+                  <td />
+                </tr>
+                <tr className="closing">
+                  <td colSpan={8}>Dövrün sonuna saldo</td>
+                  <td className="side">{side(c.closing)}</td>
+                  <td className="num">{amount(c.closing)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </ModuleFrame>
+  );
+}
+
+const sideOf = (v: string) => (!v || v === '0.00' ? '' : v.startsWith('-') ? 'K' : 'D');
+const amountOf = (v: string) => (!v || v === '0.00' ? '0,00' : money(v.replace('-', '')));
+type Source = Pick<AccountCard['lines'][number], 'sourceType' | 'sourceId' | 'direction'>;
+
+/** The card by levels: each row a level of analytics with its saldo, the last level documents. */
+function CardTree({
+  c,
+  open,
+  toggle,
+  onOpen,
+}: {
+  c: AccountCard;
+  open: Set<string>;
+  toggle: (key: string) => void;
+  onOpen: (l: Source) => void;
+}) {
+  const shown = new Set<string>(['']);
+  const kids = new Set(c.tree.map((n) => n.parent));
+  const rows = c.tree.filter((n) => {
+    const visible = shown.has(n.parent) && (n.parent === '' || open.has(n.parent));
+    if (visible) shown.add(n.key);
+    return visible;
+  });
+  return (
+    <table className="grid card onec tree">
+      <thead>
+        <tr>
+          <th scope="col">Kontragent / müqavilə / sənəd</th>
+          <th scope="colgroup" colSpan={2}>
+            Əvvələ saldo
+          </th>
+          <th scope="col" className="num">
+            Debet
+          </th>
+          <th scope="col" className="num">
+            Kredit
+          </th>
+          <th scope="colgroup" colSpan={2}>
+            Sonuna saldo
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((n) =>
+          n.kind === 'group' ? (
+            <tr key={n.key} className={`lvl${n.level}`}>
+              <td style={{ paddingLeft: `${6 + n.level * 18}px` }}>
+                {kids.has(n.key) ? (
+                  <button
+                    type="button"
+                    className="gut-mark"
+                    aria-label={`${open.has(n.key) ? 'Bağla' : 'Aç'}: ${n.label}`}
+                    onClick={() => toggle(n.key)}
+                  >
+                    {open.has(n.key) ? '⊟' : '⊞'}
+                  </button>
+                ) : (
+                  <span className="gut-mark" />
+                )}
+                {n.label}
+              </td>
+              <td className="side">{sideOf(n.opening)}</td>
+              <td className="num">{amountOf(n.opening)}</td>
+              <td className="num">{n.debit ? money(n.debit) : ''}</td>
+              <td className="num">{n.credit ? money(n.credit) : ''}</td>
+              <td className="side">{sideOf(n.closing)}</td>
+              <td className="num">{amountOf(n.closing)}</td>
+            </tr>
+          ) : (
+            <tr key={n.key} className="move">
+              <td style={{ paddingLeft: `${24 + n.level * 18}px` }}>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() =>
+                    onOpen({
+                      sourceType: n.sourceType ?? '',
+                      sourceId: n.sourceId ?? '',
+                      direction: n.direction ?? '',
+                    })
+                  }
+                >
+                  {n.label}
+                </button>
+              </td>
+              <td />
+              <td />
+              <td className="num">{n.debit ? money(n.debit) : ''}</td>
+              <td className="num">{n.credit ? money(n.credit) : ''}</td>
+              <td />
+              <td />
+            </tr>
+          ),
+        )}
+        <tr className="closing">
+          <td>Cəmi</td>
+          <td className="side">{sideOf(c.opening)}</td>
+          <td className="num">{amountOf(c.opening)}</td>
+          <td className="num">{money(c.turnDt)}</td>
+          <td className="num">{money(c.turnKt)}</td>
+          <td className="side">{sideOf(c.closing)}</td>
+          <td className="num">{amountOf(c.closing)}</td>
+        </tr>
+      </tbody>
+    </table>
   );
 }
