@@ -539,3 +539,14 @@ Plan: `docs/MERHELE-10-MALIYYE-HESABATLARI.md`. İstifadəçi növbəti mərhəl
 
 5. **Rəqəmlər müstəqil yoxlanıb:** həqiqi bazanın surətində 5 dövrdə (il, ayların ortası, bir ay, bir gün, rüb) bütün səviyyələrin 5 995 sətri yazılışlardan birbaşa hesablanmış saldo və dövriyyələrlə qəpikbəqəpik tutur.
 6. **Sadə:** başlıqda dövrün təkrarı və sorğu vaxtı (ms) yoxdur — dövr hesabat vərəqindədir; alt qeyd bir sətirdir; seçilən detallaşdırma növbəti açılışda qalır.
+
+## 2026-11-04 — Mərhələ 11: satış e-qaiməsinin göndərilməsi
+
+İstifadəçi `docs/MERHELE-11-EQAIME-GONDERME.md` planını §11-in bütün tövsiyələri ilə təsdiqlədi ("Tövsiyələrlə təsdiq").
+
+1. **İmza yalnız istifadəçidədir:** Meyar DVX-də yalnız qaralama yaradır, oxuyur və öz qaralamasını silir; `sign/*`, `sendBack`, `approve` əsas prosesdə qadağandır.
+2. **Yol — portalın qaralama sorğusu** (`POST …/v2/invoice`), mərhələ 6-nın sessiyası və qaydaları ilə; rəsmi XML paketi — ehtiyat, real faylla yoxlanandan sonra.
+3. **Nömrəni DVX verir;** imzalanandan sonra DVX-in nömrəsi qaiməyə yazılır.
+4. **Düzəliş e-qaiməsi bu mərhələdə yoxdur:** imzalanmış e-qaimənin qaiməsi dəyişəndə xəbərdarlıq.
+5. **Nomenklaturada "DVX məhsul kodu" və "DVX ölçü vahidi";** boşdursa satış uyğunluqlarından.
+6. **11a — quruluş real qaralamadan:** istifadəçi kabinetdə bir qaralamanı saxlayır (imzalamadan), Meyar-ın diaqnostikası onun quruluşunu (dəyərsiz) yazır.

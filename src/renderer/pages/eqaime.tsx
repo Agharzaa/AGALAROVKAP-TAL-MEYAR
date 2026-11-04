@@ -923,6 +923,14 @@ export function EqaimePage({ direction }: { direction: Direction }) {
         // For support only: kept out of the toolbar, where the accountant works.
         <details className="support-tools">
           <summary>Texniki dəstək üçün</summary>
+          {direction === 'sale' && (
+            // Stage 11a: the structure of a draft, for "DVX-də qaralama yarat" later.
+            <p className="muted">
+              E-qaimə göndərmə üçün: kabinetdə bir satış e-qaiməsinin qaralamasını saxlayın
+              (imzalamayın), "Qaralamalar" siyahısını açın, sonra bu düyməni basın. Faylda yalnız
+              sahə adları və tiplər olur — nömrə, VÖEN, ad, məbləğ olmur.
+            </p>
+          )}
           <button type="button" className="button secondary small" onClick={() => void diagnose()}>
             DVX sorğularının quruluşunu saxla
           </button>

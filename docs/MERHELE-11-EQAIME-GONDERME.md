@@ -1,6 +1,6 @@
 # Mərhələ 11 — satış e-qaiməsinin Meyar-dan DVX-ə göndərilməsi (dizayn)
 
-Status: **layihə** (04.11.2026) — istifadəçinin təsdiqini gözləyir (§11).
+Status: **təsdiqlənib** (04.11.2026, §11-in bütün tövsiyələri; `docs/QERARLAR.md` 2026-11-04). 11a hazırdır (0.9.31): diaqnostika qaralamaların siyahısını da oxuyur.
 
 Əsas: `docs/MERHELE-6-DVX-AVTOMAT.md` (kabinet sessiyası, sənədləşdirilməmiş interfeys qaydaları, §11 sual 4 — "göndərmə sonra, ayrıca mərhələ"), `docs/MERHELE-4-EQAIME.md` (bir dəfəlik açar, satış qaiməsinin e-qaiməyə bağlanması), `docs/QERARLAR.md` 2026-10-22 (mərhələ 6 §2: JWT yalnız yaddaşda, yalnız `new.e-taxes.gov.az/api/po/…`), 2026-10-25 §18 ("göndərmə — sonra ayrıca mərhələ").
 

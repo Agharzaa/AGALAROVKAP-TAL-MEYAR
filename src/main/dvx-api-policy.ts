@@ -60,11 +60,16 @@ export function maskPath(url: string): string {
   return keys.length ? `${path}?${keys.map((k) => `${k}=…`).join('&')}` : path;
 }
 
-/** Repeated by Meyar for the diagnostics: the e-qaimə lists only (reading, nothing else). */
+/**
+ * Repeated by Meyar for the diagnostics: the e-qaimə lists and (stage 11a) the drafts list —
+ * reading, nothing else. Creating, signing, sending back or removing is never repeated.
+ */
 export function replayable(method: string, path: string): boolean {
   return (
     method.toUpperCase() === 'POST' &&
-    /^\/api\/po\/invoice\/public\/v\d\/invoice\/find\.(inbox|outbox)(\/byProducts)?$/.test(path)
+    /^\/api\/po\/invoice\/public\/v\d\/invoice\/find\.(inbox|outbox|draft)(\/byProducts)?$/.test(
+      path,
+    )
   );
 }
 
@@ -88,8 +93,10 @@ interface CodesShape {
   codes: Record<string, number>;
 }
 
-const CODE_KEY = /status|type|kind|source|reason/i;
-const CODE_VALUE = /^[\p{L}_]{1,40}$/u;
+// Stage 11a: a draft's dictionary codes too (unit of measure, VAT kind) — "eded", "vat18".
+const CODE_KEY = /status|type|kind|source|reason|unit|measure|vat/i;
+/** A code: one word of letters (digits beside them allowed), never digits alone (a VÖEN). */
+const CODE_VALUE = /^(?=[\d_]*\p{L})[\p{L}\d_]{1,40}$/u;
 const DATE = /^(\d{4}-\d{2}-\d{2}|\d{2}[-./]\d{2}[-./]\d{4})/;
 const MAX_ITEMS = 500;
 const MAX_DEPTH = 12;

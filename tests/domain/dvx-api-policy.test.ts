@@ -121,6 +121,16 @@ test('D2: the shape holds names and types only — no number, VÖEN, name or amo
   // A "status" holding a number, a name or a long text is not a code: only its type is kept.
   assert.deepEqual(shapeOf({ status: 'Malsatan MMC 1700000001' }), { status: 'string' });
   assert.deepEqual(shapeOf({ type: 12 }), { type: 'number' });
+  // Stage 11a: the dictionary codes of a draft's lines (unit, VAT kind) are kept like statuses.
+  assert.deepEqual(
+    shapeOf({ products: [{ unit: 'eded', vatType: 'vat18', name: 'Daşıma xidməti' }] }),
+    {
+      products: {
+        array: 1,
+        of: { name: 'string', unit: { codes: { eded: 1 } }, vatType: { codes: { vat18: 1 } } },
+      },
+    },
+  );
 });
 
 test('D1: Meyar repeats only the e-qaimə list requests, with a small page', () => {
@@ -129,11 +139,17 @@ test('D1: Meyar repeats only the e-qaimə list requests, with a small page', () 
     '/api/po/invoice/public/v2/invoice/find.outbox',
     '/api/po/invoice/public/v1/invoice/find.inbox/byProducts',
     '/api/po/invoice/public/v1/invoice/find.outbox/byProducts',
+    // Stage 11a: the drafts list is read too (the user's own draft shows the structure to build).
+    '/api/po/invoice/public/v1/invoice/find.draft',
   ])
     assert.equal(replayable('POST', path), true, path);
   for (const [method, path] of [
     ['GET', '/api/po/invoice/public/v2/invoice/find.inbox'],
-    ['POST', '/api/po/invoice/public/v1/invoice/find.draft'],
+    // Creating, signing, sending and removing are never repeated (stage 11 §6).
+    ['POST', '/api/po/invoice/public/v2/invoice'],
+    ['POST', '/api/po/invoice/public/v1/invoice/sign/withAsanImza'],
+    ['POST', '/api/po/invoice/public/v1/invoice/sign/withSignature'],
+    ['POST', '/api/po/invoice/public/v1/invoice/sendBack'],
     ['POST', '/api/po/invoice/public/v1/common/removeDrafts'],
     ['POST', '/api/po/invoice/public/v1/invoice/sign'],
     ['POST', '/api/po/invoice/public/v2/invoice/find.inbox/excel'],
