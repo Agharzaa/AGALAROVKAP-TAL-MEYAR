@@ -312,13 +312,21 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
       kind: 'warning',
       text: `${month} ayı bağlanmayıb: alış ƏDV-sinin əvəzləşdirilməsi ay bağlanışında yazılır, "Əvəzləşdirilən" bağlanışın indiki planıdır, bağlanışdan sonra dəqiqdir.`,
     });
-  if (base('exempt') && v.purchaseVat) {
+  // Outside VAT ("cəlb edilməyən") counts like exempt (audit of stage 9, question 4).
+  const outside = base('exempt') + base('nontaxable');
+  if (outside && v.purchaseVat) {
     const taxable = base('18') + base('0');
-    const all = taxable + base('exempt');
+    const all = taxable + outside;
     const share = all ? Number((taxable * 10000n) / all) / 100 : 0;
+    const said = [
+      base('exempt') ? `ƏDV-dən azad satış (${money(base('exempt'))})` : '',
+      base('nontaxable') ? `ƏDV-yə cəlb edilməyən satış (${money(base('nontaxable'))})` : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
     checks.push({
       kind: 'warning',
-      text: `Ayda ƏDV-dən azad satış (${money(base('exempt'))}) və alış ƏDV-si var: VM 175 üzrə alış ƏDV-si vergi tutulan əməliyyatların payı qədər əvəzləşdirilir (bu ay ${share.toFixed(2).replace('.', ',')}%). Meyar bölgünü özü etmir — mühasib yoxlayır.`,
+      text: `Ayda ${said} və alış ƏDV-si var: VM 175 üzrə alış ƏDV-si vergi tutulan əməliyyatların payı qədər əvəzləşdirilir (bu ay ${share.toFixed(2).replace('.', ',')}%). Meyar bölgünü özü etmir — mühasib yoxlayır.`,
     });
   }
   if (t.credit !== v.salesVat)
