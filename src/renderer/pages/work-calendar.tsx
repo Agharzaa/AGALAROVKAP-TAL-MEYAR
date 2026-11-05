@@ -12,7 +12,7 @@ import { monthTitle, today } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { DateInput, Notice } from '../ui';
-import { useWindow } from '../workspace';
+import { useWindow, useWorkspace } from '../workspace';
 
 interface Day {
   date: string;
@@ -31,6 +31,8 @@ export function WorkCalendarPage() {
   const [message, setMessage] = useState('');
   useEffect(() => setDays(v && v.year === year ? v.days : null), [v, year]);
   const dirty = !!v && !!days && JSON.stringify(days) !== JSON.stringify(v.days);
+  const ws = useWorkspace();
+  useEffect(() => ws.setDirty(win.id, dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (i: number, patch: Partial<Day>) =>
     setDays(days!.map((d, j) => (j === i ? { ...d, ...patch } : d)));
   async function save() {

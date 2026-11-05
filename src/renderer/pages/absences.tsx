@@ -3,14 +3,14 @@
  * document. The pay is worked out by the ledger when the document is saved and shown with how it
  * was worked out; it goes to the payroll of the month the absence starts in.
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Ban, Check, Plus } from '../icons';
 import { vacationDays, vacationEnd, WorkCalendar } from '../../domain/calendar';
 import type { AbsenceView, CalendarView, VacationBalanceRow } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day, money, today } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { pages, viewTitle } from '../pages';
 import { Picker } from '../picker';
 import {
@@ -180,6 +180,30 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
   useEffect(() => {
     if (doc) ws.setLabel(win.id, doc.number);
   }, [doc?.number]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Unsaved: the form differs from what it opened with (or was last saved as).
+  const snapshot = form ? JSON.stringify(form) : '';
+  const baseline = useRef('');
+  useEffect(() => {
+    if (!snapshot) baseline.current = '';
+    else if (!baseline.current) baseline.current = snapshot;
+  }, [snapshot]);
+  const dirty = !!snapshot && !!baseline.current && snapshot !== baseline.current;
+  useEffect(() => ws.setDirty(win.id, dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveNow = useRef<(close?: boolean) => void>(() => undefined);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (ws.activeId !== win.id || dialogOpen()) return;
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveNow.current();
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        saveNow.current(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   if (!catalog || !form)
     return (
       <ModuleFrame title={viewTitle(win.view, win.label)}>
@@ -189,7 +213,8 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const locked = doc?.status === 'cancelled';
   const sick = kind === 'sick';
-  async function save() {
+  saveNow.current = (close) => void save(close);
+  async function save(close = false) {
     if (!form || locked || m.busy) return;
     setMessage('');
     setWarning('');
@@ -212,6 +237,11 @@ export function AbsenceEditor({ kind, id }: { kind: AbsenceKind; id?: string }) 
       ...(id && doc ? { id, version: doc.version } : {}),
     });
     if (!r) return;
+    if (close) {
+      ws.setDirty(win.id, false);
+      ws.discard(win.id);
+      return;
+    }
     setMessage(id ? 'Dəyişiklik saxlanıldı.' : `Sənəd ${r.number} saxlanıldı.`);
     setWarning(r.warning ?? '');
     setForm(null);

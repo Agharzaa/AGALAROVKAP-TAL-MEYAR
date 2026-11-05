@@ -3,6 +3,9 @@ import { api, ApiError, requestKey, type CommandInput } from './api';
 import type { CommandResult } from '../contracts/commands';
 import type { Query } from '../contracts/queries';
 
+/** A modal dialog is up: the keys of the forms and of the shell behind it wait. */
+export const dialogOpen = () => !!document.querySelector('dialog[open]');
+
 export interface Loaded<T> {
   data: T | undefined;
   error: string;

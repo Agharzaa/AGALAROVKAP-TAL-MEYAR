@@ -17,7 +17,7 @@ import { api } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { monthTitle, today } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { pages, viewTitle } from '../pages';
 import { usePrint } from '../print';
 import {
@@ -190,6 +190,31 @@ export function TimesheetEditor({ id }: { id?: string }) {
     if (doc) ws.setLabel(win.id, doc.number);
   }, [doc?.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Unsaved: the month or the grid differs from what it opened with (or was last saved as).
+  const snapshot = rows ? JSON.stringify({ month, rows }) : '';
+  const baseline = useRef('');
+  useEffect(() => {
+    if (!snapshot) baseline.current = '';
+    else if (!baseline.current) baseline.current = snapshot;
+  }, [snapshot]);
+  const dirty = !!snapshot && !!baseline.current && snapshot !== baseline.current;
+  useEffect(() => ws.setDirty(win.id, dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveNow = useRef<(close?: boolean) => void>(() => undefined);
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (ws.activeId !== win.id || dialogOpen()) return;
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveNow.current();
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        saveNow.current(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   if (!catalog || !rows)
     return (
       <ModuleFrame title={viewTitle(win.view, win.label)}>
@@ -221,7 +246,8 @@ export function TimesheetEditor({ id }: { id?: string }) {
       target.select();
     }
   };
-  async function save() {
+  saveNow.current = (close) => void save(close);
+  async function save(close = false) {
     if (!rows || locked || m.busy) return;
     setMessage('');
     const r = await m.run({
@@ -239,6 +265,12 @@ export function TimesheetEditor({ id }: { id?: string }) {
       ...(id && doc ? { id, version: doc.version } : {}),
     });
     if (!r) return;
+    baseline.current = snapshot;
+    ws.setDirty(win.id, false);
+    if (close) {
+      ws.discard(win.id);
+      return;
+    }
     setMessage(id ? 'Tabel saxlanıldı.' : `Tabel ${r.number} saxlanıldı.`);
     if (!id) ws.retarget(win.id, { type: 'timesheet', id: r.id });
     else {
