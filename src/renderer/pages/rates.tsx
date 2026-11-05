@@ -12,7 +12,7 @@ import type { RateView, RevaluationLine, RevaluationView } from '../../contracts
 import { api } from '../api';
 import { ModuleFrame } from '../frame';
 import { MonthFilter, RangeFields, useRange } from '../filters';
-import { day, money, toField } from '../format';
+import { day, money, stamp, toField } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { loadAmb } from '../rates';
