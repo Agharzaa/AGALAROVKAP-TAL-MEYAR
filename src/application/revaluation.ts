@@ -476,7 +476,8 @@ export function revaluationView(
   try {
     fresh = compute(db, companyId, month, row ? String(row.id) : undefined);
   } catch (e) {
-    error = (e as Error).message;
+    if (!(e instanceof DomainError)) throw e;
+    error = e.message;
   }
   const proposal = fresh ? storedLines(fresh).map(names) : [];
   const posted = row ? (JSON.parse(String(row.lines)) as RevaluationLine[]).map(names) : [];
