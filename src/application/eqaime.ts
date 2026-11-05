@@ -491,7 +491,7 @@ export function resolveEq(tx: Tx, cmd: CommandOf<'eqaime.resolve'>): CommandResu
       undefined,
       'conflict',
     );
-  const resolved = `${tx.clock.now().slice(0, 10)} · ${tx.ctx.actor}: ${note}`;
+  const resolved = `${localDay(tx.clock.now())} · ${tx.ctx.actor}: ${note}`;
   tx.db.run(
     'UPDATE eq_documents SET resolved=?, version=version+1, updated_at=? WHERE id=?',
     resolved,
