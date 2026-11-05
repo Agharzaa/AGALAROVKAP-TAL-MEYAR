@@ -177,6 +177,11 @@ export function DataTable<T>({
   const [size, setSize] = useState(50);
   const [page, setPage] = useState(0);
   const [menu, setMenu] = useState(false);
+  const sizeButton = useRef<HTMLButtonElement>(null);
+  const closeMenu = () => {
+    setMenu(false);
+    sizeButton.current?.focus();
+  };
   const pages = Math.max(1, Math.ceil(rows.length / size));
   const current = Math.min(page, pages - 1);
   const visible = rows.slice(current * size, (current + 1) * size);
@@ -205,9 +210,17 @@ export function DataTable<T>({
                 tabIndex={onOpen ? 0 : undefined}
                 onDoubleClick={() => onOpen?.(row)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.target === e.currentTarget && onOpen) {
+                  if (e.target !== e.currentTarget || !onOpen) return;
+                  if (e.key === 'Enter') {
                     e.preventDefault();
                     onOpen(row);
+                  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const next =
+                      e.key === 'ArrowDown'
+                        ? e.currentTarget.nextElementSibling
+                        : e.currentTarget.previousElementSibling;
+                    (next as HTMLElement | null)?.focus();
                   }
                 }}
               >
@@ -233,8 +246,14 @@ export function DataTable<T>({
             ` · ${current * size + 1}–${Math.min((current + 1) * size, rows.length)}`}
         </span>
         <div className="pager">
-          <div className="page-size">
+          <div
+            className="page-size"
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setMenu(false);
+            }}
+          >
             <button
+              ref={sizeButton}
               type="button"
               className="page-size-button"
               aria-haspopup="listbox"
@@ -254,9 +273,9 @@ export function DataTable<T>({
                       onClick={() => {
                         setSize(n);
                         setPage(0);
-                        setMenu(false);
+                        closeMenu();
                       }}
-                      onKeyDown={(e) => e.key === 'Escape' && setMenu(false)}
+                      onKeyDown={(e) => e.key === 'Escape' && closeMenu()}
                     >
                       {n}
                     </button>
