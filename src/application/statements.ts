@@ -756,17 +756,17 @@ export function statementWaiting(
 ): HomeView['warnings'] {
   return db
     .all(
-      `SELECT b.name, COUNT(*) AS n, COALESCE(SUM(CASE WHEN l.direction='in' THEN l.amount END),0) AS inflow,
+      `SELECT b.name, b.currency, COUNT(*) AS n, COALESCE(SUM(CASE WHEN l.direction='in' THEN l.amount END),0) AS inflow,
          COALESCE(SUM(CASE WHEN l.direction='out' THEN l.amount END),0) AS outflow, MIN(l.date) AS first
        FROM statement_lines l JOIN bank_accounts b ON b.company_id=l.company_id AND b.id=l.bank_account_id
-       WHERE l.company_id=? AND l.state='new' AND l.date>? AND l.date<=? GROUP BY b.id, b.name ORDER BY b.name`,
+       WHERE l.company_id=? AND l.state='new' AND l.date>? AND l.date<=? GROUP BY b.id ORDER BY b.name`,
       companyId,
       closed,
       to,
     )
     .map((r) => ({
       kind: 'statementWaiting' as const,
-      text: `${String(r.name)}: ${String(r.n)} sətir uçota alınmayıb (daxilolma ${displayMinor(r.inflow as bigint)}, məxaric ${displayMinor(r.outflow as bigint)}), ən köhnəsi ${String(r.first).split('-').reverse().join('.')}. Bu sətirlər uçota alınmayınca hesabın qalığı bankla tutmur.`,
+      text: `${String(r.name)}: ${String(r.n)} sətir uçota alınmayıb (daxilolma ${displayMinor(r.inflow as bigint)} ${String(r.currency)}, məxaric ${displayMinor(r.outflow as bigint)} ${String(r.currency)}), ən köhnəsi ${String(r.first).split('-').reverse().join('.')}. Bu sətirlər uçota alınmayınca hesabın qalığı bankla tutmur.`,
       account: '',
       sk: [],
     }));

@@ -32,8 +32,8 @@ test('audit: İş masası says how many bank statement lines are not booked', (t
   const w = home.warnings.filter((x) => x.kind === 'statementWaiting');
   assert.equal(w.length, 1);
   assert.match(w[0]!.text, /3 sətir/);
-  assert.match(w[0]!.text, /1.000,00/);
-  assert.match(w[0]!.text, /260,50/);
+  assert.match(w[0]!.text, /1.000,00 AZN/);
+  assert.match(w[0]!.text, /260,50 AZN/);
 });
 
 test('audit: the closing warns about the unbooked bank lines up to its month, not later ones', (t) => {
