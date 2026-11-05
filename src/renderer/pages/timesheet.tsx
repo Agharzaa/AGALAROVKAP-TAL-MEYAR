@@ -529,7 +529,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
         </table>
       </div>
       {!rows.length && <Empty title="Bu ay işləyən işçi yoxdur" />}
-      <PostingRule>
+      <PostingRule title="Xanaların mənası">
         Xana: saat (8, 7,5) — iş; E — ezamiyyət (E8); M — məzuniyyət; Ö — ödənişsiz; X — xəstəlik; Q
         — üzrsüz gəlməmə; B — istirahət. Günün normasından artıq saatlar və "Artıq" sütunu — artıq
         iş (× 2), istirahət / bayram günü saatları — × 2, gecə saatları — + 40% (Dərəcələr). Əmək

@@ -655,10 +655,16 @@ function todayMonth(): string {
 }
 
 /** How a document is posted (Dt / Kt), folded to one line: read once, then out of the way. */
-export function PostingRule({ children }: { children: ReactNode }) {
+export function PostingRule({
+  title = 'Yazılış qaydası',
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
   return (
-    <details className="doc-rule" aria-label="Yazılış qaydası">
-      <summary>Yazılış qaydası</summary>
+    <details className="doc-rule" aria-label={title}>
+      <summary>{title}</summary>
       <p className="doc-hint">{children}</p>
     </details>
   );
