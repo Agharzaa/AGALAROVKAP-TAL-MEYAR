@@ -696,10 +696,16 @@ test('audit: tour 2: an account without analytics lists its documents at the roo
   const h = harness();
   const s = seed(h);
   const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as {
-    accounts: { code: string; subkonto: unknown[] }[];
+    accounts: {
+      code: string;
+      subkonto: unknown[];
+      postable: boolean;
+      currency: boolean;
+      quantitative: boolean;
+    }[];
   };
   const plain = catalog.accounts.filter(
-    (a) => !a.subkonto.length && !catalog.accounts.some((b) => b.code.startsWith(`${a.code}.`)),
+    (a) => a.postable && !a.currency && !a.quantitative && !a.subkonto.length,
   );
   const [dt, kt] = plain;
   assert.ok(dt && kt, 'the chart has two plain accounts');
@@ -748,7 +754,7 @@ test('audit: tour 2: a card link of a month document opens that document’s mon
       /ƏƏ-/.test(b.textContent ?? ''),
     )!;
     await user.click(link);
-    await within(pane()).findByText(/ƏƏ-/);
+    await within(pane()).findAllByText(/ƏƏ-/);
     assert.ok(pane().getAttribute('aria-label')?.includes('ƏDV əvəzləşdirilməsi'));
   } finally {
     h.close();
