@@ -1,4 +1,4 @@
-// System audit (0.9.34): defects found on the copy of the real MG Transport database.
+// System audit (0.9.34): defects found on a copy of a real database.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { HomeView } from '../../src/contracts/queries.js';
