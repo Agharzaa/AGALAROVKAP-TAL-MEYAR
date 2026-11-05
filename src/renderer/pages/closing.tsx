@@ -18,7 +18,7 @@ import { MonthFilter } from '../filters';
 import { money, monthTitle } from '../format';
 import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
-import { Amount, Confirm, Empty, Field, Notice } from '../ui';
+import { Amount, Confirm, Empty, Field, Notice, Status } from '../ui';
 import { useWindow, useWorkspace, type View } from '../workspace';
 
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
@@ -356,7 +356,9 @@ export function ClosingPage() {
                     >
                       <td>{monthTitle(c.month)}</td>
                       <td>{c.number}</td>
-                      <td>{c.status === 'posted' ? 'uçotda' : 'ləğv edilib'}</td>
+                      <td>
+                        <Status status={c.status} />
+                      </td>
                       <td className="num">
                         <Amount value={c.profit} />
                       </td>
