@@ -170,6 +170,8 @@ export interface Position {
   residue: bigint;
   /** Anything booked up to the date. */
   any: boolean;
+  /** Net of 22x (an overdraft included): what the cash flow ties to. */
+  cash: bigint;
 }
 
 /** The balance at the end of a month (YYYY-MM), from the registers. */
@@ -232,6 +234,7 @@ function build(
   let residue = 0n;
   let any = false;
   const opened = new Map<string, bigint>();
+  let cash = 0n;
   for (const r of rows) {
     if (r.booked) any = true;
     const code = r.account;
@@ -261,13 +264,16 @@ function build(
     const cls = code[0]!;
     const assetSide = cls === '1' || cls === '2';
     const ap = chart.get(code)?.nature === 'active-passive' && cls !== '3';
-    const opposite = ap && (assetSide ? b < 0n : b > 0n);
+    // A bank account in credit is an overdraft (line 50), though 22x are active accounts.
+    const overdraft = (top === '221' || top === '223' || top === '224') && b < 0n;
+    const opposite = overdraft || (ap && (assetSide ? b < 0n : b > 0n));
+    if (code.startsWith('22')) cash += b;
     if (opposite)
       add(lineOf(code, true), b < 0n ? -b : b, `${top} (${b > 0n ? 'Dt' : 'Kt'} qalığı)`);
     else add(lineOf(code, false), assetSide ? b : -b, top);
   }
   if (unclosed) add('34', unclosed, 'bağlanmamış nəticə (6xx–9xx)');
-  return { lines, sources, unclosed, byTop, residue, any };
+  return { lines, sources, unclosed, byTop, residue, any, cash };
 }
 
 /** The ends of the year and of the two before it: two years of statements and their openings. */
@@ -1050,7 +1056,7 @@ function cashYears(
     s.add(investment ? `${other.slice(0, 3)} (əsas vəsait qaiməsi)` : other.slice(0, 3));
     sources.set(flow, s);
   }
-  const money22 = (month: string) => at(month).lines.get('22') ?? 0n;
+  const money22 = (month: string) => at(month).cash;
   return years.map((year, i) => ({
     ...out[i]!,
     opening: money22(`${Number(year) - 1}-12`),
