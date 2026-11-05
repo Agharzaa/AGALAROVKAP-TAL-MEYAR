@@ -16,7 +16,7 @@ import type {
 import { ModuleFrame } from '../frame';
 import { MonthFilter } from '../filters';
 import { money, monthTitle } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Amount, Confirm, Empty, Field, Notice } from '../ui';
 import { useWindow, useWorkspace, type View } from '../workspace';
@@ -219,7 +219,7 @@ export function ClosingPage() {
     }
   }
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.ctrlKey && e.key === 'Enter') {
+    if (e.ctrlKey && e.key === 'Enter' && !dialogOpen()) {
       e.preventDefault();
       void run();
     }

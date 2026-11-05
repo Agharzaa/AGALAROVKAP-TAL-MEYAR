@@ -11,7 +11,7 @@ import {
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
 import { useWindow, useWorkspace } from '../workspace';
@@ -113,7 +113,7 @@ export function OperationEditor({ id }: { id?: string }) {
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (ws.activeId !== win.id) return;
+      if (ws.activeId !== win.id || dialogOpen()) return;
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();

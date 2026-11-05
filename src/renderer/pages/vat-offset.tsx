@@ -10,7 +10,7 @@ import type { VatOffsetLineView, VatOffsetView } from '../../contracts/queries';
 import { ModuleFrame } from '../frame';
 import { MonthFilter } from '../filters';
 import { addAmounts, day, money, toField } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Picker } from '../picker';
 import { Confirm, Empty, Field, Notice } from '../ui';
@@ -119,7 +119,7 @@ export function VatOffsetPage() {
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (ws.activeId !== win.id) return;
+      if (ws.activeId !== win.id || dialogOpen()) return;
       // As in every document form: Ctrl+S and Ctrl+Enter post the document.
       if (e.ctrlKey && (e.key.toLowerCase() === 's' || e.key === 'Enter')) {
         e.preventDefault();

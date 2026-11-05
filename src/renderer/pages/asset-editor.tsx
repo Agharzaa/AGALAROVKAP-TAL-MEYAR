@@ -12,7 +12,7 @@ import type { AssetDocumentDetail, Catalog } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { addAmounts, day, money, today } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { accountOptions, Picker, SubkontoFields } from '../picker';
 import { Postings } from '../postings';
@@ -215,7 +215,7 @@ export function AssetEditor({ kind, id }: { kind: Kind; id?: string }) {
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (ws.activeId !== win.id) return;
+      if (ws.activeId !== win.id || dialogOpen()) return;
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();

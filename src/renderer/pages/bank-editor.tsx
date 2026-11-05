@@ -16,7 +16,7 @@ import { formFromDraft, RuleDialog } from './rules';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { day, money, toField } from '../format';
-import { useMutation, useQuery } from '../hooks';
+import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import {
   blankLine as blank,
@@ -249,7 +249,7 @@ export function BankEditor({
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (ws.activeId !== win.id) return;
+      if (ws.activeId !== win.id || dialogOpen()) return;
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();

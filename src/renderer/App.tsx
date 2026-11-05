@@ -36,7 +36,7 @@ import { searchKey } from '../domain/values';
 import { api, applyTheme } from './api';
 import type { UpdateState, Zoom } from '../contracts/bridge';
 import { useCatalog } from './catalog';
-import { useMutation, useQuery } from './hooks';
+import { dialogOpen, useMutation, useQuery } from './hooks';
 import {
   createItems,
   pages,
@@ -675,6 +675,7 @@ function Shell({
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (dialogOpen()) return;
       if (e.ctrlKey && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault();
         ws.open({ type: 'operation' });
