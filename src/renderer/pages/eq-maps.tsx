@@ -175,6 +175,7 @@ export function EqMapsPage() {
       }
       notices={
         <>
+          {maps.error && <Notice>{maps.error}</Notice>}
           {m.error && !edit && <Notice onClose={m.clear}>{m.error.message}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
@@ -191,12 +192,16 @@ export function EqMapsPage() {
         rowKey={(x) => x.id}
         onOpen={(x) => !x.archived && setEdit(x)}
         empty={
-          <Empty title="Hələ uyğunluq yoxdur">
-            <p className="doc-hint">
-              E-qaiməni qutudan uçota aldıqdan sonra qaimədə “Uyğunluq kimi saxla” düyməsini basın:
-              DVX-in mal kodu və adı seçdiyiniz nomenklaturaya bağlanır.
-            </p>
-          </Empty>
+          maps.error ? (
+            <Empty title="Siyahı oxunmadı" />
+          ) : (
+            <Empty title="Hələ uyğunluq yoxdur">
+              <p className="doc-hint">
+                E-qaiməni qutudan uçota aldıqdan sonra qaimədə “Uyğunluq kimi saxla” düyməsini
+                basın: DVX-in mal kodu və adı seçdiyiniz nomenklaturaya bağlanır.
+              </p>
+            </Empty>
+          )
         }
       />
       {edit && catalog && (

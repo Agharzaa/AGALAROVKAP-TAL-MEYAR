@@ -388,6 +388,7 @@ export function StatementsPage() {
             </Notice>
           )}
           {statement.error && <Notice>{statement.error}</Notice>}
+          {imports.error && <Notice>{imports.error}</Notice>}
         </>
       }
     >

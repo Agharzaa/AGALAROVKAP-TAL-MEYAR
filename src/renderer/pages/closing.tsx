@@ -259,6 +259,8 @@ export function ClosingPage() {
         filters={<MonthFilter value={month} onChange={(ym) => (setMonth(ym), setRead(false))} />}
         notices={
           <>
+            {next.error && <Notice>{next.error}</Notice>}
+            {list.error && <Notice>{list.error}</Notice>}
             {view.error && <Notice>{view.error}</Notice>}
             {v?.posted && (
               <Notice kind="info">
