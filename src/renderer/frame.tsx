@@ -2,7 +2,7 @@ import { RefreshCw } from './icons';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';
-import { Status } from './ui';
+import { Notice, Status } from './ui';
 
 /**
  * One form: command bar, an optional filter strip, notices and the work area. It sits inside a
@@ -33,7 +33,7 @@ export function ModuleFrame({
   children: ReactNode;
 }) {
   const win = useContext(WindowContext);
-  const { company } = useCatalog(win?.companyId);
+  const { company, error: catalogError } = useCatalog(win?.companyId);
   const ws = useWorkspace();
   const foreign = win && company && win.companyId !== ws.companyId;
   return (
@@ -92,7 +92,12 @@ export function ModuleFrame({
           Sənəd ləğv edilib: yazılışları storno edilib, sənədi dəyişdirmək olmur.
         </p>
       )}
-      {notices && <div className="module-notices">{notices}</div>}
+      {(notices || catalogError) && (
+        <div className="module-notices">
+          {catalogError && <Notice>{catalogError}</Notice>}
+          {notices}
+        </div>
+      )}
       <div className="module-content">{children}</div>
     </section>
   );
