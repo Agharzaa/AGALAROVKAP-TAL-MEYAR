@@ -819,7 +819,7 @@ function coverage(db: Db, companyId: string, direction: EqDirection) {
 }
 
 /** VAT of an invoice in AZN, as its stored lines carry it. */
-const invoiceVat = (lines: string) =>
+export const invoiceVat = (lines: string) =>
   (JSON.parse(lines) as { vatAzn?: string }[]).reduce((s, l) => {
     const v = l.vatAzn ?? '';
     return s + (v ? (v.startsWith('-') ? -parseMoney(v.slice(1)) : parseMoney(v)) : 0n);

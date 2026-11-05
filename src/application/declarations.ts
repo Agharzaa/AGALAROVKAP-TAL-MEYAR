@@ -18,6 +18,7 @@ import type {
 import type { Db } from '../infrastructure/sqlite/db.js';
 import { vatOf, vatSummary } from './analytics.js';
 import { plannedVatOffset, plannedVatPostings } from './closing.js';
+import { invoiceVat } from './eqaime.js';
 import { postedVatOffset } from './vat-offset.js';
 import { ratesAt } from './payroll.js';
 import { checkMonth } from './revaluation.js';
@@ -127,7 +128,7 @@ function offsetLists(
   }
   const invoice = (document: string) =>
     db.get(
-      `SELECT i.id, i.number, i.date, i.vat, i.eq_series, i.eq_number, p.name, p.tax_id,
+      `SELECT i.id, i.number, i.date, i.lines, i.eq_series, i.eq_number, p.name, p.tax_id,
          (SELECT COUNT(*) FROM eq_documents q WHERE q.company_id=i.company_id AND q.invoice_id=i.id
             AND q.direction='purchase' AND q.status='accepted') AS confirmed
        FROM invoices i JOIN partners p ON p.company_id=i.company_id AND p.id=i.partner_id
@@ -148,7 +149,8 @@ function offsetLists(
   const offsetRows: string[][] = [];
   for (const [document, amount] of offset) {
     const i = invoice(document);
-    if (i && amount) offsetRows.push([...head(i), money(i.vat as bigint), money(amount)]);
+    if (i && amount)
+      offsetRows.push([...head(i), money(invoiceVat(String(i.lines))), money(amount)]);
   }
   const waitingRows: string[][] = [];
   for (const [document, left] of open) {
