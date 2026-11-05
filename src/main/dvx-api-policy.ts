@@ -44,6 +44,14 @@ export function bearerOf(headers: Record<string, string | string[] | undefined>)
 
 const ID_SEGMENT = /\d{3,}|^[0-9a-f]{8}-[0-9a-f-]{20,}$/i;
 
+const decoded = (segment: string) => {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+};
+
 /** The path of a request with its ids and query values masked: "/api/po/…/download/{id}?type=…". */
 export function maskPath(url: string): string {
   let u: URL;
@@ -54,7 +62,7 @@ export function maskPath(url: string): string {
   }
   const path = u.pathname
     .split('/')
-    .map((s) => (ID_SEGMENT.test(decodeURIComponent(s)) ? '{id}' : s))
+    .map((s) => (ID_SEGMENT.test(decoded(s)) ? '{id}' : s))
     .join('/');
   const keys = [...u.searchParams.keys()];
   return keys.length ? `${path}?${keys.map((k) => `${k}=…`).join('&')}` : path;
@@ -94,7 +102,7 @@ interface CodesShape {
 }
 
 // Stage 11a: a draft's dictionary codes too (unit of measure, VAT kind) — "eded", "vat18".
-const CODE_KEY = /status|type|kind|source|reason|unit|measure|vat/i;
+const CODE_KEY = /(^|[a-z_])(status|type|kind|source|reason|unit|measure|vat)$/i;
 /** A code: one word of letters (digits beside them allowed), never digits alone (a VÖEN). */
 const CODE_VALUE = /^(?=[\d_]*\p{L})[\p{L}\d_]{1,40}$/u;
 const DATE = /^(\d{4}-\d{2}-\d{2}|\d{2}[-./]\d{2}[-./]\d{4})/;
