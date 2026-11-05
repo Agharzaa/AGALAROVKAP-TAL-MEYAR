@@ -364,7 +364,7 @@ for (const [what, item, section] of [
       await openItem(user, item, section);
       const date = (await within(pane()).findAllByPlaceholderText('gg.aa.iiii'))[0]!;
       await user.clear(date);
-      await user.type(date, '05112026');
+      await user.type(date, '01012026');
       await user.click(within(pane()).getByRole('button', { name: 'Bağla' }));
       await dialogUp();
     } finally {
@@ -468,7 +468,7 @@ test('audit: a date typed wrong is not replaced silently by the old date when sa
 // ---- 3. Low screen ----------------------------------------------------------------------------
 
 test('audit: a dialog taller than a 768 px screen scrolls, its buttons stay reachable', () => {
-  const css = source('styles.css');
+  const css = source('styles.css').replace(/\/\*[\s\S]*?\*\//g, '');
   const rule = (selector: string) =>
     [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .filter((m) => m[1]!.split(',').some((s) => s.trim() === selector))
