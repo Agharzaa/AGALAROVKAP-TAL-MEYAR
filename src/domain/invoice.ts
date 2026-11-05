@@ -10,7 +10,7 @@
  * - Goods leave stock at FIFO cost; advances are offset oldest first.
  */
 import { DomainError } from './errors.js';
-import { roundHalfAwayFromZero, type Minor } from './money.js';
+import { MAX_MINOR, roundHalfAwayFromZero, type Minor } from './money.js';
 import { formatQty, lineAmount, PRICE_SCALE, type Price, type Qty } from './quantity.js';
 import type { VatRate } from './chart.js';
 
@@ -42,7 +42,11 @@ export function lineAmounts(
 export const AZN_RATE = PRICE_SCALE;
 
 export function toAzn(amount: Minor, rate: bigint): Minor {
-  return rate === AZN_RATE ? amount : roundHalfAwayFromZero(amount * rate, PRICE_SCALE);
+  if (rate === AZN_RATE) return amount;
+  const azn = roundHalfAwayFromZero(amount * rate, PRICE_SCALE);
+  if (azn > MAX_MINOR || -azn > MAX_MINOR)
+    throw new DomainError('Manatla məbləğ icazə verilən həddi keçir.', 'amount');
+  return azn;
 }
 
 /** Line amounts in AZN: gross and VAT converted, net as their difference. */
