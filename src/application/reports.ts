@@ -51,7 +51,12 @@ import type {
 import type { Db, Param, Row } from '../infrastructure/sqlite/db.js';
 import { bankDocument, isDeposit, isPairable, pairCandidates, vatCheck } from './bank-pair.js';
 import { budgetCodes, ruleDraft, rulesView } from './rules.js';
-import { statementImports, statementLineView, statementView } from './statements.js';
+import {
+  statementImports,
+  statementLineView,
+  statementView,
+  statementWaiting,
+} from './statements.js';
 import {
   dvxStale,
   eqDocument,
@@ -1375,6 +1380,7 @@ function home(db: Db, companyId: string, today: string): HomeView {
   warnings.push(...vatPairWarnings(db, companyId, names));
   warnings.push(...eqWarnings(db, companyId, co.closedThrough, today));
   warnings.push(...eqNumberless(db, companyId, co.closedThrough));
+  warnings.push(...statementWaiting(db, companyId, co.closedThrough));
   warnings.push(...dvxStale(db, companyId, { today }));
   const recent = db
     .all(

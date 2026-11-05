@@ -120,6 +120,7 @@ const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
   eqVat: 'ƏDV: DVX ilə uçot fərqlidir',
   eqMissing: 'E-qaimə DVX-də tapılmadı',
   eqNumberless: 'ƏDV-li alış qaiməsi e-qaiməsizdir',
+  statementWaiting: 'Bank çıxarışı uçota alınmayıb',
   dvxStale: 'DVX yenilənməyib',
   rate: 'Ay sonu məzənnəsi yoxdur',
   integrity: 'Registr jurnalla uyğun deyil',
@@ -242,20 +243,22 @@ export function HomePage({
         state: 'bad',
         title: warningTitle[w.kind],
         detail: w.text,
-        ...(w.eq
-          ? {
-              action: 'Qutunu aç',
-              view: { type: 'page', page: w.eq === 'purchase' ? 'eqPurchase' : 'eqSale' },
-            }
-          : w.document
+        ...(w.kind === 'statementWaiting'
+          ? { action: 'Çıxarışı aç', view: { type: 'page', page: 'statements' } }
+          : w.eq
             ? {
-                action: 'Sənədi aç',
-                view: { type: 'bank', direction: w.document.direction, id: w.document.id },
+                action: 'Qutunu aç',
+                view: { type: 'page', page: w.eq === 'purchase' ? 'eqPurchase' : 'eqSale' },
               }
-            : {
-                action: 'Hesab kartı',
-                view: { type: 'accountCard', account: w.account, sk: w.sk },
-              }),
+            : w.document
+              ? {
+                  action: 'Sənədi aç',
+                  view: { type: 'bank', direction: w.document.direction, id: w.document.id },
+                }
+              : {
+                  action: 'Hesab kartı',
+                  view: { type: 'accountCard', account: w.account, sk: w.sk },
+                }),
       });
   }
   const amount = (v: string) => (v === '0.00' ? '' : money(v));

@@ -11,7 +11,7 @@
  */
 import { createHash } from 'node:crypto';
 import { DomainError } from '../domain/errors.js';
-import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
+import { displayMinor, formatMinor, parseMoney, type Minor } from '../domain/money.js';
 import {
   classifyStatementLine,
   findIban,
@@ -22,6 +22,7 @@ import {
 import { numberKey, parseDate, parseText, searchKey } from '../domain/values.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type {
+  HomeView,
   StatementImportView,
   StatementLineView,
   StatementProposal,
@@ -745,6 +746,31 @@ const nextDay = (iso: string) => {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 };
+
+/** Statement lines of the open period (up to `to`) nobody booked or set aside, per bank account. */
+export function statementWaiting(
+  db: Db,
+  companyId: string,
+  closed: string,
+  to = '9999-12-31',
+): HomeView['warnings'] {
+  return db
+    .all(
+      `SELECT b.name, COUNT(*) AS n, COALESCE(SUM(CASE WHEN l.direction='in' THEN l.amount END),0) AS inflow,
+         COALESCE(SUM(CASE WHEN l.direction='out' THEN l.amount END),0) AS outflow, MIN(l.date) AS first
+       FROM statement_lines l JOIN bank_accounts b ON b.company_id=l.company_id AND b.id=l.bank_account_id
+       WHERE l.company_id=? AND l.state='new' AND l.date>? AND l.date<=? GROUP BY b.id, b.name ORDER BY b.name`,
+      companyId,
+      closed,
+      to,
+    )
+    .map((r) => ({
+      kind: 'statementWaiting' as const,
+      text: `${String(r.name)}: ${String(r.n)} sətir uçota alınmayıb (daxilolma ${displayMinor(r.inflow as bigint)}, məxaric ${displayMinor(r.outflow as bigint)}), ən köhnəsi ${String(r.first).split('-').reverse().join('.')}. Bu sətirlər uçota alınmayınca hesabın qalığı bankla tutmur.`,
+      account: '',
+      sk: [],
+    }));
+}
 
 function importView(db: Db, r: Row): StatementImportView {
   const counts = db.get(

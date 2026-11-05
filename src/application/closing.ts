@@ -50,6 +50,7 @@ import { timesheetSignals } from './timesheets.js';
 import { checkSideValues } from './subkonto.js';
 import { depreciatedThrough, depreciationFor } from '../domain/assets.js';
 import { profitTaxStep } from './profit-tax.js';
+import { statementWaiting } from './statements.js';
 import {
   laterVatOffset,
   postedVatOffset,
@@ -726,7 +727,9 @@ export function vatStep(
         // The invoice's own amount is owed; more on the credit side is money back (a refund).
         const cur = inv.currency !== 'AZN';
         const owed = (cur ? inv.total : inv.total_azn) as bigint;
-        const [d, c] = cur ? [key.cd as bigint, key.ck as bigint] : [key.d as bigint, key.c as bigint];
+        const [d, c] = cur
+          ? [key.cd as bigint, key.ck as bigint]
+          : [key.d as bigint, key.c as bigint];
         const settled = d - (c > owed ? c - owed : 0n);
         const share = settled < owed ? settled : owed;
         paid = owed > 0n && share > 0n ? roundHalfAwayFromZero(invoiceVat * share, owed) : 0n;
@@ -1096,6 +1099,7 @@ function buildPlan(
       ...depreciation.warnings,
       ...payroll.warnings.map((t) => signal('closing', t, '533')),
       ...vat.waiting,
+      ...statementWaiting(db, companyId, '', monthEnd(month)),
     ],
     fifo,
     depreciation,
