@@ -131,17 +131,19 @@ const warningTitle: Record<HomeView['warnings'][number]['kind'], string> = {
 function DvxBoth({ companyId, closedThrough }: { companyId: string; closedThrough: string }) {
   const [said, setSaid] = useState<SyncOutcome[]>([]);
   const [note, setNote] = useState('');
+  const [failure, setFailure] = useState('');
   const dvx = useDvxSync({ companyId, closedThrough, onDone: setSaid });
   async function start() {
     setSaid([]);
     setNote('');
+    setFailure('');
     try {
       if (!(await dvx.start(['purchase', 'sale'])))
         setNote(
           'DVX kabineti açıldı. Daxil olun (ASAN İmza, SİMA və ya PIN) — girişdən sonra hər iki qutu özü yenilənəcək.',
         );
     } catch (e) {
-      setNote((e as Error).message);
+      setFailure((e as Error).message);
     }
   }
   return (
@@ -175,7 +177,12 @@ function DvxBoth({ companyId, closedThrough }: { companyId: string; closedThroug
           {dvx.connected ? '● DVX: daxil olunub' : '○ DVX: daxil olunmayıb'}
         </span>
       </div>
-      {note && <Notice onClose={() => setNote('')}>{note}</Notice>}
+      {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
+      {note && (
+        <Notice kind="info" onClose={() => setNote('')}>
+          {note}
+        </Notice>
+      )}
       {said.map((r) => (
         <Notice
           key={r.direction}
