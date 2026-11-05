@@ -7,6 +7,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# A slower run of an older version must not publish after a newer one.
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   windows:
     runs-on: windows-latest

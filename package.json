@@ -9,7 +9,7 @@
   "type": "module",
   "main": "dist/node/src/main/main.js",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.16.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
