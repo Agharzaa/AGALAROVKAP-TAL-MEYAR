@@ -934,6 +934,54 @@ export function linkEq(tx: Tx, cmd: CommandOf<'eqaime.link'>): CommandResult {
   return { id: cmd.documentId };
 }
 
+/**
+ * A hand-typed invoice with the number of a confirmed e-qaimə already in the box: linked as the
+ * next import would link it (the import did not see the invoice).
+ */
+export function linkWaitingEq(
+  tx: Tx,
+  companyId: string,
+  invoiceId: string,
+  direction: Direction,
+  taxId: string,
+  eqKey: string,
+): void {
+  if (
+    tx.db.get(
+      'SELECT 1 FROM eq_documents WHERE company_id=? AND invoice_id=?',
+      companyId,
+      invoiceId,
+    )
+  )
+    return;
+  const doc = tx.db.get(
+    `SELECT * FROM eq_documents WHERE company_id=? AND direction=? AND tax_id=? AND eq_key=?
+       AND state='waiting' AND status='accepted' AND kind='main'`,
+    companyId,
+    direction,
+    taxId,
+    eqKey,
+  );
+  const inv = tx.db.get('SELECT * FROM invoices WHERE company_id=? AND id=?', companyId, invoiceId);
+  if (!doc || !inv) return;
+  // Other amounts or another document: left for the accountant, the box still says so.
+  if (check(tx, companyId, doc, inv, LINK_DAYS).text) return;
+  tx.db.run(
+    `UPDATE eq_documents SET state='posted', invoice_id=?, posted_by='link', auto_note='', resolved='',
+       version=version+1, updated_at=? WHERE id=?`,
+    invoiceId,
+    tx.clock.now(),
+    String(doc.id),
+  );
+  tx.audit(
+    companyId,
+    'E-qaimə qaiməyə bağlandı',
+    'E-qaimə',
+    String(doc.id),
+    `${String(doc.eq_number)} → ${String(inv.number)}`,
+  );
+}
+
 // ---------------------------------------------------------------------------------------------
 // Automatic booking
 

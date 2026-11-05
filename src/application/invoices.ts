@@ -40,7 +40,7 @@ import { checkSideValues } from './subkonto.js';
 import { depositPaid } from './money.js';
 import { VAT_PAYMENT_MEMO } from '../domain/bank.js';
 import { expectVersion, type Tx } from './tx.js';
-import { bindEq, releaseEq } from './eqaime-book.js';
+import { bindEq, linkWaitingEq, releaseEq } from './eqaime-book.js';
 
 export const INVOICE = 'invoice';
 type SaveInvoice = CommandOf<'invoice.save'>;
@@ -1022,6 +1022,9 @@ export function saveInvoice(
   );
   // A DVX e-qaimə booked by this invoice must match it (also on every later correction).
   const warning = bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);
+  // The e-qaimə came first (QERARLAR 2026-10-15 §13): the number links them, as an import would.
+  if (!cmd.eqDocumentId && eqKey)
+    linkWaitingEq(tx, cmd.companyId, id, cmd.direction, String(n.partner.tax_id), eqKey);
   return { id, version, number, ...(warning ? { warning } : {}) };
 }
 
