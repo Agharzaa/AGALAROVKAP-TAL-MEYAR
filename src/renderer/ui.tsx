@@ -390,7 +390,7 @@ export function DateInput({
   const [text, setText] = useState(isoToText(value));
   const picker = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (textToIso(text) !== value) setText(isoToText(value));
+    if ((textToIso(text) ?? '') !== value) setText(isoToText(value));
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const iso = textToIso(text);
   const invalid = (text.length === 10 && !iso) || (!!iso && !!min && iso < min);
@@ -409,9 +409,8 @@ export function DateInput({
         onChange={(e) => {
           const next = mask(e.target.value);
           setText(next);
-          const parsed = textToIso(next);
-          if (parsed) onChange(parsed);
-          else if (!next) onChange('');
+          // Not a date yet (or an impossible one): no value, never the old date behind the text.
+          onChange(textToIso(next) ?? '');
         }}
       />
       <button
