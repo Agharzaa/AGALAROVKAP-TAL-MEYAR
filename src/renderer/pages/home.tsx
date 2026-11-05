@@ -1,7 +1,7 @@
 import { CheckCircle2, ChevronRight, CircleAlert, Clock3, RefreshCw } from '../icons';
 import type { HomeView, IntegrityView, RecentDocument } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
-import { day, longDate, money, today } from '../format';
+import { day, longDate, money, qty, today } from '../format';
 import { useState } from 'react';
 import { api } from '../api';
 import { boxName, useDvxSync, type SyncOutcome } from '../dvx-sync';
@@ -472,7 +472,7 @@ export function HomePage({
                 <li className={integrity.ok ? 'ok' : 'bad'}>
                   {integrity.ok ? <CheckCircle2 size={15} /> : <CircleAlert size={15} />}
                   {integrity.ok
-                    ? `Jurnal tarazdır, registrlər jurnala uyğundur (${integrity.postings.toLocaleString('az-AZ')} yazılış)`
+                    ? `Jurnal tarazdır, registrlər jurnala uyğundur (${qty(String(integrity.postings))} yazılış)`
                     : integrity.problems.join(' ')}
                 </li>
                 <li className="ok">

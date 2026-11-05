@@ -2,6 +2,7 @@ import { RefreshCw } from './icons';
 import { useContext, type FormEvent, type ReactNode } from 'react';
 import { WindowContext, useWorkspace } from './workspace';
 import { useCatalog } from './catalog';
+import { qty } from './format';
 import { Notice, Status } from './ui';
 
 /**
@@ -60,7 +61,7 @@ export function ModuleFrame({
             <span className="sr-only">{title}</span>
             {count !== undefined && (
               <span className="count" title="Sətir sayı">
-                {count.toLocaleString('az-AZ')}
+                {qty(String(count))}
               </span>
             )}
           </h1>

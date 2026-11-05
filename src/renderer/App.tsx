@@ -48,7 +48,7 @@ import {
   type Section,
 } from './pages';
 import { Confirm, Field, Modal, Notice } from './ui';
-import { day } from './format';
+import { day, qty } from './format';
 import {
   WindowContext,
   WorkspaceProvider,
@@ -791,7 +791,7 @@ function Shell({
               ? 'Baza yoxlanılır…'
               : integrity.data
                 ? integrity.data.ok
-                  ? `Hazır · Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                  ? `Hazır · Baza yoxlanıldı: tarazdır (${qty(String(integrity.data.postings))} yazılış)`
                   : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
                 : 'Hazır'}
         </span>

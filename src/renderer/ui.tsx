@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { monthEnd } from '../domain/rates';
 import { CalendarDays, ChevronLeft, ChevronRight, ChevronUp, Inbox, Lock, X } from './icons';
-import { isNegative, isZero, monthTitle, money, shiftMonth } from './format';
+import { isNegative, isZero, monthTitle, money, qty, shiftMonth } from './format';
 
 export function Amount({ value, strong = false }: { value: string; strong?: boolean }) {
   const className = `amount${isZero(value) ? ' zero' : ''}${isNegative(value) ? ' negative' : ''}`;
@@ -241,7 +241,7 @@ export function DataTable<T>({
       </div>
       <div className="table-bottom">
         <span>
-          <b>{rows.length.toLocaleString('az-AZ')}</b> sətir
+          <b>{qty(String(rows.length))}</b> sətir
           {rows.length > size &&
             ` · ${current * size + 1}–${Math.min((current + 1) * size, rows.length)}`}
         </span>
