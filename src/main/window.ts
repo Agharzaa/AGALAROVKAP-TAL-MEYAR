@@ -370,10 +370,22 @@ export async function createMainWindow(options: WindowOptions): Promise<BrowserW
     if (ui.maximized ?? true) window.maximize();
     window.show();
   });
+  // A crashed page must not stay a blank window; what it had not saved is gone, it says so.
+  contents.on('render-process-gone', (_event, details) => {
+    if (details.reason === 'clean-exit') return;
+    dirty = false;
+    dialog.showErrorBox(
+      'Meyar',
+      'Pəncərə gözlənilmədən bağlandı və yenidən açılır. Saxlanmamış dəyişikliklər itə bilər; uçotdakı məlumat yerindədir.',
+    );
+    contents.reload();
+  });
+  // The page asks for the update state as it mounts: the handlers come before it.
+  let updates: ReturnType<typeof startUpdates> | undefined;
+  handle('meyar:update-state', () => updates?.current());
+  handle('meyar:update-install', () => updates?.install());
   await window.loadFile(options.rendererFile);
   // Updates from GitHub releases: checked at start and every 4 hours, installed on close.
-  const updates = startUpdates(window);
-  handle('meyar:update-state', () => updates.current());
-  handle('meyar:update-install', () => updates.install());
+  updates = startUpdates(window);
   return window;
 }
