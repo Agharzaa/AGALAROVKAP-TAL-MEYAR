@@ -938,9 +938,13 @@ function MdiWindow({
   useEffect(() => {
     const el = body.current;
     if (!active || !el || el.contains(document.activeElement) || dialogOpen()) return;
-    const first = el.querySelector<HTMLElement>(
-      'tr[tabindex="0"], :is(input, select, textarea):not([disabled], [readonly], [tabindex="-1"], [type="hidden"], [role="combobox"])',
-    );
+    // A list or a report: its rows, the keys work at once. A form: its first plain field (a
+    // picker opens on focus, so it waits to be chosen).
+    const first =
+      el.querySelector<HTMLElement>('tr[tabindex="0"], .table-scroll[tabindex="0"]') ??
+      el.querySelector<HTMLElement>(
+        ':is(input, select, textarea):not([disabled], [readonly], [tabindex="-1"], [type="hidden"], [role="combobox"])',
+      );
     (first ?? el).focus({ preventScroll: true });
   }, [active]);
   const drag = (mode: DragMode) => (e: ReactPointerEvent) => {
