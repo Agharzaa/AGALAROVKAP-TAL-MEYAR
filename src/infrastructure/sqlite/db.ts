@@ -79,8 +79,11 @@ export class Db {
       this.raw.exec(`RELEASE ${name}`);
       return result;
     } catch (error) {
-      this.raw.exec(`ROLLBACK TO ${name}`);
-      this.raw.exec(`RELEASE ${name}`);
+      // SQLite itself may have rolled the whole transaction back (a full disk).
+      if (this.raw.isTransaction) {
+        this.raw.exec(`ROLLBACK TO ${name}`);
+        this.raw.exec(`RELEASE ${name}`);
+      }
       throw translate(error);
     }
   }
@@ -94,7 +97,7 @@ export class Db {
       this.raw.exec('COMMIT');
       return result;
     } catch (error) {
-      this.raw.exec('ROLLBACK');
+      if (this.raw.isTransaction) this.raw.exec('ROLLBACK');
       throw translate(error);
     } finally {
       this.depth--;

@@ -39,6 +39,14 @@ function fail(error: unknown): Outcome<never> {
       },
     };
   console.error(error);
+  if (/disk is full|database or disk is full/i.test(String(error)))
+    return {
+      ok: false,
+      error: {
+        message: 'Diskdə yer qalmayıb. Məlumat dəyişdirilmədi; yer açıb yenidən yoxlayın.',
+        code: 'internal',
+      },
+    };
   return {
     ok: false,
     error: {
