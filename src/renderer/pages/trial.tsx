@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { FileDown } from '../icons';
 import type { TrialBalance, TrialRow } from '../../contracts/queries';
 import { api } from '../api';
@@ -177,13 +177,24 @@ export function TrialPage() {
       })),
     [catalog],
   );
+  const sheet = useRef<HTMLDivElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    sheet.current?.querySelector('tr.selected')?.scrollIntoView?.({ block: 'nearest' });
+  }, [selected]);
   const onKey = (e: KeyboardEvent) => {
+    // Enter on ⊞ is that button's own: it opens its row, not the card of the selected one.
+    if (e.key === 'Enter' && (e.target as HTMLElement).closest('button')) return;
     const r = rows[selected];
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      moved.current = true;
       setSelected((s) => Math.min(s + 1, rows.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      moved.current = true;
       setSelected((s) => Math.max(s - 1, 0));
     } else if (e.key === 'ArrowRight' && r?.expandable && !r.expanded) {
       e.preventDefault();
@@ -353,6 +364,7 @@ export function TrialPage() {
       }
     >
       <div
+        ref={sheet}
         className="table-scroll"
         tabIndex={0}
         onKeyDown={onKey}
@@ -402,6 +414,7 @@ export function TrialPage() {
                 key={r.key}
                 className={`lvl${Math.min(r.level, 4)} ${r.kind} ${tier(r)}${i === selected ? ' selected' : ''}`}
                 onClick={() => setSelected(i)}
+                onFocus={() => setSelected(i)}
                 onDoubleClick={() => openCard(r)}
               >
                 <td className="gut">

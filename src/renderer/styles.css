@@ -1906,6 +1906,13 @@ td.trial-name {
   font-size: 13px;
   line-height: 18px;
 }
+/* Row 2 of the sticky header sits right under row 1; a row walked to by ↓ clears both. */
+.trial.onec thead tr:nth-child(2) th {
+  top: 24px;
+}
+.trial.onec tbody tr {
+  scroll-margin: 52px 0 34px;
+}
 .trial.onec .trial-code {
   width: 1%;
   min-width: 64px;
