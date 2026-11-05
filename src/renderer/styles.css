@@ -2766,7 +2766,9 @@ button.step:active {
   box-shadow: var(--shadow-dialog);
   color: var(--ink);
   background: var(--paper);
-  overflow: hidden;
+  /* Taller than the screen (768 px): it scrolls, "Saxla" stays reachable. */
+  max-height: calc(100vh - 32px);
+  overflow: hidden auto;
 }
 .modal.small {
   width: min(460px, calc(100vw - 32px));
