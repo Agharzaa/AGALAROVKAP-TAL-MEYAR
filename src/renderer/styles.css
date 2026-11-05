@@ -1348,6 +1348,9 @@ kbd {
   background: var(--bad);
   color: var(--on-strong) !important;
 }
+.mdi-body:focus {
+  outline: none;
+}
 .mdi-body {
   flex: 1;
   min-height: 0;

@@ -875,7 +875,11 @@ function Desktop({ children }: { children: ReactNode }) {
   }, []);
   return (
     <main className="workspace mdi" ref={ref}>
-      <div className="desktop" aria-hidden={ws.activeId !== 'home' || undefined}>
+      <div
+        className="desktop"
+        aria-hidden={ws.activeId !== 'home' || undefined}
+        inert={layout.layout[ws.activeId]?.state === 'maximized'}
+      >
         {children}
       </div>
       {ws.windows.map((w) => {
@@ -924,6 +928,18 @@ function MdiWindow({
   const g = live ?? clamp(l.geom, bounds);
   const max = l.state === 'maximized';
   const title = viewTitle(win.view, win.label);
+  // The keyboard works where the eye is: a window gets the focus when it comes forward, one
+  // hidden under a maximized window cannot be tabbed into, and tabbing into another brings it up.
+  const covered = !active && layout.layout[ws.activeId]?.state === 'maximized';
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = body.current;
+    if (!active || !el || el.contains(document.activeElement) || dialogOpen()) return;
+    const first = el.querySelector<HTMLElement>(
+      'tr[tabindex="0"], :is(input, select, textarea):not([disabled], [readonly], [tabindex="-1"], [type="hidden"], [role="combobox"])',
+    );
+    (first ?? el).focus({ preventScroll: true });
+  }, [active]);
   const drag = (mode: DragMode) => (e: ReactPointerEvent) => {
     if (e.button !== 0 || max) return;
     e.preventDefault();
@@ -966,6 +982,10 @@ function MdiWindow({
       aria-label={title}
       className={`mdi-window${active ? ' active' : ''}${max ? ' maximized' : ''}`}
       hidden={l.state === 'minimized'}
+      inert={covered}
+      onFocusCapture={() => {
+        if (!active) ws.focus(win.id);
+      }}
       style={max ? { zIndex: z } : { left: g.x, top: g.y, width: g.w, height: g.h, zIndex: z }}
       onPointerDownCapture={() => {
         if (!active) ws.focus(win.id);
@@ -1008,7 +1028,7 @@ function MdiWindow({
           </button>
         </span>
       </div>
-      <div className="mdi-body">
+      <div className="mdi-body" ref={body} tabIndex={-1}>
         <WindowBody win={win} />
       </div>
       {!max && (
