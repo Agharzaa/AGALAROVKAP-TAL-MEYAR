@@ -101,7 +101,7 @@ export function VatOffsetPage() {
     change([...lines, { invoiceId, amount: toField(amount) }]);
     setAdding('');
   }
-  async function save() {
+  async function save(close = false) {
     if (readOnly || m.busy || (v?.posted && !dirty)) return;
     setMessage('');
     const r = await m.run({
@@ -113,6 +113,11 @@ export function VatOffsetPage() {
     });
     if (r) {
       setDirty(false);
+      if (close) {
+        ws.setDirty(win.id, false);
+        ws.discard(win.id);
+        return;
+      }
       setMessage(`${r.number} uçota alındı (versiya ${r.version}).`);
       view.reload();
     }
@@ -120,10 +125,13 @@ export function VatOffsetPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (ws.activeId !== win.id || dialogOpen()) return;
-      // As in every document form: Ctrl+S and Ctrl+Enter post the document.
-      if (e.ctrlKey && (e.key.toLowerCase() === 's' || e.key === 'Enter')) {
+      // As in every document form: Ctrl+S posts the document, Ctrl+Enter posts and closes.
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void save();
+      } else if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        void save(true);
       }
     };
     window.addEventListener('keydown', onKey);
