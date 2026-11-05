@@ -585,6 +585,7 @@ test('audit: a failed read of the e-qaimə mappings is not shown as "no mappings
     const user = await start();
     await openItem(user, 'E-qaimə uyğunluqları');
     await within(pane()).findByText('Baza oxunmadı', {}, { timeout: 500 });
+    assert.ok(!within(pane()).queryByText('Hələ uyğunluq yoxdur'), 'a false empty state');
   } finally {
     h.close();
   }
@@ -598,6 +599,7 @@ test('audit: a failed read of the statement list is not shown as "no statement y
     const user = await start();
     await openItem(user, 'Bank çıxarışları');
     await within(pane()).findByText('Baza oxunmadı', {}, { timeout: 500 });
+    assert.ok(!within(pane()).queryByText('Hələ çıxarış yüklənməyib'), 'a false empty state');
   } finally {
     h.close();
   }
@@ -685,6 +687,99 @@ test('audit: in the card tree a document that cannot be opened is not a dead lin
       document.querySelectorAll('.mdi-window').length > before,
       `"${links[0]!.textContent}" looks like a link and does nothing on click`,
     );
+  } finally {
+    h.close();
+  }
+});
+
+test('audit: tour 2: an account without analytics lists its documents at the root of the card', async () => {
+  const h = harness();
+  const s = seed(h);
+  const catalog = h.ledger.query({ type: 'catalog', companyId: s.companyId }) as {
+    accounts: { code: string; subkonto: unknown[] }[];
+  };
+  const plain = catalog.accounts.filter(
+    (a) => !a.subkonto.length && !catalog.accounts.some((b) => b.code.startsWith(`${a.code}.`)),
+  );
+  const [dt, kt] = plain;
+  assert.ok(dt && kt, 'the chart has two plain accounts');
+  h.run({
+    type: 'operation.save',
+    companyId: s.companyId,
+    number: '',
+    date: `${thisMonth()}-03`,
+    memo: 'Kök',
+    lines: [{ dtAccount: dt.code, dtSk: [], ktAccount: kt.code, ktSk: [], amount: '25', memo: '' }],
+  });
+  try {
+    const user = await start();
+    await openCardBySearch(user, dt.code);
+    const link = await within(pane()).findByRole('button', { name: /Əməliyyat/ });
+    assert.ok(link.closest('tr.move'), 'the document is not a row of the tree');
+    assert.match(link.closest('tr')!.textContent ?? '', /25,00/);
+    const before = document.querySelectorAll('.mdi-window').length;
+    await user.click(link);
+    await settle();
+    assert.equal(document.querySelectorAll('.mdi-window').length, before + 1);
+  } finally {
+    h.close();
+  }
+});
+
+test('audit: tour 2: a card link of a month document opens that document’s month', async () => {
+  const h = harness();
+  const s = seed(h);
+  const invoice = purchase(h, s);
+  h.run({
+    type: 'vatOffset.save',
+    companyId: s.companyId,
+    month: thisMonth(),
+    lines: [{ invoiceId: invoice.id, amount: '180.00' }],
+  });
+  try {
+    const user = await start();
+    await openCardBySearch(user, '241');
+    for (let i = 0; i < 6; i++) {
+      const closed = within(pane()).queryAllByRole('button', { name: /^Aç: / });
+      if (!closed.length) break;
+      await user.click(closed[0]!);
+    }
+    const link = [...pane().querySelectorAll<HTMLButtonElement>('tr.move button.link')].find((b) =>
+      /ƏƏ-/.test(b.textContent ?? ''),
+    )!;
+    await user.click(link);
+    await within(pane()).findByText(/ƏƏ-/);
+    assert.ok(pane().getAttribute('aria-label')?.includes('ƏDV əvəzləşdirilməsi'));
+  } finally {
+    h.close();
+  }
+});
+
+test('audit: tour 2: the trial balance opens with the focus on its sheet: ↓ works at once', async () => {
+  const h = harness();
+  const s = seed(h);
+  purchase(h, s);
+  try {
+    const user = await start();
+    await openItem(user, 'Dövriyyə balansı');
+    assert.ok(
+      document.activeElement?.classList.contains('table-scroll'),
+      `focus is on <${document.activeElement?.tagName}>`,
+    );
+  } finally {
+    h.close();
+  }
+});
+
+test('audit: tour 2: "DVX kabineti açıldı" on the desk is information, not a red error', async () => {
+  const h = harness();
+  seed(h);
+  try {
+    const user = await start();
+    const desk = within(document.querySelector('.dvx-desk') as HTMLElement);
+    await user.click(desk.getByRole('button', { name: /DVX-dən yenilə/ }));
+    const note = await desk.findByText(/DVX kabineti açıldı/);
+    assert.equal(note.closest('.notice')?.getAttribute('role'), 'status');
   } finally {
     h.close();
   }

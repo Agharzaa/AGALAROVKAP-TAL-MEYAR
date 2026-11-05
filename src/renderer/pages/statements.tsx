@@ -474,7 +474,7 @@ export function StatementsPage() {
         </section>
       )}
       {!s && !preview ? (
-        <Empty title="Hələ çıxarış yüklənməyib">
+        <Empty title={imports.error ? 'Siyahı oxunmadı' : 'Hələ çıxarış yüklənməyib'}>
           <p className="doc-hint">
             Bankın internet-bankçılığından çıxarışı Excel (.xlsx) və ya CSV kimi endirin. Köhnə .xls
             faylını Excel-də “.xlsx” kimi yenidən saxlayın.
