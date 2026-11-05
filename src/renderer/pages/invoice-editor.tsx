@@ -14,7 +14,7 @@ import type { Catalog, EqDocumentDetail, InvoiceDetail } from '../../contracts/q
 import { useCatalog } from '../catalog';
 import { rateHint, useAutoRate } from '../rates';
 import { ModuleFrame } from '../frame';
-import { day, money, toField } from '../format';
+import { day, money, stamp, toField } from '../format';
 import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { accountOptions, Picker, subkontoOptions, type Option } from '../picker';
@@ -876,7 +876,7 @@ export function InvoiceEditor({
               {doc.history.map((h) => (
                 <li key={`${h.version}${h.status}`}>
                   v{h.version} · {h.status === 'posted' ? 'uçota alındı' : 'ləğv edildi'} ·{' '}
-                  {day(h.at.slice(0, 10))} {h.at.slice(11, 16)} · {h.actor}
+                  {stamp(h.at)} · {h.actor}
                 </li>
               ))}
             </ul>

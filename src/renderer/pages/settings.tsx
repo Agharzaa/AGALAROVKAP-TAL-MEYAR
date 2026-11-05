@@ -5,7 +5,7 @@ import { api, applyTheme, type Theme } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { SearchField, matches } from '../filters';
-import { day } from '../format';
+import { day, stamp } from '../format';
 import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { DateInput, Field, Notice } from '../ui';
@@ -264,13 +264,7 @@ export function AuditPage() {
           <tbody>
             {rows.map((a) => (
               <tr key={a.seq}>
-                <td>
-                  {day(a.at.slice(0, 10))}{' '}
-                  {new Date(a.at).toLocaleTimeString('az-AZ', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </td>
+                <td>{stamp(a.at)}</td>
                 <td>{a.actor}</td>
                 <td>{a.action}</td>
                 <td>{a.entity}</td>

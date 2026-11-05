@@ -5,7 +5,7 @@ import type { ContractView, PartnerView } from '../../contracts/queries';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
 import { SearchField, matches } from '../filters';
-import { day } from '../format';
+import { day, today } from '../format';
 import { useMutation } from '../hooks';
 import { pages } from '../pages';
 import { DateInput, Field, Modal, Notice } from '../ui';
@@ -131,7 +131,7 @@ function ContractDialog({
 }) {
   const win = useWindow();
   const [number, setNumber] = useState(contract?.number ?? '');
-  const [date, setDate] = useState(contract?.date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(contract?.date ?? today());
   const [kind, setKind] = useState<ContractView['kind']>(contract?.kind ?? 'sale');
   const [currency, setCurrency] = useState(contract?.currency ?? 'AZN');
   const [note, setNote] = useState(contract?.note ?? '');

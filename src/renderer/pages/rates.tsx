@@ -165,7 +165,7 @@ export function RatesPage() {
                   <td className="num">{toField(r.rate)}</td>
                   <td>{r.source === 'amb' ? 'AMB' : 'əl ilə'}</td>
                   <td>
-                    {r.actor} · {day(r.loadedAt.slice(0, 10))}
+                    {r.actor} · {stamp(r.loadedAt).slice(0, 10)}
                   </td>
                 </tr>
               ))}

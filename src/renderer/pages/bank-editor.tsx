@@ -15,7 +15,7 @@ import type {
 import { formFromDraft, RuleDialog } from './rules';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { day, money, toField } from '../format';
+import { day, money, stamp, toField } from '../format';
 import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import {
@@ -615,7 +615,7 @@ export function BankEditor({
               {doc.history.map((h) => (
                 <li key={`${h.version}${h.status}`}>
                   v{h.version} · {h.status === 'posted' ? 'uçota alındı' : 'ləğv edildi'} ·{' '}
-                  {day(h.at.slice(0, 10))} {h.at.slice(11, 16)} · {h.actor}
+                  {stamp(h.at)} · {h.actor}
                 </li>
               ))}
             </ul>

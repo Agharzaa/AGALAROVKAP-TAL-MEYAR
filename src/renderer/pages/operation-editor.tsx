@@ -10,7 +10,7 @@ import {
 } from '../entry-grid';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
-import { day } from '../format';
+import { stamp } from '../format';
 import { dialogOpen, useMutation, useQuery } from '../hooks';
 import { viewTitle } from '../pages';
 import { Confirm, DateInput, Field, Notice, PostingRule } from '../ui';
@@ -240,7 +240,7 @@ export function OperationEditor({ id }: { id?: string }) {
               {doc.history.map((h) => (
                 <li key={`${h.version}${h.status}`}>
                   v{h.version} · {h.status === 'posted' ? 'uçota alındı' : 'ləğv edildi'} ·{' '}
-                  {day(h.at.slice(0, 10))} {h.at.slice(11, 16)} · {h.actor}
+                  {stamp(h.at)} · {h.actor}
                 </li>
               ))}
             </ul>
