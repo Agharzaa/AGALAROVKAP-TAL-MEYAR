@@ -14,7 +14,7 @@ import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Picker } from '../picker';
 import { Confirm, Empty, Field, Notice } from '../ui';
-import { useWindow, useWorkspace } from '../workspace';
+import { usePeriod, useWindow, useWorkspace } from '../workspace';
 
 interface Line {
   invoiceId: string;
@@ -35,7 +35,7 @@ const fromView = (lines: readonly VatOffsetLineView[]): Line[] =>
 export function VatOffsetPage() {
   const win = useWindow();
   const ws = useWorkspace();
-  const [month, setMonth] = useState(ws.period.from.slice(0, 7));
+  const [month, setMonth] = useState(usePeriod().from.slice(0, 7));
   const valid = /^\d{4}-\d{2}$/.test(month);
   const view = useQuery<VatOffsetView>(
     valid ? { type: 'vatOffset', companyId: win.companyId, month } : null,

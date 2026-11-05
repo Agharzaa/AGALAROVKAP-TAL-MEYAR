@@ -17,7 +17,7 @@ import { useMutation, useQuery } from '../hooks';
 import { pages } from '../pages';
 import { loadAmb } from '../rates';
 import { Amount, Confirm, DateInput, Empty, Field, Modal, Notice } from '../ui';
-import { useWindow, useWorkspace } from '../workspace';
+import { usePeriod, useWindow, useWorkspace } from '../workspace';
 
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
 const shift = (iso: string, days: number) => {
@@ -288,8 +288,7 @@ function Lines({ lines }: { lines: RevaluationLine[] }) {
 
 export function RevaluationPage() {
   const win = useWindow();
-  const ws = useWorkspace();
-  const [month, setMonth] = useState(ws.period.from.slice(0, 7));
+  const [month, setMonth] = useState(usePeriod().from.slice(0, 7));
   const valid = /^\d{4}-\d{2}$/.test(month);
   const view = useQuery<RevaluationView>(
     valid ? { type: 'revaluation', companyId: win.companyId, month } : null,

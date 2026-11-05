@@ -173,7 +173,9 @@ export function ClosingPage() {
   useEffect(() => {
     if (opened.current || !next.data) return;
     opened.current = true;
-    setMonth(next.data.month || ws.period.from.slice(0, 7));
+    // Opened for a document of a month (the account card): that month.
+    const asked = win.view.type === 'page' ? win.view.period?.from.slice(0, 7) : '';
+    setMonth(asked || next.data.month || ws.period.from.slice(0, 7));
   }, [next.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const valid = /^\d{4}-\d{2}$/.test(month);
   const view = useQuery<ClosingView>(

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileDown } from '../icons';
-import type { AccountCard } from '../../contracts/queries';
+import type { AccountCard, AssetDocumentDetail } from '../../contracts/queries';
 import { api } from '../api';
 import { useCatalog } from '../catalog';
 import { ModuleFrame } from '../frame';
@@ -10,7 +10,7 @@ import { useQuery } from '../hooks';
 import { pages } from '../pages';
 import { Picker, subkontoOptions } from '../picker';
 import { Notice } from '../ui';
-import { useWindow, useWorkspace } from '../workspace';
+import { monthOf, useWindow, useWorkspace, type Page } from '../workspace';
 import { workbook } from '../xlsx';
 import { subkontoLabel } from '../../domain/chart';
 
@@ -21,9 +21,19 @@ export function CardPage({
 }) {
   const win = useWindow();
   const ws = useWorkspace();
-  const openSource = (
-    l: Pick<AccountCard['lines'][number], 'sourceType' | 'sourceId' | 'direction'>,
-  ) => {
+  const openSource = (l: Source) => {
+    const page = monthPages[l.sourceType];
+    if (page) ws.open({ type: 'page', page, period: monthOf(l.date) }, win.companyId);
+    if (l.sourceType === 'payroll') ws.open({ type: 'payroll', id: l.sourceId }, win.companyId);
+    if (l.sourceType === 'asset')
+      void api
+        .query<AssetDocumentDetail>({
+          type: 'assetDocument',
+          companyId: win.companyId,
+          id: l.sourceId,
+        })
+        .then((d) => ws.open({ type: 'asset', kind: d.kind, id: l.sourceId }, win.companyId))
+        .catch((e: Error) => setFailure(e.message));
     if (l.sourceType === 'operation') ws.open({ type: 'operation', id: l.sourceId }, win.companyId);
     if (l.sourceType === 'invoice' && (l.direction === 'sale' || l.direction === 'purchase'))
       ws.open({ type: 'invoice', direction: l.direction, id: l.sourceId }, win.companyId);
@@ -40,6 +50,7 @@ export function CardPage({
   const [account, setAccount] = useState(initial?.account ?? '');
   const [sk, setSk] = useState<string[]>(initial?.sk ?? []);
   const [msg, setMsg] = useState('');
+  const [failure, setFailure] = useState('');
   // The card by levels (05.11.2026): partner, contract, invoice, documents; ⊞ / ⊟ open a level.
   // "Müxabir hesablarla" shows every posting with its accounts instead.
   const [postings, setPostings] = useState(false);
@@ -64,11 +75,12 @@ export function CardPage({
   const exportXlsx = async () => {
     if (!c) return;
     const bytes = postings ? detailedBook(c) : treeBook(c);
+    setFailure('');
     try {
       const file = await api.saveFile(`Hesab kartı ${c.account}.xlsx`, bytes);
       if (file) setMsg(`Saxlanıldı: ${file}`);
     } catch (e) {
-      setMsg((e as Error).message);
+      setFailure((e as Error).message);
     }
   };
   const treeBook = (c: AccountCard) =>
@@ -256,6 +268,7 @@ export function CardPage({
       notices={
         <>
           {card.error && <Notice>{card.error}</Notice>}
+          {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
           {msg && (
             <Notice kind="success" onClose={() => setMsg('')}>
               {msg}
@@ -338,7 +351,7 @@ export function CardPage({
                   >
                     <td>{day(l.date)}</td>
                     <td className="doc">
-                      {['operation', 'invoice', 'bank', 'cash'].includes(l.sourceType) ? (
+                      {openable(l.sourceType) ? (
                         <button type="button" className="link" onClick={() => openSource(l)}>
                           {l.document}
                         </button>
@@ -371,6 +384,13 @@ export function CardPage({
                     <td className="num">{amount(l.balance)}</td>
                   </tr>
                 ))}
+                {!c.lines.length && (
+                  <tr>
+                    <td colSpan={10} className="panel-empty">
+                      {NO_MOVES}
+                    </td>
+                  </tr>
+                )}
                 <tr className="turnover">
                   <td colSpan={5}>Dövr üzrə dövriyyə</td>
                   <td className="num">{money(c.turnDt)}</td>
@@ -395,7 +415,19 @@ export function CardPage({
 
 const sideOf = (v: string) => (!v || v === '0.00' ? '' : v.startsWith('-') ? 'K' : 'D');
 const amountOf = (v: string) => (!v || v === '0.00' ? '0,00' : money(v.replace('-', '')));
-type Source = Pick<AccountCard['lines'][number], 'sourceType' | 'sourceId' | 'direction'>;
+type Source = Pick<AccountCard['lines'][number], 'sourceType' | 'sourceId' | 'direction' | 'date'>;
+/** Month documents open on their own page, at their month. */
+const monthPages: Record<string, Page | undefined> = {
+  vatOffset: 'vatOffset',
+  closing: 'closing',
+  revaluation: 'revaluation',
+};
+/** What openSource can show: anything else is plain text, never a link that does nothing. */
+const openable = (type: string) =>
+  ['operation', 'invoice', 'bank', 'cash', 'payroll', 'asset', ...Object.keys(monthPages)].includes(
+    type,
+  );
+const NO_MOVES = 'Bu dövrdə qalıq və hərəkət yoxdur.';
 
 /** The card by levels: each row a level of analytics with its saldo, the last level documents. */
 function CardTree({
@@ -420,7 +452,7 @@ function CardTree({
     <table className="grid card onec tree">
       <thead>
         <tr>
-          <th scope="col">Kontragent / müqavilə / sənəd</th>
+          <th scope="col">Analitika / sənəd</th>
           <th scope="colgroup" colSpan={2}>
             Əvvələ saldo
           </th>
@@ -445,6 +477,7 @@ function CardTree({
                     type="button"
                     className="gut-mark"
                     aria-label={`${open.has(n.key) ? 'Bağla' : 'Aç'}: ${n.label}`}
+                    aria-expanded={open.has(n.key)}
                     onClick={() => toggle(n.key)}
                   >
                     {open.has(n.key) ? '⊟' : '⊞'}
@@ -464,19 +497,25 @@ function CardTree({
           ) : (
             <tr key={n.key} className="move">
               <td style={{ paddingLeft: `${24 + n.level * 18}px` }}>
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() =>
-                    onOpen({
-                      sourceType: n.sourceType ?? '',
-                      sourceId: n.sourceId ?? '',
-                      direction: n.direction ?? '',
-                    })
-                  }
-                >
-                  {n.label}
-                </button>
+                {openable(n.sourceType ?? '') ? (
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() =>
+                      onOpen({
+                        sourceType: n.sourceType ?? '',
+                        sourceId: n.sourceId ?? '',
+                        direction: n.direction ?? '',
+                        // The label starts with the document's day: "30.11.2026 · …".
+                        date: n.label.slice(0, 10).split('.').reverse().join('-'),
+                      })
+                    }
+                  >
+                    {n.label}
+                  </button>
+                ) : (
+                  n.label
+                )}
               </td>
               <td />
               <td />
@@ -486,6 +525,13 @@ function CardTree({
               <td />
             </tr>
           ),
+        )}
+        {!c.tree.length && (
+          <tr>
+            <td colSpan={7} className="panel-empty">
+              {NO_MOVES}
+            </td>
+          </tr>
         )}
         <tr className="closing">
           <td>Cəmi</td>
