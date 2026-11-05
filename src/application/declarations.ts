@@ -7,7 +7,7 @@
  */
 import { DomainError } from '../domain/errors.js';
 import { formatMinor, parseMoney, type Minor } from '../domain/money.js';
-import { monthEnd } from '../domain/rates.js';
+import { monthEnd, monthTitle } from '../domain/rates.js';
 import type {
   DeclarationKind,
   DeclarationRow,
@@ -353,7 +353,7 @@ export function vatReturn(db: Db, companyId: string, monthInput: string): Declar
     period: month,
     from,
     to,
-    title: `ƏDV bəyannaməsi üçün rəqəmlər · ${month}`,
+    title: `ƏDV bəyannaməsi üçün rəqəmlər · ${monthTitle(month)}`,
     sections: [sales, vatSection, ledger],
     checks,
     appendices,
@@ -435,7 +435,7 @@ export function payrollReturn(db: Db, companyId: string, period: string): Declar
       month,
     );
     if (!lines.length) {
-      checks.push({ kind: 'info', text: `${month}: uçotda əmək haqqı sənədi yoxdur.` });
+      checks.push({ kind: 'info', text: `${monthTitle(month)}: uçotda əmək haqqı sənədi yoxdur.` });
       return;
     }
     const t = per[i]!;

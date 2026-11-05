@@ -63,6 +63,27 @@ export function parseAmbXml(xml: string): AmbFile {
 }
 
 /** Last day of a "YYYY-MM" month, ISO. */
+const MONTH_NAMES = [
+  'Yanvar',
+  'Fevral',
+  'Mart',
+  'Aprel',
+  'May',
+  'İyun',
+  'İyul',
+  'Avqust',
+  'Sentyabr',
+  'Oktyabr',
+  'Noyabr',
+  'Dekabr',
+];
+/** "2026-10" → "Oktyabr 2026", whatever the Windows language. */
+export function monthTitle(ym: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  const name = m && MONTH_NAMES[Number(m[2]) - 1];
+  return name ? `${name} ${m[1]}` : ym;
+}
+
 export function monthEnd(month: string): string {
   const [y, m] = month.split('-').map(Number) as [number, number];
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();

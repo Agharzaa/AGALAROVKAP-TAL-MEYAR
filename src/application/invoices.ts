@@ -1018,7 +1018,7 @@ export function saveInvoice(
     existing ? 'Düzəliş edildi (storno + yeni yazılış)' : 'Uçota alındı',
     label[cmd.direction],
     id,
-    `${number} · ${n.header.date} · ${String(n.partner.name)} · ${money(n.totals.total)} ${n.currency}`,
+    `${number} · ${n.header.date.split('-').reverse().join('.')} · ${String(n.partner.name)} · ${money(n.totals.total)} ${n.currency}`,
   );
   // A DVX e-qaimə booked by this invoice must match it (also on every later correction).
   const warning = bindEq(tx, cmd.companyId, id, cmd.eqDocumentId, eq.postedBy, eq.usedMaps);

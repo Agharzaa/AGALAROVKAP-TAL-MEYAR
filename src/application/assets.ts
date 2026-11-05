@@ -672,7 +672,7 @@ export function saveAssetDocument(tx: Tx, cmd: CommandOf<'asset.save'>): Command
     existing ? 'Düzəliş edildi (storno + yeni yazılış)' : 'Uçota alındı',
     label[kind],
     id,
-    `${number} · ${date} · ${lines.length} əsas vəsait · ${formatMinor(total)} AZN`,
+    `${number} · ${dmy(date)} · ${lines.length} əsas vəsait · ${formatMinor(total)} AZN`,
   );
   return { id, version, number };
 }

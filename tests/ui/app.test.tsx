@@ -3351,7 +3351,7 @@ test('stage 9b: the muzdlu iş return opens on the quarter, by months; another q
         .map((c) => c.textContent),
       ['24,00', '0,00', '0,00', '24,00', '521.03'],
     );
-    report.getByText(/2026-05: uçotda əmək haqqı sənədi yoxdur/);
+    report.getByText(/May 2026: uçotda əmək haqqı sənədi yoxdur/);
     report.getByRole('cell', { name: '5AAA111' });
   } finally {
     h.close();

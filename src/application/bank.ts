@@ -267,7 +267,7 @@ export function saveBankDocument(tx: Tx, cmd: SaveBank): CommandResult {
     existing ? 'Düzəliş edildi (storno + yeni yazılış)' : 'Uçota alındı',
     label[cmd.direction],
     id,
-    `${number} · ${n.header.date} · ${String(n.bank.name) || String(n.bank.iban)} · ${money(n.total)} ${n.currency}`,
+    `${number} · ${n.header.date.split('-').reverse().join('.')} · ${String(n.bank.name) || String(n.bank.iban)} · ${money(n.total)} ${n.currency}`,
   );
   return { id, version, number, ...(advanceNote ? { warning: advanceNote } : {}) };
 }

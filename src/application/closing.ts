@@ -31,7 +31,7 @@ import { fifoRemainder, type StockLayer } from '../domain/invoice.js';
 import { displayMinor, formatMinor, roundHalfAwayFromZero, type Minor } from '../domain/money.js';
 import { checkPostings, storno, type Posting } from '../domain/posting.js';
 import { formatQty } from '../domain/quantity.js';
-import { monthEnd } from '../domain/rates.js';
+import { monthEnd, monthTitle } from '../domain/rates.js';
 import type { CommandOf, CommandResult } from '../contracts/commands.js';
 import type {
   ClosingPosting,
@@ -967,7 +967,10 @@ function order(db: Db, companyId: string, month: string, today: string): Signal[
   const out: Signal[] = [];
   if (date >= today)
     out.push(
-      signal('closing', `Ay hələ bitməyib: ${month} ${dmy(nextDay(date))} tarixindən bağlanır.`),
+      signal(
+        'closing',
+        `Ay hələ bitməyib: ${monthTitle(month)} ${dmy(nextDay(date))} tarixindən bağlanır.`,
+      ),
     );
   if (closed >= date)
     out.push(

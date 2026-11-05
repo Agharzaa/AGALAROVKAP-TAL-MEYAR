@@ -294,7 +294,7 @@ export function saveCashDocument(tx: Tx, cmd: SaveCash): CommandResult {
     existing ? 'Düzəliş edildi (storno + yeni yazılış)' : 'Uçota alındı',
     cashLabel[cmd.direction],
     id,
-    `${number} · ${n.header.date} · ${String(n.box.name)} · ${money(n.total)} ${n.header.currency}`,
+    `${number} · ${dmy(n.header.date)} · ${String(n.box.name)} · ${money(n.total)} ${n.header.currency}`,
   );
   return { id, version, number, ...(advanceNote ? { warning: advanceNote } : {}) };
 }
