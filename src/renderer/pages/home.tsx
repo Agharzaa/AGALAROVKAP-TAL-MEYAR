@@ -210,10 +210,12 @@ const viewOf = (d: RecentDocument): View => {
 export function HomePage({
   integrity,
   integrityLoading,
+  integrityError,
   onRecheck,
 }: {
   integrity: IntegrityView | undefined;
   integrityLoading: boolean;
+  integrityError: string;
   onRecheck: () => void;
 }) {
   const ws = useWorkspace();
@@ -464,6 +466,7 @@ export function HomePage({
               </button>
             </header>
             {integrityLoading && !integrity && <p className="panel-empty">Baza yoxlanılır…</p>}
+            {integrityError && <Notice>{integrityError}</Notice>}
             {integrity && (
               <ul className="checks">
                 <li className={integrity.ok ? 'ok' : 'bad'}>

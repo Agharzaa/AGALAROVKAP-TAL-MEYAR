@@ -777,20 +777,23 @@ function Shell({
           <HomePage
             integrity={integrity.data}
             integrityLoading={integrity.loading}
+            integrityError={integrity.error}
             onRecheck={integrity.reload}
           />
         </Desktop>
       </div>
       <WindowBar />
       <footer className="statusbar">
-        <span className={integrity.data && !integrity.data.ok ? 'bad' : ''}>
-          {integrity.loading && !integrity.data
-            ? 'Baza yoxlanılır…'
-            : integrity.data
-              ? integrity.data.ok
-                ? `Hazır · Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
-                : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
-              : 'Hazır'}
+        <span className={integrity.error || (integrity.data && !integrity.data.ok) ? 'bad' : ''}>
+          {integrity.error
+            ? `Baza yoxlanılmadı: ${integrity.error}`
+            : integrity.loading && !integrity.data
+              ? 'Baza yoxlanılır…'
+              : integrity.data
+                ? integrity.data.ok
+                  ? `Hazır · Baza yoxlanıldı: tarazdır (${integrity.data.postings.toLocaleString('az-AZ')} yazılış)`
+                  : 'Bazada uyğunsuzluq var — Başlanğıc səhifəsinə baxın'
+                : 'Hazır'}
         </span>
         <span>
           {company.closedThrough
