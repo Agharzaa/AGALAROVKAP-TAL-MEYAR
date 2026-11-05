@@ -278,7 +278,6 @@ export interface NavItem {
   action: NavAction;
 }
 const page = (p: Page): NavAction => ({ kind: 'view', view: { type: 'page', page: p } });
-const soon = (stage: string): NavAction => ({ kind: 'soon', stage });
 
 /**
  * Sections of the program (1C's main menu, as a rail on the left). Opening a section shows its
@@ -438,10 +437,6 @@ export const sections: Section[] = [
     label: 'Anbar',
     icon: Package,
     groups: [
-      {
-        title: 'Sənədlər',
-        items: [{ label: 'Anbar hərəkəti', icon: Package, action: soon('5-ci mərhələ') }],
-      },
       {
         title: 'Hesabatlar',
         items: [card('205', 'Mallar (205)'), card('201', 'Materiallar (201)')],
@@ -712,10 +707,7 @@ export const sections: Section[] = [
       },
       {
         title: 'Baza',
-        items: [
-          { label: 'Ehtiyat nüsxə', icon: ShieldCheck, action: { kind: 'backup' } },
-          { label: 'DVX-dan e-qaimələr', icon: Upload, action: soon('4-cü mərhələ') },
-        ],
+        items: [{ label: 'Ehtiyat nüsxə', icon: ShieldCheck, action: { kind: 'backup' } }],
       },
     ],
   },
