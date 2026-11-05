@@ -46,6 +46,7 @@ const cell = (v: string) => (v === '0.00' ? '' : money(v));
 export function useOutput(file: string, sheet: () => SheetSpec, paper: () => ReactNode) {
   const printer = usePrint();
   const { company } = useCatalog(useWindow().companyId);
+  const [failure, setFailure] = useState('');
   const [message, setMessage] = useState('');
   const buttons = (
     <>
@@ -57,7 +58,7 @@ export function useOutput(file: string, sheet: () => SheetSpec, paper: () => Rea
             const saved = await api.saveFile(`${file}.xlsx`, workbook(sheet()));
             if (saved) setMessage(`Saxlanıldı: ${saved}`);
           } catch (e) {
-            setMessage((e as Error).message);
+            setFailure((e as Error).message);
           }
         }}
       >
@@ -81,10 +82,15 @@ export function useOutput(file: string, sheet: () => SheetSpec, paper: () => Rea
       </button>
     </>
   );
-  const notice = message && (
-    <Notice kind="success" onClose={() => setMessage('')}>
-      {message}
-    </Notice>
+  const notice = (message || failure) && (
+    <>
+      {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
+      {message && (
+        <Notice kind="success" onClose={() => setMessage('')}>
+          {message}
+        </Notice>
+      )}
+    </>
   );
   return { buttons, notice, sheet: printer.sheet };
 }

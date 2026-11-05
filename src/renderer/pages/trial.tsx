@@ -114,6 +114,7 @@ export function TrialPage() {
   const [partnerId, setPartnerId] = useState('');
   const [selected, setSelected] = useState(0);
   const [exportMsg, setExportMsg] = useState('');
+  const [failure, setFailure] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   // Settings in force (applied ones), shown on the folded "Ayarlar" button.
   const settingsOn = [accounts.length > 0, !!partnerId, onlyMoved, onlyArising].filter(
@@ -241,13 +242,13 @@ export function TrialPage() {
       const file = await api.saveFile(`DBC ${tb.from} ${tb.to}.xlsx`, bytes);
       if (file) setExportMsg(`Saxlanıldı: ${file}`);
     } catch (e) {
-      setExportMsg((e as Error).message);
+      setFailure((e as Error).message);
     }
   };
   const savePdf = () =>
     tb &&
     printer.pdf(<TrialSheet tb={tb} company={company} />, `DBC ${tb.from} ${tb.to}.pdf`, (o) =>
-      'error' in o ? setExportMsg(o.error) : o.file && setExportMsg(`Saxlanıldı: ${o.file}`),
+      'error' in o ? setFailure(o.error) : o.file && setExportMsg(`Saxlanıldı: ${o.file}`),
     );
   return (
     <ModuleFrame
@@ -355,6 +356,7 @@ export function TrialPage() {
       notices={
         <>
           {result.error && <Notice>{result.error}</Notice>}
+          {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
           {exportMsg && (
             <Notice kind="success" onClose={() => setExportMsg('')}>
               {exportMsg}

@@ -146,6 +146,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
   const [rows, setRows] = useState<RowForm[] | null>(null);
   const m = useMutation();
   const [message, setMessage] = useState('');
+  const [failure, setFailure] = useState('');
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState('');
   const grid = useRef<HTMLTableElement>(null);
@@ -166,7 +167,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
         }),
       );
     } catch (e) {
-      setMessage((e as Error).message);
+      setFailure((e as Error).message);
     }
   }
   useEffect(() => {
@@ -355,7 +356,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
       const saved = await api.saveFile(`Tabel ${month}.xlsx`, workbook(spec));
       if (saved) setMessage(`Saxlanıldı: ${saved}`);
     } catch (e) {
-      setMessage((e as Error).message);
+      setFailure((e as Error).message);
     }
   };
   return (
@@ -435,6 +436,7 @@ export function TimesheetEditor({ id }: { id?: string }) {
       notices={
         <>
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
+          {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
               {message}

@@ -20,6 +20,7 @@ export function SettingsPage() {
   const [through, setThrough] = useState('');
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
+  const [failure, setFailure] = useState('');
   const [version, setVersion] = useState('');
   const [theme, setTheme] = useState<Theme>('light');
   const m = useMutation();
@@ -47,7 +48,7 @@ export function SettingsPage() {
         setTheme(t);
         applyTheme(t);
       })
-      .catch((e: Error) => setMessage(e.message));
+      .catch((e: Error) => setFailure(e.message));
   if (!company) return <ModuleFrame title={pages.settings.title}>Yüklənir…</ModuleFrame>;
   const reopening = !!company.closedThrough && !!through && through < company.closedThrough;
   return (
@@ -57,6 +58,7 @@ export function SettingsPage() {
       notices={
         <>
           {m.error && <Notice onClose={m.clear}>{m.error.message}</Notice>}
+          {failure && <Notice onClose={() => setFailure('')}>{failure}</Notice>}
           {message && (
             <Notice kind="success" onClose={() => setMessage('')}>
               {message}
@@ -212,7 +214,7 @@ export function SettingsPage() {
                   const file = await api.backup();
                   if (file) setMessage(`Ehtiyat nüsxə saxlanıldı: ${file}`);
                 } catch (e) {
-                  setMessage((e as Error).message);
+                  setFailure((e as Error).message);
                 }
               }}
             >

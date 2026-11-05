@@ -448,7 +448,7 @@ export function PayrollEditor({ id }: { id?: string }) {
       );
       if (saved) setMessage(`Saxlanıldı: ${saved}`);
     } catch (e) {
-      setMessage((e as Error).message);
+      setFillError((e as Error).message);
     }
   };
   return (
