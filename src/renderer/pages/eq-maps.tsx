@@ -73,7 +73,7 @@ export function EqMapsPage() {
             {x.partner || '—'} <small>· {x.taxId}</small>
           </span>
         ) : (
-          <i>istənilən</i>
+          <span className="muted">istənilən</span>
         ),
     },
     {
@@ -87,7 +87,7 @@ export function EqMapsPage() {
             {x.name}
           </span>
         ) : (
-          <i>bütün qaimə</i>
+          <span className="muted">bütün qaimə</span>
         ),
     },
     {
