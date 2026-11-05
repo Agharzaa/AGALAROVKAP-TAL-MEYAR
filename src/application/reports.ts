@@ -956,6 +956,8 @@ function cardTree(
     }
   };
   walk(root);
+  // No level at all (341, 801, 222.01; a card opened on a full key): the documents are the card.
+  out.push(...root.moves);
   return out;
 }
 
@@ -1308,16 +1310,17 @@ function transitWarnings(db: Db, companyId: string, chart: Chart, date: string):
   );
   const out: Signal[] = [];
   for (const r of aggregate(db, companyId, date, date, ['account'], { accounts: transit })) {
-    const net = r.agg.closeDt - r.agg.closeKt;
-    if (net !== 0n)
+    // By key (the two banks of 222.02): opposite legs left open do not cancel each other.
+    const left = r.agg.closeDt + r.agg.closeKt;
+    if (left !== 0n)
       out.push({
         kind: 'transit',
         account: r.key[0]!,
         sk: [],
         text:
           r.key[0] === '222.02' || r.key[0] === '222.04'
-            ? `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} qalıb — valyutanın ikinci tərəfi uçota alınmayıb və ya məzənnə fərqidir (Dt 731 / Kt ${r.key[0]} və ya Dt ${r.key[0]} / Kt 611 ilə bağlayın).`
-            : `${r.key[0]}: ${displayMinor(net < 0n ? -net : net)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
+            ? `${r.key[0]}: ${displayMinor(left)} qalıb — valyutanın ikinci tərəfi uçota alınmayıb və ya məzənnə fərqidir (Dt 731 / Kt ${r.key[0]} və ya Dt ${r.key[0]} / Kt 611 ilə bağlayın).`
+            : `${r.key[0]}: ${displayMinor(left)} köçürmə yolda qalıb — qarşı hesabda daxilolma və ya məxaric uçota alınmayıb.`,
       });
   }
   return out;
