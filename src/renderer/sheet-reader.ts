@@ -56,6 +56,15 @@ interface ZipEntry {
   unpacked: number;
 }
 function zipEntries(bytes: Uint8Array): ZipEntry[] {
+  try {
+    return readZipDirectory(bytes);
+  } catch (e) {
+    // An offset outside the file: the bytes are not what the directory says.
+    if (e instanceof RangeError) throw new SheetError('Excel faylı zədələnib.');
+    throw e;
+  }
+}
+function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65_557); i--)
@@ -136,10 +145,19 @@ const textOf = (node: Element) =>
       .join(''),
   );
 
+const MAX_ROWS = 1_048_576;
+const MAX_COLUMNS = 16_384;
+
 async function readXlsx(bytes: Uint8Array): Promise<string[][]> {
   const entries = zipEntries(bytes);
   const find = (name: string) => entries.find((e) => e.name === name);
-  const xml = (text: string) => new DOMParser().parseFromString(text, 'application/xml');
+  const xml = (text: string) => {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    // A sheet that does not parse is refused: read on, it would be a statement with fewer rows.
+    if (doc.getElementsByTagName('parsererror').length)
+      throw new SheetError('Excel faylı zədələnib.');
+    return doc;
+  };
   // The first sheet in workbook order, resolved through the workbook relationships.
   let sheetPath = 'xl/worksheets/sheet1.xml';
   const workbook = find('xl/workbook.xml');
@@ -165,13 +183,18 @@ async function readXlsx(bytes: Uint8Array): Promise<string[][]> {
   const rows: string[][] = [];
   for (const row of byName(xml(await unzip(bytes, sheet)), 'row')) {
     const index = Number(row.getAttribute('r') ?? rows.length + 1) - 1;
+    // Excel's own limits: the numbers come from the file and size the arrays below.
+    if (!Number.isInteger(index) || index < 0 || index >= MAX_ROWS)
+      throw new SheetError('Excel faylı zədələnib.');
     const cells: string[] = [];
     for (const c of byName(row, 'c')) {
       const type = c.getAttribute('t');
       const v = byName(c, 'v')[0]?.textContent ?? '';
       const text = type === 's' ? (shared[Number(v)] ?? '') : type === 'inlineStr' ? textOf(c) : v;
       const ref = c.getAttribute('r');
-      cells[ref ? columnIndex(ref) : cells.length] = text;
+      const column = ref ? columnIndex(ref) : cells.length;
+      if (column >= MAX_COLUMNS) throw new SheetError('Excel faylı zədələnib.');
+      cells[column] = text;
     }
     rows[index] = Array.from(cells, (x) => x ?? '');
   }
