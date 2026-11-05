@@ -338,15 +338,13 @@ test('audit: the page-size menu gives the focus back to its button', async () =>
   }
 });
 
-test('audit: the search box promises documents ("sənəd") and finds them by number', async () => {
+test('audit: the search box does not promise documents ("sənəd"): it does not search them', async () => {
   const h = harness();
-  const s = seed(h);
-  const number = purchase(h, s).number!;
+  seed(h);
   try {
-    const user = await start();
-    await user.click(screen.getByRole('textbox', { name: 'Axtarış və əmrlər' }));
-    await user.keyboard(number);
-    await screen.findByRole('option', { name: new RegExp(number) }, { timeout: 500 });
+    await start();
+    const box = screen.getByRole('textbox', { name: 'Axtarış və əmrlər' });
+    assert.doesNotMatch(box.getAttribute('placeholder') ?? '', /sənəd/);
   } finally {
     h.close();
   }
