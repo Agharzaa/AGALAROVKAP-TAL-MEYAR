@@ -284,8 +284,10 @@ export function depositPaid(
   through = '9999-12-31',
 ): Minor {
   const [own, other] = direction === 'in' ? (['kt', 'dt'] as const) : (['dt', 'kt'] as const);
-  return db.get(
-    `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p
+  // Money that went back the same way (a refund to the deposit) is not paid any more.
+  const side = (own: 'kt' | 'dt', other: 'kt' | 'dt') =>
+    db.get(
+      `SELECT COALESCE(SUM(p.amount),0) AS a FROM postings p
      WHERE p.company_id=? AND p.${own}_account=? AND p.${own}_s1=? AND p.${own}_s2=? AND p.${own}_s3=?
        AND p.date<=?
        AND (p.${other}_account='224' OR p.${other}_account LIKE '224.%'
@@ -297,17 +299,18 @@ export function depositPaid(
          -- a "VAT payment" line, or the VAT part of an advance offset (the memo says so)
          OR (substr(p.memo,1,?)=? AND EXISTS(SELECT 1 FROM entries e
            WHERE e.company_id=p.company_id AND e.id=p.entry_id AND e.source_type IN ('bank','cash','invoice'))))`,
-    companyId,
-    account,
-    partner,
-    contract,
-    document,
-    through,
-    VAT_PAYMENT_MEMO.length,
-    VAT_PAYMENT_MEMO,
-    VAT_PAYMENT_MEMO.length,
-    VAT_PAYMENT_MEMO,
-  )!.a as bigint;
+      companyId,
+      account,
+      partner,
+      contract,
+      document,
+      through,
+      VAT_PAYMENT_MEMO.length,
+      VAT_PAYMENT_MEMO,
+      VAT_PAYMENT_MEMO.length,
+      VAT_PAYMENT_MEMO,
+    )!.a as bigint;
+  return side(own, other) - side(other, own);
 }
 
 function sameFamilyAccount(
